@@ -18,7 +18,7 @@ node $E down    smoke                       # deletes every box-oh-smoke-* machi
 ```
 
 Everything lands in `$BOX_E2E_OUT/<run-id>/` (default `plan/deploy-evidence/<run-id>/`, relative to where you run it):
-`harness.log` (timings), `install.log`, `preview-url.txt`, `client-key.txt`, and one folder per machine from `logs`.
+`harness.log` (timings), `install.log` (with the setup link), `preview-url.txt`, and one folder per machine from `logs`.
 `BOX_ENV` picks the Box environment (default `box`). Always `down` when done: medium is about $0.036/h, small $0.018/h.
 
 ## How it works, and the gaps
@@ -28,12 +28,11 @@ Everything lands in `$BOX_E2E_OUT/<run-id>/` (default `plan/deploy-evidence/<run
   with the Box MCP tool `create_agent {"environment":"box","name":"oh-<run>-main","size":"medium"}` (and
   `oh-<run>-rt1`, small), then run `up` again: it skips machines that exist and does the rest (ssh wait, `box awake`).
 - **Awake.** Machines sleep after 5 idle minutes, which kills containers; `--awake 1` and `box awake` keep them up a day.
-- **Key.** Today's installer refuses to start without a join code or an app key, so `install` makes a throwaway key and
-  passes its SHA-256 as `OPENHUT_CLIENT_KEY_SHA256`. The key is in `client-key.txt` for API calls (`Authorization: Bearer`).
+- **Address.** `install` gets the preview URL first and passes it as `OPENHUT_ADDRESS`, so the printed setup link and the
+  session cookie use it. `RUNTIME_IMAGE=<ref>` in the environment installs that image instead of the pinned one.
 - **Preview.** The installer publishes `127.0.0.1:8787` only and Box previews only ports bound on `0.0.0.0`, so `install`
   runs `socat` on `0.0.0.0:8788` (systemd unit `oh-preview`) and `preview 8788`, giving
   `https://box-node-<id>-8788.on.boat.dev`. The runtime has no Host allow-list today (only WebSockets check that
   `Origin` matches `Host`), so the on.boat.dev host just works. If M1 adds one, pass the preview host to the installer.
 - **Join (M2).** The runtime can't hand out a join code headlessly yet, so `join` takes the code or command from outside.
-  Once main can mint one (an API call with the key in `client-key.txt`), fetch it in `join` and drop the flags.
-- **App.** 8787 serves the API and `/health`, not the web App (app.openhut.dev reaches runtimes through the relay).
+- **App.** 8787 serves the web App, the API and `/health` on one origin.

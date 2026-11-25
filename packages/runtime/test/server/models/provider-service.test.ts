@@ -20,14 +20,15 @@ const fake = createServer((req, res) => {
     ] })
   }
   if (req.url === '/openai/v1/models') return ok ? reply(200, { data: openaiModels }) : reply(401, { error: { message: 'bad' } })
-  if (req.url === '/xai/v1/models') return reply(503, {})
+  if (req.url === '/compatible/v1/models') return reply(503, {})
   reply(404, {})
 })
 fake.listen(0, '127.0.0.1')
 await once(fake, 'listening')
 const base = `http://127.0.0.1:${(fake.address() as AddressInfo).port}`
 const { config } = await import('../../../src/server/platform/config.ts')
-Object.assign(config, { openaiApi: `${base}/openai`, openrouterApi: `${base}/openrouter/api`, xaiApi: `${base}/xai` })
+Object.assign(config, { openaiApi: `${base}/openai`, openrouterApi: `${base}/openrouter/api` })
+await (await import('../../../src/server/platform/settings.ts')).settings.setProviderBaseUrl('compatible', `${base}/compatible/v1`)
 after(() => fake.close())
 
 const { migrate } = await import('../../../src/server/platform/db.ts')
@@ -35,7 +36,7 @@ const { settings } = await import('../../../src/server/platform/settings.ts')
 const { providerService } = await import('../../../src/server/models/provider-service.ts')
 await migrate()
 
-const actor = { id: 'usr_provider1', email: 'owner@example.com', local: false }
+const actor = { id: 'usr_provider1', email: 'owner@example.com', role: 'owner' as const }
 const GOOD = 'sk-good-key-1234'
 const many = (count: number) => Array.from({ length: count }, (_, index) => ({ id: `gpt-${index}`, created: index }))
 
@@ -51,11 +52,11 @@ test('a good key connects, lists only chat models, switches on the eight newest 
 })
 
 test('a refused key is a 400 on apiKey and saves nothing', async () => {
-  await assert.rejects(providerService.update({ actor, id: 'xai', patch: { apiKey: 'sk-bad-key-12345' } }), /xAI couldn't list its models/)
+  await assert.rejects(providerService.update({ actor, id: 'compatible', patch: { apiKey: 'sk-bad-key-12345' } }), /OpenAI-compatible couldn't list its models/)
   await assert.rejects(providerService.update({ actor, id: 'openrouter', patch: { apiKey: 'sk-bad-key-12345' } }), (err: unknown) => err instanceof Error && /OpenRouter refused that key/.test(err.message) && 'param' in err && err.param === 'apiKey')
   assert.equal(providerService.get({ id: 'openrouter' }).connected, false)
   assert.equal(settings.providerKey('openrouter'), '')
-  assert.equal(providerService.get({ id: 'xai' }).connected, false)
+  assert.equal(providerService.get({ id: 'compatible' }).connected, false)
 })
 
 test('OpenRouter: the key is checked first, image models are left out, names lose the lab prefix, prices are dollars per million tokens and only the hand-picked models start on', async () => {
@@ -73,7 +74,7 @@ test('switching models keeps to the list, and only a connected provider can be s
   const off = await providerService.update({ actor, id: 'openai', patch: { models: [{ id: 'gpt-11', on: false }, { id: 'gpt-0', on: true }] } })
   assert.deepEqual([off.models.find((model) => model.id === 'gpt-11')?.on, off.models.find((model) => model.id === 'gpt-0')?.on], [false, true])
   await assert.rejects(providerService.update({ actor, id: 'openai', patch: { models: [{ id: 'gpt-404', on: true }] } }), /isn't in the list/)
-  await assert.rejects(providerService.update({ actor, id: 'xai', patch: { models: [{ id: 'grok', on: true }] } }), /isn't connected/)
+  await assert.rejects(providerService.update({ actor, id: 'compatible', patch: { models: [{ id: 'grok', on: true }] } }), /isn't connected/)
 })
 
 test('a refresh keeps the switches, adds new models switched off and drops the ones that are gone', async () => {
@@ -89,7 +90,7 @@ test('an agent may be given only a model that is connected, listed and switched 
   providerService.requireUsable({ key: 'openai:gpt-0', param: 'model' })
   assert.throws(() => providerService.requireUsable({ key: 'openai:gpt-3', param: 'model' }), /switched off/)
   assert.throws(() => providerService.requireUsable({ key: 'openai:nope', param: 'model' }), /doesn't list nope/)
-  assert.throws(() => providerService.requireUsable({ key: 'xai:grok-5', param: 'model' }), /isn't connected on this computer/)
+  assert.throws(() => providerService.requireUsable({ key: 'compatible:grok-5', param: 'model' }), /isn't connected on this computer/)
   assert.throws(() => providerService.requireUsable({ key: 'nonsense', param: 'model' }), /provider:model/)
 })
 

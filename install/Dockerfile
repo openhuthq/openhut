@@ -7,6 +7,18 @@ ARG AGENT_IMAGE
 ARG ALPINE=alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
 ARG DIND=docker:28-dind@sha256:2a232a42256f70d78e3cc5d2b5d6b3276710a0de0596c145f627ecfae90282ac
 
+FROM --platform=$BUILDPLATFORM $ALPINE AS web
+RUN apk add --no-cache nodejs npm >/dev/null
+WORKDIR /src
+COPY package.json package-lock.json ./
+COPY packages/common/package.json packages/common/
+COPY packages/runtime/package.json packages/runtime/
+COPY packages/app/package.json packages/app/
+RUN npm ci --no-audit --no-fund --loglevel=error >/dev/null
+COPY packages/common packages/common
+COPY packages/app packages/app
+RUN npm run build -w @openhut/app >/dev/null
+
 FROM --platform=$BUILDPLATFORM $ALPINE AS tree
 ARG BUILD=dev
 COPY package.json package-lock.json /opt/openhut/
@@ -17,6 +29,7 @@ COPY packages/runtime/package.json /opt/openhut/packages/runtime/
 COPY packages/runtime/src /opt/openhut/packages/runtime/src
 COPY packages/runtime/test/agentd /opt/openhut/packages/runtime/test/agentd
 COPY packages/app/package.json /opt/openhut/packages/app/
+COPY --from=web /src/packages/app/dist /opt/openhut/packages/app/dist
 RUN printf '%s\n' "$BUILD" > /opt/openhut/BUILD && chmod -R go-w /opt/openhut
 
 FROM --platform=$BUILDPLATFORM $ALPINE AS agent
@@ -102,3 +115,4 @@ RUN cd /opt/openhut && npm ci --omit=dev --no-audit --no-fund --loglevel=error >
 FROM ${BASE}
 COPY --from=deps /opt/openhut/node_modules /opt/openhut/node_modules
 COPY --from=tree /opt/openhut /opt/openhut
+RUN ln -sf /opt/openhut/install/openhut /usr/local/bin/openhut

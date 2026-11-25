@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+api() { curl -fsS --unix-socket /data/app/openhut.sock -X POST "http://openhut$1" || { echo "openhut: the server didn't answer. Is OpenHut up? docker logs openhut" >&2; exit 1; }; }
+link() { sed -n 's/.*"url":"\([^"]*\)".*/\1/p'; }
+case "${1:-}" in
+  setup-code) out=$(curl -sS --unix-socket /data/app/openhut.sock -X POST http://openhut/api/setup-codes) || exit 1
+    case "$out" in *'"url"'*) printf '%s\n' "$out" | link ;; *) printf '%s\n' "$out" | sed -n 's/.*"message":"\([^"]*\)".*/\1/p' >&2; exit 1 ;; esac ;;
+  reset-owner) api /api/owner-resets | link ;;
+  *) echo "usage: openhut setup-code | reset-owner
+  setup-code   prints a one-use link to create the owner account (each new one replaces the last)
+  reset-owner  signs the owner out everywhere and prints a link to set a new email and password" >&2; exit 2 ;;
+esac

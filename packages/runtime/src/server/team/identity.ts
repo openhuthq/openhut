@@ -3,30 +3,58 @@ import { once } from 'node:events'
 import { chmodSync, rmSync } from 'node:fs'
 import type { Server } from 'node:http'
 import { createServer, type Server as NetServer } from 'node:net'
-import { userInfo } from 'node:os'
 import type { Duplex } from 'node:stream'
-import type { FastifyRequest } from 'fastify'
+import type { FastifyReply, FastifyRequest } from 'fastify'
+import type { TeamRole } from '@openhut/common/team/team.ts'
 import { config } from '../platform/config.ts'
-import { db, isUniqueViolation } from '../platform/db.ts'
-import { emit } from '../platform/events.ts'
+import { db } from '../platform/db.ts'
 import { HttpError } from '../platform/http-error.ts'
-import { newId } from '../platform/secrets.ts'
+import { newId, sha } from '../platform/secrets.ts'
 
 const LOCAL = Symbol('local')
+const COOKIE = 'openhut_session'
+const DEV_OWNER = 'owner@example.com'
+export const SESSION_DAYS = 30
 
 export async function who(req: FastifyRequest): Promise<Caller> {
-  if (!arrival(req)) throw new HttpError(401, 'Send the key this install was set up with, as Authorization: Bearer <key>.')
-  return { ...await owner(), local: true }
+  const caller = await sessionCaller(req) ?? await devCaller(req)
+  if (!caller) throw new HttpError(401, 'Sign in first.')
+  return caller
 }
 
 export async function requireSignIn(req: FastifyRequest): Promise<void> {
   await who(req)
 }
 
-export function enrolled(header: string | undefined): boolean {
-  const key = /^Bearer (\S+)$/.exec(header ?? '')?.[1]
-  if (!key || !config.clientKeySha256) return false
-  return timingSafeEqual(createHash('sha256').update(key).digest(), Buffer.from(config.clientKeySha256, 'hex'))
+export const isAdmin = (caller: Caller): boolean => caller.role === 'owner' || caller.role === 'admin'
+
+export function requireAdmin(caller: Caller): void {
+  if (!isAdmin(caller)) throw new HttpError(403, 'Only the owner or an admin can do that.')
+}
+
+export async function admin(req: FastifyRequest): Promise<Caller> {
+  const caller = await who(req)
+  requireAdmin(caller)
+  return caller
+}
+
+export function isLocal(req: FastifyRequest): boolean {
+  return !!(req.raw.socket as (Duplex & { [LOCAL]?: true }) | undefined)?.[LOCAL]
+}
+
+export async function requireLocal(req: FastifyRequest): Promise<void> {
+  if (!isLocal(req)) throw new HttpError(403, 'Run this on the server: docker exec openhut openhut <command>.')
+}
+
+export const sessionToken = (req: FastifyRequest): string | undefined =>
+  (req.headers.cookie ?? '').split(/;\s*/).find((part) => part.startsWith(`${COOKIE}=`))?.slice(COOKIE.length + 1)
+
+export function setSessionCookie({ reply, token }: { reply: FastifyReply; token: string }): void {
+  reply.header('set-cookie', cookie(token, SESSION_DAYS * 86400))
+}
+
+export function clearSessionCookie(reply: FastifyReply): void {
+  reply.header('set-cookie', cookie('', 0))
 }
 
 export async function listenLocally({ server, path }: { server: Server; path: string }): Promise<NetServer> {
@@ -43,31 +71,26 @@ export async function listenLocally({ server, path }: { server: Server; path: st
   return local
 }
 
-function arrival(req: FastifyRequest): boolean {
-  const conn = req.raw.socket as (Duplex & { [LOCAL]?: true }) | undefined
-  return !!conn?.[LOCAL] || enrolled(req.headers.authorization)
+function cookie(value: string, maxAge: number): string {
+  return `${COOKIE}=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${config.address.startsWith('https:') ? '; Secure' : ''}`
 }
 
-async function owner(): Promise<Owner> {
-  const person = await theOwner() ?? await claimOwner()
-  return { id: person.id, email: person.email }
+async function sessionCaller(req: FastifyRequest): Promise<Caller | undefined> {
+  const token = sessionToken(req)
+  if (!token) return undefined
+  return db.selectFrom('session as s').innerJoin('person as p', 'p.id', 's.person_id').select(['p.id', 'p.email', 'p.role'])
+    .where('s.hash', '=', sha(token)).where('s.expires_at', '>', new Date()).where('p.removed_at', 'is', null).executeTakeFirst()
 }
 
-function theOwner(): Promise<Owner | undefined> {
-  return db.selectFrom('person').select(['id', 'email']).where('role', '=', 'owner').executeTakeFirst()
+async function devCaller(req: FastifyRequest): Promise<Caller | undefined> {
+  const key = /^Bearer (\S+)$/.exec(req.headers.authorization ?? '')?.[1]
+  if (!key || !config.devKeySha256) return undefined
+  if (!timingSafeEqual(createHash('sha256').update(key).digest(), Buffer.from(config.devKeySha256, 'hex'))) return undefined
+  await db.insertInto('person').values({ id: newId('usr'), email: DEV_OWNER, role: 'owner' }).onConflict((oc) => oc.doNothing()).execute()
+  return db.selectFrom('person').select(['id', 'email', 'role']).where('role', '=', 'owner').executeTakeFirstOrThrow()
 }
 
-async function claimOwner(): Promise<Owner> {
-  const owner = await db.insertInto('person').values({ id: newId('usr'), email: userInfo().username, role: 'owner', removed_at: null }).returning(['id', 'email']).executeTakeFirstOrThrow()
-    .catch((err: unknown) => { if (isUniqueViolation(err)) return undefined; throw err })
-  if (owner) emit({ name: 'setup.completed', actor: owner, target: { type: 'person', id: owner.id } })
-  const found = owner ?? await theOwner()
-  if (!found) throw new HttpError(500, 'This computer has no owner yet. Restart OpenHut and try again.')
-  return found
-}
-
-type Owner = { id: string; email: string }
-export type Caller = Owner & { local: boolean }
+export type Caller = { id: string; email: string; role: TeamRole }
 
 export function peopleOf(json: string): string[] {
   try {

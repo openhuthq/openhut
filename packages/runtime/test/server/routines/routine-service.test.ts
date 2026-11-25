@@ -24,7 +24,7 @@ fakeAgentd()
 signIn({ email: 'rtn@example.com' })
 await refresh()
 
-const owner = { id: 'usr_rtnowner', email: 'rtn@example.com', local: true, role: 'owner' as const }
+const owner = { id: 'usr_rtnowner', email: 'rtn@example.com', role: 'owner' as const }
 const app = { platform: 'api_server', chat_id: 'openhut-msg_rtnchat1' }
 const whatsapp = { platform: 'whatsapp', chat_id: '15550001111@s.whatsapp.net', chat_type: 'dm', chat_name: 'Mo' }
 const slack = { platform: 'slack', chat_id: 'C0FINANCE1', chat_type: 'group', chat_name: 'finance', thread_id: '1732.1' }

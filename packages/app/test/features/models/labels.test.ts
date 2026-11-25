@@ -19,7 +19,7 @@ test('a key model says its context and prices; a subscription model says its not
 
 test('an unknown model is named by its id', () => {
   const providers = [provider('openrouter', [model('a/big')])]
-  assert.equal(nameOf({ providers, key: 'xai:unknown' }), 'unknown')
+  assert.equal(nameOf({ providers, key: 'compatible:unknown' }), 'unknown')
 })
 
 test('search matches the name or the id, in any case', () => {
@@ -48,7 +48,7 @@ test('disconnecting says who stops answering', () => {
   const agents = [agent('Juniper', 'openrouter:a/b'), agent('Pepper', 'claude:opus'), agent('Maple', 'openrouter:x/y')]
   assert.equal(consequence({ agents, id: 'openrouter' }), 'Juniper and Maple use its models, and stop answering until you pick others.')
   assert.equal(consequence({ agents: [agent('Juniper', 'openrouter:a/b')], id: 'openrouter' }), 'Juniper uses its models, and stops answering until you pick others.')
-  assert.equal(consequence({ agents, id: 'xai' }), 'No agent uses its models yet.')
+  assert.equal(consequence({ agents, id: 'compatible' }), 'No agent uses its models yet.')
 })
 
 test('prices keep two significant digits under a dollar and drop trailing zeros', () => {
@@ -62,6 +62,6 @@ test('a model shows its maker\'s logo, whichever provider runs it', () => {
   assert.deepEqual(ids.map((model) => glyphOf({ provider: 'openrouter', model })), ['deepseek', 'openai', 'gemini', 'xai', 'anthropic', 'zai'])
   assert.equal(glyphOf({ provider: 'claude', model: 'opus' }), 'anthropic')
   assert.equal(glyphOf({ provider: 'codex', model: 'gpt-5.5' }), 'openai')
-  assert.equal(glyphOf({ provider: 'xai', model: 'grok-4.7' }), 'xai')
+  assert.equal(glyphOf({ provider: 'compatible', model: 'grok-4.7' }), 'compatible')
   assert.equal(glyphOf({ provider: 'openrouter', model: 'someone/new-model' }), 'openrouter')
 })

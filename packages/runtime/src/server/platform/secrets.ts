@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, createHmac, createPrivateKey, createPublicKey, diffieHellman, generateKeyPairSync, hkdfSync, randomBytes, timingSafeEqual, type KeyObject } from 'node:crypto'
+import { createCipheriv, createDecipheriv, createHash, createHmac, createPrivateKey, createPublicKey, diffieHellman, generateKeyPairSync, hkdfSync, randomBytes, scrypt, timingSafeEqual, type KeyObject } from 'node:crypto'
 import { config } from './config.ts'
 import { db } from './db.ts'
 
@@ -33,6 +33,22 @@ export const newToken = (prefix: string): string => `${prefix}_${randomBytes(24)
 
 export const sameSecret = ({ given, expected }: { given: string; expected: string }): boolean =>
   given.length === expected.length && timingSafeEqual(Buffer.from(given), Buffer.from(expected))
+
+const DUMMY_HASH = `scrypt:${'0'.repeat(32)}:${'0'.repeat(64)}`
+
+export async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16)
+  return `scrypt:${salt.toString('hex')}:${(await derive({ password, salt })).toString('hex')}`
+}
+
+export async function checkPassword({ password, stored }: { password: string; stored: string | null | undefined }): Promise<boolean> {
+  const [, salt = '', hash = ''] = (stored ?? DUMMY_HASH).split(':')
+  const got = await derive({ password, salt: Buffer.from(salt, 'hex') })
+  return !!stored && got.length === hash.length / 2 && timingSafeEqual(got, Buffer.from(hash, 'hex'))
+}
+
+const derive = ({ password, salt }: { password: string; salt: Buffer }): Promise<Buffer> =>
+  new Promise((resolve, reject) => scrypt(password, salt, 32, { N: 1 << 15, maxmem: 64 << 20 }, (err, key) => (err ? reject(err) : resolve(key))))
 
 export const agentToken = ({ id, epoch }: { id: string; epoch: number }): string => `${id}.${createHmac('sha256', secret).update(epoch ? `${id}:${epoch}` : id).digest('hex')}`
 

@@ -27,27 +27,27 @@ test('an agent\'s own token is the whole check, from any address; a forged one i
 })
 
 test('revoking an agent\'s token refuses the old one at once; the new one works', async () => {
-  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', local: false, role: 'owner' as const }
+  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', role: 'owner' as const }
   await agentService.revokeToken({ actor, id: 'ag_tokentst' })
   assert.equal(await agentService.byToken({ token }), undefined)
   assert.equal((await agentService.byToken({ token: agentToken({ id: 'ag_tokentst', epoch: 1 }) }))?.id, 'ag_tokentst')
 })
 
 test('renaming an agent cleans the name and refuses an empty one', async () => {
-  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', local: false, role: 'owner' as const }
+  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', role: 'owner' as const }
   assert.equal((await agentService.update({ actor, id: 'ag_tokentst', patch: { name: '  Sales <b>bot</b> ' } })).name, 'Sales bbotb')
   await assert.rejects(agentService.update({ actor, id: 'ag_tokentst', patch: { name: '<>' } }), { status: 400 })
 })
 
 test('an agent carries its model’s display name from this computer’s catalogue, so teammates see Sonnet 5.5, not sonnet', async () => {
-  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', local: false, role: 'owner' as const }
+  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', role: 'owner' as const }
   const agent = await agentService.get({ actor, id: 'ag_tokentst' })
   assert.equal(agent.model, 'claude:sonnet')
   assert.equal(agent.modelName, 'Sonnet 5.5')
 })
 
 test('an agent keeps the face it was given, so every device shows the same one', async () => {
-  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', local: false, role: 'owner' as const }
+  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', role: 'owner' as const }
   assert.equal((await agentService.get({ actor, id: 'ag_tokentst' })).face, null)
   const face = JSON.stringify({ seed: 'face_1', body: 2 })
   assert.equal((await agentService.update({ actor, id: 'ag_tokentst', patch: { face } })).face, face)
@@ -55,25 +55,25 @@ test('an agent keeps the face it was given, so every device shows the same one',
 })
 
 test('model choices: only a connected, switched-on model is accepted', async () => {
-  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', local: false, role: 'owner' as const }
+  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', role: 'owner' as const }
   const model = (id: string, on: boolean) => ({ id, name: id, on, tier: 'big' as const, note: null, contextLength: null, inputPrice: null, outputPrice: null })
   await settings.setProviderKey('openai', 'sk-test-key-for-choices')
   await settings.setCatalog('openai', { at: new Date().toISOString(), models: [model('gpt-5.5', true), model('gpt-5.5-mini', true), model('o5', false)] })
   const id = 'ag_tokentst'
-  await assert.rejects(agentService.update({ actor, id, patch: { model: 'xai:grok-5' } }), { status: 409, param: 'model', message: /isn't connected on this computer/ })
+  await assert.rejects(agentService.update({ actor, id, patch: { model: 'compatible:grok-5' } }), { status: 409, param: 'model', message: /isn't connected on this computer/ })
   await assert.rejects(agentService.update({ actor, id, patch: { model: 'openai:o5' } }), { status: 409, message: /switched off/ })
   const picked = await agentService.update({ actor, id, patch: { model: 'openai:gpt-5.5' } })
   assert.equal(picked.model, 'openai:gpt-5.5')
 })
 
 test('a computer without agent-browser refuses the browser switch before changing anything', async () => {
-  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', local: false }
+  const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', role: 'owner' as const }
   await assert.rejects(agentService.update({ actor, id: 'ag_tokentst', patch: { browser: true } }), { status: 409, param: 'browser' })
   assert.equal((await db.selectFrom('agent').select('web_browser').where('id', '=', 'ag_tokentst').executeTakeFirstOrThrow()).web_browser, false)
 })
 
-const owner = { id: 'usr_tokenown', email: 'tokenowner@example.com', local: true }
-const mate = { id: 'usr_teammate', email: 'teammate@example.com', local: false }
+const owner = { id: 'usr_tokenown', email: 'tokenowner@example.com', role: 'owner' as const }
+const mate = { id: 'usr_teammate', email: 'teammate@example.com', role: 'owner' as const }
 
 test('a new agent is two records, runs here, and only its owner changes it, even shared: a teammate chats', async () => {
   const made = await agentService.create({ actor: owner, name: 'Juniper' })

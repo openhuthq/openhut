@@ -5,7 +5,10 @@ type Timestamp = ColumnType<Date, Date | string | undefined, Date | string>
 
 export interface Database {
   install_setting: { name: string; value: string }
-  person: { id: string; email: string; role: 'owner' | 'admin' | 'member'; created_at: Timestamp; removed_at: Timestamp | null }
+  person: { id: string; email: string; name: Generated<string>; pass: string | null; role: 'owner' | 'admin' | 'member'; created_at: Timestamp; removed_at: Timestamp | null }
+  session: { hash: string; person_id: string; expires_at: Timestamp }
+  invite: { hash: string; role: 'admin' | 'member'; created_by: string; expires_at: Timestamp }
+  password_reset: { hash: string; person_id: string; expires_at: Timestamp }
   agent: {
     id: string; name: string; owner_id: string; instructions: string; model: string; fallback_model: string | null; helper_models: Generated<string>; net: number
     wanted: Generated<'running' | 'stopped'>; code_execution: Generated<boolean>; web_browser: Generated<boolean>; face: Generated<string | null>; token_epoch: Generated<number>; channel_key: string; created_at: Timestamp

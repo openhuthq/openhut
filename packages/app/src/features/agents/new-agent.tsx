@@ -1,11 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Cancel01Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
-import { providerInfo, type ProviderId } from '@openhut/common/models/provider.ts'
-import { Button } from '@/components/ui/button'
+import { PROVIDERS, providerInfo, type ProviderId } from '@openhut/common/models/provider.ts'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { Row as SettingsRow, Rows } from '@/features/settings/kit'
+import { useIsAdmin } from '@/features/people/api'
 import { DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { ErrorNote } from '@/components/error-note'
-import { DialogCard, I } from '@/components/kit'
+import { DialogCard, I, PILL } from '@/components/kit'
 import { Glyph } from '@/components/glyph'
 import { useAgents, useCreateAgent } from '@/features/agents/api'
 import { useStartSeatSignIn } from '@/features/settings/api'
@@ -55,6 +57,7 @@ function AgentForm() {
   const taken = new Set(useAgents().data?.map((agent) => agent.name))
   const name = NAMES.find((each) => !taken.has(each)) ?? NAMES[0]
   const model = picked ?? firstModel(providers) ?? DEFAULT_MODEL
+  const none = Boolean(providers && !providers.some((provider) => provider.connected))
   const unready = Boolean(providers && !providers.some((provider) => provider.connected && model.startsWith(`${provider.id}:`)))
   const { mutate: prepare, isIdle } = seat
   useEffect(() => { if (unready && isIdle) prepare() }, [unready, isIdle, prepare])
@@ -83,15 +86,29 @@ function AgentForm() {
     <Input name="name" required maxLength={40} defaultValue={name} placeholder={name} aria-label="Name" autoFocus={!touch} autoComplete="off" spellCheck={false} enterKeyHint="go"
       className="h-auto w-full rounded-none border-0 bg-transparent p-0 text-center text-[22px]/[1.3] font-semibold shadow-none focus-visible:ring-0 text-ink outline-none placeholder:text-mute-2" />
     <div className="flex w-full flex-col divide-y divide-hair border-y border-hair text-left">
-      <Row title="Model">
+      {none && <ConnectModel onSetUp={setUp} />}
+      {!none && <Row title="Model">
         <ModelPicker providers={providers} value={model} onPick={setPicked} onSetUp={setUp} label="Model" title="It thinks with" className={PICKER}>
           {unready ? <NeedsSignIn model={model} /> : undefined}
         </ModelPicker>
-      </Row>
+      </Row>}
     </div>
-    <Button type="submit" variant="primary" className="h-10 w-full justify-center rounded-[10px] text-[15px]" disabled={createAgent.isPending || !providers}>{createAgent.isPending ? 'Creating…' : 'Create agent'}</Button>
+    <Button type="submit" variant="primary" className="h-10 w-full justify-center rounded-[10px] text-[15px]" disabled={createAgent.isPending || !providers || none}>{createAgent.isPending ? 'Creating…' : 'Create agent'}</Button>
     <ErrorNote message={createAgent.error?.message} />
   </form>
+}
+
+const KEY_PROVIDERS = PROVIDERS.filter((info) => info.kind === 'key')
+
+function ConnectModel({ onSetUp }: { onSetUp: (id: ProviderId) => void }) {
+  const admin = useIsAdmin()
+  return <div className="flex flex-col gap-2 py-3">
+    <div className="grid gap-0.5"><span className="text-[13px] font-medium">Connect a model first</span><span className="text-[12px]/[16px] text-mute">{admin ? 'Your agents think with it. You pick the model for each agent.' : 'Ask the owner or an admin to connect one under Settings › Models.'}</span></div>
+    {admin && <Rows>
+      <SettingsRow icon={<Glyph name="claude" size={20} />} title="Claude subscription" note="Pro or Max. One for this whole install." onClick={() => onSetUp('claude')}><span className={cn(buttonVariants({ variant: 'primary' }), PILL)}>Sign in</span></SettingsRow>
+      {KEY_PROVIDERS.map((info) => <SettingsRow key={info.id} icon={<Glyph name={info.id} size={20} />} title={info.id === 'compatible' ? info.name : `${info.short} API key`} note={info.keysAt ? `From ${info.keysAt}` : info.blurb} onClick={() => onSetUp(info.id)}><span className={cn(buttonVariants({ variant: 'secondary' }), PILL)}>Paste key</span></SettingsRow>)}
+    </Rows>}
+  </div>
 }
 
 function NeedsSignIn({ model }: { model: string }) {

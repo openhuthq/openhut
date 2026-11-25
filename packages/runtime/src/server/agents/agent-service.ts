@@ -1,5 +1,5 @@
 import type { Selectable } from 'kysely'
-import { AgentRecord, ControlRecord, inSidebar, type Access, type Agent, type CreateAgent, type AgentHealth, type AgentStatus, type Grant, type UpdateAgent } from '@openhut/common/agents/agent.ts'
+import { AgentRecord, ControlRecord, canUse, inSidebar, type Access, type Agent, type CreateAgent, type AgentHealth, type AgentStatus, type Grant, type UpdateAgent } from '@openhut/common/agents/agent.ts'
 import type { Deleted } from '@openhut/common/api.ts'
 import { splitModelKey } from '@openhut/common/models/provider.ts'
 import { db, findRow } from '../platform/db.ts'
@@ -38,11 +38,12 @@ const held = new Map<string, boolean>()
 export const agentService = {
   async list({ actor }: { actor: Caller }): Promise<Agent[]> {
     const [all, states] = await Promise.all([everything(), containerStates()])
-    return Promise.all(all.map((facts) => agentOf({ facts, actor, states })))
+    return Promise.all(all.filter((facts) => canUse(accessOf(facts), actor.email)).map((facts) => agentOf({ facts, actor, states })))
   },
 
   async get({ actor, id }: { actor: Caller; id: string }): Promise<Agent> {
     const [facts, states] = await Promise.all([agentService.find({ id }), containerStates()])
+    if (!canUse(accessOf(facts), actor.email)) throw new HttpError(404, 'That agent doesn\'t exist. It may have been deleted.')
     return agentOf({ facts, actor, states })
   },
 
@@ -69,7 +70,7 @@ export const agentService = {
     const ws = HOME
     const health = await agentd.health()
     if (health.imageReady === false) throw new HttpError(409, 'OpenHut is still downloading what agents need to run. This happens once and takes a few minutes. Try again shortly.')
-    const access = teamOnly({ owner: actor.email, people, sidebars })
+    const access = await teamOnly({ owner: actor.email, people, sidebars })
     const id = newId('ag')
     const value: AgentRecord = { name: clean, instructions: (instructions || `# ${clean}\n\nYou are ${clean}. Answer briefly.`).slice(0, 20_000), face: face ?? null, wanted: 'stopped', createdAt: new Date().toISOString() }
     await recordsService.put({ collection: 'agent', id, workspace: ws, parent: actor.email, personal: !shared, value })
@@ -92,7 +93,7 @@ export const agentService = {
     if (target !== facts.control?.runsOn) requireRunner({ facts, runsOn: target, me })
     if (browser && target === me && !(await features()).browser) throw new HttpError(409, config.installKind === 'server' ? 'This computer can\'t give agents a browser. Run the agent on a Linux computer you added to use one.' : 'Install Google Chrome on this computer, then turn Browser on.', { param: 'browser' })
     const personal = shared === undefined ? facts.personal : !shared
-    const access = people || sidebars ? teamOnly({ owner: facts.owner, people: people ?? facts.control?.people ?? [], sidebars: sidebars ?? facts.control?.sidebars ?? [] }) : {}
+    const access = people || sidebars ? await teamOnly({ owner: facts.owner, people: people ?? facts.control?.people ?? [], sidebars: sidebars ?? facts.control?.sidebars ?? [] }) : {}
     const resealed = personal !== facts.personal
     const name = fields.name === undefined ? undefined : cleanName(fields.name)
     if (Object.keys(fields).length || resealed) {
@@ -265,8 +266,8 @@ function accessOf(facts: Pick<AgentFacts, 'personal' | 'owner' | 'control'>): Ac
   return { owner: facts.owner, shared: !facts.personal, people: facts.control?.people ?? [], sidebars: facts.control?.sidebars ?? [] }
 }
 
-function teamOnly({ owner, people, sidebars }: { owner: string; people: string[]; sidebars: string[] }): { people: string[]; sidebars: string[] } {
-  const members = new Set([owner])
+async function teamOnly({ owner, people, sidebars }: { owner: string; people: string[]; sidebars: string[] }): Promise<{ people: string[]; sidebars: string[] }> {
+  const members = new Set([owner, ...(await db.selectFrom('person').select('email').where('removed_at', 'is', null).execute()).map((row) => row.email)])
   const clean = (emails: string[]) => [...new Set(emails.map((email) => email.toLowerCase()))].filter((email) => email !== owner)
   const outside = [...clean(people), ...clean(sidebars)].find((email) => !members.has(email))
   if (outside) throw new HttpError(400, `${outside} isn’t on this team yet. Invite them first.`, { param: 'people' })

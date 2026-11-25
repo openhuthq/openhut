@@ -25,9 +25,13 @@ export const isUniqueViolation = (err: unknown): boolean => typeof err === 'obje
 
 export async function migrate(): Promise<void> {
   await sql`create table if not exists person (
-    id text primary key, email text unique not null, role text not null check (role in ('owner', 'admin', 'member')),
+    id text primary key, email text unique not null, name text not null default '', pass text, role text not null check (role in ('owner', 'admin', 'member')),
     created_at timestamptz not null default now(), removed_at timestamptz)`.execute(db)
   await sql`create unique index if not exists one_owner on person (role) where role = 'owner'`.execute(db)
+  await sql`create table if not exists session (hash text primary key, person_id text not null references person(id), expires_at timestamptz not null)`.execute(db)
+  await sql`create table if not exists invite (
+    hash text primary key, role text not null check (role in ('admin', 'member')), created_by text not null references person(id), expires_at timestamptz not null)`.execute(db)
+  await sql`create table if not exists password_reset (hash text primary key, person_id text not null references person(id), expires_at timestamptz not null)`.execute(db)
   await sql`create table if not exists agent (
     id text primary key, name text not null, owner_id text not null references person(id), instructions text not null,
     model text not null default 'claude:sonnet', net integer unique not null check (net between 1 and 250),

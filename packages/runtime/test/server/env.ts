@@ -10,4 +10,4 @@ process.env.OPENHUT_MODEL = 'test'
 process.env.OPENHUT_CLOUD_URL ??= 'http://127.0.0.1:9'
 process.env.OPENHUT_API_URL ??= 'http://127.0.0.1:9'
 process.env.OPENHUT_AGENT_API = 'http://127.0.0.1:18649'
-process.env.OPENHUT_CLIENT_KEY_SHA256 = createHash('sha256').update('test-key').digest('hex')
+process.env.OPENHUT_DEV_KEY_SHA256 = createHash('sha256').update('test-key').digest('hex')

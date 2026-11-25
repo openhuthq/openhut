@@ -18,12 +18,14 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   `connections/`, `gateway/` (the agents' MCP gateway and key broker on :8081), `admin/`, and `integrations/<service>/`.
   An agent and its control, memory, skills, routines, channels and messages are rows in the local `record` table
   (`platform/records.ts`, secrets sealed with the install secret); `agents/run-set.ts` applies them to the agents this computer
-  runs. Every caller is the owner: the local socket or `Authorization: Bearer <key>` matching `OPENHUT_CLIENT_KEY_SHA256`
-  (`team/identity.ts`; M1 adds sign-in).
+  runs. People sign in with a session cookie (`team/identity.ts`, `team/team-service.ts`): the owner from the one-use setup code
+  (`docker exec openhut openhut setup-code`, over the local socket), everyone else from an invite link; roles owner, admin, member.
+  `OPENHUT_ADDRESS` (the HTTPS address) sets the cookie's Secure flag and every redirect URL. `npm run dev` and the tests use
+  `OPENHUT_DEV_KEY_SHA256` instead, a key that acts as the owner. The server also serves the built App (`platform/web-app.ts`).
   `src/agentd/` is the root helper on a Unix socket, the only process that starts agents: `sandbox/docker.ts` runs each one
   as a container (`--runtime runsc` when a probe at boot finds gVisor works; health says `gvisor`), `sandbox/memory.ts`
   is the tests' fake (`OPENHUT_FAKE_SANDBOX=1`). Tests mirror them in `test/server/` and `test/agentd/`.
-- **`packages/app`** — `@openhut/app`, the App: the React dashboard (Vite to `dist`, TanStack Query). Tailwind v4 with shared
+- **`packages/app`** — `@openhut/app`, the App: the React dashboard (Vite to `dist`, built into the image and served by the runtime on the same origin, TanStack Query). Tailwind v4 with shared
   components in `src/components/ui` (shadcn on Base UI); screens use those, not their own styles.
 - **`packages/common`** — `@openhut/common`, the API contract: Zod Mini request schemas and response types.
 - **`site/`** — openhut.dev: the home page, the brand page and `/` for curl, served by a Cloudflare Worker with static assets
@@ -34,7 +36,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
 Node, the tree, Claude Code pinned by `ARG CLAUDE`, agent-browser, the WhatsApp bridge and the pinned Hermes agent image, so
 nothing downloads on the server); `install/image-start.sh` is its entrypoint. `install.sh` pulls that image by the digest
 `scripts/image.sh` pins into it and runs it as the container `openhut` (`--privileged` for the agents' Docker and gVisor,
-read-only root, data in the volumes `openhut-data` and `openhut`, 127.0.0.1:8787 only), and goes back to the previous container
+read-only root, data in the volumes `openhut-data` and `openhut`, 127.0.0.1:8787 only, `OPENHUT_ADDRESS` from its first argument or a prompt), prints the setup link, and goes back to the previous container
 if the new one fails its health check. `.github/workflows/runtime-image.yml` builds, smoke-tests (`scripts/image-smoke.sh`) and
 pushes it; `promote.yml` smoke-tests main's newest green commit and tags its image `stable`. `vendor/` is the pinned Hermes plugin.
 

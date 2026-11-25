@@ -10,7 +10,7 @@ import { connectionService } from '../../../src/server/connections/connection-se
 import { mcp } from '../../../src/server/integrations/mcp/mcp.ts'
 
 const lan = Object.values(networkInterfaces()).flat().find((each) => each?.family === 'IPv4' && !each.internal)?.address
-const actor = { id: 'usr_aaaaaaaa', email: 'owner@example.com', local: false, role: 'owner' as const }
+const actor = { id: 'usr_aaaaaaaa', email: 'owner@example.com', role: 'owner' as const }
 await migrate()
 await db.insertInto('person').values({ id: actor.id, email: actor.email, role: 'owner' }).execute()
 

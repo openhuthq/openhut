@@ -3,7 +3,8 @@ import websocket from '@fastify/websocket'
 import { config } from './platform/config.ts'
 import { db, migrate } from './platform/db.ts'
 import { emit, log } from './platform/events.ts'
-import { answerErrors, errorBody, messageOf } from './platform/http-error.ts'
+import { answerErrors, messageOf } from './platform/http-error.ts'
+import { webApp } from './platform/web-app.ts'
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod'
 import { adminController, healthController, updateController } from './admin/admin-controller.ts'
 import { agentController, grantController } from './agents/agent-controller.ts'
@@ -23,18 +24,15 @@ import { routineController } from './routines/routine-controller.ts'
 import { changeRequestController } from './agents/change-request-controller.ts'
 import { changeRequestService } from './agents/change-request-service.ts'
 import { routineService } from './routines/routine-service.ts'
-import { meController } from './team/team-controller.ts'
+import { googleSignInController, inviteController, meController, ownerResetController, passwordResetController, peopleController, securityController, sessionController, setupCodeController, setupController } from './team/team-controller.ts'
+import { securityService } from './team/security-service.ts'
 import { forward } from './relay/forward.ts'
 import { runSet } from './agents/run-set.ts'
 import { listenLocally } from './team/identity.ts'
 
 await migrate()
-if (config.installKind === 'server' && !/^[0-9a-f]{64}$/i.test(config.clientKeySha256 ?? '')) {
-  log.error({ event: 'app.no_client_key', message: 'Set OPENHUT_CLIENT_KEY_SHA256 to the hex SHA-256 of the key the app sends, or OPENHUT_SOCKET for local mode. Refusing to start without one.' })
-  process.exit(1)
-}
 
-const app = Fastify({ logger: false, bodyLimit: 1 << 20, trustProxy: ['127.0.0.1', '::1'], forceCloseConnections: true }).withTypeProvider<ZodTypeProvider>()
+const app = Fastify({ logger: false, bodyLimit: 1 << 20, forceCloseConnections: true }).withTypeProvider<ZodTypeProvider>()
 answerErrors(app)
 app.setValidatorCompiler(validatorCompiler)
 app.setSerializerCompiler(serializerCompiler)
@@ -50,6 +48,15 @@ await app.register(websocket)
 app.addHook('preHandler', forward.http)
 await app.register(healthController, { prefix: '/health' })
 await app.register(meController, { prefix: '/api/me' })
+await app.register(setupController, { prefix: '/api/setup' })
+await app.register(setupCodeController, { prefix: '/api/setup-codes' })
+await app.register(ownerResetController, { prefix: '/api/owner-resets' })
+await app.register(peopleController, { prefix: '/api/people' })
+await app.register(sessionController, { prefix: '/api/sessions' })
+await app.register(inviteController, { prefix: '/api/invites' })
+await app.register(passwordResetController, { prefix: '/api/password-resets' })
+await app.register(googleSignInController, { prefix: '/api/google-sign-in' })
+await app.register(securityController, { prefix: '/api/settings/security' })
 await app.register(agentController, { prefix: '/api/agents' })
 await app.register(grantController, { prefix: '/api/grants' })
 await app.register(skillController, { prefix: '/api/skills' })
@@ -68,7 +75,7 @@ await app.register(adminController, { prefix: '/api/admin' })
 await app.register(eventsController, { prefix: '/api/events' })
 await app.register(updateController, { prefix: '/api/updates' })
 
-app.setNotFoundHandler((req, reply) => reply.status(404).send(errorBody({ status: 404, message: `There's no ${req.method} ${req.url.split('?')[0]}.` })))
+app.setNotFoundHandler(webApp)
 
 if (config.installKind === 'server') await app.listen({ port: config.port, host: config.host })
 else await app.ready()
@@ -92,4 +99,5 @@ routineService.runDashboardWith((input) => threadService.runRoutine(input))
 changeRequestService.runDashboardWith((input) => threadService.runRoutine(input))
 void changeRequestService.resume().catch((err: unknown) => log.warn({ event: 'change_request.resume_failed', error: messageOf(err) }))
 routineService.start()
+securityService.startUsageData()
 void channelService.resumeTelegramClaims().catch((err: unknown) => log.warn({ event: 'telegram.claim_resume_failed', error: messageOf(err) }))

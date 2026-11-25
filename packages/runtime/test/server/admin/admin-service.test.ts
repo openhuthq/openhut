@@ -8,7 +8,7 @@ import { config } from '../../../src/server/platform/config.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { settings } from '../../../src/server/platform/settings.ts'
 
-const actor = { id: 'usr_aaaaaaaa', email: 'owner@example.com', local: false }
+const actor = { id: 'usr_aaaaaaaa', email: 'owner@example.com', role: 'owner' as const }
 await migrate()
 await db.insertInto('person').values({ id: actor.id, email: actor.email, role: 'owner' }).execute()
 const startedAt = '2026-11-13T12:00:00.000Z'

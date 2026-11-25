@@ -3,12 +3,12 @@ import assert from 'node:assert/strict'
 
 const { migrate } = await import('../../../../src/server/platform/db.ts')
 await migrate()
-const { config } = await import('../../../../src/server/platform/config.ts')
+const { settings } = await import('../../../../src/server/platform/settings.ts')
 const { google } = await import('../../../../src/server/integrations/google/google.ts')
 
 test('Google sign-in needs the team\'s own OAuth client, and then asks Google directly with PKCE and offline access', async () => {
   await assert.rejects(google.beginSignIn({ kind: 'gmail', redirectUri: 'http://127.0.0.1:8787/cb', state: 's' }), { status: 409 })
-  Object.assign(config, { googleClientId: 'client-1.apps.googleusercontent.com', googleClientSecret: 'secret' })
+  await settings.setGoogleClient({ id: 'client-1.apps.googleusercontent.com', secret: 'secret' })
   const { authorizationUrl, verifier } = await google.beginSignIn({ kind: 'gmail', redirectUri: 'http://127.0.0.1:8787/cb', state: 's' })
   const url = new URL(authorizationUrl)
   assert.equal(url.origin, 'https://accounts.google.com')

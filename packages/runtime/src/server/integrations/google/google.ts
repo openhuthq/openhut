@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import * as z from 'zod/mini'
 import type { GOOGLE_KINDS } from '@openhut/common/connections/connection.ts'
-import { config } from '../../platform/config.ts'
+import { settings } from '../../platform/settings.ts'
 import { HttpError } from '../../platform/http-error.ts'
 import type { Connector, ConnectorContext, ToolSpec } from '../connector.ts'
 import { mcp } from '../mcp/mcp.ts'
@@ -26,6 +26,7 @@ const PRODUCTS: Record<GoogleKind, { servers: string[]; scopes: string[] }> = {
   },
 }
 const Token = z.object({ access_token: z.string(), refresh_token: z.optional(z.string()), expires_in: z.number(), id_token: z.optional(z.string()) })
+const IdClaims = z.object({ email: z.string(), email_verified: z.boolean(), aud: z.string() })
 const Config = z.object({ accessToken: z.string(), refreshToken: z.string(), expiresAt: z.number(), email: z.string() })
 const toolHomes = new Map<string, string>()
 
@@ -40,6 +41,21 @@ export const google = {
       code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256',
     })
     return { authorizationUrl: `https://accounts.google.com/o/oauth2/v2/auth?${query}`, verifier }
+  },
+
+  signInUrl({ redirectUri, state, verifier }: { redirectUri: string; state: string; verifier: string }): string {
+    const query = new URLSearchParams({
+      client_id: client().id, redirect_uri: redirectUri, response_type: 'code', state, scope: 'openid email', prompt: 'select_account',
+      code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256',
+    })
+    return `https://accounts.google.com/o/oauth2/v2/auth?${query}`
+  },
+
+  async verifiedEmail({ code, verifier, redirectUri }: { code: string; verifier: string; redirectUri: string }): Promise<string | undefined> {
+    const token = await tokenOf({ grant_type: 'authorization_code', code, code_verifier: verifier, redirect_uri: redirectUri })
+    const payload = token.id_token?.split('.')[1]
+    const claims = z.safeParse(IdClaims, payload ? JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) : undefined).data
+    return claims?.email_verified && claims.aud === client().id ? claims.email.toLowerCase() : undefined
   },
 
   async finishSignIn({ code, verifier, redirectUri }: { code: string; verifier: string; redirectUri: string }): Promise<GoogleConfig> {
@@ -88,8 +104,9 @@ async function renew(latest: Record<string, unknown>): Promise<GoogleConfig> {
 }
 
 function client(): { id: string; secret: string } {
-  if (!config.googleClientId || !config.googleClientSecret) throw new HttpError(409, 'Google needs your own OAuth client. Set OPENHUT_GOOGLE_CLIENT_ID and OPENHUT_GOOGLE_CLIENT_SECRET, then try again.')
-  return { id: config.googleClientId, secret: config.googleClientSecret }
+  const saved = settings.googleClient()
+  if (!saved) throw new HttpError(409, 'Google needs your own OAuth client first. An admin adds it under Settings › Security or when connecting a Google app.')
+  return saved
 }
 
 async function tokenOf(fields: Record<string, string>): Promise<z.infer<typeof Token>> {

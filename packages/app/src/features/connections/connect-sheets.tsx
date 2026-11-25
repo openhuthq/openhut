@@ -7,6 +7,8 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useAuthorizeConnection, useBackToAsker, useConnections, useCreateConnection } from '@/features/connections/api'
 import { uniqueName, type Integration } from '@/features/connections/catalog'
 import { Field } from '@/features/connections/sheet'
+import { GoogleClientGuide } from '@/features/connections/google-client'
+import { useSecurity, useUpdateSecurity } from '@/features/settings/security'
 import { CopyButton } from '@/components/copy-button'
 import { useAgents, useCreateGrant } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
@@ -42,6 +44,7 @@ export function ConnectSheet({ me, item }: { me: Me; item: Integration }) {
   const ask = asker ? { url: wanted.url, name: wanted.name, auth: wanted.auth, line: <AskedLine asker={asker} host={host} existing={existing} /> } : {}
   const close = () => { asked.forget(); navigate('/connections') }
   const props = { me, item, returned, ask, close }
+  if (GOOGLE_KINDS.some((kind) => kind === item.name)) return <GoogleSheet {...props} />
   switch (item.name) {
     case 'postgres': return <PostgresSheet {...props} />
     case 'convex': return <ConvexSheet {...props} />
@@ -142,6 +145,25 @@ function McpSheet({ item, close, returned, ask }: FlowProps) {
       <Field label="Header" error={fieldError(error, 'header')}><Input mono name="headerName" defaultValue="Authorization" autoComplete="off" /></Field>
       <Field label="Value"><Input mono name="headerValue" type="password" placeholder="Bearer …" autoComplete="off" /></Field>
     </div>}
+  </SetupSheet>
+}
+
+function GoogleSheet(props: FlowProps) {
+  const { item, close, returned, ask } = props
+  const google = useSecurity().data?.google
+  const save = useUpdateSecurity()
+  const quick = useQuickConnect()
+  if (!google) return null
+  if (google.set) return <QuickSheet {...props} />
+  return <SetupSheet {...sheetOf(item)} blurb="Google needs your own OAuth client first. An admin sets it up once and the whole team uses it." eta="5 minutes" onClose={close}
+    error={formError(save.error, ['googleClientId', 'googleClientSecret']) ?? returned} safe="The secret stays on this server."
+    onSubmit={(event) => {
+      const field = formValues(event)
+      save.mutate({ googleClientId: field('clientId').trim(), googleClientSecret: field('clientSecret').trim() }, { onSuccess: () => quick.connect(item) })
+    }}
+    foot={FOOT(close, save.isPending || quick.pending, 'Save and connect')}>
+    {ask.line}
+    <GoogleClientGuide redirectUris={[google.connectionsRedirectUri, google.signInRedirectUri]} error={save.error} apis />
   </SetupSheet>
 }
 

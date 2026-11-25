@@ -1,13 +1,15 @@
 import { ComputersSettings } from '@/features/settings/computers'
 import { GeneralSettings } from '@/features/settings/general'
 import { ModelsSettings, ModelsStep, stepOf } from '@/features/settings/models'
+import { SECURITY_STEPS, SecuritySettingsTab, SecurityStep } from '@/features/settings/security'
+import { PeopleSettings } from '@/features/people/people'
 import { AppsSettings, AppsSheet } from '@/features/connections/connections-view'
 import { tabsFor } from '@/features/settings/tabs'
 import { AppWindow, HOVER, I, PICKED } from '@/components/kit'
 import { navigate, useOpen, usePath } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
-const MOVED: Record<string, string> = { devices: 'computers', people: 'general', usage: 'general', cloud: 'general', backup: 'general', account: 'general', team: 'general', mcp: 'general', phones: 'computers', security: 'general', updates: 'general' }
+const MOVED: Record<string, string> = { devices: 'computers', usage: 'general', cloud: 'general', backup: 'general', account: 'general', team: 'general', mcp: 'general', phones: 'computers', updates: 'general' }
 
 export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: () => void }) {
   const tab = MOVED[asked] ?? asked
@@ -19,12 +21,14 @@ export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: ()
   </nav>
   const opened = useOpen()
   const step = tab === 'models' ? stepOf(opened) : undefined
+  const securityStep = tab === 'security' && opened && SECURITY_STEPS.includes(opened) ? opened : undefined
   const [section, sheet] = usePath().split('/').slice(1)
   const apps = section === 'connections' && Boolean(sheet)
   return <AppWindow label="Settings" nav={nav} onClose={onClose}>
     {step && <ModelsStep id={step} />}
+    {securityStep && <SecurityStep id={securityStep} />}
     {!step && apps && <AppsSheet />}
-    {!step && !apps && <>
+    {!step && !securityStep && !apps && <>
       <div className="shrink-0 pt-[26px] pr-[52px] pb-1.5 pl-[34px] phone:hidden">
         <h2 className="m-0 text-[15px]/[22px] font-medium">{current?.name}</h2>
         <p className="m-0 text-[12.5px]/[18px] text-mute">{current?.subtitle}</p>
@@ -38,6 +42,8 @@ export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: ()
 
 function Tab({ tab }: { tab: string }) {
   switch (tab) {
+    case 'people': return <PeopleSettings />
+    case 'security': return <SecuritySettingsTab />
     case 'computers': return <ComputersSettings />
     case 'models': return <ModelsSettings />
     case 'apps': return <AppsSettings />

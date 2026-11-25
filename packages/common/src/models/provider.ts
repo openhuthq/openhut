@@ -1,7 +1,7 @@
 import * as z from 'zod/mini'
 import { Timestamp, atLeastOneField } from '../api.ts'
 
-export const ProviderId = z.enum(['claude', 'codex', 'openrouter', 'openai', 'xai'])
+export const ProviderId = z.enum(['claude', 'codex', 'openrouter', 'openai', 'compatible'])
 export type ProviderId = z.infer<typeof ProviderId>
 
 export const ProviderKind = z.enum(['subscription', 'key'])
@@ -14,14 +14,14 @@ export const PROVIDERS = [
   { id: 'codex', kind: 'subscription', name: 'ChatGPT subscription', short: 'ChatGPT', blurb: 'Plus or Pro', keysAt: null, keyHint: null },
   { id: 'openrouter', kind: 'key', name: 'OpenRouter', short: 'OpenRouter', blurb: 'One key for hundreds of models', keysAt: 'openrouter.ai/keys', keyHint: 'sk-or-v1-…' },
   { id: 'openai', kind: 'key', name: 'OpenAI', short: 'OpenAI', blurb: 'GPT models with your OpenAI key', keysAt: 'platform.openai.com/api-keys', keyHint: 'sk-…' },
-  { id: 'xai', kind: 'key', name: 'xAI', short: 'xAI', blurb: 'Grok models with your xAI key', keysAt: 'console.x.ai', keyHint: 'xai-…' },
+  { id: 'compatible', kind: 'key', name: 'OpenAI-compatible', short: 'OpenAI-compatible', blurb: 'Any OpenAI-compatible API, like xAI, Groq or your own server', keysAt: null, keyHint: null },
 ] as const satisfies readonly { id: ProviderId; kind: ProviderKind; name: string; short: string; blurb: string; keysAt: string | null; keyHint: string | null }[]
 
 export type ProviderInfo = (typeof PROVIDERS)[number]
 
 export const providerInfo = (id: ProviderId): ProviderInfo => PROVIDERS.find((each) => each.id === id) ?? PROVIDERS[0]
 
-export const ModelKey = z.string().check(z.regex(/^(claude|codex|openrouter|openai|xai):\S{1,200}$/, 'Use provider:model, like claude:sonnet.'))
+export const ModelKey = z.string().check(z.regex(/^(claude|codex|openrouter|openai|compatible):\S{1,200}$/, 'Use provider:model, like claude:sonnet.'))
 export type ModelKey = z.infer<typeof ModelKey>
 
 export function splitModelKey(key: string): { provider: ProviderId; model: string } | undefined {
@@ -51,12 +51,14 @@ export const Provider = z.object({
   name: z.string(),
   connected: z.boolean(),
   keyHint: z.nullable(z.string()),
+  baseUrl: z.nullable(z.string()),
   updatedAt: z.nullable(Timestamp),
   models: z.array(ProviderModel),
 })
 export type Provider = z.infer<typeof Provider>
 
 export const UpdateProvider = z.object({
+  baseUrl: z.optional(z.url({ protocol: /^https?$/, error: 'Enter the API base URL, like https://api.x.ai/v1.' }).check(z.maxLength(300))),
   apiKey: z.optional(z.string().check(z.regex(/^\S{8,400}$/, KEY_MESSAGE))),
   models: z.optional(z.array(z.object({ id: z.string().check(z.maxLength(200)), on: z.boolean() })).check(z.maxLength(2000))),
 }).check(atLeastOneField)

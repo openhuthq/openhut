@@ -19,7 +19,7 @@ await db.insertInto('channel').values({ id: 'ch_chgwhats', agent_id: 'ag_chgagen
 signIn({ email: 'chg@example.com' })
 runSet.watch()
 await refresh()
-const owner = { id: 'usr_chgowner', email: 'chg@example.com', local: true, role: 'owner' as const }
+const owner = { id: 'usr_chgowner', email: 'chg@example.com', role: 'owner' as const }
 const told: { agentId: string; text: string }[] = []
 changeRequestService.runDashboardWith(async (input) => { told.push(input); return '' })
 

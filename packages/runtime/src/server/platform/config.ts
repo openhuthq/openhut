@@ -24,13 +24,13 @@ export const config = {
   releaseUrl: env.get('OPENHUT_URL').default('https://openhut.dev').asString(), // where releases are downloaded from
   socket: SOCKET ?? join(DATA, 'openhut.sock'),
   installKind: installKindOf(SOCKET ? 'desktop' : 'server'),
-  clientKeySha256: env.get('OPENHUT_CLIENT_KEY_SHA256').asString(), // sha256 of the key a server's clients present
+  address: addressOf(env.get('OPENHUT_ADDRESS').asUrlString()), // the HTTPS address people open; cookies and redirect URLs come from it
+  devKeySha256: env.get('OPENHUT_DEV_KEY_SHA256').asString(), // npm run dev and the tests only: sha256 of a key that acts as the owner
+  appDir: fileURLToPath(new URL('../../../../app/dist', import.meta.url)), // the built web app, served on the same origin
   modelMode: TEST_MODEL ? 'test' as const : 'claude' as const,
   agentApi: env.get('OPENHUT_AGENT_API').asString(), // overrides the agents' API address (tests)
   agentGateway: HOST_NET ? `http://127.0.0.1:${GATEWAY_PORT}` : undefined,
   agentHostNet: HOST_NET,
-  googleClientId: env.get('OPENHUT_GOOGLE_CLIENT_ID').asString(), // the team's own Google OAuth client (M1 moves it to Settings)
-  googleClientSecret: env.get('OPENHUT_GOOGLE_CLIENT_SECRET').asString(),
   slackApi: 'https://slack.com/api',
   slackFiles: 'https://files.slack.com',
   telegramApi: 'https://api.telegram.org',
@@ -38,7 +38,6 @@ export const config = {
   anthropicApi: TEST_MODEL ? `http://127.0.0.1:${GATEWAY_PORT}/test-anthropic` : 'https://api.anthropic.com',
   openrouterApi: process.env.OPENHUT_OPENROUTER_API || 'https://openrouter.ai/api', // a local fake in tests
   openaiApi: 'https://api.openai.com',
-  xaiApi: 'https://api.x.ai',
   codexApi: 'https://chatgpt.com/backend-api/codex',
   codexAuthApi: 'https://auth.openai.com',
   agentdSocket: AGENTD_SOCK ?? '/run/agentd/agentd.sock',
@@ -56,6 +55,10 @@ delete process.env.OPENHUT_SECRET
 function installKindOf(kind: 'desktop' | 'server'): 'mac' | 'linux' | 'server' {
   if (kind === 'server') return 'server'
   return process.platform === 'darwin' ? 'mac' : 'linux'
+}
+
+function addressOf(url: string | undefined): string {
+  return url ? new URL(url).origin : `http://127.0.0.1:${env.get('PORT').default('8787').asPortNumber()}`
 }
 
 function fileOr(url: URL, fallback: string): string {

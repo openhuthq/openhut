@@ -27,7 +27,7 @@ export function useComputerProviders(_computer: string): Provider[] | undefined 
 export function useConnectProvider() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, apiKey }: { id: ProviderId; apiKey: string }) => request({ schema: Provider, path: pathOf(id), method: 'PATCH', body: { apiKey } }),
+    mutationFn: ({ id, apiKey, baseUrl }: { id: ProviderId; apiKey: string; baseUrl?: string }) => request({ schema: Provider, path: pathOf(id), method: 'PATCH', body: { apiKey, baseUrl } }),
     onSuccess: () => client.invalidateQueries({ queryKey: PROVIDERS_KEY }),
   })
 }

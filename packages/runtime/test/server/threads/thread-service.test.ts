@@ -271,7 +271,7 @@ test('several people chat with one shared agent through its runner: each message
   await db.insertInto('agent').values({ id: 'ag_chatteam', name: 'Team', owner_id: 'usr_chatownr', instructions: '# Team', model: 'sonnet', net: 24, channel_key: seal('k'.repeat(48)), wanted: 'stopped', shared: true, workspace: WS }).execute()
   const team = Fastify()
   answerErrors(team)
-  team.post<{ Params: { email: string }; Body: SendChat }>('/as/:email', async (req, reply) => threadService.chat({ actor: { id: 'usr_chatownr', email: req.params.email, local: false }, id: 'ag_chatteam', body: req.body, reply }))
+  team.post<{ Params: { email: string }; Body: SendChat }>('/as/:email', async (req, reply) => threadService.chat({ actor: { id: 'usr_chatownr', email: req.params.email, role: 'owner' as const }, id: 'ag_chatteam', body: req.body, reply }))
   const asks = (text: string, author: string) => team.inject({ method: 'POST', url: `/as/${author}`, payload: { trigger: 'submit-message', message: { id: 'client-id', role: 'user', parts: [{ type: 'text', text }], metadata: { author: 'forged@example.com' } } } })
   assert.equal((await asks('Is 4471 shipped?', 'ana@example.com')).statusCode, 409)
   assert.equal((await asks('Check order 4471 for Lena', 'sara@example.com')).statusCode, 409)
