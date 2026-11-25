@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import type { Selectable } from 'kysely'
+import { sql, type Selectable } from 'kysely'
 import type { Deleted } from '@openhut/common/api.ts'
 import type { CreatePerson, Invite, Me, MemberRole, Person, Session, Setup } from '@openhut/common/team/team.ts'
 import { config } from '../platform/config.ts'
@@ -92,13 +92,27 @@ export const teamService = {
     await db.insertInto('invite').values({ hash: sha(token), role, created_by: actor.id, expires_at: expiresAt }).execute()
     await db.deleteFrom('invite').where('expires_at', '<', new Date()).execute()
     emit({ name: 'invite.created', actor, target: { type: 'invite', id: sha(token).slice(0, 12), role } })
-    return { object: 'invite', role, expiresAt: expiresAt.toISOString(), link: `${publicAddress()}/invite/${token}` }
+    return { ...inviteOf({ hash: sha(token), role, expires_at: expiresAt }), link: `${publicAddress()}/invite/${token}` }
   },
 
   async getInvite({ token }: { token: string }): Promise<Invite> {
-    const row = await db.selectFrom('invite').select(['role', 'expires_at']).where('hash', '=', sha(token)).where('expires_at', '>', new Date()).executeTakeFirst()
+    const row = await db.selectFrom('invite').select(['hash', 'role', 'expires_at']).where('hash', '=', sha(token)).where('expires_at', '>', new Date()).executeTakeFirst()
     if (!row) throw new HttpError(410, USED_INVITE)
-    return { object: 'invite', role: row.role, expiresAt: new Date(row.expires_at).toISOString() }
+    return inviteOf(row)
+  },
+
+  // Pending links only: the token itself isn't stored, so a lost link is revoked and made again.
+  async listInvites({ actor }: { actor: Caller }): Promise<Invite[]> {
+    requireAdmin(actor)
+    return (await db.selectFrom('invite').select(['hash', 'role', 'expires_at']).where('expires_at', '>', new Date()).orderBy('expires_at', 'desc').execute()).map(inviteOf)
+  },
+
+  async deleteInvite({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'invite'>> {
+    requireAdmin(actor)
+    const row = await db.deleteFrom('invite').where('hash', '=', id).returning('hash').executeTakeFirst()
+    if (!row) throw new HttpError(404, 'That invite link was already used, revoked or has expired.')
+    emit({ name: 'invite.revoked', actor, target: { type: 'invite', id: id.slice(0, 12) } })
+    return deleted({ id, object: 'invite' })
   },
 
   async createPasswordReset({ email }: { email: string }): Promise<{ object: 'password_reset' }> {
@@ -174,6 +188,8 @@ async function acceptInvite({ inviteToken, name, email, password }: { inviteToke
   return db.transaction().execute(async (trx) => {
     const invite = await trx.deleteFrom('invite').where('hash', '=', sha(inviteToken)).where('expires_at', '>', new Date()).returning('role').executeTakeFirst()
     if (!invite) throw new HttpError(410, USED_INVITE)
+    // A removed person keeps their row (history points at it); free the email so they can be invited back as a new person.
+    await trx.updateTable('person').set({ email: sql<string>`id || ':' || email` }).where('email', '=', email).where('removed_at', 'is not', null).execute()
     const person = await trx.insertInto('person').values({ id: newId('usr'), email, name, pass, role: invite.role }).returningAll().executeTakeFirstOrThrow()
     return personOf(person)
   }).catch((err: unknown) => { throw isUniqueViolation(err) ? new HttpError(409, 'That email already has an account here, or had one. Use another one, or sign in.', { param: 'email' }) : err })
@@ -188,6 +204,12 @@ async function openSession(personId: string): Promise<string> {
 
 function sessionOf({ person, token }: { person: Person; token: string }): { session: Session; token: string } {
   return { session: { id: sha(token).slice(0, 16), object: 'session', person, expiresAt: new Date(Date.now() + SESSION_DAYS * DAY_MS).toISOString() }, token }
+}
+
+// ponytail: created is derived from the fixed lifetime, so the invite table needs no created_at.
+function inviteOf(row: { hash: string; role: MemberRole; expires_at: Date | string }): Invite {
+  const expires = new Date(row.expires_at)
+  return { id: row.hash, object: 'invite', role: row.role, createdAt: new Date(expires.getTime() - INVITE_DAYS * DAY_MS).toISOString(), expiresAt: expires.toISOString() }
 }
 
 function personOf(row: Selectable<Database['person']>): Person {

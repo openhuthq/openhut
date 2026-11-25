@@ -22,7 +22,8 @@ const Stored = z.object({
 })
 
 export const mcp = {
-  connector({ url: fixedUrl, stdio, redirectUrl }: { url?: string; stdio?: (config: unknown) => StdioServerParameters; redirectUrl: () => string }): Connector {
+  // hide: tools agents never see or call (e.g. ones that only draw a widget our app doesn't render).
+  connector({ url: fixedUrl, stdio, redirectUrl, hide = [] }: { url?: string; stdio?: (config: unknown) => StdioServerParameters; redirectUrl: () => string; hide?: string[] }): Connector {
     const open = ({ config, refresh }: ConnectorContext): Target => {
       if (stdio) return { url: '', stdio: stdio(config), redirectUrl: '' }
       const stored = z.parse(Stored, config)
@@ -33,8 +34,8 @@ export const mcp = {
       return { url, headers: stored.headers, oauth: stored.oauth && signIn(stored.oauth), redirectUrl: back, renew: stored.oauth?.tokens ? renew : undefined }
     }
     return {
-      tools: (ctx) => withRenewal(open(ctx), listTools),
-      call: (ctx) => withRenewal(open(ctx), (client) => callTool({ client, tool: ctx.tool, args: ctx.args })),
+      tools: async (ctx) => (await withRenewal(open(ctx), listTools)).filter((tool) => !hide.includes(tool.name)),
+      call: async (ctx) => hide.includes(ctx.tool) ? { text: `${ctx.tool} isn't available here.`, isError: true } : withRenewal(open(ctx), (client) => callTool({ client, tool: ctx.tool, args: ctx.args })),
     }
   },
 

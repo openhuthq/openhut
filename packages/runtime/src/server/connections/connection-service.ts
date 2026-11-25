@@ -36,7 +36,8 @@ const CONNECTORS: Record<ConnectionKind, Connector> = {
   posthog: mcp.connector({ url: MCP_SERVERS.posthog, redirectUrl }),
   linear: mcp.connector({ url: MCP_SERVERS.linear, redirectUrl }),
   github: github.connector,
-  excalidraw: mcp.connector({ url: MCP_SERVERS.excalidraw, redirectUrl }),
+  // create_view only draws an inline widget the app doesn't render; agents use export_to_excalidraw for a link.
+  excalidraw: mcp.connector({ url: MCP_SERVERS.excalidraw, redirectUrl, hide: ['create_view'] }),
   mcp: mcp.connector({ redirectUrl }),
   gmail: google.connector('gmail'),
   drive: google.connector('drive'),

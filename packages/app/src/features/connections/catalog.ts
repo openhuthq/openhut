@@ -40,7 +40,7 @@ export const SHELVES: { shelf: string; items: Integration[] }[] = [
     },
     {
       name: 'excalidraw', short: 'Diagrams shared as a link', safeLine: 'Drawings live on excalidraw.com. Anyone with the link can open them.', eta: 'One click', title: 'Excalidraw', blurb: 'Excalidraw’s official MCP server: agents draw a diagram and send a link that opens it. No account or key.',
-      gets: ['read_me and create_view: draw a hand-drawn diagram', 'export_to_excalidraw: a link that opens it on excalidraw.com, where people can edit it'],
+      gets: ['read_me: how to draw a hand-drawn diagram', 'export_to_excalidraw: a link that opens it on excalidraw.com, where people can edit it'],
       safe: ['Anyone with the link can open the drawing, so leave secrets out.', 'There is no account or key to leak.'],
     },
     {

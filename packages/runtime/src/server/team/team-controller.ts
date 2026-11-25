@@ -70,6 +70,10 @@ export const sessionController: FastifyPluginAsyncZod = async (app) => {
 export const inviteController: FastifyPluginAsyncZod = async (app) => {
   app.post('/', CreateInviteRequest, async (req) => teamService.createInvite({ actor: await who(req), role: req.body.role }))
 
+  app.get('/', async (req) => listOf({ req, data: await teamService.listInvites({ actor: await who(req) }) }))
+
+  app.delete('/:id', { schema: { params: IdParams } }, async (req) => teamService.deleteInvite({ actor: await who(req), id: req.params.id }))
+
   app.get('/:token', { schema: { params: TokenParams } }, async (req) => {
     rateLimit({ keys: [`invite:${clientOf(req)}`], max: 60 })
     return teamService.getInvite(req.params)
