@@ -1,5 +1,5 @@
 import { createContext, useState, type ReactElement } from 'react'
-import { Delete02Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SidebarLeftIcon, StopIcon } from '@hugeicons/core-free-icons'
+import { Delete02Icon, Logout01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SidebarLeftIcon, StopIcon } from '@hugeicons/core-free-icons'
 import type { OpenHutAgent } from '@/lib/openhut'
 import type { Thread } from '@openhut/common/threads/thread.ts'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ import { agentPath } from '@/app/routes'
 import { useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
 import { toneOf, troubleOf, wordOf } from '@/features/agents/status'
+import { useSignOut } from '@/features/auth/api'
 import { useOwner } from '@/features/people/api'
 import { useConnections } from '@/features/connections/api'
 import { chipMarks } from '@/features/connections/catalog'
@@ -46,7 +47,7 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew }: {
     <div className={cn('flex h-full w-[280px] flex-col phone:w-full transition-[opacity,translate] duration-[160ms] ease-out', collapsed && '-translate-x-2 opacity-0')}>
     <div className={cn('flex h-[44px] shrink-0 items-center gap-1.5 pr-3 pl-3 phone:h-16 phone:px-4')}>
       <a href="/" aria-label="OpenHut" title="OpenHut" className="flex items-center gap-1.5 text-[14px] font-semibold text-ink no-underline phone:hidden"><Hut className="size-6" />OpenHut</a>
-      <a href="/settings/general" aria-label="Settings" className={cn(ICON_BUTTON, ROUND, 'hidden phone:grid')}><I icon={Settings02Icon} size={20} /></a>
+      <a href="/settings/people" aria-label="Settings" className={cn(ICON_BUTTON, ROUND, 'hidden phone:grid')}><I icon={Settings02Icon} size={20} /></a>
       <span className="ml-auto flex gap-1.5">
         <Button type="button" variant="bare" className={cn(ICON_BUTTON, 'phone:hidden')} aria-label="Hide sidebar" title="Hide sidebar ⌘\" onClick={onCollapse}><I icon={SidebarLeftIcon} size={16} /></Button>
         <Button type="button" variant="bare" className={cn(ICON_BUTTON, ROUND)} aria-label="New agent" title="New agent" onClick={onNew}><I icon={PlusSignIcon} size={phone ? 20 : 16} /></Button>
@@ -102,7 +103,7 @@ function RowMenu({ agent, children }: { agent: OpenHutAgent; children: ReactElem
 }
 
 function Gear() {
-  return <a href="/settings/general" aria-label="Settings" title="Settings" className={cn(SURFACE, 'grid phone:hidden size-10 shrink-0 place-items-center rounded-lg')}><I icon={Settings02Icon} size={17} /></a>
+  return <a href="/settings/people" aria-label="Settings" title="Settings" className={cn(SURFACE, 'grid phone:hidden size-10 shrink-0 place-items-center rounded-lg')}><I icon={Settings02Icon} size={17} /></a>
 }
 
 function Live({ agent, className }: { agent: OpenHutAgent; className: string }) {
@@ -122,6 +123,7 @@ function ConnectedMarks() {
 function You() {
   const email = useOwner()
   const name = personName(email)
+  const signOut = useSignOut()
   return <DropdownMenu>
     <DropdownMenuTrigger render={<Button type="button" variant="bare" aria-label={`You: ${name}`} title={name} className={cn(SURFACE, 'relative grid size-10 shrink-0 place-items-center rounded-lg')} />}>
       <PersonFace name={name} email={email} size={24} />
@@ -129,7 +131,7 @@ function You() {
     <DropdownMenuContent side="top" align="start" className="flex w-[260px] flex-col gap-0.5 rounded-lg p-1.5 shadow-menu">
       <div className="flex items-center gap-2.5 px-2 py-1.5"><PersonFace name={name} email={email} size={28} /><span className="grid min-w-0 leading-tight"><span className="truncate text-[13px] font-medium">{name}</span><span className="truncate text-[11.5px] text-mute">{email}</span></span></div>
       <DropdownMenuSeparator />
-      <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => navigate('/settings/general')}><I icon={Settings02Icon} size={15} className="text-mute" />Settings</DropdownMenuItem>
+      <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}><I icon={Logout01Icon} size={15} className="text-mute" />Sign out</DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
 }

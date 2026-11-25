@@ -4,8 +4,8 @@ import { tabsFor } from '../../../src/features/settings/tabs.ts'
 
 const names = () => tabsFor().map(({ name }) => name)
 
-test('settings is one flat list: General, People, Computers, Models, Apps and Updates, and Admin last for owners and admins', () => {
-  assert.deepEqual(names(), ['General', 'People', 'Computers', 'Models', 'Apps', 'Updates'])
+test('settings is one flat list: People, Computers, Models, Apps and Updates, and Admin last for owners and admins', () => {
+  assert.deepEqual(names(), ['People', 'Computers', 'Models', 'Apps', 'Updates'])
   assert.equal(tabsFor({ admin: true }).at(-1)?.name, 'Admin')
 })
 

@@ -1,5 +1,4 @@
 import { ComputersSettings } from '@/features/settings/computers'
-import { GeneralSettings } from '@/features/settings/general'
 import { ModelsSettings, ModelsStep, stepOf } from '@/features/settings/models'
 import { AdminSettings } from '@/features/settings/admin'
 import { PeopleSettings } from '@/features/people/people'
@@ -40,12 +39,11 @@ export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: ()
 
 function Tab({ tab }: { tab: string }) {
   switch (tab) {
-    case 'people': return <PeopleSettings />
     case 'admin': return <AdminSettings />
     case 'computers': return <ComputersSettings />
     case 'models': return <ModelsSettings />
     case 'apps': return <AppsSettings />
     case 'updates': return <UpdatesSettings />
-    default: return <GeneralSettings />
+    default: return <PeopleSettings />
   }
 }
