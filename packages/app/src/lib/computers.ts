@@ -1,7 +1,7 @@
 import { BrowserIcon, LaptopIcon, ServerStack01Icon, SmartPhone01Icon } from '@hugeicons/core-free-icons'
 import type { Cloud } from '@openhut/common/cloud/cloud.ts'
 
-export type Features = { whatsapp: boolean; browser: boolean }
+export type Features = { whatsapp: boolean; browser: boolean; cloud?: boolean }
 export type Computer = { id: string; name: string; kind: 'here' | 'desktop' | 'server'; url: string; online: boolean; features: Features; appTooOld: boolean; runtimeTooOld: boolean; server?: boolean }
 
 // The id a computer has in the App (its tunnel key) from its device key.

@@ -43,7 +43,7 @@ export const adminService = {
         running: agents.filter((agent) => states?.[agent.id] === 'running').length, total: agents.length,
       },
       publicKey: transferPublicKey,
-      features: available,
+      features: { ...available, cloud: config.cloudComputer },
       minAppVersion: MIN_APP_VERSION,
     }
   },

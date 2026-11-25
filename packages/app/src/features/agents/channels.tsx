@@ -25,6 +25,7 @@ const KINDS: Record<ChannelKind, { label: string; remove: string; gone: string }
   discord: { label: 'Discord', remove: 'Disconnect', gone: 'stops answering in Discord. Connecting again takes the bot token.' },
 }
 const ORDER: ChannelKind[] = ['slack', 'discord', 'whatsapp', 'telegram']
+const WAKES: ChannelKind[] = ['telegram']
 
 export function ChannelRows({ agent }: { agent: Agent }) {
   const channels = useChannels(agent.id)
@@ -32,18 +33,18 @@ export function ChannelRows({ agent }: { agent: Agent }) {
   const offered = ORDER.filter((kind) => kind !== 'whatsapp' || features.whatsapp || channels.data?.some((channel) => channel.kind === 'whatsapp'))
   return <Section title="Talk to it on">
     <ErrorNote message={channels.error?.message} />
-    <div className="-mx-2.5 flex flex-col gap-px">{offered.map((kind) => <ChannelRow key={kind} agent={agent} kind={kind} channel={channels.data?.find((channel) => channel.kind === kind)} />)}</div>
+    <div className="-mx-2.5 flex flex-col gap-px">{offered.map((kind) => <ChannelRow key={kind} agent={agent} kind={kind} channel={channels.data?.find((channel) => channel.kind === kind)} awake={!!features.cloud && !WAKES.includes(kind)} />)}</div>
   </Section>
 }
 
-function ChannelRow({ agent, kind, channel }: { agent: Agent; kind: ChannelKind; channel: Channel | undefined }) {
+function ChannelRow({ agent, kind, channel, awake }: { agent: Agent; kind: ChannelKind; channel: Channel | undefined; awake: boolean }) {
   const deleteChannel = useDeleteChannel()
   const [confirming, setConfirming] = useState(false)
   const open = () => navigate(agentPath({ agentId: agent.id, dialog: kind }))
   const { label, remove, gone } = KINDS[kind]
   return <div className={cn(ROW, 'cursor-default')} onClick={agent.canEdit && channel?.status !== 'connected' ? open : undefined}>
     <Glyph name={kind} size={16} />
-    {label}<span className="min-w-0 flex-1 truncate text-xs text-mute">{line(channel)}</span>
+    {label}<span className="min-w-0 flex-1 truncate text-xs text-mute">{[line(channel), awake && 'Keeps Cloud awake'].filter(Boolean).join(' · ')}</span>
     {channel?.status === 'connected'
       ? <Switch checked aria-label={`${remove} ${label}`} disabled={!agent.canEdit || deleteChannel.isPending} onCheckedChange={() => setConfirming(true)} />
       : <Button type="button" variant="secondary" size="xs" className="rounded-full px-2.5 text-[12px] font-normal" disabled={!agent.canEdit} onClick={(event) => { event.stopPropagation(); open() }}>{channel ? 'Scan code' : 'Set up'}</Button>}
