@@ -9,6 +9,7 @@ import { ResetEncryptionRow, TeamDangerRows, TeamSettings } from '@/features/peo
 import { DeleteAccountRow, SignInRows, YouSettings } from '@/features/cloud/cloud'
 import { toastError } from '@/lib/toast'
 import { useWorkspaces } from '@/features/cloud/workspaces'
+import { EncryptionRow, useEncryption } from '@/features/settings/encryption'
 
 export function GeneralSettings() {
   return <>
@@ -27,7 +28,7 @@ export function GeneralSettings() {
 export function SecuritySettings() {
   const admin = useWorkspaces().active.role !== 'member'
   return <>
-    <Section title="Sign-in and recovery"><Rows><SignInRows /></Rows></Section>
+    <Section title="Getting in"><Rows><EncryptionRow />{useEncryption() && <SignInRows />}</Rows></Section>
     {admin && <Section title="Encryption"><Rows><ResetEncryptionRow /></Rows></Section>}
   </>
 }
