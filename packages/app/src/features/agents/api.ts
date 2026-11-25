@@ -60,7 +60,7 @@ export function useCreateAgent() {
     },
     onSuccess: (agent) => {
       client.setQueryData([...AGENTS_KEY, agent.id], agent)
-      client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents && [...agents, { ...agent, computer: 'local', online: true }])
+      client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents && [...agents, { ...agent, computer: agent.runsOn ?? 'here', online: true }])
       navigate(`/agents/${encodeURIComponent(agent.id)}`)
     },
   })
