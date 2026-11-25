@@ -14,7 +14,7 @@ import { HttpError, messageOf } from '../platform/http-error.ts'
 import { forward } from '../relay/forward.ts'
 import { deleted } from '../platform/responses.ts'
 import { unseal } from '../platform/secrets.ts'
-import { agentService, runsHere } from '../agents/agent-service.ts'
+import { agentService } from '../agents/agent-service.ts'
 import { HERE, HOME } from '../team/home.ts'
 import { recordsService } from '../platform/records.ts'
 import { peopleOf, type Caller } from '../team/identity.ts'
@@ -190,7 +190,6 @@ export const threadService = {
 
 async function runner({ actor, id }: { actor: Caller; id: string }): Promise<AgentRow> {
   const agent = await agentService.requireEditable({ actor, id })
-  if (!runsHere({ row: agent, me: HERE })) throw new HttpError(409, `${agent.name} runs on another computer now. Try again in a moment.`)
   return agent
 }
 

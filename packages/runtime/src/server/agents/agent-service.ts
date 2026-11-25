@@ -418,10 +418,6 @@ async function keepRunning({ row }: { row: AgentRow }): Promise<void> {
   if (change !== 'none') log.info({ event: `reconcile.${change}`, agent: row.id })
 }
 
-export function runsHere({ row, me }: { row: Pick<AgentRow, 'runs_on'>; me: string | null }): boolean {
-  return !row.runs_on || row.runs_on === me
-}
-
 function statusOf(state: string | undefined): AgentStatus {
   switch (state) {
     case 'running': return 'running'

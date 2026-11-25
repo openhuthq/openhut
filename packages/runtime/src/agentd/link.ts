@@ -12,6 +12,7 @@ const FAILED = `${config.data}/failed-images`
 const UPDATE_LOG = `${config.data}/update.log`
 const LINKED = '/run/openhut-linked'
 const ID = /^ag_[a-z0-9]{8}$/
+const HELLO_MS = 60_000
 const run = promisify(execFile)
 
 let current: Mux | undefined
@@ -105,7 +106,10 @@ function dial(): void {
       try { writeFileSync(LINKED, `${new Date().toISOString()}\n`) } catch { console.log('link: no /run to mark the link in') }
       wait = 1_000
       void follow(image).catch((err: unknown) => console.error(`link: couldn't start the update: ${String(err)}`))
-      void hello(image).then((said) => link.say(said))
+      const tell = () => void hello(image).then((said) => link.say(said))
+      tell()
+      const again = setInterval(tell, HELLO_MS)
+      socket.once('close', () => clearInterval(again))
     },
   })
   socket.on('open', () => {
