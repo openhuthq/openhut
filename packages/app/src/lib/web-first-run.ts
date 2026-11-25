@@ -4,7 +4,7 @@ export const FIRST_RUN_KEY = 'openhut-first-run'
 export const DOWNLOAD_MAC = 'https://openhut.dev/download/mac?from=web'
 export const HELP = 'https://openhut.dev/docs'
 
-export type FirstRunStep = { step: 'mac' } | { step: 'server'; code?: string; expiresAt?: string }
+export type FirstRunStep = { step: 'mac' } | { step: 'cloud' } | { step: 'server'; code?: string; expiresAt?: string }
 export type WebScreen = 'loading' | 'sign-in' | 'first-run' | 'phone' | 'continuing' | 'knock' | 'over' | 'offline' | 'connecting' | 'open'
 
 export class Offline extends Error {
@@ -48,6 +48,7 @@ export function savedOf(raw: string | null): FirstRunStep | null {
     const saved: unknown = JSON.parse(raw ?? 'null')
     if (typeof saved !== 'object' || !saved || !('step' in saved)) return null
     if (saved.step === 'mac') return { step: 'mac' }
+    if (saved.step === 'cloud') return { step: 'cloud' }
     if (saved.step !== 'server') return null
     const code = 'code' in saved && typeof saved.code === 'string' ? saved.code : undefined
     const expiresAt = 'expiresAt' in saved && typeof saved.expiresAt === 'string' ? saved.expiresAt : undefined
