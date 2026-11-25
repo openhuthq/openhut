@@ -1,6 +1,7 @@
 import { createContext, useState, useSyncExternalStore, type ReactElement } from 'react'
 import { BrowserIcon, Cancel01Icon, Logout03Icon, Delete02Icon, LaptopIcon, Link01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, ServerStack01Icon, SidebarLeftIcon, StopIcon, Tick02Icon } from '@hugeicons/core-free-icons'
 import type { OpenHutAgent } from '@/lib/openhut'
+import { CreditsLine } from '@/features/credits/credits'
 import type { Thread } from '@openhut/common/threads/thread.ts'
 import { Button } from '@/components/ui/button'
 import { Tooltip } from '@/components/ui/tooltip'
@@ -89,6 +90,7 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew, team
     <footer className="mt-auto flex flex-col items-start gap-2 px-3 pt-2 pb-3">
       <UpdateEverything />
       <RemovedLine />
+      <CreditsLine />
       <div className="flex w-full items-center gap-2">
         <TeamSwitcher />
         <a href="/connections" className={cn(SURFACE, 'flex h-10 min-w-0 flex-1 items-center gap-2 rounded-lg pr-3 pl-3.5 text-[13.5px] font-medium')}>
