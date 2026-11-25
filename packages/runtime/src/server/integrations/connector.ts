@@ -1,5 +1,5 @@
 import * as z from 'zod/mini'
-import { describeIssues } from '../platform/validation.ts'
+import { describeIssues } from '../platform/http-error.ts'
 
 export function nativeConnector<C>({ config, tools }: { config: z.ZodMiniType<C>; tools: Record<string, NativeTool<C>> }): Connector {
   return {

@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import Fastify from 'fastify'
+import { validatorCompiler } from 'fastify-type-provider-zod'
 import { boxKey, identity, toBase64 } from '@openhut/common/vault/public.ts'
 import { serve, toHex } from '@openhut/common/tunnel/index.ts'
 import { startRelay, TOKEN, waitFor } from '@openhut/common/test/tunnel/relay.ts'
@@ -43,6 +44,7 @@ records.write({ collection: 'agent', id: 'ag_fwdthere', workspace, parent: 'mo@e
 records.write({ collection: 'control', id: 'ag_fwdthere', workspace, parent: 'ag_fwdthere', personal: true, value: { runsOn: toBase64(runner.publicKey), model: 'claude:sonnet', codeExecution: true, browser: false, grants: [] } })
 
 const app = Fastify()
+app.setValidatorCompiler(validatorCompiler)
 answerErrors(app)
 app.addHook('preHandler', forward.http)
 app.get('/api/threads/:id', async () => ({ on: 'here' }))

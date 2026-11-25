@@ -9,7 +9,7 @@ import { config } from '../../../src/server/platform/config.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { answerErrors, HttpError } from '../../../src/server/platform/http-error.ts'
 import { seal } from '../../../src/server/platform/secrets.ts'
-import { validateWithZod } from '../../../src/server/platform/validation.ts'
+import { validatorCompiler } from 'fastify-type-provider-zod'
 import { threadController } from '../../../src/server/threads/thread-controller.ts'
 import { imageTypeOf, safeFileName, shownCall, threadService } from '../../../src/server/threads/thread-service.ts'
 import { keysService } from '../../../src/server/cloud/keys-service.ts'
@@ -56,7 +56,7 @@ config.agentApi = `http://127.0.0.1:${(hermes.address() as AddressInfo).port}`
 
 const app = Fastify()
 answerErrors(app)
-app.setValidatorCompiler(validateWithZod)
+app.setValidatorCompiler(validatorCompiler)
 await app.register(threadController, { prefix: '/api/threads' })
 const as = () => ({ authorization: 'Bearer test-key' })
 const messagesOf = async (id: string) => (await app.inject({ method: 'GET', url: `/api/threads/${id}`, headers: as() })).json().messages as { id: string; role: string; parts: { type: string; text?: string }[]; metadata?: { author: string } }[]

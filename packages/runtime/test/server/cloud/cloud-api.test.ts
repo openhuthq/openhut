@@ -15,7 +15,7 @@ test('against the real cloud API: dev sign-in, save the kit, make an agent, chat
   const { config } = await import('../../../src/server/platform/config.ts')
   const { migrate } = await import('../../../src/server/platform/db.ts')
   const { answerErrors } = await import('../../../src/server/platform/http-error.ts')
-  const { validateWithZod } = await import('../../../src/server/platform/validation.ts')
+  const { validatorCompiler } = await import('fastify-type-provider-zod')
   const { cloudController } = await import('../../../src/server/cloud/cloud-controller.ts')
   const { cloudEvents } = await import('../../../src/server/cloud/cloud-events.ts')
   const { agentController } = await import('../../../src/server/agents/agent-controller.ts')
@@ -35,7 +35,7 @@ test('against the real cloud API: dev sign-in, save the kit, make an agent, chat
 
   const app = Fastify()
   answerErrors(app)
-  app.setValidatorCompiler(validateWithZod)
+  app.setValidatorCompiler(validatorCompiler)
   await app.register(cloudController, { prefix: '/api/cloud' })
   await app.register(agentController, { prefix: '/api/agents' })
   await app.register(threadController, { prefix: '/api/threads' })
