@@ -135,12 +135,23 @@ export const threadService = {
     reply.raw.on('close', () => abort.abort())
     const started = Date.now()
     const answerId = nextId()
-    const session = sessionOf(said)
-    const message = await seeded({ said, session, message: together({ messages: said.map((each) => each.message), shared: agent.shared || peopleOf(agent.people).length > 0 }) })
+    let session = sessionOf(said)
+    const asked = together({ messages: said.map((each) => each.message), shared: agent.shared || peopleOf(agent.people).length > 0 })
+    const answer = async (writer: { write: (chunk: UIMessageChunk) => void }) => {
+      const message = await seeded({ said, session, message: asked })
+      for await (const chunk of joinText(pipeJsonRender(relayed({ agent, session, message, signal: abort.signal })))) writer.write(chunk)
+    }
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
         writer.write({ type: 'start', messageId: answerId })
-        for await (const chunk of joinText(pipeJsonRender(relayed({ agent, session, message, signal: abort.signal })))) writer.write(chunk)
+        await answer(writer).catch(async (err: unknown) => {
+          if (!(err instanceof LostTurn)) throw err
+          // Hermes lost a turn of this session (its gateway was killed mid-turn, e.g. by an update) and
+          // pauses the session for good; carry on in a fresh session, seeded with the chat so far.
+          log.warn({ event: 'agent.session_lost', agent: agent.id, session })
+          session = `${sessionOf([], said[0]?.id)}.${nextId()}`
+          await answer(writer)
+        })
         const calls = await callsSince({ agentId: agent.id, after: lastCall?.id ?? '0' })
         if (calls.length) writer.write({ type: 'data-calls', data: calls })
         const changes = await changeRequestService.inChat({ agentId: agent.id, since: new Date(started) })
@@ -234,7 +245,10 @@ const idAt = ({ ms, tail }: { ms: number; tail: string }): string => `msg_${ms.t
 
 const timeOf = (id: string): number => parseInt(id.slice(4, 13), 36) || 0
 
-const sessionOf = (said: Said[], first = said[0]?.id): string => `openhut-${first}`
+const sessionOf = (said: Said[], first = said[0]?.id): string => {
+  const base = `openhut-${first}`
+  return said.findLast((each) => each.session === base || each.session?.startsWith(`${base}.`))?.session ?? base
+}
 
 async function seeded({ said, session, message }: { said: Said[]; session: string; message: ChatMessage }): Promise<ChatMessage> {
   const me = await keysService.deviceKey()
@@ -346,6 +360,7 @@ async function relay({ agent, session, message, writer, signal }: { agent: Agent
       continue
     }
     const chunk = z.safeParse(Chunk, parseJson(event.data)).data
+    if (chunk?.error?.message === 'unknown_execution' && !text) throw new LostTurn()
     if (chunk?.error) throw new Error(modelFailure({ name: agent.name, message: chunk.error.message }))
     const delta = chunk?.choices?.[0]?.delta?.content
     if (!delta) continue
@@ -355,6 +370,8 @@ async function relay({ agent, session, message, writer, signal }: { agent: Agent
   }
   if (open) writer.write({ type: 'text-end', id: `t${text}` })
 }
+
+class LostTurn extends Error {}
 
 function modelFailure({ name, message }: { name: string; message: string }): string {
   log.warn({ event: 'agent.chat_failed', agent: name, error: message.slice(0, 500) })
