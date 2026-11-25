@@ -4,7 +4,7 @@ import type { Channel, ChannelKind } from '@openhut/common/channels/channel.ts'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { ConfirmDialog } from '@/components/confirm-button'
-import { ErrorNote } from '@/components/error-note'
+import { ErrorNote, shownError } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
 import { ROW, Section } from '@/components/kit'
 import { agentPath } from '@/app/routes'
@@ -32,7 +32,7 @@ export function ChannelRows({ agent }: { agent: Agent }) {
   const features = useFeatures(agent.id)
   const offered = ORDER.filter((kind) => kind !== 'whatsapp' || features.whatsapp || channels.data?.some((channel) => channel.kind === 'whatsapp'))
   return <Section title="Talk to it on">
-    <ErrorNote message={channels.error?.message} />
+    <ErrorNote message={shownError(channels.error)} />
     <div className="-mx-2.5 flex flex-col gap-px">{offered.map((kind) => <ChannelRow key={kind} agent={agent} kind={kind} channel={channels.data?.find((channel) => channel.kind === kind)} awake={!!features.cloud && !WAKES.includes(kind)} />)}</div>
   </Section>
 }

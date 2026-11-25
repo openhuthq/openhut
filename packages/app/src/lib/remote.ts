@@ -10,6 +10,14 @@ import { config } from './config.ts'
 export const REMOTE = !config.local
 const RETURN = '/signed-in'
 
+// A background read found the person's Cloud computer paused. Not an error to show: sending a message wakes it.
+export class CloudPaused extends Error {
+  constructor() {
+    super('Cloud is paused. It wakes when you send a message.')
+  }
+}
+const PAUSED = ['asleep', 'stopping', 'waking']
+
 export class CloudOffline extends Error {
   constructor() {
     super('Can’t reach OpenHut Cloud. Check your internet. OpenHut keeps trying.')
@@ -166,7 +174,8 @@ export const remote = {
   },
 
   async fetch(path: string, init?: RequestInit, wake = false): Promise<Response> {
-    return (await (wake ? live().catch(() => live(true)) : live())).fetch(path, init)
+    const paused = async (err: unknown) => { throw err instanceof ComputersOffline && PAUSED.includes((await cloud.cloudComputer().catch(() => null))?.state ?? '') ? new CloudPaused() : err }
+    return (await (wake ? live().catch(() => live(true)) : live().catch(paused))).fetch(path, init)
   },
 
   channel({ path, onLine, onClose }: { path: string; onLine: (line: string) => void; onClose: (code: number, reason: string) => void }): Channel {

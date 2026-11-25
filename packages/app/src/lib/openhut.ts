@@ -55,7 +55,7 @@ export const openhut = {
     async list(): Promise<Computer[]> {
       const admin = await request({ schema: Admin, path: '/api/admin' }).catch(() => undefined)
       const cloud = await request({ schema: Cloud, path: '/api/cloud' }).catch(() => undefined)
-      return computersOf({ here: { id: LOCAL, name: 'Your computer', kind: 'here', url: '', online: !!admin, features: admin?.features ?? { whatsapp: false, browser: false }, runtimeTooOld: false }, devices: cloud?.devices ?? [] })
+      return computersOf({ here: { id: LOCAL, name: 'Your server', kind: 'here', url: '', online: !!admin, features: admin?.features ?? { whatsapp: false, browser: false }, runtimeTooOld: false }, devices: cloud?.devices ?? [] })
     },
   },
   account: {

@@ -23,7 +23,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
-import { ErrorNote } from '@/components/error-note'
+import { ErrorNote, shownError } from '@/components/error-note'
 import { STEP_ICONS } from '@/components/icons'
 import { Dots, I, ICON_BUTTON } from '@/components/kit'
 import { OfflineChip } from '@/features/cloud/live'
@@ -57,7 +57,7 @@ const IMAGE = /\.(png|jpe?g|gif|webp)$/i
 export function Chat({ agent, tools, onTitle }: { agent: Agent; tools?: ReactNode; onTitle?: () => void }) {
   const thread = useAgentThread(agent.id)
   if (agentState(agent) === 'stopped') return <ChatFrame agent={agent} tools={tools} onTitle={onTitle}><Asleep agent={agent} /></ChatFrame>
-  if (!thread.data) return <ChatFrame agent={agent} tools={tools} onTitle={onTitle}><div className="m-auto"><ErrorNote message={thread.error?.message} /></div></ChatFrame>
+  if (!thread.data) return <ChatFrame agent={agent} tools={tools} onTitle={onTitle}><div className="m-auto"><ErrorNote message={shownError(thread.error)} /></div></ChatFrame>
   return <ThreadView key={thread.data.id} thread={thread.data} agent={agent} tools={tools} onTitle={onTitle} />
 }
 
