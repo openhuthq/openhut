@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The browser run (R1): a fresh dev stack (local cloud, runtime, the Mac's App), the web App beside it, and
-# packages/desktop/scripts/web-e2e.cjs signing a browser in through the Mac. CI's gate runs it; it works on a Mac too.
+# The browser run (R1, W1): a fresh dev stack (local cloud, runtime, the Mac's App), the web App beside it, and
+# packages/desktop/scripts/web-e2e.cjs: a second browser and an invited teammate get in with no approval. CI's gate runs it; it works on a Mac too.
 set -euo pipefail
 OUT=${OUT:-$(mktemp -d)}
 DATA=$(mktemp -d)
