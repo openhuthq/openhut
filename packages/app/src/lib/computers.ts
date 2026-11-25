@@ -4,6 +4,11 @@ import type { Cloud } from '@openhut/common/cloud/cloud.ts'
 export type Features = { whatsapp: boolean; browser: boolean }
 export type Computer = { id: string; name: string; kind: 'here' | 'desktop' | 'server'; url: string; online: boolean; features: Features; appTooOld: boolean; runtimeTooOld: boolean; server?: boolean }
 
+// The id a computer has in the App (its tunnel key) from its device key.
+export function tunnelKeyOf(deviceKey: string): string {
+  return Array.from(atob(deviceKey.replaceAll('-', '+').replaceAll('_', '/')).slice(32), (char) => char.charCodeAt(0).toString(16).padStart(2, '0')).join('')
+}
+
 const ANYWHERE: Features = { whatsapp: true, browser: true }
 const UNKNOWN: Features = { whatsapp: false, browser: false }
 

@@ -16,6 +16,20 @@ const SHOW_DONE_MS = 60_000
 const ON_POLL_MS = 10_000
 const PAIRING_POLL_MS = 2000
 const SIGN_IN_POLL_MS = 1500
+const CLOUD_COMPUTER_KEY = ['cloud-computer']
+const MOVING = ['creating', 'stopping', 'waking']
+
+export const CLOUD_NOTE = 'We run it, so we can see what’s on it'
+
+// The person's Cloud computer (null when they have none). Only the web App talks to the Cloud directly.
+export function useCloudComputer() {
+  return useQuery({ queryKey: CLOUD_COMPUTER_KEY, queryFn: remote.cloudComputer, enabled: REMOTE, refetchInterval: (query) => MOVING.includes(query.state.data?.state ?? '') ? PAIRING_POLL_MS : ON_POLL_MS })
+}
+
+export function useStartCloud() {
+  const client = useQueryClient()
+  return useMutation({ mutationFn: remote.startCloud, onSuccess: (started) => client.setQueryData(CLOUD_COMPUTER_KEY, started), onError: toastError })
+}
 
 export function useCloud() {
   const client = useQueryClient()
