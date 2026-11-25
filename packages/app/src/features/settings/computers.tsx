@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Tick02Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
+import { CloudIcon, Tick02Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
 import * as z from 'zod/mini'
 import type { Admin } from '@openhut/common/admin/admin.ts'
 import type { Cloud, CloudWorkspaceView, DeviceRequest } from '@openhut/common/cloud/cloud.ts'
@@ -14,7 +14,7 @@ import { ErrorNote } from '@/components/error-note'
 import { Hut } from '@/components/hut'
 import { Meter } from '@/components/ui/meter'
 import { Glyph } from '@/components/glyph'
-import { I, PILL } from '@/components/kit'
+import { I, PILL, Status } from '@/components/kit'
 import { useAgents } from '@/features/agents/api'
 import { useComputerAdmins, useComputers, useUpdateComputer } from '@/features/computers/api'
 import { useEnroll, useEnrollments, type Enrollment } from '@/features/computers/enroll'
@@ -24,7 +24,7 @@ import { byEligibility, stateOf, type Peer } from '@/features/settings/peers'
 import { Chevron, Command, Intro, Row, Rows } from '@/features/settings/kit'
 import { UpdateStatus } from '@/features/settings/update-pill'
 import { KeysToReplace } from '@/features/cloud/cloud'
-import { LOST_POINTS, REMOVE_DETAIL, REMOVE_POINTS, useCloud, useRemoveMac } from '@/features/cloud/api'
+import { CLOUD_NOTE, LOST_POINTS, REMOVE_DETAIL, REMOVE_POINTS, useCloud, useCloudComputer, useRemoveMac } from '@/features/cloud/api'
 import { useApprove, useDeny } from '@/features/cloud/workspaces'
 import { request } from '@/lib/api-client'
 import { ago, shortDate } from '@/lib/format'
@@ -34,7 +34,7 @@ import { open, useOpen } from '@/lib/router'
 import { toast, toastError, toastInfo } from '@/lib/toast'
 import type { Mood } from '@/lib/hut'
 import { desktop } from '@/lib/desktop'
-import { isBrowser } from '@/lib/computers'
+import { isBrowser, tunnelKeyOf } from '@/lib/computers'
 import { remote, REMOTE } from '@/lib/remote'
 import { iconOf } from '@/features/computers/computer-picker'
 import { cn } from '@/lib/utils'
@@ -73,6 +73,7 @@ function ComputerList() {
   const here = devices.find((device) => device.here)
   const current = useQuery({ queryKey: ['browser-key'], queryFn: remote.deviceKey, staleTime: Infinity }).data
   const others = devices.filter((device) => !device.here)
+  const cloudComputer = useCloudComputer().data
   const browsers = others.filter(isBrowser)
   return <>
     <KeysToReplace />
@@ -84,7 +85,8 @@ function ComputerList() {
         {!isPhone() && <UpdateStatus idle={<span className="inline-flex items-center gap-1"><I icon={Tick02Icon} size={14} />Up to date</span>} />}
       </Row>}
       {home && requests.map((each) => <RequestRow key={each.device} workspace={home} asked={each} />)}
-      {others.filter((device) => !isBrowser(device)).map((device) => <DeviceRow key={device.key} device={device} twin={devices.some((each) => each.key !== device.key && each.name === device.name)} admin={admins?.find((each) => each.computer.id === tunnelKeyOf(device.key))?.admin} />)}
+      {cloudComputer && <CloudRow state={cloudComputer.state} />}
+      {others.filter((device) => !isBrowser(device) && device.key !== cloudComputer?.device).map((device) => <DeviceRow key={device.key} device={device} twin={devices.some((each) => each.key !== device.key && each.name === device.name)} admin={admins?.find((each) => each.computer.id === tunnelKeyOf(device.key))?.admin} />)}
       {enrollments.map((enrollment) => <EnrollRow key={enrollment.peer.dns} enrollment={enrollment} />)}
       {!isPhone() && <Row onClick={() => open('add')} icon={<I icon={PlusSignIcon} size={20} className="text-hue-green" />} title="Add a computer" note="Add a Linux server. It stays on and seals each agent in its own box."><Chevron /></Row>}
     </Rows>
@@ -93,6 +95,12 @@ function ComputerList() {
       <Rows>{browsers.map((device) => <DeviceRow key={device.key} device={device} current={device.key === current} twin={false} admin={undefined} />)}</Rows>
     </>}
   </>
+}
+
+// C3: the Cloud computer pauses when idle and wakes on a message.
+function CloudRow({ state }: { state: string }) {
+  const shown = state === 'running' ? <Status tone="on">Running</Status> : <span className="text-[13px] text-mute">{state === 'waking' ? 'Waking…' : state === 'creating' ? 'Starting…' : state === 'out' ? 'Out of credits' : 'Paused'}</span>
+  return <Row icon={<I icon={CloudIcon} size={20} className="text-hue-sky" />} title="Cloud" note={CLOUD_NOTE}>{shown}</Row>
 }
 
 function mineOf(cloud: Cloud | undefined): { devices: Device[]; requests: DeviceRequest[]; home: CloudWorkspaceView | undefined } {
@@ -170,10 +178,6 @@ function RequestRow({ workspace, asked }: { workspace: CloudWorkspaceView; asked
     <Button type="button" variant="primary" className={PILL} disabled={answer.busy} onClick={answer.approve}>{asked.checked ? 'Review' : 'Approve'}</Button>
     {answer.dialog}
   </Row>
-}
-
-function tunnelKeyOf(deviceKey: string): string {
-  return Array.from(atob(deviceKey.replaceAll('-', '+').replaceAll('_', '/')).slice(32), (char) => char.charCodeAt(0).toString(16).padStart(2, '0')).join('')
 }
 
 function useKnown(): (name: string) => boolean {
