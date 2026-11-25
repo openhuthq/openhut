@@ -2,7 +2,7 @@ import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { ErrorNote } from '@/components/error-note'
-import { Offline, StartCloud } from '@/app/first-run'
+import { Offline } from '@/app/first-run'
 import { nameOf } from '@/features/cloud/api'
 import { Teammate } from '@/app/teammate'
 import { BIG, EntryScreen, QUIET, Stage } from '@/features/cloud/step'
@@ -10,7 +10,6 @@ import { LINE, SignInScreen, TITLE } from '@/features/cloud/sign-in'
 import { followEvents } from '@/lib/live'
 import { CloudOffline, remote } from '@/lib/remote'
 import { Offline as Away, screenOf } from '@/lib/web-first-run'
-import { waking } from '@openhut/common/tunnel/connect.ts'
 
 const WAIT_MS = 3000
 const OFFLINE_MS = 5000
@@ -29,7 +28,6 @@ export function RemoteGate({ children }: { children: ReactNode }) {
     void client.invalidateQueries({ predicate: (query) => !['remote', 'remote-tunnel'].includes(String(query.queryKey[0])) })
   }, [opened.data, client])
   const cut = useSyncExternalStore(remote.watchCut, remote.cut)
-  const wakingCloud = useSyncExternalStore(waking.subscribe, () => waking.now)
   useEffect(() => {
     if (!cut) return
     const retry = setInterval(() => void remote.reconnect(), OFFLINE_MS)
@@ -38,7 +36,8 @@ export function RemoteGate({ children }: { children: ReactNode }) {
   const screen = screenOf({ step: state.data?.step, opened: Boolean(opened.data), error: opened.error })
   if (opened.data && cut) return <CloudDown />
   if (opened.data && state.data?.step === 'ready' && state.data.teammate) return <Teammate />
-  if (opened.data) return children
+  const step = state.data?.step
+  if (opened.data || step === 'first-run' || (step === 'ready' && !state.data?.teammate && !opened.error)) return children
   const failure = error ?? (state.error ?? opened.error)?.message
   if (state.error instanceof CloudOffline || opened.error instanceof CloudOffline) return <CloudDown />
   const invited = state.data?.step === 'signed-out' || state.data?.step === 'waiting' ? state.data.invited : null
@@ -48,8 +47,6 @@ export function RemoteGate({ children }: { children: ReactNode }) {
     {failure && <ErrorNote message={failure} />}
   </SignInScreen></Stage>
   const otherAccount = <Button type="button" variant="text" className={QUIET} onClick={() => void remote.signOut().then(() => state.refetch())}>Use another account</Button>
-  if (screen === 'start-cloud') return <Stage><StartCloud foot={otherAccount} /></Stage>
-  if (wakingCloud) return <Stage><EntryScreen mood="looking" title="Waking Cloud…" line="Your Cloud computer was paused. It’s back in a few seconds." waiting="Waking" /></Stage>
   if (screen === 'offline' && opened.error instanceof Away) return <Offline computer={opened.error.computer} seen={opened.error.seen} />
   if (state.data?.step === 'waiting') return <Stage><EntryScreen mood="looking" title="Letting you in…" line={invited ? `Joining ${invited.team ?? `${host}’s team`}.` : 'This takes a few seconds.'} waiting="Letting you in" foot={otherAccount} /></Stage>
   const over = state.data?.step === 'over' ? state.data : undefined

@@ -15,11 +15,11 @@ import '@fontsource/ibm-plex-mono/400.css'
 import '@fontsource/ibm-plex-mono/500.css'
 import '@fontsource/bebas-neue/400.css'
 import '@/index.css'
-import { REMOTE } from '@/lib/remote'
+import { NoComputer, REMOTE } from '@/lib/remote'
 import { RemoteGate } from '@/app/remote-gate'
 
 const client = new QueryClient({
-  defaultOptions: { queries: { retry: (failures, error) => failures < 2 && !(error instanceof RequestError && error.status < 500) } },
+  defaultOptions: { queries: { retry: (failures, error) => failures < 2 && !(error instanceof RequestError && error.status < 500) && !(error instanceof NoComputer) } },
 })
 
 addEventListener('pointerdown', () => { document.documentElement.dataset.pointer = '' }, true)

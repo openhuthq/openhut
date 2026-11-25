@@ -8,6 +8,7 @@ import { Channel, Conversation, TelegramInvite, type CreateChannel, type UpdateC
 import { openhut, type OpenHutAgent } from '@/lib/openhut'
 import { request } from '@/lib/api-client'
 import { AGENTS_KEY, CONNECTIONS_KEY, GRANTS_KEY, grantsKey } from '@/lib/query-keys'
+import { NoComputer } from '@/lib/remote'
 import { navigate } from '@/lib/router'
 import { localFace } from '@/features/agents/face'
 
@@ -21,7 +22,7 @@ const DELETED_CHANNEL = Deleted('channel')
 const DELETED_SKILL = Deleted('skill')
 
 export function useAgents() {
-  return useQuery({ queryKey: AGENTS_KEY, queryFn: () => openhut.agents.list() })
+  return useQuery({ queryKey: AGENTS_KEY, queryFn: () => openhut.agents.list().catch((err: unknown) => { if (err instanceof NoComputer) return []; throw err }) })
 }
 
 const sharedFaces = new Set<string>()

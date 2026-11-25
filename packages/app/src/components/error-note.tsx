@@ -1,9 +1,9 @@
 import { Alert } from '@/components/ui/alert'
-import { CloudPaused } from '@/lib/remote'
+import { CloudPaused, NoComputer } from '@/lib/remote'
 
-// What a failed read shows: nothing while Cloud is paused (sending wakes it).
+// What a failed read shows: nothing while Cloud is paused (sending wakes it) or not made yet.
 export function shownError(error: Error | null | undefined): string | undefined {
-  return error instanceof CloudPaused ? undefined : error?.message
+  return error instanceof CloudPaused || error instanceof NoComputer ? undefined : error?.message
 }
 
 export function ErrorNote({ message, className }: { message?: string; className?: string }) {

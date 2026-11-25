@@ -5,7 +5,8 @@ import { request } from '@/lib/api-client'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { notify } from '@/components/custom/toast'
-import { REMOTE, remote } from '@/lib/remote'
+import { NoComputer, REMOTE, remote } from '@/lib/remote'
+import { nameOf } from '@/features/cloud/seen'
 
 const CLOUD_KEY = ['cloud']
 const SIGN_IN_KEY = ['cloud-sign-in']
@@ -35,7 +36,7 @@ export function useCloudId(computers: { id: string }[]): string | undefined {
 
 export function useStartCloud() {
   const client = useQueryClient()
-  return useMutation({ mutationFn: remote.startCloud, onSuccess: (started) => client.setQueryData(CLOUD_COMPUTER_KEY, started), onError: toastError })
+  return useMutation({ mutationFn: remote.startCloud, onSuccess: (started) => client.setQueryData(CLOUD_COMPUTER_KEY, started) })
 }
 
 export function useCloud() {
@@ -44,13 +45,24 @@ export function useCloud() {
   return useQuery({
     queryKey: CLOUD_KEY,
     queryFn: async () => {
-      const cloud = await request({ schema: Cloud, computer: 'local', path: '/api/cloud' })
+      const cloud = await request({ schema: Cloud, computer: 'local', path: '/api/cloud' }).catch(async (err: unknown) => { if (err instanceof NoComputer) return noComputerYet(); throw err })
       if (client.getQueryData(SIGN_IN_KEY) && (cloud.status !== 'off' || cloud.signInError)) client.setQueryData(SIGN_IN_KEY, false)
       return cloud
     },
     refetchInterval: (query) => !query.state.data || (signingIn && query.state.data.status === 'off') ? SIGN_IN_POLL_MS : pollOf(query.state.data),
     refetchIntervalInBackground: true,
   })
+}
+
+// A new account before its first agent: just its own team, from OpenHut Cloud, until Cloud joins and answers for itself.
+async function noComputerYet(): Promise<Cloud> {
+  const me = await remote.me()
+  if (!me?.home) throw new NoComputer()
+  return {
+    object: 'cloud', status: 'on', email: me.email, device: null, workspace: null, keyStore: 'file', signInError: null, devices: [], needsSignIn: false, asking: null, canAsk: false, rotate: [], gone: [],
+    backup: { state: 'idle', done: 0, total: 0, current: null, at: null, agent: null, problem: null },
+    workspaces: [{ id: me.home, name: `${nameOf(me.email)}’s team`, website: null, home: true, own: true, role: 'owner', waiting: false, members: [{ email: me.email, role: 'owner', devices: [] }], invites: [], requests: [], names: {} }],
+  }
 }
 
 export function useSigningIn(): boolean {

@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Cancel01Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import { providerInfo, type ProviderId } from '@openhut/common/models/provider.ts'
 import { Button } from '@/components/ui/button'
@@ -19,12 +20,14 @@ import { ComputerPicker } from '@/features/computers/computer-picker'
 import { useComputerProviders } from '@/features/models/api'
 import { ModelPicker, SOFT_TRIGGER } from '@/features/models/model-picker'
 import { FacePicker } from '@/features/agents/face-picker'
+import { Face } from '@/features/agents/face'
 import { AccessPicker } from '@/features/agents/access'
 import { formValues } from '@/lib/form'
 import { TOUCH, useMedia } from '@/lib/media'
 import { navigate, open, useOpen } from '@/lib/router'
 import type { Computer } from '@/lib/computers'
 import { REMOTE } from '@/lib/remote'
+import { PROVIDERS_KEY } from '@/lib/query-keys'
 import { cn } from '@/lib/utils'
 
 const NAMES = ['Juniper', 'Scout', 'Pepper', 'Atlas', 'Maple', 'Biscuit', 'Nova', 'Otto']
@@ -60,6 +63,8 @@ function AgentForm() {
   const [wanted, setWanted] = useState<ProviderId>()
   const seat = useStartSeatSignIn()
   const [signing, setSigning] = useState<{ name: string; face: string } | 'only'>()
+  const [queued, setQueued] = useState<{ name: string; face: string }>()
+  const client = useQueryClient()
   const setup = stepOf(useOpen())
   const taken = new Set(useAgents().data?.map((agent) => agent.name))
   const name = NAMES.find((each) => !taken.has(each)) ?? NAMES[0]
@@ -80,10 +85,25 @@ function AgentForm() {
     else open(id)
   }
   const create = ({ name, face }: { name: string; face: string }) => createAgent.mutate({ body: { name, face, model, ...access, ...(!active.home && { workspace: active.id }) }, computer })
+  useEffect(() => {
+    if (!queued || starting || !providers) return
+    const ready = picked ?? firstModel(providers)
+    if (!ready) {
+      const again = setTimeout(() => void client.invalidateQueries({ queryKey: PROVIDERS_KEY }), 1000)
+      return () => clearTimeout(again)
+    }
+    setQueued(undefined)
+    createAgent.mutate({ body: { name: queued.name, face: queued.face, model: ready, ...access, ...(!active.home && { workspace: active.id }) }, computer })
+  }, [queued, starting, providers, picked, access, active, computer, createAgent, client])
   const where = computers.find((each) => each.id === computer) ?? computers[0]
+  if (queued) return <StartingCloud agent={queued} error={startCloud.error?.message} onRetry={() => startCloud.mutate()} />
   return <form className="flex w-full flex-col items-center gap-4" onSubmit={(event) => {
     const field = formValues(event)
     const typed = { name: field('name').trim() || name, face: field('face') }
+    if (starting) {
+      if (!startCloud.isPending && !startCloud.isSuccess) startCloud.mutate()
+      return setQueued(typed)
+    }
     if (unready && model.startsWith('claude:')) return setSigning(typed)
     create(typed)
   }}>
@@ -94,16 +114,16 @@ function AgentForm() {
       className="h-auto w-full rounded-none border-0 bg-transparent p-0 text-center text-[22px]/[1.3] font-semibold shadow-none focus-visible:ring-0 text-ink outline-none placeholder:text-mute-2" />
     <div className="flex w-full flex-col divide-y divide-hair border-y border-hair text-left">
       {where && <Row title="Runs on">
-        <ComputerPicker computers={computers} value={computer} cloud={cloud} onPick={(id) => { setComputer(id); setPicked(null); if (id === CLOUD_PICK) startCloud.mutate() }} onAdd={() => navigate('/settings/computers?open=add')} title="It runs on" className={PICKER} />
+        <ComputerPicker computers={computers} value={computer} cloud={cloud} onPick={(id) => { setComputer(id); setPicked(null) }} onAdd={() => navigate('/settings/computers?open=add')} title="It runs on" className={PICKER} />
       </Row>}
-      <Row title="Model">
+      {(providers || !starting) && <Row title="Model">
         <ModelPicker providers={providers} value={model} onPick={setPicked} onSetUp={setUp} label="Model" title="It thinks with" className={PICKER}>
           {unready ? <NeedsSignIn model={model} /> : undefined}
         </ModelPicker>
-      </Row>
+      </Row>}
       {email && <Row title="Access"><AccessPicker workspace={active} owner={email} value={access} onChange={setAccess} className={PICKER} /></Row>}
     </div>
-    <Button type="submit" variant="primary" className="h-10 w-full justify-center rounded-[10px] text-[15px]" disabled={createAgent.isPending || !providers || starting}>{starting ? 'Starting Cloud…' : createAgent.isPending ? 'Creating…' : 'Create agent'}</Button>
+    <Button type="submit" variant="primary" className="h-10 w-full justify-center rounded-[10px] text-[15px]" disabled={createAgent.isPending || (!providers && !starting)}>{createAgent.isPending ? 'Creating…' : 'Create agent'}</Button>
     <ErrorNote message={createAgent.error?.message} />
   </form>
 }
@@ -119,6 +139,16 @@ function useRunsOn(): { computers: Computer[]; cloud?: string } {
   const listed = joined ? computers.map((each) => each.id === cloud ? { ...each, name: 'Cloud' } : each)
     : [...computers, { id: cloud, name: 'Cloud', kind: 'server' as const, url: '', online: true, features: { whatsapp: false, browser: false }, runtimeTooOld: false }]
   return { computers: listed, cloud: joined ? cloud : CLOUD_PICK }
+}
+
+// Creating the first agent on Cloud starts Cloud; the agent waits here, like its chat does, until Cloud joins.
+function StartingCloud({ agent, error, onRetry }: { agent: { name: string; face: string }; error?: string; onRetry: () => void }) {
+  return <div className="flex flex-col items-center gap-2 py-8 text-center">
+    <span className={cn(!error && 'animate-pulse')}><Face agent={{ id: agent.name, instructions: '', face: agent.face }} size={64} /></span>
+    <h3 className="mt-2 mb-0 text-[20px]/[1.3] font-semibold text-ink">{error ? 'Couldn’t start Cloud' : 'Starting Cloud…'}</h3>
+    <p className="m-0 text-[14px]/[1.5] text-balance text-body">{error ?? `${agent.name} is ready to chat in a minute or two.`}</p>
+    {error && <Button type="button" variant="secondary" onClick={onRetry}>Try again</Button>}
+  </div>
 }
 
 function NeedsSignIn({ model }: { model: string }) {

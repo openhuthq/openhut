@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { ErrorNote } from '@/components/error-note'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -9,16 +9,6 @@ import { ago } from '@/lib/format'
 import { remote } from '@/lib/remote'
 import { HELP } from '@/lib/web-first-run'
 import { cn } from '@/lib/utils'
-
-/** A new account's first screen: Cloud starts by itself, joins, and lets this browser in. A Linux server is added later from Computers. */
-export function StartCloud({ foot }: { foot?: ReactNode }) {
-  const start = useMutation({ mutationFn: remote.startCloud })
-  const { mutate } = start
-  useEffect(() => mutate(), [mutate])
-  if (start.error) return <EntryScreen mood="worried" title="Couldn’t start Cloud." line={start.error.message} foot={foot}
-    action={<Button type="button" variant="primary" className={BIG} onClick={() => mutate()}>Try again</Button>} />
-  return <EntryScreen mood="building" title="Starting Cloud…" line="Your agents run here, even when your computer is off. This takes a minute or two." foot={foot} waiting="Starting Cloud" />
-}
 
 /** A Linux server as the first computer: a full screen, not a dialog. */
 export function ServerCommand({ step, onCode, onBack }: { step: { code?: string; expiresAt?: string }; onCode: (step: { code: string; expiresAt: string }) => void; onBack: () => void }) {
