@@ -313,6 +313,8 @@ export type AddPasskey = z.infer<typeof AddPasskey>
 
 export const SetEncryption = z.object({ on: z.boolean() })
 export type SetEncryption = z.infer<typeof SetEncryption>
+export const EncryptionPasskey = z.object({ id: Base64, publicKey: Base64 })
+export type EncryptionPasskey = z.infer<typeof EncryptionPasskey>
 
 export const CreateCloudInvite = z.object({ workspace: Id, email: z.pipe(z.string().check(z.trim(), z.toLowerCase()), Email), role: InviteRole })
 export type CreateCloudInvite = z.infer<typeof CreateCloudInvite>

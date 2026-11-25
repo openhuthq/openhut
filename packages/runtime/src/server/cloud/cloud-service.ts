@@ -1,12 +1,12 @@
 import { randomBytes } from 'node:crypto'
 import type { FastifyReply } from 'fastify'
 import * as z from 'zod/mini'
-import { type Backup, KeyBox, type Letter, type MemberList, type Role, type Cloud, type CloudAuthorization, type RecoveryKit, type SetEncryption, type UnlockCloud, type CreateWebLink, type WebLink, faceName, KNOCK_MS, siteHost } from '@openhut/common/cloud/cloud.ts'
+import { type Backup, KeyBox, type Letter, type MemberList, type Role, type Cloud, type CloudAuthorization, type RecoveryKit, type SetEncryption, type EncryptionPasskey, type UnlockCloud, type CreateWebLink, type WebLink, faceName, KNOCK_MS, siteHost } from '@openhut/common/cloud/cloud.ts'
 import type { Health } from '@openhut/common/admin/admin.ts'
 import type { JoinCode } from '@openhut/common/cloud/v1/identity.ts'
 import { facesOf } from '@openhut/common/cloud/faces.ts'
 import { addedOf, bodyOf } from '@openhut/common/cloud/member-list.ts'
-import { fromBase64 } from '@openhut/common/vault/public.ts'
+import { fromBase64, newKey, toBase64 } from '@openhut/common/vault/public.ts'
 import { kitId } from '@openhut/common/vault/kit-file.ts'
 import { CloudError, type Reply } from '@openhut/common/cloud/openhut-cloud.ts'
 import { cloud, fromCloud, sending } from '../platform/cloud.ts'
@@ -33,6 +33,7 @@ const WORKSPACE_BOX = 'workspace-'
 const IDLE: Backup = { state: 'idle', done: 0, total: 0, current: null, at: null, agent: null, problem: null }
 const CHANGED = 'Someone changed this team a moment ago. Try again.'
 const ROTATE = 'cloud_rotate'
+const PASSKEY = 'encryption_passkey'
 const ASK_POLL_MS = 2000
 const WEB_POLL_MS = 1000
 const WEB_GRACE_MS = 5000
@@ -46,6 +47,7 @@ let passkeyDropped = false
 let asking: { settled: string[]; approved: boolean; error: string | null; timer: NodeJS.Timeout; reviewed: boolean; revealed: boolean; missed: boolean } | undefined
 let polling = false
 let joinError: string | null = null
+let prepared: { key: string; kit: string; passkey?: EncryptionPasskey } | undefined
 const requestedOs = new Map<string, string>()
 const invited = new Map<string, string>()
 const Rotate = z.array(z.object({ id: z.string(), name: z.string(), kind: z.string() }))
@@ -317,18 +319,7 @@ export const cloudService = {
       if (kept && !keysService.kitState().saved) throw new HttpError(409, 'Your account already has a recovery kit, and this computer hasn’t picked it up yet. Use the kit you saved, or make a new one on the computer that made it.')
       const savedAt = Math.max(Date.now(), (Date.parse(kept?.savedAt ?? '') || 0) + 1)
       await keysService.setKit({ box, savedAt: new Date(savedAt).toISOString(), confirmed: false })
-      const signer = keysService.mustBeOn()
-      try {
-        const saved = await cloud.keyBoxes.put(await keysService.signBox({ account: signer, name: 'kit', body: box, savedAt }))
-        boxesDiffer = saved.status === 403
-        if (saved.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t save your recovery kit. Try again.')
-      } catch (err) {
-        await getBox('kit').then((got) => dropPending({ account: signer, cloudKit: boxIn(got) })).catch(warnCheck)
-        throw err
-      }
-      await keysService.setKit({ box, savedAt: new Date(savedAt).toISOString() })
-      cloudHasKit = true
-      await confirmKit({ account: signer, body: box, savedAt }).catch(warnCheck)
+      await saveKit(box, savedAt)
       return { object: 'recovery_kit' as const, words, ask, kitId: await kitId(box), madeAt: new Date(savedAt).toISOString(), device: deviceName() }
     })
   },
@@ -357,11 +348,33 @@ export const cloudService = {
     return cloudService.status()
   },
 
+  async prepareEncryption(): Promise<RecoveryKit> {
+    keysService.mustBeOn()
+    const key = toBase64(newKey())
+    const { words, box, ask } = await keyring.kit(key)
+    prepared = { key, kit: box }
+    return { object: 'recovery_kit', words, ask, kitId: await kitId(box), madeAt: new Date().toISOString(), device: deviceName() }
+  },
+
+  async encryptionPasskey(passkey: EncryptionPasskey): Promise<Cloud> {
+    if (!prepared) throw new HttpError(409, 'Download your recovery key first.')
+    prepared = { ...prepared, passkey }
+    return cloudService.status()
+  },
+
   async encryption({ on }: SetEncryption): Promise<Cloud> {
     const account = keysService.mustBeOn()
     if (on === encryptionOn()) return cloudService.status()
+    const ready = prepared
+    if (on && !ready?.passkey) throw new HttpError(409, 'Download your recovery key and set up Touch ID first.')
     await serial(async () => {
-      if (on) return rotate({ changed: await keysService.change({ dropManaged: true }), drop: ['kit', 'kit-confirmed', 'passkey', 'escrow'] })
+      if (on && ready?.passkey) {
+        await rotate({ changed: await keysService.change({ dropManaged: true, fresh: ready.key }), drop: ['kit', 'kit-confirmed', 'passkey', 'escrow'] })
+        await saveKit(ready.kit)
+        await db.insertInto('install_setting').values({ name: PASSKEY, value: JSON.stringify(ready.passkey) }).onConflict((oc) => oc.column('name').doUpdateSet({ value: JSON.stringify(ready.passkey) })).execute()
+        prepared = undefined
+        return
+      }
       const ours = (await cloud.me())?.managed
       if (!ours) throw new HttpError(409, 'OpenHut Cloud can’t keep a backup key right now. Try again later.')
       await putList({ workspace: account.workspace.id, list: await keysService.withManaged(ours), boxes: [await keysService.escrowBox({ account, to: ours })] })
@@ -538,6 +551,21 @@ function joinedOf({ key, accountKey, names }: { key: string; accountKey: string 
   if (!by) return null
   if (by === accountKey) return { how: 'recovery' }
   return { how: 'approved', by: names?.[by] ?? null }
+}
+
+async function saveKit(box: string, savedAt = Date.now()): Promise<void> {
+  const signer = keysService.mustBeOn()
+  try {
+    const saved = await cloud.keyBoxes.put(await keysService.signBox({ account: signer, name: 'kit', body: box, savedAt }))
+    boxesDiffer = saved.status === 403
+    if (saved.status !== 200) throw new HttpError(502, 'OpenHut Cloud couldn’t save your recovery kit. Try again.')
+  } catch (err) {
+    await getBox('kit').then((got) => dropPending({ account: signer, cloudKit: boxIn(got) })).catch(warnCheck)
+    throw err
+  }
+  await keysService.setKit({ box, savedAt: new Date(savedAt).toISOString() })
+  cloudHasKit = true
+  await confirmKit({ account: signer, body: box, savedAt }).catch(warnCheck)
 }
 
 function encryptionOn(): boolean {

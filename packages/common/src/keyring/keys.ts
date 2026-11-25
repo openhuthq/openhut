@@ -130,11 +130,11 @@ export const keysService = {
     return account
   },
 
-  async newKit(): Promise<{ words: string[]; box: string; ask: number[] }> {
+  async newKit(fresh?: string): Promise<{ words: string[]; box: string; ask: number[] }> {
     const account = (await keyStore.read()).account
     if (!account) throw new HttpError(409, 'Enable OpenHut Cloud before making a recovery kit.')
     const { words, key } = await newWords()
-    const box = await lock({ key, version: 1, bind: bind({ sub: account.sub, name: 'kit' }), plain: fromBase64(account.key) })
+    const box = await lock({ key, version: 1, bind: bind({ sub: account.sub, name: 'kit' }), plain: fromBase64(fresh ?? account.key) })
     return { words, box: toBase64(box || new Uint8Array()), ask: [randomInt(0, 6), randomInt(6, 12)] }
   },
 
@@ -170,14 +170,14 @@ export const keysService = {
     return signList({ signer: await keysService.device(), body: withoutDevices({ body: await nextOf({ list: account.list, body, me }), gone }) })
   },
 
-  async change({ dropManaged = false }: { dropManaged?: boolean } = {}): Promise<{ list: MemberList; next: Account; letters: Sent[] }> {
+  async change({ dropManaged = false, fresh }: { dropManaged?: boolean; fresh?: string } = {}): Promise<{ list: MemberList; next: Account; letters: Sent[] }> {
     const account = keysService.mustBeOn()
     const body = bodyOf(account.list)
     const me = toBase64((await keysService.device()).publicKey)
     const mine = body?.members.find((member) => member.email === account.email)
     const oldKit = toBase64((await accountDevice(fromBase64(account.key))).publicKey)
     if (!body || !mine) throw new HttpError(409, `Enable OpenHut Cloud on this computer first.`)
-    const key = newKey()
+    const key = fresh ? fromBase64(fresh) : newKey()
     const kit = toBase64((await accountDevice(key)).publicKey)
     const gone = mine.devices.includes(oldKit) ? [oldKit] : []
     const base = withoutDevices({ body: await nextOf({ list: account.list, body, me }), gone })

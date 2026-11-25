@@ -9,7 +9,7 @@ import { bootCloud, devSignIn, hasCloud } from './real-cloud.ts'
 
 const skip = hasCloud ? false : 'private/api isn’t checked out here'
 
-test('against the real cloud API: End-to-end encryption on drops our signer and escrow and moves to a fresh key the old one can’t open; off brings both back', { skip }, async () => {
+test('against the real cloud API: End-to-end encryption on, after the setup, drops our signer and escrow and moves to the prepared key the old one can’t open; off brings both back', { skip }, async () => {
   const booted = await bootCloud({ managed: true })
   const { fakeAgentd } = await import('../agents/signed-in.ts')
   fakeAgentd()
@@ -33,7 +33,11 @@ test('against the real cloud API: End-to-end encryption on drops our signer and 
     assert.ok(ours)
     assert.equal((await cloudService.status()).encryption, false, 'a new account starts with it off')
 
+    await assert.rejects(cloudService.encryption({ on: true }), /recovery key/, 'nothing changes before the setup is done')
+    await cloudService.prepareEncryption()
+    await cloudService.encryptionPasskey({ id: 'cred', publicKey: 'pub' })
     assert.equal((await cloudService.encryption({ on: true })).encryption, true)
+    assert.equal((await cloud.keyBoxes.get('kit')).status, 200, 'the recovery key from the setup is saved')
     const on = keysService.mustBeOn()
     assert.equal(bodyOf(on.list)?.managed, undefined, 'our signer is gone')
     assert.equal((await cloud.keyBoxes.get('escrow')).status, 404, 'and so is our backup key')

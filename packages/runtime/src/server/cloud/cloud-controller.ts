@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import * as z from 'zod/mini'
-import { AddPasskey, ApproveRequest, ChangeRole, CreateWebLink, DenyRequestQuery, DeviceKey, PasteSignInCode, RemoveDeviceQuery, SetEncryption, SetHere, StartCloudSignIn, UnlockCloud, UpdateWorkspace } from '@openhut/common/cloud/cloud.ts'
+import { AddPasskey, ApproveRequest, ChangeRole, CreateWebLink, DenyRequestQuery, DeviceKey, PasteSignInCode, EncryptionPasskey, RemoveDeviceQuery, SetEncryption, SetHere, StartCloudSignIn, UnlockCloud, UpdateWorkspace } from '@openhut/common/cloud/cloud.ts'
 import { requireSignIn, withPresence } from '../team/identity.ts'
 import { cloudService } from './cloud-service.ts'
 import { presence } from './presence.ts'
@@ -29,6 +29,10 @@ export const cloudController: FastifyPluginAsync = async (app) => {
   app.post<{ Body: AddPasskey }>('/passkeys', PasskeyRequest, async (req) => cloudService.addPasskey(req.body))
 
   app.post<{ Body: SetEncryption }>('/encryption', EncryptionRequest, async (req) => cloudService.encryption(req.body))
+
+  app.post('/encryption/keys', SignedIn, async () => cloudService.prepareEncryption())
+
+  app.post<{ Body: EncryptionPasskey }>('/encryption/passkeys', EncryptionPasskeyRequest, async (req) => cloudService.encryptionPasskey(req.body))
 
   app.delete('/passkeys', async () => cloudService.removePasskey())
 
@@ -72,6 +76,7 @@ const UnlockRequest = { onRequest: requireSignIn, schema: { body: UnlockCloud } 
 const NotMeRequest = { onRequest: withPresence('remove a device from OpenHut'), schema: { params: z.object({ key: DeviceKey }), querystring: RemoveDeviceQuery } }
 const DeviceRequest = { onRequest: withPresence('remove a device from OpenHut'), schema: { params: z.object({ id: z.string(), key: DeviceKey }) } }
 const EncryptionRequest = { onRequest: withPresence('turn end-to-end encryption on or off'), schema: { body: SetEncryption } }
+const EncryptionPasskeyRequest = { onRequest: requireSignIn, schema: { body: EncryptionPasskey } }
 const PasskeyRequest = { onRequest: requireSignIn, schema: { body: AddPasskey } }
 const UpdateRequest = { onRequest: requireSignIn, schema: { body: UpdateWorkspace } }
 const RoleRequest = { onRequest: requireSignIn, schema: { body: ChangeRole } }
