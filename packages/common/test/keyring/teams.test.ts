@@ -114,9 +114,9 @@ test('an invite link keeps the team name until the hint would pass 430 character
   await signedIn()
   const ws = (await roomKeys.createTeam()).workspace.id
   const hint = (link: string) => new TextDecoder().decode(fromBase64(link.split('#')[1] ?? ''))
-  const fixed = `\nmo@example.com\nT`.length
+  const fixed = `\nmo@example.com\nT\nmember`.length
   const fits = `${'a'.repeat(322 - fixed - '@example.com'.length)}@example.com`
-  assert.equal(hint((await roomKeys.invite({ ws, email: fits, role: 'member', name: 'T' })).link), `${fits}\nmo@example.com\nT`)
+  assert.equal(hint((await roomKeys.invite({ ws, email: fits, role: 'member', name: 'T' })).link), `${fits}\nmo@example.com\nT\nmember`)
   const over = `a${fits}`
   assert.equal(hint((await roomKeys.invite({ ws, email: over, role: 'member', name: 'T' })).link), over)
 })

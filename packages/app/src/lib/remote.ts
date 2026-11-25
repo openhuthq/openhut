@@ -32,14 +32,19 @@ export class CloudOffline extends Error {
 
 type Pair = { publicKey: CryptoKey; privateKey: CryptoKey }
 type Keys = { signing: Pair; tunnel: Pair }
-export type Invited = { workspace: string; team: string | null; from: string | null; email: string | null }
-export type RemoteState = { step: 'signed-out'; invited: Invited | null } | { step: 'first-run'; email: string } | { step: 'waiting'; email: string; invited: Invited | null } | { step: 'over'; email: string; workspace: string } | { step: 'ready'; email: string; workspace: string; teammate: boolean }
+export type Invited = { workspace: string; team: string | null; from: string | null; email: string | null; role: 'admin' | 'member' | null }
+export type RemoteState = { step: 'signed-out'; invited: Invited | null } | { step: 'first-run'; email: string; workspace: string } | { step: 'invited'; email: string; invited: Invited } | { step: 'waiting'; email: string; invited: Invited | null } | { step: 'over'; email: string; workspace: string } | { step: 'ready'; email: string; workspace: string; teammate: boolean }
+export const ACTIVE_KEY = 'openhut.workspace'
+
+function chosen(): string | null {
+  try { return localStorage.getItem(ACTIVE_KEY) } catch { return null }
+}
 
 let tunnel: Tunnel | undefined
 let target: { team: string; computer?: string } | undefined
 let reopening: Promise<Tunnel> | undefined
 let cut = false
-let fresh = false
+let fresh: string | null = null
 const watchers = new Set<() => void>()
 
 function setCut(now: boolean): void {
@@ -118,7 +123,7 @@ export const remote = {
   async signOut(): Promise<void> {
     const asked = await store.get<string | null>('asked')
     const me = asked ? await cloud.me().catch(() => null) : null
-    const account = me ? accountStepOf(me, (await store.get<Invited | null>('invite'))?.workspace) : undefined
+    const account = me ? accountStepOf(me, { invited: (await store.get<Invited | null>('invite'))?.workspace }) : undefined
     if (asked && account && account.step !== 'first-run') await cloud.knock({ team: account.workspace }).cancel().catch(() => undefined)
     await store.set('session', undefined)
     await store.set('asked', null)
@@ -134,7 +139,7 @@ export const remote = {
   async state(): Promise<RemoteState> {
     const back = new URL(location.href)
     const link = back.pathname === '/join' ? inviteOf(back.hash) : undefined
-    if (link) await store.set('invite', { workspace: link.workspace, team: link.team ?? null, from: link.from ?? null, email: link.email ?? null } satisfies Invited)
+    if (link) await store.set('invite', { workspace: link.workspace, team: link.team ?? null, from: link.from ?? null, email: link.email ?? null, role: link.role ?? null } satisfies Invited)
     const code = back.pathname === RETURN ? back.searchParams.get('code') : null
     if (code) {
       await cloud.signIn({ googleCode: code, state: back.searchParams.get('state') ?? '' }).catch(() => null)
@@ -144,21 +149,31 @@ export const remote = {
     const me = await cloud.me()
     if (!me && !await reachable()) throw new CloudOffline()
     if (!me) return { step: 'signed-out', invited }
-    const account = accountStepOf(me, invited?.workspace)
-    fresh = account.step === 'first-run'
-    if (account.step === 'first-run') return { step: 'first-run', email: me.email }
+    const account = accountStepOf(me, { invited: invited?.workspace, chosen: chosen() })
+    fresh = account.step === 'first-run' ? account.workspace : null
+    if (account.step === 'first-run') return { step: 'first-run', email: me.email, workspace: account.workspace }
     const { workspace } = account
     const ready = async (): Promise<RemoteState> => {
       await store.set('asked', null)
       if (invited?.workspace === workspace) await store.set('invite', null)
-      return { step: 'ready', email: me.email, workspace, teammate: workspace !== me.home }
+      return { step: 'ready', email: me.email, workspace, teammate: me.workspaces.find((each) => each.id === workspace)?.role !== 'owner' }
     }
     if (account.step === 'ready') return ready()
-    if (await store.get<string | null>('asked') !== workspace) await remote.knock(workspace)
+    const asked = await store.get<string | null>('asked') === workspace
+    if (account.step === 'invited' && invited && !asked) return { step: 'invited', email: me.email, invited }
+    if (!asked) await remote.knock(workspace)
     const state = await cloud.knock({ team: workspace }).state()
     if (state.step === 'approved') return ready()
     return state.step === 'waiting' ? { step: 'waiting', email: me.email, invited } : { step: 'over', email: me.email, workspace }
   },
+
+  async notNow(): Promise<void> {
+    await store.set('invite', null)
+  },
+
+  me: () => cloud.me(),
+
+  createTeam: (name: string) => cloud.createTeam({ name }),
 
   async knock(workspace: string): Promise<void> {
     await cloud.knock({ team: workspace }).ask({ name: browserName(), os: 'web' })
@@ -169,9 +184,11 @@ export const remote = {
 
   joinCode: (): Promise<JoinCode> => cloud.firstComputerCode(),
 
-  startCloud: () => cloud.startCloud(),
+  startCloud: (team = target?.team ?? fresh ?? '') => cloud.startCloud(team),
 
-  cloudComputer: () => cloud.cloudComputer(),
+  firstRun: (): string | null => fresh,
+
+  cloudComputer: () => { const team = target?.team ?? fresh; return team ? cloud.cloudComputer(team) : Promise.resolve(null) },
 
   async open(workspace: string): Promise<void> {
     target = { team: workspace }
@@ -184,7 +201,7 @@ export const remote = {
   },
 
   async fetch(path: string, init?: RequestInit, wake = acted(init)): Promise<Response> {
-    const paused = async (err: unknown) => { throw err instanceof ComputersOffline && PAUSED.includes((await cloud.cloudComputer().catch(() => null))?.state ?? '') ? new CloudPaused() : err }
+    const paused = async (err: unknown) => { throw err instanceof ComputersOffline && PAUSED.includes((await remote.cloudComputer().catch(() => null))?.state ?? '') ? new CloudPaused() : err }
     return (await (wake ? live().catch(() => live(true)) : live().catch(paused))).fetch(path, init)
   },
 

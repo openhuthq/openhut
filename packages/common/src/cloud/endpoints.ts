@@ -3,7 +3,7 @@ import { AskAdmin, DeviceKey } from './cloud.ts'
 import { CreateJoinRequest } from './v1/trust.ts'
 
 export type Auth = 'none' | 'device' | 'token' | 'signed' | 'computer'
-export type Endpoint = { call: 'signIn' | 'records' | 'tunnel' | 'connections' | 'ops'; method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'WSS'; path: string; auth: Auth; does: string }
+export type Endpoint = { call: 'signIn' | 'records' | 'tunnel' | 'connections' | 'ops'; method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'WSS'; path: string; auth: Auth; does: string }
 
 export const ENDPOINTS = {
   startSignIn: { call: 'signIn', method: 'POST', path: '/v1/sign-ins', auth: 'none', does: 'Start Google sign-in for a device key. Returns the Google URL. The return address must be app.openhut.dev or a loopback address.' },
@@ -13,8 +13,10 @@ export const ENDPOINTS = {
   me: { call: 'signIn', method: 'GET', path: '/v1/me', auth: 'token', does: 'The account, and each team with this device’s access (listed, waiting).' },
   deleteMe: { call: 'signIn', method: 'DELETE', path: '/v1/me', auth: 'computer', does: 'Delete the account. Signed, and allowed from a computer only.' },
   createJoinCode: { call: 'signIn', method: 'POST', path: '/v1/join-codes', auth: 'signed', does: 'A one-use, 10-minute code for a team. Only the hash is stored. A computer makes one any time; any signed-in device makes one only while the account has no computer (device.firstComputerCode, the web first run).' },
-  startCloudComputer: { call: 'signIn', method: 'POST', path: '/v1/cloud-computer', auth: 'signed', does: 'Start the person\u2019s Cloud computer (one Boat VM), or adopt the one starting. 409 when this server has no Boat key, 402 at $0. It joins with a server code and lets in the device that asked.' },
-  getCloudComputer: { call: 'signIn', method: 'GET', path: '/v1/cloud-computer', auth: 'signed', does: 'The person\u2019s Cloud computer and its state (creating, running, stopping, asleep, waking, out). 404 when they have none.' },
+  createWorkspace: { call: 'signIn', method: 'POST', path: '/v1/workspaces', auth: 'signed', does: 'Create a team. It names the person\u2019s home team instead while that has no member list. Up to 5 teams a person.' },
+  updateWorkspace: { call: 'signIn', method: 'PATCH', path: '/v1/workspaces/:team', auth: 'signed', does: 'Rename a team (owners and admins). Its computer sends the name it shows.' },
+  startCloudComputer: { call: 'signIn', method: 'POST', path: '/v1/workspaces/:team/cloud-computer', auth: 'signed', does: 'Start the team\u2019s Cloud computer (one Boat VM) and its $5.00 of credits, or adopt the one starting. Only the person who made the team. 409 when this server has no Boat key, 402 at $0. It joins with a server code for that team.' },
+  getCloudComputer: { call: 'signIn', method: 'GET', path: '/v1/workspaces/:team/cloud-computer', auth: 'signed', does: 'The team\u2019s Cloud computer and its state (creating, running, stopping, asleep, waking, out). 404 when it has none.' },
   listRecords: { call: 'records', method: 'GET', path: '/v1/teams/:team/:kind', auth: 'token', does: 'List one kind, ordered, paged with ?after=.' },
   getRecord: { call: 'records', method: 'GET', path: '/v1/teams/:team/:kind/:id', auth: 'token', does: 'Read one record (sealed).' },
   putRecord: { call: 'records', method: 'PUT', path: '/v1/teams/:team/:kind/:id', auth: 'signed', does: 'Write one record. If-Match: <version>; a conflict returns 409 with the newer copy. Blobs stream through the same path as kind blob.' },

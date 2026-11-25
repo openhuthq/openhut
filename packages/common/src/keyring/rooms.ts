@@ -9,7 +9,7 @@ import { deviceName, keyStore, type Account, type Room, type Stored } from './st
 import { accountDevice, keysService, openLetter, ownOf, readSecret, rotateKeys, sealTo, secretOf, type Sent } from './keys.ts'
 
 const HINT_MAX = 430
-const INVITE_MS = 48 * 60 * 60_000
+const INVITE_MS = 7 * 24 * 60 * 60_000
 const INVITE_URL = 'https://openhut.dev/join'
 
 export type Cloudside = Pick<Team, 'lists' | 'letters' | 'take' | 'publish' | 'send'>
@@ -63,7 +63,7 @@ export const roomKeys = {
     const plain = await lockInvite({ secret: card.secret, workspace: ws, plain: new TextEncoder().encode(JSON.stringify({ workspace: ws, name, from: account.email, email, role, anchor: await anchorOf(firstOf(room)), expiresAt })) })
     const sealed = plain && await letter({ sender: await keysService.device(), to: card.publicKey, workspace: ws, purpose: 'invite', version: 1, plain })
     if (!sealed) throw new HttpError(500, 'Couldn’t make the invite. Try again.')
-    return { list, id: await inviteId(card.publicKey), key, body: toBase64(sealed), link: `${INVITE_URL}#${hintOf({ email, from: account.email, team: name })}#${ws}.${toBase64(card.secret)}`, expiresAt }
+    return { list, id: await inviteId(card.publicKey), key, body: toBase64(sealed), link: `${INVITE_URL}#${hintOf({ email, from: account.email, team: name, role })}#${ws}.${toBase64(card.secret)}`, expiresAt }
   },
 
   async revoke({ ws, email }: { ws: string; email: string }): Promise<MemberList> {
@@ -321,7 +321,7 @@ export async function inviteId(key: Bytes): Promise<string> {
   return `inv_${toBase64(await sha256(key)).slice(0, 22)}`
 }
 
-function hintOf({ email, from, team }: { email: string; from: string; team: string }): string {
-  const full = toBase64(new TextEncoder().encode(`${email}\n${from}\n${team.replace(/\s+/g, ' ').slice(0, 60)}`))
+function hintOf({ email, from, team, role }: { email: string; from: string; team: string; role: Role }): string {
+  const full = toBase64(new TextEncoder().encode(`${email}\n${from}\n${team.replace(/\s+/g, ' ').slice(0, 60)}\n${role}`))
   return full.length <= HINT_MAX ? full : toBase64(new TextEncoder().encode(email))
 }

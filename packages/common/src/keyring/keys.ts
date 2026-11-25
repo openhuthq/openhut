@@ -88,18 +88,18 @@ export const keysService = {
     if (other && other.sub !== sub) throw new HttpError(409, `This computer is set up for ${other.email}. Sign in with that account.`)
   },
 
-  async open({ sub, email, home = toBase64(newKey(12)), managed }: { sub: string; email: string; home?: string; managed?: string }): Promise<Account> {
+  async open({ sub, email, home = toBase64(newKey(12)), managed, team = false }: { sub: string; email: string; home?: string; managed?: string; team?: boolean }): Promise<Account> {
     const current = await keyStore.read()
     if (current.account?.sub === sub) return current.account
     keysService.ownedBy({ sub })
     const device = await identity(fromBase64(current.device))
     const id = home
-    const key = newKey()
-    const kit = toBase64((await accountDevice(key)).publicKey)
-    const devices = [toBase64(device.publicKey), kit]
+    const key = team ? null : newKey()
+    const kit = key && toBase64((await accountDevice(key)).publicKey)
+    const devices = kit ? [toBase64(device.publicKey), kit] : [toBase64(device.publicKey)]
     const at = Date.now()
-    const list = await signList({ signer: device, body: { workspace: id, version: 1, previous: null, members: [{ email, role: 'owner', devices, kit, viewers: [] }], invites: [], removed: [], at, added: Object.fromEntries(devices.map((each) => [each, at])), names: { [devices[0]]: deviceName() }, ...managed && { managed } } })
-    const account = { sub, email, key: toBase64(key), vault: toBase64(newKey()), workspace: { id, key: toBase64(newKey()), version: 1 }, list, first: list }
+    const list = await signList({ signer: device, body: { workspace: id, version: 1, previous: null, members: [{ email, role: 'owner', devices, ...kit && { kit }, viewers: [] }], invites: [], removed: [], at, added: Object.fromEntries(devices.map((each) => [each, at])), names: { [devices[0]]: deviceName() }, ...managed && { managed } } })
+    const account = { sub, email, key: key ? toBase64(key) : '', vault: toBase64(newKey()), workspace: { id, key: toBase64(newKey()), version: 1 }, list, first: list }
     await keyStore.write({ device: current.device, machine: keyStore.machine, account, session: current.session })
     return account
   },

@@ -5,7 +5,7 @@ export const PARTIES = {
   admin: 'A listed device of an owner or admin',
   knocking: 'A device of a member’s email that isn’t listed yet, or the member’s kit key',
   invited: 'A device signed in with an email this team has a live invite for',
-  founder: 'The account’s own device, before its home team has a member list',
+  founder: 'A device of the person who made the team, before it has a member list',
   home: 'A device on the account’s home team list',
   fresh: 'A device that signed in with Google in the last 10 minutes',
   self: 'The device the record is about',

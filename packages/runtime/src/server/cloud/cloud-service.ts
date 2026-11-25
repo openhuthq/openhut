@@ -5,7 +5,7 @@ import { type Backup, type Letter, type MemberList, type Role, type Cloud, type 
 import type { Health } from '@openhut/common/admin/admin.ts'
 import type { JoinCode } from '@openhut/common/cloud/v1/identity.ts'
 import { addedOf, bodyOf } from '@openhut/common/cloud/member-list.ts'
-import { CloudError } from '@openhut/common/cloud/openhut-cloud.ts'
+import { CloudError, type SignedIn } from '@openhut/common/cloud/openhut-cloud.ts'
 import { cloud, fromCloud, sending } from '../platform/cloud.ts'
 import { config } from '../platform/config.ts'
 import { db } from '../platform/db.ts'
@@ -149,6 +149,7 @@ export const cloudService = {
     const kept = { name: cloudEvents.named(ws), site: cloudEvents.site(ws) }
     const value = { name: name ?? kept.name, site: site === undefined ? kept.site : site || null }
     await recordsService.put({ collection: 'workspace', id: ws, workspace: ws, value, reapply: (current) => ({ value: { ...z.safeParse(z.record(z.string(), z.unknown()), current.value).data, ...name !== undefined && { name }, ...site !== undefined && { site: site || null } } }) })
+    if (name !== undefined) await cloud.renameTeam({ team: ws, name }).catch((err: unknown) => log.warn({ event: 'cloud.rename_failed', error: messageOf(err) }))
     await cloudEvents.refreshName(ws)
     return cloudService.status()
   },
@@ -351,6 +352,7 @@ async function joinAsServer(code: string): Promise<void> {
   const me = await cloud.signIn({ joinCode: code }).catch(fromCloud)
   if (me.object !== 'me') throw new HttpError(502, 'OpenHut Cloud didn’t take the join code. Make a new one and try again.')
   const who = { sub: me.sub, email: me.email }
+  if (me.workspace && me.workspace !== me.home) return joinAsTeam({ me: { ...me, workspace: me.workspace }, who })
   if (await accountExists()) {
     await keysService.setLocked(who)
     await cloudService.ask()
@@ -362,6 +364,16 @@ async function joinAsServer(code: string): Promise<void> {
   log.info({ event: 'cloud.first_computer', workspace: home })
   cloudEvents.start()
   if (me.maker) void letInMaker({ workspace: home, device: me.maker }).catch((err: unknown) => log.warn({ event: 'cloud.let_in_failed', error: messageOf(err) }))
+}
+
+async function joinAsTeam({ me, who }: { me: SignedIn & { workspace: string }; who: { sub: string; email: string } }): Promise<void> {
+  const team = me.workspace
+  if (!await serial(async () => openRoom({ account: await keysService.open({ ...who, home: team, managed: me.managed, team: true }) }))) throw new HttpError(409, 'This team already has a Cloud computer.')
+  log.info({ event: 'cloud.team_computer', workspace: team })
+  cloudEvents.start()
+  const name = me.unstarted.find((each) => each.id === team)?.name
+  if (name) await cloudService.update({ workspace: team, name }).catch((err: unknown) => log.warn({ event: 'cloud.team_name_failed', error: messageOf(err) }))
+  if (me.maker) void letInMaker({ workspace: team, device: me.maker }).catch((err: unknown) => log.warn({ event: 'cloud.let_in_failed', error: messageOf(err) }))
 }
 
 async function letInMaker({ workspace, device }: { workspace: string; device: string }): Promise<void> {
@@ -568,7 +580,7 @@ async function rotate({ list, next, letters }: Awaited<ReturnType<typeof keysSer
 
 async function openRoom({ account }: { account: Account }): Promise<boolean> {
   const managed = bodyOf(account.list)?.managed
-  const boxes = [await keysService.workspaceBox({ account }), ...managed ? [await keysService.escrowBox({ account, to: managed })] : []]
+  const boxes = !account.key ? [] : [await keysService.workspaceBox({ account }), ...managed ? [await keysService.escrowBox({ account, to: managed })] : []]
   const made = await cloud.team(account.workspace.id).publish({ list: account.list, letters: [], boxes })
   if (made.status === 403) {
     log.warn({ event: 'cloud.room_refused', workspace: account.workspace.id, reply: JSON.stringify(made.json).slice(0, 300) })

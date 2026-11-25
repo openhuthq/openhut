@@ -5,14 +5,14 @@ import { inviteOf } from '../../../src/features/join/invite.ts'
 const secret = `${'A'.repeat(42)}Q`
 const email = Buffer.from('ana@example.com').toString('base64url')
 
-test('an invite hash gives the link the runtime takes, its team, and the email it was sent to', () => {
-  assert.deepEqual(inviteOf(`#${email}#ws_Abc-123.${secret}`), { link: `https://openhut.dev/join#ws_Abc-123.${secret}`, workspace: 'ws_Abc-123', email: 'ana@example.com', from: undefined, team: undefined })
-  assert.deepEqual(inviteOf(`#ws_Abc-123.${secret}`), { link: `https://openhut.dev/join#ws_Abc-123.${secret}`, workspace: 'ws_Abc-123', email: undefined, from: undefined, team: undefined })
+test('an invite hash gives its team and the email it was sent to', () => {
+  assert.deepEqual(inviteOf(`#${email}#ws_Abc-123.${secret}`), { workspace: 'ws_Abc-123', email: 'ana@example.com', from: undefined, team: undefined, role: undefined })
+  assert.deepEqual(inviteOf(`#ws_Abc-123.${secret}`), { workspace: 'ws_Abc-123', email: undefined, from: undefined, team: undefined, role: undefined })
 })
 
-test('a newer invite hash also says who sent it and to which team', () => {
-  const hint = Buffer.from('ana@example.com\nmo@example.com\nMo’s team').toString('base64url')
-  assert.deepEqual(inviteOf(`#${hint}#ws_Abc-123.${secret}`), { link: `https://openhut.dev/join#ws_Abc-123.${secret}`, workspace: 'ws_Abc-123', email: 'ana@example.com', from: 'mo@example.com', team: 'Mo’s team' })
+test('an invite hash also says who sent it, to which team, and as what, for the Join card', () => {
+  const hint = Buffer.from('ana@example.com\nmo@example.com\nMo’s team\nadmin').toString('base64url')
+  assert.deepEqual(inviteOf(`#${hint}#ws_Abc-123.${secret}`), { workspace: 'ws_Abc-123', email: 'ana@example.com', from: 'mo@example.com', team: 'Mo’s team', role: 'admin' })
 })
 
 test('a hash that isn\'t an invite gives nothing, and a broken email part is left out', () => {

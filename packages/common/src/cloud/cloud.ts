@@ -119,7 +119,7 @@ export const Invite = z.object({
 })
 export type Invite = z.infer<typeof Invite>
 
-export const NewInvite = z.object({ id: Id, email: Email, role: InviteRole, key: DeviceKey, body: Locked })
+export const NewInvite = z.object({ id: Id, email: Email, role: InviteRole, key: DeviceKey, body: Locked, link: z.string().check(z.maxLength(2000)) })
 export type NewInvite = z.infer<typeof NewInvite>
 
 export const OpenedInvite = z.object({ ...Invite.shape, memberLists: z.array(MemberList).check(z.maxLength(200)), hasMore: z.optional(z.boolean()) })
@@ -279,12 +279,6 @@ export type CreateCloudInvite = z.infer<typeof CreateCloudInvite>
 
 export const CloudInvite = z.object({ object: z.literal('cloud_invite'), id: z.string(), workspace: Id, email: Email, role: InviteRole, link: z.string(), expiresAt: Timestamp })
 export type CloudInvite = z.infer<typeof CloudInvite>
-
-export const InviteLink = z.object({ link: z.string().check(z.maxLength(2000)) })
-export type InviteLink = z.infer<typeof InviteLink>
-
-export const CloudInvitePreview = z.object({ object: z.literal('cloud_invite_preview'), workspace: Id, name: z.string(), from: Email, email: Email, role: InviteRole })
-export type CloudInvitePreview = z.infer<typeof CloudInvitePreview>
 
 export const InviteLetter = z.object({ workspace: Id, name: z.string().check(z.maxLength(200)), from: Email, email: Email, role: InviteRole, anchor: Base64, expiresAt: Timestamp })
 export type InviteLetter = z.infer<typeof InviteLetter>

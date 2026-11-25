@@ -23,6 +23,7 @@ import { IdParams } from '../platform/responses.ts'
 const LOCAL = Symbol('local')
 const DEVICE = Symbol('device')
 const TRUST = /^(POST|PUT|PATCH|DELETE) \/api\/cloud(\/|$)/
+const TEAM = new Set(['PATCH /api/cloud/workspaces/:id', 'DELETE /api/cloud/workspaces/:id/invites/:email', 'PATCH /api/cloud/workspaces/:id/members/:email', 'DELETE /api/cloud/workspaces/:id/members/:email'])
 const TEAMMATES = new Set(['GET /api/threads/:id', 'POST /api/threads/:id/chat'])
 const TEAMMATE_LISTS = new Set(['GET /api/agents'])
 
@@ -33,7 +34,7 @@ export async function who(req: FastifyRequest): Promise<Caller> {
   const member = memberOf(device)
   if (!member) throw new HttpError(401, 'This device isn’t on your list anymore, so it can’t reach this computer.')
   const route = routeOf(req)
-  const allowed = member.own ? !TRUST.test(route) : TEAMMATE_LISTS.has(route) || (TEAMMATES.has(route) && await sharedWith({ req, email: member.email, workspaces: member.workspaces }))
+  const allowed = member.own ? !TRUST.test(route) || TEAM.has(route) : TEAMMATE_LISTS.has(route) || (TEAMMATES.has(route) && await sharedWith({ req, email: member.email, workspaces: member.workspaces }))
   if (!allowed) throw new HttpError(403, member.own ? 'Do this on your computer: devices, keys and sign-in change only there.' : 'You can only chat with the agents your team shares.')
   return { id: (await owner()).id, email: member.email, local: false, ...!member.own && { teammate: member.workspaces } }
 }

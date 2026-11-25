@@ -182,7 +182,7 @@ test('an admin revokes an invite: the next list drops it and moves its key to re
   assert.ok(await roomKeys.advance({ lists: [invited.list], ws }))
   const [, to, room] = invited.link.split('#')
   const [, secret] = room?.split('.') ?? []
-  assert.equal(new TextDecoder().decode(fromBase64(to ?? '')), 'ana@example.com\nmo@example.com\nTeam', 'the invitee, who sent it and the team, for the join page')
+  assert.equal(new TextDecoder().decode(fromBase64(to ?? '')), 'ana@example.com\nmo@example.com\nTeam\nmember', 'the invitee, who sent it, the team and the role, for the Join card')
   assert.match(invited.link, /#([A-Za-z0-9_-]{8,64})\.([A-Za-z0-9_-]{43})\s*$/, 'what runtimes before the email part take')
   const card = await identity(fromBase64(secret ?? ''))
   const ana = toBase64((await identity()).publicKey)

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { ErrorNote } from '@/components/error-note'
 import { useCancelSignIn, usePasteSignInCode, useSignIn, useSigningIn } from '@/features/cloud/api'
 import { BIG, EntryScreen, QUIET } from '@/features/cloud/step'
-import { open, usePath } from '@/lib/router'
+import { usePath } from '@/lib/router'
 import { inviteOf } from '@/features/join/invite'
 import { firstName } from '@/features/cloud/live'
 
@@ -21,13 +21,16 @@ export function SignIn({ cloud }: { cloud: Cloud | undefined }) {
   const hint = invite?.email
   const busy = waiting || signIn.isPending
   const ready = Boolean(cloud)
-  const quiet = !invited && <Button type="button" variant="text" className={QUIET} onClick={() => open('join-link')}>I have an invite link</Button>
-  const link = waiting ? <><Button type="button" variant="text" className={QUIET} disabled={signIn.isPending} onClick={() => signIn.mutate(hint)}>Open Google again</Button><Button type="button" variant="text" className={QUIET} onClick={cancel}>Cancel</Button></> : quiet
-  const [title, line] = invited ? [invite?.team ? `You’re invited to ${invite.team}.` : 'You’re invited.', `${invite?.from ? `${firstName(invite.from)} (${invite.from}) invited you. ` : ''}${hint ? `Sign in with Google as ${hint} to join.` : INVITED}`] : [TITLE, LINE]
+  const link = waiting && <><Button type="button" variant="text" className={QUIET} disabled={signIn.isPending} onClick={() => signIn.mutate(hint)}>Open Google again</Button><Button type="button" variant="text" className={QUIET} onClick={cancel}>Cancel</Button></>
+  const [title, line] = invited ? invitedLines(invite ?? {}) : [TITLE, LINE]
   return <SignInScreen title={title} line={line} hint={hint} ready={ready} busy={busy} disabled={!online || !ready || signIn.isPending} onSignIn={() => signIn.mutate(hint)} link={link}>
     {waiting && <PasteCode />}
     {online ? <ErrorNote className="max-w-[420px]" message={signIn.error?.message ?? cloud?.signInError ?? undefined} /> : <p className="m-0 text-[13px] text-mute">OpenHut needs the internet the first time.</p>}
   </SignInScreen>
+}
+
+export function invitedLines({ team, from, email }: { team?: string | null; from?: string | null; email?: string | null }): [string, string] {
+  return [team ? `You’re invited to ${team}.` : 'You’re invited.', `${from ? `${firstName(from)} (${from}) invited you. ` : ''}${email ? `Sign in with Google as ${email} to join.` : INVITED}`]
 }
 
 export const TITLE = 'Your agents, everywhere.'

@@ -9,7 +9,7 @@ import { ENDPOINTS, pathOf, SignInStarted, type EndpointName } from './endpoints
 import { bodyOf } from './member-list.ts'
 import { recordsClient, type RecordsOptions } from './records.ts'
 import type { Kind } from './rules.ts'
-import { Credits, JoinCode, KeyBox, Me, proofOf, requestParts, Session, SIGNATURE_HEADER, type NamedKeyBox, type V1Proof } from './v1/identity.ts'
+import { Credits, JoinCode, KeyBox, Me, Workspace, proofOf, requestParts, Session, SIGNATURE_HEADER, type NamedKeyBox, type V1Proof } from './v1/identity.ts'
 import { JoinRequest, type NewLetter, type PostMemberList } from './v1/trust.ts'
 
 export type Store = {
@@ -25,7 +25,7 @@ export type Reply = { status: number; json: unknown }
 
 export type SignIn = { google: { returnTo: string; state?: string } } | { googleCode: string; state?: string } | { joinCode: string }
 export type Redirect = { object: 'redirect'; url: string }
-export type SignedIn = Me & { maker?: string }
+export type SignedIn = Me & { maker?: string; workspace?: string }
 export type KnockState = { step: 'approved' } | { step: 'waiting' } | { step: 'over' }
 export type Knock = { team: string; ask: (input: { name: string; os: string; server?: boolean }) => Promise<JoinRequest>; mine: () => Promise<JoinRequest | undefined>; state: () => Promise<KnockState>; cancel: () => Promise<void> }
 export type Watch = { send: (input: { type: 'presence' | 'beat'; workspace: string; body: string }) => void; close: () => void }
@@ -35,8 +35,9 @@ export type Device = {
   signIn: (input: SignIn) => Promise<Redirect | SignedIn>
   me: () => Promise<Me | null>
   firstComputerCode: () => Promise<JoinCode>
-  startCloud: () => Promise<CloudComputer>
-  cloudComputer: () => Promise<CloudComputer | null>
+  createTeam: (input: { name: string }) => Promise<Workspace>
+  startCloud: (team: string) => Promise<CloudComputer>
+  cloudComputer: (team: string) => Promise<CloudComputer | null>
   knock: (input: { team: string }) => Knock
   // wake: a person acted (opened the App, sent a message), so a paused Cloud computer is woken; background dials aren't.
   open: (input: ({ team: string; computer?: string; timeout?: number } | { box: string; timeout?: number }) & { wake?: boolean }) => Promise<Tunnel>
@@ -60,6 +61,7 @@ export type Computer = Device & {
   joinCode: () => Promise<JoinCode>
   deleteAccount: () => Promise<Reply>
   credits: () => Promise<Credits>
+  renameTeam: (input: { team: string; name: string }) => Promise<Reply>
   keyBoxes: {
     list: () => Promise<KeyBox[] | null>
     put: (box: NamedKeyBox) => Promise<Reply>
@@ -164,7 +166,7 @@ function wire({ url, key, store, fetch: send = globalThis.fetch }: { url: Url; k
     const body = grant === 'google' ? { grant, code, signature: await sign('session', [code]) } : { grant, code, device: await key.id(), signature: await sign('session', [code]) }
     const made = await ok({ name: 'createSession', body, auth: false, reply: Session })
     await store.set('session', made)
-    return { ...await ok({ name: 'me', reply: Me }), ...made.maker && { maker: made.maker } }
+    return { ...await ok({ name: 'me', reply: Me }), ...made.maker && { maker: made.maker }, ...made.workspace && { workspace: made.workspace } }
   }
 
   return { call, ok, start, session, sign, base, token: async () => (await session())?.token ?? '' }
@@ -206,8 +208,9 @@ function deviceOf({ key, store, net }: { key: DeviceIdentity; store: Store; net:
     },
 
     firstComputerCode: () => net.ok({ name: 'createJoinCode', reply: JoinCode }),
-    startCloud: () => net.ok({ name: 'startCloudComputer', reply: CloudComputer }),
-    cloudComputer: () => net.ok({ name: 'getCloudComputer', reply: CloudComputer }).catch((error: unknown) => {
+    createTeam: (body) => net.ok({ name: 'createWorkspace', body, reply: Workspace }),
+    startCloud: (team) => net.ok({ name: 'startCloudComputer', params: { team }, reply: CloudComputer }),
+    cloudComputer: (team) => net.ok({ name: 'getCloudComputer', params: { team }, reply: CloudComputer }).catch((error: unknown) => {
       if (error instanceof CloudError && error.status === 404) return null
       throw error
     }),
@@ -333,6 +336,7 @@ function computerOf({ url, key, store, fetch }: { url: Url; key: ComputerIdentit
     joinCode: () => net.ok({ name: 'createJoinCode', reply: JoinCode }),
     deleteAccount: () => net.call({ name: 'deleteMe' }),
     credits: () => net.ok({ name: 'getCredits', reply: Credits }),
+    renameTeam: ({ team, name }) => net.call({ name: 'updateWorkspace', params: { team }, body: { name } }),
 
     channels: {
       create: (body) => net.call({ name: 'createChannel', body }),

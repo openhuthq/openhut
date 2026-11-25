@@ -10,8 +10,7 @@ import { I } from '@/components/kit'
 import { nameOf } from '@/features/cloud/seen'
 import { accessLabel, looksLikeEmail, previewOf, searchPeople, withWholeTeam, type AccessValue } from '@/features/agents/form'
 import { useInvite } from '@/features/cloud/workspaces'
-import { copyText } from '@/lib/clipboard'
-import { toast, toastError, toastFailed } from '@/lib/toast'
+import { toast, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 const PERSON = 'flex items-center h-8 w-full justify-start gap-2 rounded-md px-2 text-[13px] font-normal hover:bg-hover'
@@ -23,7 +22,7 @@ export function AccessPicker({ workspace, owner, value, onChange, disabled, trig
   const set = (people: string[]) => onChange({ ...value, people })
   const toggle = (email: string) => set(value.people.includes(email) ? value.people.filter((each) => each !== email) : [...value.people, email])
   const inviteOf = (email: string) => invite.mutate({ workspace: workspace.id, email, role: 'member' }, {
-    onSuccess: async ({ link }) => { setQuery(''); if (!await copyText(link)) return toastFailed('Couldn’t copy the link', link); toast('Invite link copied', `Send it to ${email}. It works once, for 2 days.`) },
+    onSuccess: () => { setQuery(''); toast('Invite sent', `We emailed ${email} a link to join ${workspace.name}.`) },
     onError: toastError,
   })
 
@@ -53,7 +52,7 @@ export function AccessPicker({ workspace, owner, value, onChange, disabled, trig
           </Button>
         })}
         {!value.shared && found.kind === 'none' && (looksLikeEmail(found.query)
-          ? <Button type="button" variant="bare" role="option" aria-selected={false} disabled={invite.isPending} onClick={() => inviteOf(found.query)} className={PERSON}><span className="grid w-5 place-items-center"><I icon={Mail01Icon} size={15} className="text-mute" /></span><span className="truncate">{invite.isPending ? 'Making the link…' : `Invite ${found.query}`}</span></Button>
+          ? <Button type="button" variant="bare" role="option" aria-selected={false} disabled={invite.isPending} onClick={() => inviteOf(found.query)} className={PERSON}><span className="grid w-5 place-items-center"><I icon={Mail01Icon} size={15} className="text-mute" /></span><span className="truncate">{invite.isPending ? 'Sending…' : `Invite ${found.query}`}</span></Button>
           : <p className="m-0 px-2 py-1.5 text-[12.5px] text-mute">No one on your team matches. Type their email to invite them.</p>)}
       </div>
     </PopoverContent>

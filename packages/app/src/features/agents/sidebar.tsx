@@ -1,5 +1,5 @@
 import { createContext, useState, useSyncExternalStore, type ReactElement } from 'react'
-import { BrowserIcon, Cancel01Icon, CloudIcon, Logout03Icon, Delete02Icon, LaptopIcon, Link01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, ServerStack01Icon, SidebarLeftIcon, StopIcon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { Add01Icon, BrowserIcon, Cancel01Icon, CloudIcon, Logout03Icon, Delete02Icon, LaptopIcon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, ServerStack01Icon, SidebarLeftIcon, StopIcon, Tick02Icon } from '@hugeicons/core-free-icons'
 import type { OpenHutAgent } from '@/lib/openhut'
 import { CreditsLine } from '@/features/credits/credits'
 import type { Thread } from '@openhut/common/threads/thread.ts'
@@ -11,8 +11,8 @@ import { Glyph } from '@/components/glyph'
 import { Hut } from '@/components/hut'
 import { TeamMark } from '@/components/custom/team-mark'
 import { GLASS, HOVER, I, ICON_BUTTON, PICKED, SURFACE } from '@/components/kit'
-import { chooseWorkspace, peopleNote, useWorkspaces } from '@/features/cloud/workspaces'
-import { shownTeams } from '@/features/cloud/shown-teams'
+import { chooseWorkspace, useTeams, useWorkspaces } from '@/features/cloud/workspaces'
+import { CreateTeamDialog } from '@/features/people/create-team'
 import { nameOf as personName, useCloud, useCloudId, useSignOut } from '@/features/cloud/api'
 import { SIGN_OUT_DETAIL } from '@/features/cloud/cloud'
 import { PersonFace } from '@/components/custom/person-face'
@@ -28,7 +28,7 @@ import { chipMarks } from '@/features/connections/catalog'
 import { UpdateEverything } from '@/features/settings/update-pill'
 import { ago } from '@/lib/format'
 import { PHONE, useMedia } from '@/lib/media'
-import { navigate, open } from '@/lib/router'
+import { navigate, open, useOpen } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
@@ -146,11 +146,11 @@ function RemovedLine() {
 }
 
 function TeamSwitcher() {
-  const { all, active, email } = useWorkspaces()
+  const { active, email } = useWorkspaces()
   const signOut = useSignOut()
   const [leaving, setLeaving] = useState(false)
-  const homeAgents = (useAgents().data ?? []).filter((agent) => !agent.workspace).length
-  const teams = shownTeams({ all, active: active.id, homeAgents })
+  const teams = useTeams()
+  const creating = useOpen() === 'create-team'
   const name = personName(email ?? '')
   return <>
     <DropdownMenu>
@@ -162,16 +162,17 @@ function TeamSwitcher() {
         <DropdownMenuSeparator />
         {teams.map((workspace) => <DropdownMenuItem key={workspace.id} className="h-auto gap-2.5 px-2 py-1.5" onClick={() => { if (workspace.id !== active.id) { chooseWorkspace(workspace.id); navigate('/') } }}>
           <TeamMark workspace={workspace} className="size-7 rounded-md text-[12px]" />
-          <span className="grid min-w-0 flex-1 leading-tight"><span className="truncate text-[13px] font-medium">{workspace.name}</span><span className="text-[11.5px] text-mute">{peopleNote(workspace)}</span></span>
+          <span className="grid min-w-0 flex-1 leading-tight"><span className="truncate text-[13px] font-medium">{workspace.name}</span><span className="text-[11.5px] text-mute">{workspace.note}</span></span>
           {workspace.id === active.id && <I icon={Tick02Icon} size={14} />}
         </DropdownMenuItem>)}
-        <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => open('join-link')}><I icon={Link01Icon} size={15} className="text-mute" />Join a team</DropdownMenuItem>
+        <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => open('create-team')}><I icon={Add01Icon} size={15} className="text-mute" />Create a team</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => navigate('/settings/general')}><I icon={Settings02Icon} size={15} className="text-mute" />Settings</DropdownMenuItem>
         <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" onClick={() => setLeaving(true)}><I icon={Logout03Icon} size={15} className="text-mute" />Sign out</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
     <ConfirmDialog open={leaving} onOpenChange={setLeaving} question="Sign out?" detail={SIGN_OUT_DETAIL} action="Sign out" onConfirm={() => signOut.mutateAsync()} />
+    {creating && <CreateTeamDialog />}
   </>
 }
 

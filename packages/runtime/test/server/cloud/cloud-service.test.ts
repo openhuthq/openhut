@@ -36,7 +36,7 @@ test('signing in for an invite with another Google account sets nothing up for t
       const device = Buffer.alloc(64).toString('base64url')
       res.end(JSON.stringify(req.url === '/v1/sessions'
         ? { object: 'session', token: 't', refreshToken: 'r', sub: 'google-mo', email: 'mo@example.com', device, expiresAt: new Date(Date.now() + 60_000).toISOString() }
-        : req.url === '/v1/me' ? { object: 'me', sub: 'google-mo', email: 'mo@example.com', device, home: null, workspaces: [] } : { object: 'sign_in', url: 'https://accounts.example.com/o' }))
+        : req.url === '/v1/me' ? { object: 'me', sub: 'google-mo', email: 'mo@example.com', device, home: null, workspaces: [], unstarted: [] } : { object: 'sign_in', url: 'https://accounts.example.com/o' }))
     })
   })
   await new Promise<void>((resolve) => cloud.listen(0, '127.0.0.1', resolve))

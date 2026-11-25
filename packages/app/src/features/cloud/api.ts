@@ -36,7 +36,7 @@ export function useCloudId(computers: { id: string }[]): string | undefined {
 
 export function useStartCloud() {
   const client = useQueryClient()
-  return useMutation({ mutationFn: remote.startCloud, onSuccess: (started) => client.setQueryData(CLOUD_COMPUTER_KEY, started) })
+  return useMutation({ mutationFn: () => remote.startCloud(), onSuccess: (started) => client.setQueryData(CLOUD_COMPUTER_KEY, started) })
 }
 
 export function useCloud() {
@@ -57,11 +57,13 @@ export function useCloud() {
 // A new account before its first agent: just its own team, from OpenHut Cloud, until Cloud joins and answers for itself.
 async function noComputerYet(): Promise<Cloud> {
   const me = await remote.me()
-  if (!me?.home) throw new NoComputer()
+  const team = remote.firstRun() ?? me?.home
+  if (!me || !team) throw new NoComputer()
+  const name = me.unstarted.find((each) => each.id === team)?.name ?? `${nameOf(me.email)}’s team`
   return {
     object: 'cloud', status: 'on', email: me.email, device: null, workspace: null, keyStore: 'file', signInError: null, devices: [], needsSignIn: false, asking: null, canAsk: false, rotate: [], gone: [],
     backup: { state: 'idle', done: 0, total: 0, current: null, at: null, agent: null, problem: null },
-    workspaces: [{ id: me.home, name: `${nameOf(me.email)}’s team`, website: null, home: true, own: true, role: 'owner', waiting: false, members: [{ email: me.email, role: 'owner', devices: [] }], invites: [], requests: [], names: {} }],
+    workspaces: [{ id: team, name, website: null, home: team === me.home, own: true, role: 'owner', waiting: false, members: [{ email: me.email, role: 'owner', devices: [] }], invites: [], requests: [], names: {} }],
   }
 }
 

@@ -1,16 +1,44 @@
 import { createContext, use, useSyncExternalStore } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Cloud, CloudInvite, CloudInvitePreview, type CloudWorkspaceView, type CreateCloudInvite, type Role } from '@openhut/common/cloud/cloud.ts'
+import { Cloud, CloudInvite, type CloudWorkspaceView, type CreateCloudInvite, type Role } from '@openhut/common/cloud/cloud.ts'
+import type { Me } from '@openhut/common/cloud/v1/identity.ts'
 import { request, requestBlob } from '@/lib/api-client'
 import { AGENTS_KEY } from '@/lib/query-keys'
+import { ACTIVE_KEY, REMOTE, remote } from '@/lib/remote'
 
-const ACTIVE_KEY = 'openhut.workspace'
 const CHANGED = 'openhut:workspace'
 const CLOUD_KEY = ['cloud']
 
-export function peopleNote(workspace: CloudWorkspaceView): string {
-  if (workspace.waiting) return 'Joining…'
-  return workspace.members.length === 1 ? 'Just you' : `${workspace.members.length} people`
+export type Team = { id: string; name: string; website: string | null; note: string }
+
+const peopleNote = (people: number) => people === 1 ? 'Just you' : `${people} people`
+
+export function teamsOf({ me, here, active }: { me: Me | null | undefined; here: CloudWorkspaceView[]; active: string }): Team[] {
+  const site = (id: string) => here.find((each) => each.id === id)?.website ?? null
+  if (!me) return here.map((each) => ({ id: each.id, name: each.name, website: each.website, note: each.waiting ? 'Joining…' : peopleNote(each.members.length) }))
+  const listed = me.workspaces.filter((each) => each.access === 'listed').map((each) => ({ id: each.id, name: here.find((one) => one.id === each.id)?.name ?? each.name, website: site(each.id), note: peopleNote(each.people) }))
+  const unstarted = me.unstarted.filter((each) => each.id !== me.home || each.id === active).map((each) => ({ id: each.id, name: each.name, website: null, note: 'Just you' }))
+  return [...listed, ...unstarted]
+}
+
+const ME_KEY = ['cloud-me']
+
+export function useTeams(): Team[] {
+  const { all, active } = useWorkspaces()
+  const me = useQuery({ queryKey: ME_KEY, queryFn: remote.me, enabled: REMOTE }).data
+  return teamsOf({ me, here: all, active: active.id })
+}
+
+export function useCreateTeam() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: remote.createTeam,
+    onSuccess: async (team) => {
+      await remote.startCloud(team.id)
+      await client.invalidateQueries({ queryKey: ME_KEY })
+      chooseWorkspace(team.id)
+    },
+  })
 }
 
 export function chooseWorkspace(id: string) {
@@ -58,21 +86,6 @@ export function useInvite() {
   return useMutation({
     mutationFn: (body: CreateCloudInvite) => request({ schema: CloudInvite, computer: 'local', path: '/api/invitations/cloud', method: 'POST', body }),
     onSuccess: () => client.invalidateQueries({ queryKey: CLOUD_KEY }),
-  })
-}
-
-export function useInvitePreview({ link, enabled }: { link: string; enabled: boolean }) {
-  return useQuery({ queryKey: ['cloud-invite', link], queryFn: () => request({ schema: CloudInvitePreview, computer: 'local', path: '/api/invitations/cloud/previews', method: 'POST', body: { link } }), enabled, retry: false, staleTime: Infinity })
-}
-
-export function useJoin() {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: (link: string) => request({ schema: Cloud, computer: 'local', path: '/api/invitations/cloud/joins', method: 'POST', body: { link } }),
-    onSuccess: (cloud) => {
-      client.setQueryData(CLOUD_KEY, cloud)
-      void client.invalidateQueries({ queryKey: AGENTS_KEY })
-    },
   })
 }
 

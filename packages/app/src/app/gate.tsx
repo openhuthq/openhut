@@ -7,19 +7,16 @@ import { useCloud } from '@/features/cloud/api'
 import { SignIn } from '@/features/cloud/sign-in'
 import { Stage } from '@/features/cloud/step'
 import { activeOf, GateContext, useChosen } from '@/features/cloud/workspaces'
-import { JoinLinkDialog } from '@/features/join/cloud-join'
-import { useOpen } from '@/lib/router'
 
 type Me = { error: Error | null; isFetching: boolean; refetch: () => unknown }
 
 export function Gate({ me, children }: { me: Me; children: ReactNode }) {
   const cloud = useCloud()
   const chosen = useChosen()
-  const opened = useOpen()
   const error = me.error ?? cloud.error
   const step = gateOf(cloud.data)
   if (step === 'loading') return error ? <Down error={error} retrying={me.isFetching} onRetry={() => { void me.refetch(); void cloud.refetch() }} /> : <Waiting />
-  if (step === 'sign-in') return <><Stage><SignIn cloud={cloud.data} /></Stage>{opened === 'join-link' && <JoinLinkDialog />}</>
+  if (step === 'sign-in') return <Stage><SignIn cloud={cloud.data} /></Stage>
   if (!cloud.data) return <Waiting />
   const active = activeOf({ workspaces: cloud.data.workspaces, chosen })
   if (!active) return <Waiting />

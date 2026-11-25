@@ -45,7 +45,7 @@ export const CreateSession = z.discriminatedUnion('grant', [
 ])
 export type CreateSession = z.infer<typeof CreateSession>
 
-export const Session = z.object({ object: z.literal('session'), token: z.string(), refreshToken: z.string(), sub: z.string(), email: Email, device: DeviceKey, expiresAt: Timestamp, maker: z.optional(DeviceKey) })
+export const Session = z.object({ object: z.literal('session'), token: z.string(), refreshToken: z.string(), sub: z.string(), email: Email, device: DeviceKey, expiresAt: Timestamp, maker: z.optional(DeviceKey), workspace: z.optional(WorkspaceId) })
 export type Session = z.infer<typeof Session>
 
 export const CreditModel = z.object({ id: z.string(), name: z.string(), inputPrice: z.number(), outputPrice: z.number() })
@@ -61,6 +61,8 @@ export const DEVICE_KINDS = ['computer', 'runtime', 'viewer', 'kit'] as const
 export const DeviceKind = z.enum(DEVICE_KINDS)
 export type DeviceKind = z.infer<typeof DeviceKind>
 export const ACCESS = ['listed', 'kit', 'waiting'] as const
+export const Workspace = z.object({ id: WorkspaceId, object: z.literal('workspace'), name: z.string() })
+export type Workspace = z.infer<typeof Workspace>
 
 export const Me = z.object({
   object: z.literal('me'),
@@ -68,7 +70,8 @@ export const Me = z.object({
   email: Email,
   device: DeviceKey,
   home: z.nullable(WorkspaceId),
-  workspaces: z.array(z.object({ id: WorkspaceId, object: z.literal('workspace'), role: Role, access: z.enum(ACCESS), kind: z.nullable(DeviceKind), version: z.number() })),
+  workspaces: z.array(z.object({ id: WorkspaceId, object: z.literal('workspace'), name: z.string(), people: z.number(), role: Role, access: z.enum(ACCESS), kind: z.nullable(DeviceKind), version: z.number() })),
+  unstarted: z.array(Workspace),
   managed: z.optional(DeviceKey),
 })
 export type Me = z.infer<typeof Me>

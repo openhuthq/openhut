@@ -1,4 +1,4 @@
-// The browser run (R1, W1): a second browser and an invited teammate get in with no approval. scripts/web-e2e.sh starts the stack.
+// The browser run (R1, W1): a second browser gets in with no approval, and an invited teammate joins from the Join card with no owner step. scripts/web-e2e.sh starts the stack.
 // Drives the system Chrome (ubuntu-latest has one) through playwright-core.
 import { appendFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -45,10 +45,12 @@ try {
   log('6 the owner invites ana@example.com')
   const ana = await open()
   await ana.page.goto(`${new URL('join', WEB)}${new URL(invite.link).hash}`)
-  log(`7 ana opens the invite: ${lines(await ana.until(/Continue with Google/), 2)}`)
-  await ana.page.getByRole('button', { name: /Continue with Google/ }).click()
+  log(`7 ana opens the invite: ${lines(await ana.until(/Sign in as ana@example.com/), 2)}`)
+  await ana.page.getByRole('button', { name: /Sign in as ana@example.com/ }).click()
   await ana.until(/Sign in \(dev only\)/)
   await ana.page.getByRole('link', { name: 'ana@example.com', exact: true }).click()
+  log(`8a ana sees the Join card: ${lines(await ana.until(/Join team/), 3)}`)
+  await ana.page.getByRole('button', { name: 'Join team' }).click()
   const inTeam = await ana.until(/Nothing is shared with you yet|Shared with you|Knock knock|Tell /)
   if (/Knock knock|Tell /.test(inTeam)) throw new Error('the invited teammate was asked to knock: our servers should let her in')
   log(`8 the invited teammate is in, no owner step: ${lines(inTeam, 3)}`)

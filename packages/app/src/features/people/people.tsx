@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link01Icon, MoreHorizontalIcon, PlusSignIcon } from '@hugeicons/core-free-icons'
+import { Mail01Icon, MoreHorizontalIcon, UserAdd01Icon } from '@hugeicons/core-free-icons'
 import type { CloudWorkspaceView, Member } from '@openhut/common/cloud/cloud.ts'
 import { Button } from '@/components/ui/button'
 import { ConfirmButton, ConfirmDialog } from '@/components/confirm-button'
@@ -14,10 +14,8 @@ import { I, PILL, Section } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { nameOf } from '@/features/cloud/api'
 import { useInvite, useRemoveDevice, useRemoveMember, useRevokeInvite, useSetRole, useWorkspaces } from '@/features/cloud/workspaces'
-import { shortDateTime } from '@/lib/format'
-import { copyText } from '@/lib/clipboard'
 import { open, useOpen } from '@/lib/router'
-import { toast, toastError, toastFailed } from '@/lib/toast'
+import { toast, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 const ROLE = { owner: 'Owner', admin: 'Admin', member: 'Member' }
@@ -45,11 +43,24 @@ export function TeamPeople({ workspace }: { workspace: CloudWorkspaceView }) {
 
 function InviteRow({ invite, workspace, admin }: { invite: CloudWorkspaceView['invites'][number]; workspace: CloudWorkspaceView; admin: boolean }) {
   const revoke = useRevokeInvite()
-  const name = nameOf(invite.email)
-  return <Row icon={<span className="opacity-40"><PersonFace name={name} email={invite.email} size={24} /></span>} title={name} note={[invite.email, invite.until && (Date.parse(invite.until) > Date.now() ? `link works until ${shortDateTime.format(new Date(invite.until))}` : 'link ran out')].filter(Boolean).join(' · ')}>
-    {invite.link && <Button type="button" variant="ghost" className={PILL} onClick={() => void copy({ link: invite.link ?? '', email: invite.email })}>Copy link</Button>}
-    {admin && <ConfirmButton className={PILL} disabled={revoke.isPending} question={`Revoke ${name}’s invite?`} detail="The link stops working. You can invite them again later." action="Revoke" onConfirm={() => revoke.mutateAsync({ id: workspace.id, email: invite.email }).then(() => toast(`${name}’s invite revoked`))}>Revoke</ConfirmButton>}
+  const resend = useInvite()
+  return <Row icon={<I icon={Mail01Icon} size={18} className="w-6 text-mute" />} title={invite.email} note={`${ROLE[invite.role]} · ${sentNote(invite.until)}`}>
+    {admin && <Button type="button" variant="ghost" className={PILL} disabled={resend.isPending} onClick={() => resend.mutate({ workspace: workspace.id, email: invite.email, role: invite.role }, { onSuccess: () => toast('Invite sent again', `${invite.email} gets a new email. The old link stops working.`), onError: toastError })}>{resend.isPending ? 'Sending…' : 'Resend'}</Button>}
+    {admin && <ConfirmButton className={PILL} disabled={revoke.isPending} question={`Revoke ${invite.email}’s invite?`} detail="The link in the email stops working. You can invite them again later." action="Revoke" onConfirm={() => revoke.mutateAsync({ id: workspace.id, email: invite.email }).then(() => toast(`${invite.email}’s invite revoked`))}>Revoke</ConfirmButton>}
   </Row>
+}
+
+const DAY_MS = 24 * 60 * 60_000
+const INVITE_DAYS = 7
+
+export function sentNote(until: string | null, now = Date.now()): string {
+  if (!until) return 'sent'
+  const left = Date.parse(until) - now
+  if (left <= 0) return 'ran out, resend it'
+  const ago = Math.floor((INVITE_DAYS * DAY_MS - left) / DAY_MS)
+  const sent = ago === 0 ? 'sent today' : ago === 1 ? 'sent yesterday' : `sent ${ago} days ago`
+  const days = Math.ceil(left / DAY_MS)
+  return `${sent}, works for ${days === 1 ? '1 more day' : `${days}${ago ? ' more' : ''} days`}`
 }
 
 function PersonRow({ member, workspace, you, admin }: { member: Member; workspace: CloudWorkspaceView; you: boolean; admin: boolean }) {
@@ -86,11 +97,10 @@ function InviteButton({ workspace }: { workspace: CloudWorkspaceView }) {
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const email = String(new FormData(event.currentTarget).get('email') ?? '').trim()
-    const sent = workspace.invites.find((each) => each.email.toLowerCase() === email.toLowerCase())
-    invite.mutate({ workspace: workspace.id, email, role }, { onSuccess: ({ link }) => void copy({ link, email, replaced: Boolean(sent) }).then(() => open()), onError: () => undefined })
+    invite.mutate({ workspace: workspace.id, email, role }, { onSuccess: () => { toast('Invite sent', `We emailed ${email} a link to join ${workspace.name}.`); open() }, onError: () => undefined })
   }
   return <Popover open={opened} onOpenChange={(on) => open(on ? 'invite' : undefined)}>
-    <PopoverTrigger render={<Button type="button" variant="primary" className={cn(PILL, 'gap-1')} />}><I icon={PlusSignIcon} size={14} />Invite</PopoverTrigger>
+    <PopoverTrigger render={<Button type="button" variant="primary" className={cn(PILL, 'gap-1')} />}><I icon={UserAdd01Icon} size={14} />Invite</PopoverTrigger>
     <PopoverContent className="flex w-[320px] flex-col gap-2.5 rounded-xl p-3 text-[13px]">
       <form onSubmit={submit} className="flex flex-col gap-2.5">
         <Input name="email" type="email" required aria-label="Their email" placeholder="Their email" autoFocus autoComplete="off" data-1p-ignore data-lpignore="true" className="h-8 w-full text-[13px] phone:h-11" onInput={(event) => setValid(event.currentTarget.validity.valid)} />
@@ -99,16 +109,10 @@ function InviteButton({ workspace }: { workspace: CloudWorkspaceView }) {
           <ToggleGroupItem value="admin" className="justify-center">Admin</ToggleGroupItem>
         </ToggleGroup>
         <span className="text-[12px] text-body">{role === 'admin' ? 'Also invites people and adds computers.' : 'Chats with the agents the team shares, and makes their own.'}</span>
-        <Button type="submit" variant="primary" className="h-8 w-full gap-1.5 phone:h-11 phone:justify-center" disabled={!valid || invite.isPending}><I icon={Link01Icon} size={14} />{invite.isPending ? 'Making the link…' : 'Copy invite link for this email'}</Button>
+        <Button type="submit" variant="primary" className="h-8 w-full gap-1.5 phone:h-11 phone:justify-center" disabled={!valid || invite.isPending}>{invite.isPending ? 'Sending…' : 'Send invite'}</Button>
         <ErrorNote message={invite.error?.message} />
-        <span className="text-[12px] text-mute">Works once, for 2 days. Your agents stay private until you share them.</span>
+        <span className="text-[12px] text-mute">The invite works for 7 days.</span>
       </form>
     </PopoverContent>
   </Popover>
-}
-
-async function copy({ link, email, replaced = false }: { link: string; email: string; replaced?: boolean }) {
-  const name = nameOf(email)
-  if (!await copyText(link)) return toastFailed('Couldn’t copy the link', link)
-  toast(replaced ? 'New invite link copied' : 'Invite link copied', replaced ? `Send it to ${name}. The old one stops working.` : `Send it to ${name}. It works once, for 2 days.`)
 }
