@@ -1,4 +1,4 @@
-import { Alert02Icon, ArrowRight01Icon, SquareLock02Icon, UserIcon } from '@hugeicons/core-free-icons'
+import { Alert02Icon, ArrowRight01Icon, SquareLock02Icon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { ToolCall, Work } from '@openhut/common/threads/thread.ts'
 import { Button } from '@/components/ui/button'
@@ -13,18 +13,19 @@ import { toast, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { useAgentTools, useConnections, useSetToolPermission } from '@/features/connections/api'
 import { connectionBrand } from '@/features/connections/catalog'
-import { durationOf, kindOf, summaryOf, troubleOf } from '@/features/threads/steps'
+import { durationOf, kindOf, splitLive, summaryOf, troubleOf } from '@/features/threads/steps'
 
 const LIVE = 'text-mute'
 
-export function WorkLine({ agent, work, live, answered, onRetry }: { agent: Agent; work: Work; live: boolean; answered: boolean; onRetry?: () => void }) {
-  const running = live ? work.calls.filter((call) => call.status === 'running').at(-1) : undefined
-  const { failed, blocked, asked, declined } = troubleOf(work)
+export function WorkLine({ agent, work: all, live, answered, onRetry }: { agent: Agent; work: Work; live: boolean; answered: boolean; onRetry?: () => void }) {
+  const { finished: work, running } = splitLive({ work: all, live })
+  const { failed, blocked } = troubleOf(work)
   const marks = [...new Map(work.calls.map((call) => [call.connectionId ?? kindOf(call.tool), call])).values()].slice(0, 3)
-  if (running) return <div className="flex min-w-0 items-center gap-2 py-[3px] text-[12.5px] text-mute" role="status">
+  const now = running && <div className="flex min-w-0 items-center gap-2 py-[3px] text-[12.5px] text-mute" role="status">
     <Spinner className="mt-0 size-3.5 shrink-0" />
     <span className={cn('truncate', LIVE)}>{running.label}…</span>
   </div>
+  if (!work.calls.length) return now
   return <>
     <Collapsible defaultOpen={work.error !== undefined} className="text-[12.5px] text-mute">
       <CollapsibleTrigger className="group/work -ml-1 flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-2 rounded-lg border-0 bg-transparent py-[3px] pr-2 pl-1 text-left text-inherit hover:bg-tint">
@@ -33,8 +34,6 @@ export function WorkLine({ agent, work, live, answered, onRetry }: { agent: Agen
         {work.ms > 10_000 && <span className="shrink-0 text-mute-2">· {durationOf(work.ms)}</span>}
         {failed > 0 && <span className="shrink-0 text-fail">· {failed} failed</span>}
         {blocked > 0 && <span className="shrink-0 text-fail">· {blocked} blocked</span>}
-        {asked > 0 && <span className="shrink-0 text-ink">· waiting on you</span>}
-        {declined > 0 && <span className="shrink-0 text-mute-2">· declined</span>}
         <I icon={ArrowRight01Icon} size={12} className="shrink-0 text-mute-2 [transition:transform_.15s] group-data-panel-open/work:rotate-90" />
       </CollapsibleTrigger>
       <CollapsibleContent><ul className="mt-1 mr-0 mb-0.5 ml-[9px] flex list-none flex-col gap-0.5 border-l-[1.5px] border-hair py-0.5 pr-0 pl-3">
@@ -43,6 +42,7 @@ export function WorkLine({ agent, work, live, answered, onRetry }: { agent: Agen
       </ul></CollapsibleContent>
     </Collapsible>
     {work.calls.filter((call) => call.status === 'blocked').map((call) => <Blocked key={call.id} agent={agent} call={call} />)}
+    {now}
   </>
 }
 
@@ -52,10 +52,10 @@ function Mark({ call, size = 14 }: { call: ToolCall; size?: number }) {
   return <span className="grid shrink-0 place-items-center text-mute">{STEP_ICONS[kindOf(call.tool)]}</span>
 }
 
-const STATUS = { failed: ['Failed', Alert02Icon, 'text-fail'], blocked: ['Blocked', SquareLock02Icon, 'text-fail'], asked: ['Waiting for you', UserIcon, 'text-ink'], declined: ['Declined', UserIcon, 'text-mute-2'] } as const
+const STATUS = { failed: ['Failed', Alert02Icon, 'text-fail'], blocked: ['Blocked', SquareLock02Icon, 'text-fail'] } as const
 
 function Row({ call }: { call: ToolCall }) {
-  const status = call.status !== 'running' && call.status !== 'done' ? STATUS[call.status] : undefined
+  const status = call.status === 'failed' || call.status === 'blocked' ? STATUS[call.status] : undefined
   const hint = call.input && hintOf(call.input)
   const head = <span className="flex min-w-0 items-center gap-2">
     <Mark call={call} />

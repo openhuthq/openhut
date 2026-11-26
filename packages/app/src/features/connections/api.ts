@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@openhut/common/api.ts'
-import { AgentTool, Connection, ConnectionAuthorization, ConnectionEvent, ConnectionTool, type UpdateAgentTools, type CreateConnection, type CreateConnectionAuthorization } from '@openhut/common/connections/connection.ts'
+import { AgentTool, Connection, ConnectionAuthorization, ConnectionEvent, ConnectionTool, type UpdateAgentTools, type CreateConnection, type CreateConnectionAuthorization, type ReconnectConnection } from '@openhut/common/connections/connection.ts'
 import { request, RequestError } from '@/lib/api-client'
 import { CONNECTIONS_KEY, GRANTS_KEY } from '@/lib/query-keys'
 import { navigate } from '@/lib/router'
@@ -15,6 +15,14 @@ const EVENTS_PER_PAGE = '25'
 
 export function useConnections() {
   return useQuery({ queryKey: CONNECTIONS_KEY, queryFn: () => request({ schema: CONNECTION_LIST, path: '/api/connections' }).then((page) => page.data) })
+}
+
+export function useReconnect(connection: Connection) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (body: ReconnectConnection) => request({ schema: Connection, path: `/api/connections/${encodeURIComponent(connection.id)}`, method: 'PATCH', body }),
+    onSuccess: () => Promise.all([CONNECTIONS_KEY, ['connection-tools', connection.id]].map((queryKey) => client.invalidateQueries({ queryKey }))),
+  })
 }
 
 export function useConnectionEvents(connection: Connection) {

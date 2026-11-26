@@ -30,6 +30,8 @@ test('Settings › Apps is one alphabetical list: an app connected twice shows t
   const digitalocean = rows.find((row) => row.title === 'DigitalOcean')
   assert.deepEqual([digitalocean?.brand, digitalocean?.note], ['digitalocean', 'mcp.digitalocean.com · 3 tools'])
   assert.equal(rows.find((row) => row.key === 'mcp')?.connection, undefined)
+  assert.equal(digitalocean?.href, '/connections/cn_do')
+  assert.equal(rows.find((row) => row.key === 'mcp')?.href, undefined)
 })
 
 test('a proposed app keeps its logo by name even on an unknown host, and only plain MCP servers say Custom MCP', () => {

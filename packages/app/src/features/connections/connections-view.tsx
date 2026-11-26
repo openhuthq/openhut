@@ -30,10 +30,8 @@ export function AppsSettings() {
   const returned = new URLSearchParams(useSearch()).get('error') ?? undefined
   return <div className="flex flex-col gap-4">
     <ErrorNote message={returned} />
-    <Rows>{appRows({ items: INTEGRATIONS, connections: connections.data ?? [] }).map((row) => <Row key={row.key} icon={<Glyph name={row.brand} size={20} />} title={row.title} note={row.note}>
-      {row.connection
-        ? <a href={`/connections/${row.connection.id}`} aria-label={`Manage ${row.title}`} className="no-underline"><StatusBadge status={row.connection.status} /></a>
-        : row.item && <ConnectAction item={row.item} quick={quick} />}
+    <Rows>{appRows({ items: INTEGRATIONS, connections: connections.data ?? [] }).map((row) => <Row key={row.key} icon={<Glyph name={row.brand} size={20} />} title={row.title} note={row.note} href={row.href}>
+      {row.connection ? <StatusBadge status={row.connection.status} /> : row.item && <ConnectAction item={row.item} quick={quick} />}
     </Row>)}</Rows>
   </div>
 }

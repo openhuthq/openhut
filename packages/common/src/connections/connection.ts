@@ -31,18 +31,21 @@ export const Connection = z.object({
 })
 export type Connection = z.infer<typeof Connection>
 
+export const ToolGroup = z.enum(['read', 'create', 'update', 'delete', 'other'])
+export type ToolGroup = z.infer<typeof ToolGroup>
+
 export const ConnectionTool = z.object({
   object: z.literal('connection_tool'),
   name: z.string(),
+  label: z.string(),
   description: z.string(),
+  group: ToolGroup,
+  kind: z.enum(['tool', 'catch_all', 'action']),
 })
 export type ConnectionTool = z.infer<typeof ConnectionTool>
 
 export const Permission = z.enum(['allow', 'ask', 'deny'])
 export type Permission = z.infer<typeof Permission>
-
-export const ToolGroup = z.enum(['read', 'create', 'update', 'delete', 'other'])
-export type ToolGroup = z.infer<typeof ToolGroup>
 
 export const AgentTool = z.object({
   object: z.literal('agent_tool'),
@@ -124,6 +127,13 @@ export const CreateConnection = z.object({
   header: z.optional(z.string().check(z.maxLength(4000))),
 })
 export type CreateConnection = z.input<typeof CreateConnection>
+
+export const ReconnectConnection = z.object({
+  dsn: z.optional(z.string().check(z.minLength(1), z.maxLength(2000))),
+  deployKey: z.optional(z.string().check(z.minLength(1), z.maxLength(2000))),
+  token: z.optional(z.string().check(z.minLength(1), z.maxLength(4000))),
+})
+export type ReconnectConnection = z.infer<typeof ReconnectConnection>
 
 export const CreateConnectionAuthorization = z.object({
   kind: z.optional(z.enum(SIGN_IN_KINDS)),

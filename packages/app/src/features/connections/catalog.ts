@@ -96,12 +96,12 @@ export function uniqueName({ title, taken }: { title: string; taken: string[] })
   return `${title} ${n}`
 }
 
-export type AppRow = { key: string; brand: BrandName; title: string; note: string; item?: Integration; connection?: Connection }
+export type AppRow = { key: string; brand: BrandName; title: string; note: string; item?: Integration; connection?: Connection; href?: string }
 
 export function appRows({ items, connections }: { items: Integration[]; connections: Connection[] }): AppRow[] {
   const rows = [
     ...items.filter((item) => item.name === 'mcp' || !connections.some((connection) => connection.kind === item.name)).map((item) => ({ key: item.name, brand: item.name, title: item.title, note: item.short, item })),
-    ...connections.map((connection) => ({ key: connection.id, brand: connectionBrand(connection), title: connection.name, note: kindNote(connection), connection })),
+    ...connections.map((connection) => ({ key: connection.id, brand: connectionBrand(connection), title: connection.name, note: kindNote(connection), connection, href: `/connections/${connection.id}` })),
   ]
   return byName(rows, (row) => row.title)
 }

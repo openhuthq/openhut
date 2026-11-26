@@ -27,7 +27,7 @@ export function Row({ icon, title, note, href, onClick, disabled, children }: { 
     <span className="flex min-w-0 flex-1 flex-col self-center"><span className="truncate text-[13px]/[18px]">{title}</span>{note && <span className="text-[12px]/[16px] text-pretty text-mute">{note}</span>}</span>
     {children && <span className={cn(TOP, 'gap-2 text-[13px]')}>{children}</span>}
   </>
-  if (href) return <a href={href} {...href.startsWith('http') && { target: '_blank', rel: 'noreferrer' }} className={cn(ROW, 'hover:bg-hover')}>{body}</a>
+  if (href) return <a href={href} {...href.startsWith('http') && { target: '_blank', rel: 'noreferrer' }} className={cn(ROW, 'cursor-pointer hover:bg-hover focus-visible:bg-hover')}>{body}</a>
   if (onClick) return <Button type="button" variant="bare" disabled={disabled} className={cn(ROW, 'not-disabled:hover:bg-hover')} onClick={onClick}>{body}</Button>
   return <div className={ROW}>{body}</div>
 }

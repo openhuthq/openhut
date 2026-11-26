@@ -1,6 +1,6 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import * as z from 'zod/mini'
-import { CONNECTION_TITLES, CreateConnection, CreateConnectionAuthorization, ListConnectionEvents, ListConnectionTools } from '@openhut/common/connections/connection.ts'
+import { CONNECTION_TITLES, CreateConnection, CreateConnectionAuthorization, ListConnectionEvents, ListConnectionTools, ReconnectConnection } from '@openhut/common/connections/connection.ts'
 import { page } from '../platform/page.ts'
 import { IdParams, listOf } from '../platform/responses.ts'
 import { requireSignIn, who } from '../team/identity.ts'
@@ -14,6 +14,8 @@ export const connectionController: FastifyPluginAsyncZod = async (app) => {
   app.post('/', CreateRequest, async (req) => connectionService.create({ actor: await who(req), ...req.body }))
 
   app.get('/:id', { schema: { params: IdParams } }, async (req) => connectionService.get({ actor: await who(req), id: req.params.id }))
+
+  app.patch('/:id', ReconnectRequest, async (req) => connectionService.reconnect({ actor: await who(req), id: req.params.id, ...req.body }))
 
   app.delete('/:id', { schema: { params: IdParams } }, async (req) => connectionService.delete({ actor: await who(req), id: req.params.id }))
 }
@@ -41,6 +43,7 @@ export const connectionEventController: FastifyPluginAsyncZod = async (app) => {
 }
 
 const CreateRequest = { schema: { body: CreateConnection } }
+const ReconnectRequest = { schema: { params: IdParams, body: ReconnectConnection } }
 const AuthorizeRequest = { onRequest: requireSignIn, schema: { body: CreateConnectionAuthorization } }
 const ListToolsRequest = { schema: { querystring: ListConnectionTools } }
 const ListEventsRequest = { schema: { querystring: ListConnectionEvents } }

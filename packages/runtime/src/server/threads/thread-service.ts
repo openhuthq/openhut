@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import type { FastifyReply } from 'fastify'
 import type { Selectable } from 'kysely'
-import { createUIMessageStream, pipeUIMessageStreamToResponse, type UIMessage, type UIMessageChunk } from 'ai'
+import { createUIMessageStream, pipeUIMessageStreamToResponse, readUIMessageStream, type UIMessage, type UIMessageChunk } from 'ai'
 import { applySpecPatch, pipeJsonRender, SPEC_DATA_PART_TYPE, type JsonPatch } from '@json-render/core'
 import * as z from 'zod/mini'
 import { AGENT_HOME, ChatMessage, fileInHome, MAX_FILES, MessageValue, ToolProgress, UPLOADS, uploadName, type ChatCall, type ChatFile, type HomeFile, type SendChat, type Thread, type ThreadWithMessages, type UploadFile } from '@openhut/common/threads/thread.ts'
@@ -142,7 +142,7 @@ export const threadService = {
     const asked = together({ messages: said.map((each) => each.message), shared: agent.shared || peopleOf(agent.people).length > 0 })
     const answer = async (writer: { write: (chunk: UIMessageChunk) => void }) => {
       const message = await seeded({ said, session, message: asked })
-      for await (const chunk of joinText(pipeJsonRender(relayed({ agent, session, message, signal: abort.signal, work })))) writer.write(chunk)
+      for await (const chunk of answerStream({ agent, session, message, signal: abort.signal, work })) writer.write(chunk)
     }
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
@@ -158,10 +158,7 @@ export const threadService = {
         const done = work.done({ error: failed === undefined ? undefined : messageOf(failed) })
         if (done) writer.write({ type: 'data-work', id: 'work', data: done })
         if (failed !== undefined) throw failed
-        for (const plugin of plugins()) {
-          const part = await plugin.afterTurn?.({ agentId: agent.id, since: new Date(started) })
-          if (part) writer.write(part)
-        }
+        for (const part of await afterTurn({ agentId: agent.id, since: started })) writer.write(part)
         writer.write({ type: 'finish' })
       },
       onError: messageOf,
@@ -183,9 +180,20 @@ export const threadService = {
       const agent = await findRow({ table: 'agent', id: agentId, missing: 'That agent doesn\'t exist.' })
       const id = nextId()
       const session = sessionOf(await saidOf(agent), id)
-      let said = ''
-      await relay({ agent, session, message: { id, role: 'user', parts: [{ type: 'text', text }] }, signal: AbortSignal.timeout(TURN_MS), writer: { write: (chunk) => { if (chunk.type === 'text-delta') said += chunk.delta } } })
-      if (!SILENT.test(said)) await write({ agent, message: { id, role: 'assistant', parts: [{ type: 'text', text: said }], metadata: { wake: true } }, session })
+      const started = Date.now()
+      const work = turnWork({ agent, started })
+      const chunks = async function* (): AsyncGenerator<UIMessageChunk> {
+        yield* answerStream({ agent, session, message: { id, role: 'user', parts: [{ type: 'text', text }] }, signal: AbortSignal.timeout(TURN_MS), work })
+        const done = work.done({})
+        if (done) yield { type: 'data-work', id: 'work', data: done }
+        yield* await afterTurn({ agentId, since: started })
+      }
+      let built: UIMessage = { id, role: 'assistant', parts: [] }
+      for await (const each of readUIMessageStream({ message: built, stream: ReadableStream.from(chunks()), terminateOnError: true })) built = each
+      const answer = foldCard(built)
+      const said = answer.parts.map((part) => part.type === 'text' ? part.text : '').join('')
+      const message = z.safeParse(ChatMessage, { ...answer, id, metadata: { wake: true } }).data
+      if (message && !SILENT.test(said)) await write({ agent, message, session })
       return said
     } finally {
       busy.delete(agentId)
@@ -299,6 +307,15 @@ async function callAgent({ agent, session, message, signal }: { agent: AgentRow;
   const res = await ask().catch(() => { throw new HttpError(502, signal.aborted ? 'Stopped.' : `${agent.name} isn't answering. Try again, or stop it and start it again.`) })
   if (!res.ok || !res.body) throw new HttpError(502, `${agent.name} couldn't answer. Try again, or stop it and start it again.`)
   return res.body
+}
+
+function answerStream(input: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal; work: TurnWork }): ReadableStream<UIMessageChunk> {
+  return joinText(pipeJsonRender(relayed(input)))
+}
+
+async function afterTurn({ agentId, since }: { agentId: string; since: number }): Promise<UIMessageChunk[]> {
+  const parts = await Promise.all(plugins().map((plugin) => plugin.afterTurn?.({ agentId, since: new Date(since) })))
+  return parts.flatMap((part) => part ? [part as UIMessageChunk] : [])
 }
 
 function relayed(input: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal; work: TurnWork }): ReadableStream<UIMessageChunk> {

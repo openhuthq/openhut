@@ -1,7 +1,7 @@
 import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { asks } from '../../../src/core/asks.ts'
-import { connectionService, type AgentTool } from '../../../src/server/connections/connection-service.ts'
+import { connectionService, toolsShown, type AgentTool } from '../../../src/server/connections/connection-service.ts'
 import { permissions } from '../../../src/server/permissions/permissions.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { seal } from '../../../src/server/platform/secrets.ts'
@@ -113,4 +113,32 @@ test('an app\'s status follows its latest call, and apps list by name', async ()
   assert.equal(status.Linear, 'connected')
   await call('cn_permlin0001', 'failed', 0)
   assert.equal((await connectionService.get({ actor: owner, id: 'cn_permlin0001' })).status, 'failing')
+})
+
+test('reconnect swaps the key in place: the same id, its grants and its tool permissions stay', async () => {
+  const made = await connectionService.create({ actor: owner, kind: 'postgres', name: 'Orders', dsn: 'postgres://reader:old@db-a:5432/orders' })
+  await db.insertInto('connection_grant').values({ id: 'grt_recon01', connection_id: made.id, agent_id: agent.id, created_at: new Date().toISOString() }).execute()
+  await db.insertInto('tool_permission').values({ agent_id: agent.id, connection_id: made.id, tool: 'postgres_query', state: 'allow', changed_by: owner.id }).execute()
+  const again = await connectionService.reconnect({ actor: owner, id: made.id, dsn: 'postgres://reader:new@db-b:5432/orders' })
+  assert.deepEqual([again.id, again.account], [made.id, 'db-b/orders'])
+  assert.equal(connectionService.unsealed((await connectionService.owned({ id: made.id })).config).dsn, 'postgres://reader:new@db-b:5432/orders')
+  assert.equal((await db.selectFrom('connection_grant').selectAll().where('connection_id', '=', made.id).execute()).length, 1)
+  assert.equal((await db.selectFrom('tool_permission').selectAll().where('connection_id', '=', made.id).execute()).length, 1)
+  assert.equal((await connectionService.list({ actor: owner })).filter((each) => each.name === 'Orders').length, 1)
+})
+
+test('a sign-in app reconnects by signing in again, not with a key', async () => {
+  await db.insertInto('connection').values({ id: 'cn_reconlin01', kind: 'linear', name: 'Linear', owner_id: owner.id, config: seal('{}'), sign_in: true }).execute()
+  await assert.rejects(connectionService.reconnect({ actor: owner, id: 'cn_reconlin01', token: 'x' }), /signing in/)
+})
+
+test('an app page names its tools plainly: lookups hidden behind a catch-all, which shows the actions it reached with their group', () => {
+  const spec = (name: string, extra = {}) => ({ name, description: name, schema: {}, ...extra })
+  const tools = [spec('find_tools', { annotations: { readOnlyHint: true } }), spec('invoke_tool'), spec('retrieve_schema', { annotations: { readOnlyHint: true } })]
+  const shown = (discovered: ReturnType<typeof spec>[]) => toolsShown({ connection, tools, discovered }).map((each) => [each.kind, each.label, each.group])
+  assert.deepEqual(shown([]), [['catch_all', 'Any DigitalOcean action', 'other']])
+  assert.deepEqual(shown([spec('droplet-list', { description: 'List droplets', annotations: { readOnlyHint: true } }), spec('droplet-delete', { annotations: { title: 'Delete a droplet', destructiveHint: true } })]),
+    [['catch_all', 'Any DigitalOcean action', 'other'], ['action', 'List droplets', 'read'], ['action', 'Delete a droplet', 'delete']])
+  assert.deepEqual(toolsShown({ connection: { kind: 'linear', name: 'Linear' }, tools: [spec('list_issues'), spec('find_user')], discovered: [] }).map((each) => [each.kind, each.label, each.name]),
+    [['tool', 'List issues', 'linear_list_issues'], ['tool', 'Find user', 'linear_find_user']])
 })
