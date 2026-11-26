@@ -10,9 +10,9 @@ export const Webhook = z.object({
   name: z.string(),
   url: z.string(),
   secret: z.string(),
-  platform: z.string(),
-  target: z.string(),
-  place: z.string(),
+  platform: z.nullable(z.string()),
+  target: z.nullable(z.string()),
+  place: z.nullable(z.string()),
   lastAt: z.nullable(Timestamp),
   lastPayload: z.nullable(z.string()),
   createdAt: Timestamp,
@@ -30,5 +30,5 @@ export type ListWebhooks = z.infer<typeof ListWebhooks>
 export const CreateWebhook = z.object({ agentId: z.string().check(z.maxLength(40)), name: WebhookName, target: z.optional(z.string().check(z.maxLength(40))) })
 export type CreateWebhook = z.infer<typeof CreateWebhook>
 
-export const UpdateWebhook = z.object({ name: z.optional(WebhookName), target: z.optional(z.string().check(z.maxLength(40))) })
+export const UpdateWebhook = z.object({ name: z.optional(WebhookName), target: z.optional(z.nullable(z.string().check(z.maxLength(40)))) })
 export type UpdateWebhook = z.infer<typeof UpdateWebhook>

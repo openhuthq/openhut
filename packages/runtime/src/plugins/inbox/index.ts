@@ -4,13 +4,17 @@ import { routineService } from '../../server/inbox/routines.ts'
 import { inboxService, urlOf } from '../../server/inbox/inbox-service.ts'
 import { deliveryTargetController, inboxReceiver, routineController, webhookController } from '../../server/inbox/inbox-controller.ts'
 import { createTables } from './tables.ts'
+import { SETUP_PROMPT, setupCard, setupController, showWebhookSetup } from './setup.ts'
 
 export const inbox = definePlugin({
   name: 'inbox',
   migrate: createTables,
-  routes: () => ({ '/api/routines': routineController, '/api/webhooks': webhookController, '/api/delivery-targets': deliveryTargetController, '/inbox': inboxReceiver }),
+  routes: () => ({ '/api/routines': routineController, '/api/webhooks': webhookController, '/api/delivery-targets': deliveryTargetController, '/inbox': inboxReceiver, '/api/agents/:id/webhooks': setupController }),
   start: () => inboxService.start(),
+  hermes: () => ({ prompt: SETUP_PROMPT }),
+  afterTurn: async (input) => setupCard(input),
   tools: {
+    show_webhook_setup: showWebhookSetup,
     schedule_routine: defineTool({
       description: 'Use this whenever something needs a follow-up later: a promise you made, a reply you\'re waiting on, a date someone mentioned. Don\'t wait to be asked. Then tell the person in one line what you set up. Check list_routines first, and don\'t set up the same follow-up twice. Each run starts in the chat where you call this, with that chat\'s history.',
       input: {
@@ -32,11 +36,11 @@ export const inbox = definePlugin({
   asks: {
     add_webhook: defineAsk({
       input: z.object({ name: z.string().trim().min(1).max(60).describe('What calls it, in a few words: "DigitalOcean Postgres alerts".') }),
-      tool: 'Ask for a webhook: an address another service (like DigitalOcean alerts) calls when something happens. Each call comes to you as a message in this chat, with the raw payload. Once approved you get the address; your owner keeps the secret.',
+      tool: 'Ask for a webhook: an address another service (like DigitalOcean alerts) calls when something happens. Each call starts a new chat in OpenHut with the raw payload; if your owner sets where it posts, your reply goes there too. Once approved, call show_webhook_setup to show the person how to set it up.',
       title: ({ input }) => `Add a webhook named ${input.name}`,
       run: async ({ actor, ask: { agentId, input, origin } }) => {
         const { id } = await inboxService.createSource({ actor, agentId, name: input.name, origin })
-        return `Its address is ${urlOf(id)}. Calls to it come to this chat. Your owner has the secret and puts both into the sender (DigitalOcean: a webhook notification channel signed with that secret).`
+        return `Webhook ${id} is ready at ${urlOf(id)}. Each call starts a new chat. Now call show_webhook_setup with ${id} so the person gets the address and secret to paste into the sender (DigitalOcean: a webhook notification channel signed with that secret).`
       },
     }),
   },

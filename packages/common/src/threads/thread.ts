@@ -1,5 +1,6 @@
 import * as z from 'zod/mini'
 import { Timestamp } from '../api.ts'
+import { Place } from '../channels/channel.ts'
 
 export const ChatMessage = z.looseObject({
   id: z.string().check(z.maxLength(100)),
@@ -8,11 +9,20 @@ export const ChatMessage = z.looseObject({
 })
 export type ChatMessage = z.infer<typeof ChatMessage>
 
+export const ThreadOrigin = z.object({
+  platform: z.enum(['app', 'discord', 'webhook', 'routine']),
+  label: z.string(),
+  url: z.optional(z.string()),
+})
+export type ThreadOrigin = z.infer<typeof ThreadOrigin>
+
 export const Thread = z.object({
   id: z.string(),
   object: z.literal('thread'),
   agentId: z.string(),
   title: z.string(),
+  origin: ThreadOrigin,
+  mirrors: z.array(Place),
   createdAt: Timestamp,
   updatedAt: Timestamp,
 })
@@ -105,3 +115,11 @@ export function fileInHome(path: string): string | undefined {
   const segments = full.slice(AGENT_HOME.length + 1).split('/')
   return segments.length <= MAX_HOME_DEPTH && segments.every((segment) => segment && segment !== '.' && segment !== '..' && !segment.includes('\0')) ? segments.join('/') : undefined
 }
+
+export const NOTIFY_RULES_MAX = 2000
+
+export const AgentNotify = z.object({
+  default: z.nullable(Place),
+  rules: z.string().check(z.maxLength(NOTIFY_RULES_MAX)),
+})
+export type AgentNotify = z.infer<typeof AgentNotify>

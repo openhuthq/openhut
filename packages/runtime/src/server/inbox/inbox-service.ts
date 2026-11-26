@@ -18,6 +18,9 @@ import type { Caller } from '../team/identity.ts'
 import { APP_PLATFORM, type Wake } from '../../core/plugin.ts'
 import { wakes } from '../../core/wakes.ts'
 import { placeFor, routineService, targetOf, type Fired, type Origin } from './routines.ts'
+import type { Place } from '@openhut/common/channels/channel.ts'
+import { threadService } from '../threads/thread-service.ts'
+import { discordPlace } from '../../plugins/chat/turns.ts'
 
 export const BODY_MAX = 256 * 1024
 const REPEAT_MS = 10 * 60_000
@@ -76,9 +79,9 @@ export const inboxService = {
     return webhookOf(row)
   },
 
-  async updateWebhook({ actor, id, name, target }: { actor: Caller; id: string; name?: string; target?: string }): Promise<Webhook> {
+  async updateWebhook({ actor, id, name, target }: { actor: Caller; id: string; name?: string; target?: string | null }): Promise<Webhook> {
     const row = await webhookRow({ actor, id })
-    const to = target ? await originFor({ agentId: row.agent_id, target }) : undefined
+    const to = target === undefined ? undefined : await originFor({ agentId: row.agent_id, target: target ?? undefined })
     const place = to && await placeFor({ agentId: row.agent_id, origin: to })
     const next = await db.updateTable('inbox_source').set({ ...name && { name: name.trim() }, ...to && { origin: JSON.stringify({ ...to, place }) } }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
     return webhookOf(next, (await lastPayloads([next.id])).get(next.id))
@@ -145,6 +148,28 @@ export const inboxService = {
     ticking = setInterval(run, TICK_MS)
     ticking.unref()
     run()
+  },
+
+  async threadFor({ agentId, id }: { agentId: string; id: string }): Promise<string> {
+    const row = await db.selectFrom('inbox_item').innerJoin('inbox_source', 'inbox_source.id', 'inbox_item.source_id').select(['inbox_source.kind', 'inbox_source.name', 'inbox_source.origin'])
+      .where('inbox_item.id', '=', id).where('inbox_item.agent_id', '=', agentId).executeTakeFirst()
+    if (!row) throw new HttpError(404, `No open run ${id}.`)
+    const origin = originOf(row)
+    if (row.kind === 'webhook') return threadService.open({ agentId, title: row.name, origin: { platform: 'webhook', label: row.name }, mirrors: postsIn(origin) ? [placeOf(origin)] : [] })
+    if (origin.platform === 'discord') return threadService.discordThread({ agentId, place: discordPlace(chatOf(origin)) })
+    return threadService.bySession({ agentId, session: origin.chat_id })
+  },
+
+  async setup({ actor, agentId, id }: { actor: Caller; agentId: string; id: string }): Promise<{ object: 'webhook_setup'; address: string; secret: string }> {
+    const row = await webhookRow({ actor, id })
+    if (row.agent_id !== agentId) throw new HttpError(404, 'That webhook doesn\'t exist.')
+    return { object: 'webhook_setup', address: urlOf(row.id), secret: unseal(row.secret ?? '') }
+  },
+
+  async ownWebhook({ agentId, id }: { agentId: string; id: string }): Promise<{ id: string; name: string; address: string }> {
+    const row = await db.selectFrom('inbox_source').select(['id', 'name']).where('id', '=', id).where('agent_id', '=', agentId).where('kind', '=', 'webhook').executeTakeFirst()
+    if (!row) throw new HttpError(404, `You have no webhook ${id}. Use the id from your webhook list.`)
+    return { ...row, address: urlOf(row.id) }
   },
 
   async forAgent({ agentId }: { agentId: string }): Promise<{ name: string; url: string; deliversTo: string }[]> {
@@ -232,10 +257,18 @@ async function lastPayloads(ids: string[]): Promise<Map<string, string>> {
   return new Map(rows.map((row) => [row.source_id, row.text.slice(row.text.indexOf('\n\n') + 2, row.text.indexOf('\n\n') + 2 + PREVIEW_MAX)]))
 }
 
+const postsIn = (origin: Origin): boolean => origin.platform !== APP_PLATFORM
+
+function placeOf(origin: Origin & { place?: string }): Place {
+  return { platform: origin.platform, chat_id: origin.chat_id, ...origin.thread_id && { thread_id: origin.thread_id }, chat_name: origin.place ?? origin.chat_name ?? '' }
+}
+
 function webhookOf(row: SourceRow, lastPayload?: string): Webhook {
   const origin = originOf(row)
+  const posts = postsIn(origin)
   return {
-    id: row.id, object: 'webhook', agentId: row.agent_id, name: row.name, url: urlOf(row.id), secret: unseal(row.secret ?? ''), platform: origin.platform, target: targetOf(chatOf(origin)), place: origin.place ?? '',
+    id: row.id, object: 'webhook', agentId: row.agent_id, name: row.name, url: urlOf(row.id), secret: unseal(row.secret ?? ''),
+    platform: posts ? origin.platform : null, target: posts ? targetOf(chatOf(origin)) : null, place: posts ? origin.place ?? '' : null,
     lastAt: row.last_at ? new Date(row.last_at).toISOString() : null, lastPayload: lastPayload ?? null, createdAt: new Date(row.created_at).toISOString(),
   }
 }

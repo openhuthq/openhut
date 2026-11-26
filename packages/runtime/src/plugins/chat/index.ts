@@ -3,11 +3,17 @@ import { config } from '../../server/platform/config.ts'
 import { AGENT_API_PORT_BASE } from '../../agentd/sandbox/sandbox.ts'
 import { deliverAppWakes } from './wakes.ts'
 import { threadController } from '../../server/threads/thread-controller.ts'
+import { createTables } from './tables.ts'
+import { notified, notifyController, notifyPrompt, notifyTool } from './notify.ts'
 
 export const chat = definePlugin({
   name: 'chat',
-  routes: () => ({ '/api/threads': threadController }),
+  migrate: createTables,
+  routes: () => ({ '/api/threads': threadController, '/api/agents/:id/notify': notifyController }),
+  tools: { notify: notifyTool },
+  afterTurn: async (input) => notified(input),
   hermes: ({ agent, channelKey }) => ({
+    prompt: notifyPrompt(agent.notify),
     config: { platform_toolsets: { api_server: ['hermes-api-server', 'openhut'] } },
     env: {
       API_SERVER_KEY: channelKey,

@@ -14,6 +14,7 @@ export interface Database {
     id: string; name: string; owner_id: string; instructions: string; model: string; fallback_model: string | null; helper_models: Generated<string>; net: number
     wanted: Generated<'running' | 'stopped'>; code_execution: Generated<boolean>; web_browser: Generated<boolean>; face: Generated<string | null>; token_epoch: Generated<number>; channel_key: string; created_at: Timestamp
     runs_on: Generated<string | null>; changed_by: Generated<string | null>; workspace: Generated<string | null>; shared: Generated<boolean>; people: Generated<string>; owner: Generated<string | null>
+    notify: Generated<string | null>
   }
   channel: { id: string; agent_id: string; kind: 'slack' | 'whatsapp' | 'telegram' | 'discord'; status: 'connected' | 'linking'; account: string | null; owner_address: string; secrets: string; open: boolean; allowed: string; created_at: Timestamp }
   connection: {
@@ -27,6 +28,7 @@ export interface Database {
   }
   tool_permission: { agent_id: string; connection_id: string; tool: string; state: 'allow' | 'ask' | 'deny'; changed_by: string; changed_at: Generated<Date> }
   record: { key: string; collection: string; id: string; workspace: string; parent: string | null; ver: number; value: string; secret: string | null; personal: boolean; deleted: boolean }
+  chat_thread: { id: string; agent_id: string; key: string | null; title: string; origin: string; mirrors: string; created_at: Generated<Date> }
   github_face: { agent_id: string; sha256: string; png: string; url: string | null }
   github_thread: { agent_id: string; thread: string }
   github_install_wait: { ask_id: string; actor: string; permissions: string; known: string; created_at: Generated<Date> }
