@@ -451,6 +451,27 @@ test('a Discord conversation is kept in one web thread per channel thread, and a
   posted.mock.restore()
 })
 
+test('an archived thread leaves the list until it is unarchived or gets a new message; the agent\'s main chat can\'t be archived', async () => {
+  await db.insertInto('agent').values({ id: 'ag_chatarch', name: 'Archer', owner_id: 'usr_chatownr', instructions: '# Archer', model: 'sonnet', net: 63, channel_key: seal('k'.repeat(48)), wanted: 'running', workspace: WS }).execute()
+  const posted = mock.method(channelService, 'send', async () => ({ url: '', messageId: '' }))
+  const place = { platform: 'discord', chat_id: '444', thread_id: '555', chat_name: 'alerts' }
+  const { id } = await threadService.recordTurn({ agentId: 'ag_chatarch', origin: place, user: 'disk full', author: 'ana', reply: 'Looking.' })
+  const listed = async (query = '') => ((await app.inject({ method: 'GET', url: `/api/threads${query}`, headers: as() })).json().data as { id: string }[]).map((thread) => thread.id).filter((each) => each === id)
+  assert.deepEqual(await listed(), [id])
+  const archived = await app.inject({ method: 'POST', url: `/api/threads/${id}/archive`, headers: as() })
+  assert.equal(archived.statusCode, 200)
+  assert.ok(archived.json().archivedAt)
+  assert.deepEqual(await listed(), [])
+  assert.deepEqual(await listed('?archived=true'), [id])
+  assert.equal((await app.inject({ method: 'POST', url: `/api/threads/${id}/unarchive`, headers: as() })).json().archivedAt, null)
+  assert.deepEqual(await listed(), [id])
+  await app.inject({ method: 'POST', url: `/api/threads/${id}/archive`, headers: as() })
+  await threadService.recordTurn({ agentId: 'ag_chatarch', origin: place, user: 'disk full again', author: 'ana', reply: 'On it.' })
+  assert.deepEqual(await listed(), [id], 'new activity unarchives it')
+  assert.equal((await app.inject({ method: 'POST', url: '/api/threads/ag_chatarch/archive', headers: as() })).statusCode, 400)
+  posted.mock.restore()
+})
+
 test('a thread waits on someone while it shows a webhook setup card for a webhook not called since', async () => {
   await db.insertInto('agent').values({ id: 'ag_chatwait', name: 'Waiter', owner_id: 'usr_chatownr', instructions: '# Waiter', model: 'sonnet', net: 30, channel_key: seal('k'.repeat(48)), wanted: 'running', workspace: WS }).execute()
   await db.insertInto('inbox_source').values({ id: 'wh_chatwait', agent_id: 'ag_chatwait', kind: 'webhook', name: 'DO', origin: '{}' }).execute()

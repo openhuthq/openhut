@@ -72,11 +72,11 @@ listen(({ name, target }) => {
 })
 
 export const threadService = {
-  async list(): Promise<Thread[]> {
+  async list({ archived = false }: { archived?: boolean } = {}): Promise<Thread[]> {
     const agents = await db.selectFrom('agent').selectAll().execute()
     const byId = new Map(agents.map((agent) => [agent.id, agent]))
-    const rows = await db.selectFrom('chat_thread').selectAll().execute()
-    const chats: Chat[] = [...agents.map((agent) => ({ id: agent.id, agent })), ...rows.flatMap((row) => {
+    const rows = await db.selectFrom('chat_thread').selectAll().where('archived_at', archived ? 'is not' : 'is', null).execute()
+    const chats: Chat[] = [...archived ? [] : agents.map((agent) => ({ id: agent.id, agent })), ...rows.flatMap((row) => {
       const agent = byId.get(row.agent_id)
       return agent ? [{ id: row.id, agent, row }] : []
     })]
@@ -135,6 +135,16 @@ export const threadService = {
     await runner({ actor, id: chat.agent.id })
     if (!chat.row) throw new HttpError(400, 'This chat isn\'t posted anywhere else.')
     await db.updateTable('chat_thread').set({ mirror_paused: paused, web_streak: 0 }).where('id', '=', id).execute()
+    emit({ name: 'thread.updated', actor, target: { type: 'thread', id, agentId: chat.agent.id } })
+    const fresh = await chatOf(id)
+    return threadOf({ chat: fresh, said: await saidOf(fresh), waiting: await waitingOn() })
+  },
+
+  async archive({ actor, id, archived }: { actor: Caller; id: string; archived: boolean }): Promise<Thread> {
+    const chat = await chatOf(id)
+    await runner({ actor, id: chat.agent.id })
+    if (!chat.row) throw new HttpError(400, 'The agent\'s main chat can\'t be archived.')
+    await db.updateTable('chat_thread').set({ archived_at: archived ? new Date() : null }).where('id', '=', id).execute()
     emit({ name: 'thread.updated', actor, target: { type: 'thread', id, agentId: chat.agent.id } })
     const fresh = await chatOf(id)
     return threadOf({ chat: fresh, said: await saidOf(fresh), waiting: await waitingOn() })
@@ -368,6 +378,7 @@ function saidOf({ id, agent }: Chat): Promise<Said[]> {
 async function write({ chat, message, session }: { chat: Chat; message: ChatMessage; session?: string }): Promise<void> {
   await recordsService.put({ collection: 'message', id: message.id, parent: chat.id, workspace: workspaceOf(chat.agent), value: { message, ...session && { session } } satisfies MessageValue, queue: true })
   cache.delete(chat.id)
+  if (chat.row) await db.updateTable('chat_thread').set({ archived_at: null }).where('id', '=', chat.id).where('archived_at', 'is not', null).execute()
   emit({ name: 'thread.updated', target: { type: 'thread', id: chat.id, agentId: chat.agent.id } })
 }
 
@@ -749,7 +760,7 @@ function withoutPlumbing(message: ChatMessage): ChatMessage {
 function threadOf({ chat: { id, agent, row }, said, waiting }: { chat: Chat; said: Said[]; waiting: Awaited<ReturnType<typeof waitingOn>> }): Thread {
   const at = (each: string | undefined) => new Date(each ? timeOf(each) : row?.created_at ?? agent.created_at).toISOString()
   return {
-    id, object: 'thread', agentId: agent.id, title: row?.title ?? agent.name, origin: row ? JSON.parse(row.origin) as ThreadOrigin : APP_ORIGIN, mirrors: row ? JSON.parse(row.mirrors) as Place[] : [], mirrorPaused: row?.mirror_paused ?? false, readOnly: !!row?.continue_url, continueUrl: row?.continue_url ?? null, waiting: isWaiting({ id, said, waiting }),
+    id, object: 'thread', agentId: agent.id, title: row?.title ?? agent.name, origin: row ? JSON.parse(row.origin) as ThreadOrigin : APP_ORIGIN, mirrors: row ? JSON.parse(row.mirrors) as Place[] : [], mirrorPaused: row?.mirror_paused ?? false, readOnly: !!row?.continue_url, continueUrl: row?.continue_url ?? null, waiting: isWaiting({ id, said, waiting }), archivedAt: row?.archived_at ? new Date(row.archived_at).toISOString() : null,
     createdAt: at(said[0]?.id), updatedAt: at(said.findLast((each) => !isWake(each.message))?.id),
   }
 }
