@@ -37,8 +37,11 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   The app builds each ask's card from its `title`, `why` and `form` (the JSON schema of `answer`); a kind with its own row exports it from
   `features/<feature>/asks.tsx` as `rows` (found by `features/asks/custom.ts`), like `connect_app`'s checklist row and connect dialog, and a kind that only adds to the card exports `extras`, like `update_self`'s instructions diff, `add_webhook`'s address and secret, `add_channel`'s QR step and `call_tool`'s can't-be-undone line. A form field longer than 1000 characters folds the card's fields behind **Edit**. A sign-in
   started for an ask carries its id, and the callback calls `asks.approve` with the new connection.
-  Anything that restarts an agent for new access (grants, agent edits, an ask's `run`) goes through `agentService.quietly`: the restart waits
-  until the agent's gateway has been quiet for `config.quietMs` (10 s; tests shorten it), and `wakes.due` holds every wake for that agent until it has been applied.
+  Changes reach a running agent live: Hermes re-reads `config.yaml` and `.env` every turn, and agentd runs `hermes sessions refresh-prompts` when `SOUL.md` changes.
+  A `hermes()` part may set `restart` to what in it needs a restart (default: its config, env and auth; a prompt never does), and `core/hermes.ts` hashes
+  that with the version, gateway and token into `restart.key`. agentd restarts only when that file changes or a key left `.env` (Hermes never unsets one), and
+  with `restart: false` answers `pending` instead; `agentService` then restarts once the agent's gateway has been quiet for `config.quietMs` (10 s; tests
+  shorten it), the one path every restart takes (moves and the browser toggle too), and `wakes.due` holds that agent's wakes until it has.
   `connectorCall` may rewrite an app call's arguments just before the connector runs it (`connection-service` `run()`): `plugins/github` signs PR, issue and first-comment bodies with the agent's face there.
   An agent and its control, memory, skills, routines, channels and messages are rows in the local `record` table
   (`platform/records.ts`, secrets sealed with the install secret); `agents/run-set.ts` applies them to the agents this computer
