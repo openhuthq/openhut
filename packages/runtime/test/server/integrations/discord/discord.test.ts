@@ -38,7 +38,7 @@ test('a bot without the Message Content intent is refused, since Hermes asks for
 
 test('a channel the bot can\'t see asks for an invite', async (t) => {
   fakeDiscord(t, { flags: 1 << 19 })
-  await assert.rejects(discord.verify({ botToken: TOKEN, channels: [SEEN, HIDDEN] }), new RegExp(`@ops can't see channel ${HIDDEN} \\(HTTP 403\\)\\. Invite it`))
+  await assert.rejects(discord.verify({ botToken: TOKEN, channels: [SEEN, HIDDEN] }), new RegExp(`@ops can't see channel ${HIDDEN}\\. In Discord, open the channel's settings, then Permissions, and add @ops`))
 })
 
 test('a public bot is refused, so nobody else can add it to their server', async (t) => {
@@ -69,4 +69,39 @@ test('channels to pick are the text channels of every server the bot joined, gro
   assert.deepEqual((await discord.conversations({ botToken: TOKEN })).map((each) => [each.name, each.group]), [['juniper', 'Acme HQ'], ['news', 'Acme HQ']])
   assert.deepEqual(await discord.greet({ botToken: TOKEN, ids: [SEEN, HIDDEN], bot: '@Juniper' }), [HIDDEN])
   assert.match(posted[0] ?? '', /Hi, I'm Juniper\. Mention @Juniper and I'll answer in a thread\./)
+})
+
+test('private channels are listed with whether the bot can read them, from its roles and the channel\'s overwrites', async (t) => {
+  const VIEW = String(1 << 10)
+  t.mock.method(globalThis, 'fetch', async (url: string | URL) => {
+    const path = new URL(String(url)).pathname.replace('/api/v10', '')
+    if (path === '/users/@me/guilds') return Response.json([{ id: 'g1', name: 'Acme HQ' }])
+    if (path === '/users/@me') return Response.json({ id: 'bot', username: 'ops' })
+    if (path === '/guilds/g1') return Response.json({ id: 'g1', roles: [{ id: 'g1', permissions: VIEW }, { id: 'r-bot', permissions: '0' }, { id: 'r-admin', permissions: String(1 << 3) }] })
+    if (path === '/guilds/g1/members/bot') return Response.json({ roles: ['r-bot'] })
+    if (path === '/guilds/g1/channels') return Response.json([
+      { id: '1', name: 'general', type: 0, permission_overwrites: [] },
+      { id: '2', name: 'secret', type: 0, permission_overwrites: [{ id: 'g1', type: 0, allow: '0', deny: VIEW }] },
+      { id: '3', name: 'ops-room', type: 0, permission_overwrites: [{ id: 'g1', type: 0, allow: '0', deny: VIEW }, { id: 'r-bot', type: 0, allow: VIEW, deny: '0' }] },
+      { id: '4', name: 'by-name', type: 0, permission_overwrites: [{ id: 'g1', type: 0, allow: '0', deny: VIEW }, { id: 'bot', type: 1, allow: VIEW, deny: '0' }] },
+      { id: '5', name: 'muted', type: 0, permission_overwrites: [{ id: 'r-bot', type: 0, allow: '0', deny: VIEW }] },
+    ])
+    return Response.json({}, { status: 404 })
+  })
+  assert.deepEqual((await discord.conversations({ botToken: TOKEN })).map((each) => [each.name, each.type, each.joined]), [
+    ['general', 'public', true], ['secret', 'private', false], ['ops-room', 'private', true], ['by-name', 'private', true], ['muted', 'public', false],
+  ])
+})
+
+test('a bot with Administrator reads every private channel', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (url: string | URL) => {
+    const path = new URL(String(url)).pathname.replace('/api/v10', '')
+    if (path === '/users/@me/guilds') return Response.json([{ id: 'g1', name: 'Acme HQ' }])
+    if (path === '/users/@me') return Response.json({ id: 'bot', username: 'ops' })
+    if (path === '/guilds/g1') return Response.json({ id: 'g1', roles: [{ id: 'g1', permissions: '0' }, { id: 'r-admin', permissions: String(1 << 3) }] })
+    if (path === '/guilds/g1/members/bot') return Response.json({ roles: ['r-admin'] })
+    if (path === '/guilds/g1/channels') return Response.json([{ id: '2', name: 'secret', type: 0, permission_overwrites: [{ id: 'g1', type: 0, allow: '0', deny: String(1 << 10) }] }])
+    return Response.json({}, { status: 404 })
+  })
+  assert.deepEqual((await discord.conversations({ botToken: TOKEN })).map((each) => [each.type, each.joined]), [['private', true]])
 })
