@@ -72,15 +72,17 @@ export const changeRequestService = {
     if (action(row) === 'add_secret') secretValue(token)
     const edits = action(row) === 'add_secret' ? undefined : input
     const final = edits ? checkedInput({ action: action(row), input: edits, agentId: row.agent_id }) : JSON.parse(row.input) as Record<string, unknown>
+    const summary = edits ? await summaryOf({ action: action(row), input: final, agentId: row.agent_id }) : row.summary
+    await decide({ id, status: 'approved', input: final, summary, note: null, told: true })
     agentService.holdReapply(row.agent_id)
     try {
       Object.assign(final, await apply({ actor, row, input: final, token }))
     } catch (err) {
+      await db.updateTable('change_request').set({ status: 'pending', input: row.input, summary: row.summary, told: false, decided_at: null }).where('id', '=', id).execute()
       await agentService.releaseReapply(row.agent_id)
       throw err
     }
-    const summary = edits ? await summaryOf({ action: action(row), input: final, agentId: row.agent_id }) : row.summary
-    const decided = await decide({ id, status: 'approved', input: final, summary, note: null })
+    const decided = await db.updateTable('change_request').set({ input: JSON.stringify(final), told: false }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
     deliver(decided)
     void activity.quiet({ agentId: row.agent_id, ms: QUIET_MS }).then(() => agentService.releaseReapply(row.agent_id))
       .catch((err: unknown) => log.warn({ event: 'change_request.reapply_failed', agent: row.agent_id, error: messageOf(err) }))
@@ -260,13 +262,13 @@ async function pendingRow({ actor, id }: { actor: Caller; id: string }): Promise
   await expire()
   const row = await db.selectFrom('change_request').selectAll().where('id', '=', id).executeTakeFirst()
   if (!row) throw new HttpError(404, 'That request doesn\'t exist.')
-  await agentService.requireEditable({ actor, id: row.agent_id })
+  await agentService.requireOwner({ actor, id: row.agent_id })
   if (row.status !== 'pending') throw new HttpError(409, `That request was already ${row.status}.`)
   return row
 }
 
-async function decide({ id, status, input, summary, note }: { id: string; status: 'approved' | 'denied'; input: unknown; summary: string; note: string | null }): Promise<Row> {
-  const row = await db.updateTable('change_request').set({ status, input: JSON.stringify(input), summary, note, decided_at: new Date() }).where('status', '=', 'pending').where('id', '=', id).returningAll().executeTakeFirst()
+async function decide({ id, status, input, summary, note, told = false }: { id: string; status: 'approved' | 'denied'; input: unknown; summary: string; note: string | null; told?: boolean }): Promise<Row> {
+  const row = await db.updateTable('change_request').set({ status, input: JSON.stringify(input), summary, note, told, decided_at: new Date() }).where('status', '=', 'pending').where('id', '=', id).returningAll().executeTakeFirst()
   if (!row) throw new HttpError(409, 'That request was already answered.')
   return row
 }

@@ -4,6 +4,13 @@ import { db, migrate } from '../../../src/server/platform/db.ts'
 import { seal } from '../../../src/server/platform/secrets.ts'
 import { agentService } from '../../../src/server/agents/agent-service.ts'
 import { runSet } from '../../../src/server/agents/run-set.ts'
+import Fastify from 'fastify'
+import { validatorCompiler } from 'fastify-type-provider-zod'
+import { answerErrors } from '../../../src/server/platform/http-error.ts'
+import { sha } from '../../../src/server/platform/secrets.ts'
+import { permissionController } from '../../../src/server/permissions/permission-controller.ts'
+import { changeRequestService } from '../../../src/server/agents/change-request-service.ts'
+import { secretService } from '../../../src/server/agents/secret-service.ts'
 import { fakeAgentd, refresh, signIn } from './signed-in.ts'
 
 fakeAgentd()
@@ -21,7 +28,7 @@ await refresh()
 
 const ID = 'ag_accesst1'
 const canOpen = async (actor: typeof owner) => (await agentService.list({ actor })).some((agent) => agent.id === ID)
-const canChat = (actor: typeof owner) => agentService.requireEditable({ actor, id: ID }).then(() => true, () => false)
+const canChat = (actor: typeof owner) => agentService.requireUse({ actor, id: ID }).then(() => true, () => false)
 
 test('specific people: the owner, the people picked and admins can list, open and chat; nobody else', async () => {
   await agentService.update({ actor: owner, id: ID, patch: { shared: false, people: [picked.email] } })
@@ -46,4 +53,32 @@ test('whole team: every member can open and chat', async () => {
 test('only the owner changes who has access, and only to people on the team', async () => {
   await assert.rejects(agentService.update({ actor: picked, id: ID, patch: { people: [other.email] } }), { status: 403 })
   await assert.rejects(agentService.update({ actor: owner, id: ID, patch: { people: ['stranger@example.com'] } }), { status: 400 })
+})
+
+test('a picked member can chat, but only the owner changes its tools, keys and token, or answers its requests', async () => {
+  await agentService.update({ actor: owner, id: ID, patch: { shared: false, people: [picked.email] } })
+  assert.equal(await canChat(picked), true)
+  const app = Fastify()
+  answerErrors(app)
+  app.setValidatorCompiler(validatorCompiler)
+  await app.register(permissionController, { prefix: '/api/agent-tools' })
+  await db.insertInto('session').values({ hash: sha('ohs_pickedsession'), person_id: picked.id, expires_at: new Date(Date.now() + 60_000) }).execute()
+  const cookie = 'openhut_session=ohs_pickedsession'
+  const patch = await app.inject({ method: 'PATCH', url: '/api/agent-tools', headers: { cookie }, payload: { agentId: ID, connectionId: 'cn_anything', tools: ['git_credentials'], permission: 'allow' } })
+  assert.equal(patch.statusCode, 403)
+  assert.equal((await app.inject({ method: 'DELETE', url: `/api/agent-tools?agentId=${ID}&connectionId=cn_anything`, headers: { cookie } })).statusCode, 403)
+  await app.close()
+  const origin = JSON.stringify({ platform: 'slack', chat_id: 'c1' })
+  await db.insertInto('change_request').values({ id: 'chg_accesst1', agent_id: ID, action: 'update_self', input: JSON.stringify({ name: 'Salt' }), summary: 'Rename to Salt', why: 'x', origin, expires_at: new Date(Date.now() + 60_000) }).execute()
+  await assert.rejects(changeRequestService.approve({ actor: picked, id: 'chg_accesst1' }), { status: 403 })
+  await assert.rejects(changeRequestService.deny({ actor: picked, id: 'chg_accesst1' }), { status: 403 })
+  assert.equal((await changeRequestService.deny({ actor: owner, id: 'chg_accesst1' })).status, 'denied')
+  await secretService.save({ agentId: ID, input: { name: 'STRIPE_KEY', hosts: ['api.stripe.com'], header: 'Authorization: Bearer {value}' }, value: 'sk_test_x' })
+  const [key] = await secretService.list({ actor: picked, agentId: ID })
+  await assert.rejects(secretService.replace({ actor: picked, id: key.id, value: 'sk_test_y' }), { status: 403 })
+  await assert.rejects(secretService.delete({ actor: picked, id: key.id }), { status: 403 })
+  await assert.rejects(agentService.revokeToken({ actor: picked, id: ID }), { status: 403 })
+  await assert.rejects(agentService.revokeToken({ actor: admin, id: ID }), { status: 403 })
+  assert.equal((await secretService.delete({ actor: owner, id: key.id })).deleted, true)
+  assert.equal((await agentService.revokeToken({ actor: owner, id: ID })).id, ID)
 })

@@ -54,7 +54,7 @@ export const secretService = {
 async function editable({ actor, id }: { actor: Caller; id: string }): Promise<Row> {
   const row = await db.selectFrom('agent_secret').selectAll().where('id', '=', id).executeTakeFirst()
   if (!row) throw new HttpError(404, 'That key doesn\'t exist. It may have been removed.')
-  await agentService.requireEditable({ actor, id: row.agent_id })
+  await agentService.requireOwner({ actor, id: row.agent_id })
   return row
 }
 

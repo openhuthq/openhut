@@ -86,14 +86,26 @@ test('the agent gets a stand-in in its env and instructions, never the value', (
   assert.ok(!Object.values(files).join('\n').includes(VALUE))
 })
 
-test('the gateway adds the header and swaps the stand-in only for an allowed host', async () => {
-  const res = await call('/x/api.stripe.com/v1/charges?key=openhut-secret-STRIPE_KEY', { 'x-extra': 'openhut-secret-STRIPE_KEY' })
+test('the gateway adds the key only in its configured header, and refuses a stand-in in the URL or another header', async () => {
+  const before = seen.length
+  for (const [path, headers] of [
+    ['/x/api.stripe.com/v1/openhut-secret-STRIPE_KEY', {}],
+    ['/x/api.stripe.com/v1/charges?key=openhut-secret-STRIPE_KEY', {}],
+    ['/x/api.stripe.com/v1/charges', { 'x-extra': 'openhut-secret-STRIPE_KEY' }],
+  ] as const) {
+    const refused = await call(path, headers)
+    assert.equal(refused.status, 403, path)
+    assert.match(await refused.text(), /only in the header your owner set for it/)
+  }
+  assert.equal(seen.length, before)
+  const res = await call('/x/api.stripe.com/v1/charges?limit=3', { 'x-extra': 'plain' })
   assert.equal(res.status, 200)
   assert.ok(!(await res.text()).includes(VALUE))
   const last = seen.at(-1)
   assert.equal(last?.headers.authorization, `Bearer ${VALUE}`)
-  assert.equal(last?.headers['x-extra'], VALUE)
-  assert.equal(last?.url, `/v1/charges?key=${VALUE}`)
+  assert.equal(last?.headers['x-extra'], 'plain')
+  assert.equal(last?.url, '/v1/charges?limit=3')
+  assert.ok(!JSON.stringify(last?.headers).replace(`Bearer ${VALUE}`, '').includes(VALUE))
   assert.ok((await db.selectFrom('agent_secret').select('used_at').where('name', '=', 'STRIPE_KEY').executeTakeFirstOrThrow()).used_at)
 })
 

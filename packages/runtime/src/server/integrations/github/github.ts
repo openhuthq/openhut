@@ -6,6 +6,7 @@ import { HttpError } from '../../platform/http-error.ts'
 import { unseal } from '../../platform/secrets.ts'
 import type { Connector, ConnectorContext, ToolSpec } from '../connector.ts'
 import { MCP_SERVERS, mcp } from '../mcp/mcp.ts'
+import { permissions } from '../../permissions/permissions.ts'
 
 const API = 'https://api.github.com'
 const PERMISSIONS = { contents: 'write', pull_requests: 'write', issues: 'write', actions: 'read', checks: 'read', metadata: 'read' }
@@ -50,10 +51,13 @@ export const github = {
     },
   } satisfies Connector,
 
-  async gitToken({ agentId }: { agentId: string }): Promise<string> {
-    const row = await db.selectFrom('connection as c').innerJoin('connection_grant as g', 'g.connection_id', 'c.id').select('c.config')
+  async gitToken({ agentId, push = false }: { agentId: string; push?: boolean }): Promise<string> {
+    const row = await db.selectFrom('connection as c').innerJoin('connection_grant as g', 'g.connection_id', 'c.id').select(['c.id', 'c.config'])
       .where('g.agent_id', '=', agentId).where('c.kind', '=', 'github').orderBy('c.created_at').executeTakeFirst()
     if (!row) throw new HttpError(403, 'No GitHub connection is granted to this agent. Ask for one with ask_to_connect.')
+    const state = await permissions.decide({ agentId, connectionId: row.id, spec: GIT })
+    if (state === 'deny') throw new HttpError(403, 'git_credentials is set to Never for you, so git can\'t reach GitHub. Ask your owner to change it in OpenHut.')
+    if (push && state !== 'allow') throw new HttpError(403, 'Pushing needs git_credentials set to Always. Call call_tool git_credentials to ask your owner, and ask them to choose Always, then push again.')
     return fresh(configOf(JSON.parse(unseal(row.config))))
   },
 }

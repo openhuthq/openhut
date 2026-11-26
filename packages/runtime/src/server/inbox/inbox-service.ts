@@ -64,7 +64,7 @@ export const inboxService = {
   },
 
   async webhooks({ actor, agentId }: { actor: Caller; agentId: string }): Promise<Webhook[]> {
-    await agentService.requireEditable({ actor, id: agentId })
+    await agentService.requireOwner({ actor, id: agentId })
     const rows = await db.selectFrom('inbox_source').selectAll().where('agent_id', '=', agentId).where('kind', '=', 'webhook').orderBy('created_at').execute()
     const last = await lastPayloads(rows.map((row) => row.id))
     return rows.map((row) => webhookOf(row, last.get(row.id)))
@@ -73,7 +73,7 @@ export const inboxService = {
   routines: (input: { actor: Caller; agentId: string }): Promise<Routine[]> => routineService.list(input),
 
   async createSource({ actor, agentId, name, target, origin }: { actor: Caller; agentId: string; name: string; target?: string; origin?: Origin }): Promise<Webhook> {
-    await agentService.requireEditable({ actor, id: agentId })
+    await agentService.requireOwner({ actor, id: agentId })
     const to = origin ?? await originFor({ agentId, target })
     const place = await placeFor({ agentId, origin: to })
     const row = await db.insertInto('inbox_source').values({ id: newId('wh'), agent_id: agentId, kind: 'webhook', name: name.trim(), origin: JSON.stringify({ ...to, place }), secret: seal(newToken('whsec')) })
@@ -113,7 +113,7 @@ export const inboxService = {
   stopRoutine: (input: { actor: Caller; id: string }): Promise<Deleted<'routine'>> => routineService.stop(input),
 
   async targets({ actor, agentId }: { actor: Caller; agentId: string }): Promise<DeliveryTarget[]> {
-    await agentService.requireEditable({ actor, id: agentId })
+    await agentService.requireOwner({ actor, id: agentId })
     const known = await knownOrigins(agentId)
     const usable = await Promise.all(known.map(async (origin) => ({ origin, place: await placeFor({ agentId, origin }).catch(() => null) })))
     return usable.flatMap(({ origin, place }) => place ? [{ id: targetOf(origin), object: 'delivery_target' as const, platform: origin.platform, place }] : [])
@@ -239,7 +239,7 @@ function retrying(item: ItemRow, attempt = 0): void {
 async function webhookRow({ actor, id }: { actor: Caller; id: string }): Promise<SourceRow> {
   const row = await db.selectFrom('inbox_source').selectAll().where('id', '=', id).where('kind', '=', 'webhook').executeTakeFirst()
   if (!row) throw new HttpError(404, 'That webhook doesn\'t exist.')
-  await agentService.requireEditable({ actor, id: row.agent_id })
+  await agentService.requireOwner({ actor, id: row.agent_id })
   return row
 }
 

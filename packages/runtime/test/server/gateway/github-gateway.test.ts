@@ -27,6 +27,7 @@ const { agentToken, seal } = await import('../../../src/server/platform/secrets.
 const { gatewayServer } = await import('../../../src/server/gateway/gateway-server.ts')
 const { upstreams } = await import('../../../src/server/gateway/broker.ts')
 const { github } = await import('../../../src/server/integrations/github/github.ts')
+const { permissions } = await import('../../../src/server/permissions/permissions.ts')
 upstreams.get('github')!.origin = `http://127.0.0.1:${(fake.address() as AddressInfo).port}`
 
 await migrate()
@@ -48,9 +49,11 @@ after(() => {
   fake.close()
 })
 const ask = (agent: string, path: string, method = 'GET') => realFetch(`${gw}/u/github${path}`, { method, headers: { authorization: `Agent ${agentToken({ id: agent, epoch: 0 })}` } })
+const gitPermission = (state: 'allow' | 'ask' | 'deny') => permissions.set({ actor: { id: 'usr_gitowner', email: 'git@example.com', role: 'owner' }, agentId: 'ag_gitgrant', connectionId: 'cn_gitgithub', tools: ['git_credentials'], state })
 const events = () => db.selectFrom('connection_event').select(['tool', 'outcome']).where('agent_id', '=', 'ag_gitgrant').orderBy('id').execute()
 
 test('git_credentials hands out config only: no GitHub token in the reply or in ~/.gitconfig, and plain git clones and pushes through the gateway', async () => {
+  await gitPermission('allow')
   const reply = await github.connector.call({ config: app, refresh: async () => ({}), tool: 'git_credentials', args: {} })
   assert.ok(!reply.text.includes('ghs_'))
   const home = mkdtempSync(join(tmpdir(), 'openhut-agent-home-'))
@@ -70,6 +73,24 @@ test('git_credentials hands out config only: no GitHub token in the reply or in 
   assert.ok(auths.length >= 4 && auths.every((auth) => auth === `Basic ${Buffer.from(`x-access-token:${GITHUB_TOKEN}`).toString('base64')}`))
   assert.ok(!readFileSync(join(home, '.gitconfig'), 'utf8').includes(GITHUB_TOKEN))
   assert.deepEqual(await events(), [{ tool: 'github fetch from acme/api', outcome: 'allowed' }, { tool: 'github push to acme/api', outcome: 'allowed' }])
+})
+
+test('git_credentials gates git: Never refuses everything, Ask fetches but refuses push, Always pushes', async () => {
+  const push = () => ask('ag_gitgrant', '/acme/api.git/git-receive-pack', 'POST')
+  const pushRefs = () => ask('ag_gitgrant', '/acme/api.git/info/refs?service=git-receive-pack')
+  const fetchRefs = () => ask('ag_gitgrant', '/acme/api.git/info/refs?service=git-upload-pack')
+  await gitPermission('ask')
+  assert.equal((await fetchRefs()).status, 200)
+  const refused = await pushRefs()
+  assert.equal(refused.status, 403)
+  assert.match(await refused.text(), /Pushing needs git_credentials set to Always/)
+  assert.equal((await push()).status, 403)
+  await gitPermission('deny')
+  assert.equal((await fetchRefs()).status, 403)
+  assert.equal((await pushRefs()).status, 403)
+  await gitPermission('allow')
+  assert.equal((await fetchRefs()).status, 200)
+  assert.equal((await pushRefs()).status, 200)
 })
 
 test('only git smart HTTP passes, and only for an agent granted GitHub', async () => {

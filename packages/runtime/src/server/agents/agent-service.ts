@@ -66,11 +66,17 @@ export const agentService = {
     throw new HttpError(404, 'That agent doesn\'t exist. It may have been deleted.')
   },
 
-  async requireEditable({ actor, id }: { actor: Caller; id: string }): Promise<AgentRow> {
+  async requireUse({ actor, id }: { actor: Caller; id: string }): Promise<AgentRow> {
     const row = await db.selectFrom('agent').selectAll().where('id', '=', id).executeTakeFirst()
     if (!row) throw new HttpError(404, 'That agent doesn\'t run on this computer.')
     if (!mayUse({ access: rowAccess({ row, actor }), actor })) throw new HttpError(403, `Ask ${row.owner ?? 'its owner'} to give you access to ${row.name}.`)
     return row
+  },
+
+  async requireOwner({ actor, id }: { actor: Caller; id: string }): Promise<AgentFacts> {
+    const facts = await agentService.find({ id })
+    if (!mayEdit({ facts, actor })) throw new HttpError(403, `Only ${facts.owner} can change ${facts.value.name}, its tools, keys and token, or answer its requests. You can chat with it.`)
+    return facts
   },
 
   async create({ actor, name, instructions, model, face, workspace, shared = false, people = [], sidebars = [], runsOn = HERE }: { actor: Caller; name: string; instructions?: string } & Pick<CreateAgent, 'model' | 'face' | 'workspace' | 'shared' | 'people' | 'sidebars' | 'runsOn'>): Promise<Agent> {
@@ -182,7 +188,7 @@ export const agentService = {
   },
 
   async revokeToken({ actor, id }: { actor: Caller; id: string }): Promise<Agent> {
-    await agentService.requireEditable({ actor, id })
+    await agentService.requireOwner({ actor, id })
     await db.updateTable('agent').set((eb) => ({ token_epoch: eb('token_epoch', '+', 1) })).where('id', '=', id).execute()
     emit({ name: 'agent.token_revoked', actor, target: { type: 'agent', id } })
     await tellAgent(id)
