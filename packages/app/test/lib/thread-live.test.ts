@@ -1,6 +1,6 @@
 import { beforeEach, test } from 'node:test'
 import assert from 'node:assert/strict'
-import { liveThreads, namesLine, typingLine, type LiveSnapshot } from '../../src/lib/thread-live.ts'
+import { liveThreads, namesLine, presenceOf, typingLine, type LiveSnapshot } from '../../src/lib/thread-live.ts'
 
 const sent: object[] = []
 let snapshot: LiveSnapshot = { turnId: null, seq: 0, text: '', agent: { state: 'idle' } }
@@ -76,4 +76,21 @@ test('typing and answering lines read naturally', () => {
   assert.equal(typingLine(['Sara', 'Ahmed', 'Jake']), '3 people are typing')
   assert.equal(namesLine(['Mo', 'Ahmed']), 'Mo and Ahmed')
   assert.equal(namesLine(['Mo', 'Ahmed', 'Sara']), 'Mo, Ahmed and Sara')
+})
+
+test('a thread nobody opened reads its typing and agent state from the agents board, and an open one from its own presence', () => {
+  const board = (typing: { id: string; name: string; email: string }[], state: 'idle' | 'replying') => liveThreads.receive({ type: 'agents', agents: [{ id: 'ag_1', activity: state === 'replying' ? 'working' : 'idle', status: 'running', health: 'answering', subagents: [], threads: state === 'idle' && !typing.length ? [] : [{ id: 'th_2', agent: { state }, typing }] }] })
+  board([{ id: 'u2', name: 'Sara', email: 'sara@example.com' }], 'replying')
+  const seen = presenceOf(liveThreads.board('th_2'))
+  assert.deepEqual(seen.typing.map((person) => person.name), ['Sara'])
+  assert.equal(seen.agent.state, 'replying')
+  assert.equal(liveThreads.agents().get('ag_1')?.activity, 'working')
+  board([], 'idle')
+  assert.equal(presenceOf(liveThreads.board('th_2')).agent.state, 'idle')
+  liveThreads.join('th_2')
+  liveThreads.receive({ type: 'presence', thread: 'th_2', people: [{ id: 'u1', name: 'Mo', email: 'mo@example.com', state: 'viewing' }], agent: { state: 'idle' } })
+  assert.equal(liveThreads.joined('th_2'), true)
+  liveThreads.leave('th_2')
+  assert.equal(liveThreads.joined('th_2'), false)
+  assert.deepEqual(liveThreads.get('th_2').people, [])
 })

@@ -2,14 +2,11 @@ import { createContext, useEffect, useState, type ReactElement } from 'react'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
 import { CancelCircleIcon, CheckmarkCircle02Icon, CircleIcon, DashedLineCircleIcon, PauseCircleIcon, ArrowDown01Icon, ArrowRight01Icon, BubbleChatIcon, Clock01Icon, Delete02Icon, GitBranchIcon, Logout01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SidebarLeftIcon, StopIcon, WebhookIcon } from '@hugeicons/core-free-icons'
 import type { OpenHutAgent } from '@/lib/openhut'
-import { useQuery } from '@tanstack/react-query'
-import { List } from '@openhut/common/api.ts'
 import { Subagent } from '@openhut/common/agents/subagent.ts'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, LongPressMenu } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/components/confirm-button'
 import { Glyph } from '@/components/glyph'
-import { request } from '@/lib/api-client'
 import { Hut } from '@/components/hut'
 import { GLASS, HOVER, I, ICON_BUTTON, PICKED, SURFACE } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
@@ -30,6 +27,7 @@ import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { useLiveLine } from '@/features/threads/live'
+import { useAgentsLive, type LiveAgentBoard } from '@/lib/thread-live'
 
 const ROUND = 'float phone:size-10 phone:rounded-full phone:bg-card phone:text-ink'
 
@@ -86,16 +84,10 @@ export function Sidebar({ contacts, activeId, threadId, collapsed, onCollapse, o
 
 const FIRST = 5
 
-const SUBAGENT_LIST = List(Subagent)
 const FADE_MS = 1500
 
-function useSubagents(agentId: string | undefined): (Subagent & { gone: boolean })[] {
-  const { data } = useQuery({
-    queryKey: ['subagents', agentId],
-    queryFn: async () => (await request({ schema: SUBAGENT_LIST, of: agentId, path: `/api/agents/${agentId}/subagents` })).data,
-    enabled: agentId !== undefined,
-    refetchInterval: (query) => query.state.data?.some((item) => item.status === 'working') ? 2_000 : 5_000,
-  })
+function useSubagents(agentId: string): (Subagent & { gone: boolean })[] {
+  const data = useAgentsLive().get(agentId)?.subagents
   const [faded, setFaded] = useState<Set<string>>(new Set())
   const done = (data ?? []).filter((item) => item.status === 'done' && !faded.has(item.id)).map((item) => item.id).join(' ')
   useEffect(() => {
@@ -107,7 +99,8 @@ function useSubagents(agentId: string | undefined): (Subagent & { gone: boolean 
 }
 
 function AgentRow({ agent, threads, active, threadId, phone }: { agent: OpenHutAgent; threads: SourcedThread[]; active: boolean; threadId: string | undefined; phone: boolean }) {
-  const children = useSubagents(agent.wanted === 'running' && agent.online ? agent.id : undefined)
+  const children = useSubagents(agent.id)
+  const activity = useAgentsLive().get(agent.id)?.activity ?? 'idle'
   const [choice, setChoice] = useState<{ active: boolean; open: boolean }>()
   const working = children.filter((child) => child.status === 'working').length
   useTick(working > 0)
@@ -119,7 +112,7 @@ function AgentRow({ agent, threads, active, threadId, phone }: { agent: OpenHutA
   const shown = subagents + sessions.length
   const open = (phone || (choice?.active === active ? choice.open : active)) && shown > 0
   const idle = agent.online ? troubleOf(agent) ?? (agent.summary || 'Say hello') : 'Offline'
-  const line = lineOf({ working, waiting, idle })
+  const line = lineOf({ working, waiting, activity, idle })
   const [more, setMore] = useState(false)
   const accent = SWATCHES[lookOf(agent).body].shade
   const rows = children.map((child) => <Session key={child.id} gone={child.gone} icon={<I icon={GitBranchIcon} size={12} />} title={child.title} detail="Sub-agent" status={child.status} time={ago(child.startedAt)} accent={accent} />)
@@ -154,9 +147,11 @@ function AgentRow({ agent, threads, active, threadId, phone }: { agent: OpenHutA
 
 type Progress = 'idle' | 'queued' | 'working' | 'review' | 'done' | 'failed'
 
-function lineOf({ working, waiting, idle }: { working: number; waiting: number; idle: string }) {
+function lineOf({ working, waiting, activity, idle }: { working: number; waiting: number; activity: LiveAgentBoard['activity']; idle: string }) {
   if (working) return `Working on ${working} ${working === 1 ? 'task' : 'tasks'}`
+  if (activity === 'working') return 'Working…'
   if (waiting) return `${waiting} waiting`
+  if (activity === 'waiting') return 'Waiting on you'
   return idle
 }
 
