@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { BrowserIcon, SidebarRight01Icon, AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, SparklesIcon } from '@hugeicons/core-free-icons'
+import { BrowserIcon, AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, SparklesIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { DialogClose, DialogTitle } from '@/components/ui/dialog'
@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch'
 import { Tooltip } from '@/components/ui/tooltip'
 import { Textarea } from '@/components/ui/textarea'
 import { ConfirmDialog, useConfirming } from '@/components/confirm-button'
-import { DialogCard, GLASS, HOVER, I, ICON_BUTTON, PILL, ROW, ROW_VALUE, TINY_ICON } from '@/components/kit'
+import { DialogCard, GLASS, HOVER, I, PILL, ROW, ROW_VALUE, TINY_ICON } from '@/components/kit'
 import { agentPath, type AgentDialog } from '@/app/routes'
 import { useDeleteAgent, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
 import { useFeatures } from '@/features/computers/api'
@@ -36,17 +36,17 @@ import { cn } from '@/lib/utils'
 
 const VALUE = ROW_VALUE
 
-export function Panel({ agent, naming, watching, onHide }: { agent: Agent; naming: boolean; watching: boolean; onHide: () => void }) {
+export function Panel({ agent, naming, watching, collapsed = false }: { agent: Agent; naming: boolean; watching: boolean; collapsed?: boolean }) {
   const memory = useMemoryCount(agent)
   useGitHubFace(agent)
   const skills = skillsNote(useSkills(agent.id).data)
-  return <aside className={cn('still flex w-[280px] shrink-0 flex-col gap-4 overflow-auto border-l-[0.5px] phone:w-full phone:flex-1 phone:border-l-0 border-hair px-4 pt-4 pb-4 [scrollbar-gutter:stable]', GLASS)}>
+  return <aside data-details inert={collapsed} className={cn('still flex shrink-0 justify-end overflow-hidden border-hair transition-[width] duration-[240ms] ease-(--ease-spring) phone:w-full phone:flex-1 phone:border-l-0', collapsed ? 'w-0' : 'w-[280px] border-l-[0.5px]', GLASS)}>
+    <div className={cn('flex w-[280px] shrink-0 flex-col gap-4 overflow-auto px-4 pt-4 pb-4 [scrollbar-gutter:stable] transition-[opacity,translate] duration-[160ms] ease-out phone:w-full', collapsed && 'translate-x-2 opacity-0')}>
     <div className={'flex items-center gap-3'}>
       <div className="relative shrink-0">{agent.canEdit ? <a href={agentPath({ agentId: agent.id, dialog: 'customize' })} aria-label={`Customize ${agent.name}`} title="Customize" className="relative block shrink-0">
         <Face agent={agent} size={48} tile />
       </a> : <Face agent={agent} size={48} tile />}</div>
       <div className="relative grid min-w-0 flex-1"><PanelTitle agent={agent} naming={naming} /></div>
-      <Button type="button" variant="bare" className={cn(ICON_BUTTON, 'self-start phone:hidden')} aria-label="Hide details" title="Hide details" onClick={onHide}><I icon={SidebarRight01Icon} size={16} /></Button>
     </div>
     <div className="relative -mx-2.5"><Button type="button" variant="bare" onClick={() => navigate(agentPath({ agentId: agent.id, dialog: 'does' }))} className={cn('group flex w-full flex-col gap-1 rounded-lg px-2.5 py-2', HOVER)}>
       <span className="flex items-center text-[12px]/[16px] text-mute">What it does<span className="ml-auto text-mute opacity-0 group-hover:opacity-100"><I icon={PencilEdit02Icon} size={13} /></span></span>
@@ -74,6 +74,7 @@ export function Panel({ agent, naming, watching, onHide }: { agent: Agent; namin
       </CollapsibleContent>
     </Collapsible>
     <AgentActions agent={agent} watching={watching} />
+    </div>
   </aside>
 }
 
@@ -113,21 +114,21 @@ function PanelTitle({ agent, naming }: { agent: Agent; naming: boolean }) {
   const phone = useMedia(PHONE)
   const running = agent.wanted === 'running'
   const toggle = running ? `Stop ${agent.name}` : `Start ${agent.name}`
+  const customize = agent.canEdit && !naming && <a href={agentPath({ agentId: agent.id, dialog: 'customize' })} aria-label={`Customize ${agent.name}`} title="Customize" className="grid size-6 shrink-0 place-items-center rounded-md text-mute hover:bg-hover hover:text-ink"><I icon={PencilEdit02Icon} size={14} /></a>
   return <div ref={box} className="grid min-w-0 flex-1 gap-0.5">
-    <div className="flex min-w-0 items-center gap-1"><AgentName agent={agent} editing={naming && agent.canEdit} />
-      {agent.canEdit && !naming && <a href={agentPath({ agentId: agent.id, dialog: 'customize' })} aria-label={`Customize ${agent.name}`} title="Customize" className="grid size-6 shrink-0 place-items-center rounded-md text-mute hover:bg-hover hover:text-ink"><I icon={PencilEdit02Icon} size={14} /></a>}
-      {phone ? <PhoneActions agent={agent} /> : <span className="ml-auto flex shrink-0 items-center gap-0.5">{confirming
-        ? <>
-          <Button type="button" variant="secondary" className={PILL} autoFocus onClick={() => setConfirming(false)}>Cancel</Button>
-          <Button type="button" variant="destructive" className={cn(PILL, 'ml-1')} disabled={deleteAgent.isPending} onClick={() => deleteAgent.mutate(undefined, { onError: toastError })}>Delete</Button>
-        </>
-        : <>
-          <Tooltip label={toggle}><Button type="button" variant="bare" className={TINY_ICON} aria-label={toggle} disabled={!agent.canEdit || updateAgent.isPending}
-            onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}><I icon={running ? StopIcon : PlayIcon} size={16} className={running ? 'text-hue-amber' : 'text-hue-green'} /></Button></Tooltip>
-          {agent.canEdit && agent.canManage && <Tooltip label={`Delete ${agent.name}`}><Button type="button" variant="bare" className={cn(TINY_ICON, 'text-fail')} aria-label={`Delete ${agent.name}`} onClick={() => setConfirming(true)}><I icon={Delete02Icon} size={16} /></Button></Tooltip>}
-        </>}</span>}
-    </div>
-    <span className="flex items-center gap-2 text-xs text-body">{confirming ? 'Its chats, memory and skills go with it.' : <AgentStatus agent={agent} />}</span>
+    <div className="flex min-w-0 items-center gap-1"><AgentName agent={agent} editing={naming && agent.canEdit} />{phone && <>{customize}<PhoneActions agent={agent} /></>}</div>
+    {confirming ? <span className="text-xs text-body">Its chats, memory and skills go with it.</span> : <AgentStatus agent={agent} />}
+    {confirming
+      ? <span className="mt-1 flex items-center gap-1">
+        <Button type="button" variant="secondary" className={PILL} autoFocus onClick={() => setConfirming(false)}>Cancel</Button>
+        <Button type="button" variant="destructive" className={PILL} disabled={deleteAgent.isPending} onClick={() => deleteAgent.mutate(undefined, { onError: toastError })}>Delete</Button>
+      </span>
+      : !phone && <span className="-ml-1 flex items-center gap-0.5">
+        {customize}
+        <Tooltip label={toggle}><Button type="button" variant="bare" className={cn(TINY_ICON, 'size-6')} aria-label={toggle} disabled={!agent.canEdit || updateAgent.isPending}
+          onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}><I icon={running ? StopIcon : PlayIcon} size={15} className={running ? 'text-hue-amber' : 'text-hue-green'} /></Button></Tooltip>
+        {agent.canEdit && agent.canManage && <Tooltip label={`Delete ${agent.name}`}><Button type="button" variant="bare" className={cn(TINY_ICON, 'size-6 text-fail')} aria-label={`Delete ${agent.name}`} onClick={() => setConfirming(true)}><I icon={Delete02Icon} size={15} /></Button></Tooltip>}
+      </span>}
   </div>
 }
 
@@ -180,7 +181,7 @@ function AgentName({ agent, editing }: { agent: Agent; editing: boolean }) {
     ref.current.focus()
     getSelection()?.selectAllChildren(ref.current)
   }, [editing])
-  if (!editing) return <h2 className={cn(NAME, 'truncate')} title={agent.canEdit ? 'Double-click to rename' : undefined} onDoubleClick={agent.canEdit ? () => navigate(agentPath({ agentId: agent.id, dialog: 'name' }), true) : undefined}>{updateAgent.isPending ? updateAgent.variables.name ?? agent.name : agent.name}</h2>
+  if (!editing) return <h2 className={cn(NAME, 'line-clamp-2 break-words')} title={agent.canEdit ? 'Double-click to rename' : undefined} onDoubleClick={agent.canEdit ? () => navigate(agentPath({ agentId: agent.id, dialog: 'name' }), true) : undefined}>{updateAgent.isPending ? updateAgent.variables.name ?? agent.name : agent.name}</h2>
   return <h2 ref={ref} className={cn(NAME, 'min-w-[1ch] cursor-text overflow-hidden whitespace-nowrap shadow-[0_2px_0_var(--ink)] outline-none')} contentEditable="plaintext-only" suppressContentEditableWarning role="textbox" aria-label="Agent name" spellCheck={false}
     onKeyDown={(event) => {
       if (event.key === 'Escape') event.currentTarget.textContent = agent.name
