@@ -6,7 +6,7 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { SpecDataPart } from '@json-render/core'
 import { useJsonRenderMessage } from '@json-render/react'
-import { ArrowLeft01Icon, ArrowUp02Icon, Attachment01Icon, Cancel01Icon, Copy01Icon, EraserIcon, File01Icon, Image01Icon, PlayIcon } from '@hugeicons/core-free-icons'
+import { ArrowLeft01Icon, ArrowUp02Icon, ArrowUpRight01Icon, Attachment01Icon, Cancel01Icon, Copy01Icon, EraserIcon, File01Icon, Image01Icon, PlayIcon } from '@hugeicons/core-free-icons'
 import { openhut, type OpenHutAgent } from '@/lib/openhut'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { ChatCall, fileInHome, MAX_FILE_BYTES, MAX_FILES, ToolProgress, Work, type ChatFile, type ChatMessage, type ThreadWithMessages } from '@openhut/common/threads/thread.ts'
@@ -42,6 +42,7 @@ import { plainError, toast, toastError, toastFailed } from '@/lib/toast'
 import { usePhoneBack } from '@/app/phone-page'
 import { TOUCH, useMedia } from '@/lib/media'
 import { cn } from '@/lib/utils'
+import { ICONS } from '@/components/icons'
 
 type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; work: Work; spec: SpecDataPart; asks: string[] }>
 type AgentPart = AgentMessage['parts'][number]
@@ -287,7 +288,7 @@ function AgentReply({ agent, message, live, onRetry }: { agent: Agent; message: 
     <CopyMenu text={textOf(message)}><div className="flex min-w-0 flex-col gap-2 pt-1.5 pointer-coarse:select-none">
       {work && <WorkLine agent={agent} work={work} live={live} answered={blocks.length > 0} onRetry={onRetry} />}
       {blocks.map((block, index) => block.type === 'text'
-        ? <div key={index} className="msg-t"><Markdown remarkPlugins={plugins} components={{ a: ChatLink, code: FileCode, pre: CodeBlock }}>{live ? settled(bullets(block.text)) : bullets(block.text)}</Markdown></div>
+        ? <div key={index} className="msg-t"><Markdown remarkPlugins={plugins} components={{ a: ChatLink, code: FileCode, pre: CodeBlock, input: TaskBox, table: WideTable }}>{live ? settled(bullets(block.text)) : bullets(block.text)}</Markdown></div>
         : hasSpec && <MessageCard key={index} spec={spec} loading={live} />)}
       {ids.length > 0 && <AskCards agent={agent} ids={ids} />}
       {live && !blocks.length && !work?.calls.some((call) => call.status === 'running') && <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>}
@@ -343,6 +344,14 @@ function FileCode({ children, className }: { children?: ReactNode; className?: s
   return <code className={className}>{children}</code>
 }
 
+function WideTable({ children }: { children?: ReactNode }) {
+  return <div className="table-scroll"><table>{children}</table></div>
+}
+
+function TaskBox({ checked }: { checked?: boolean }) {
+  return <span className={cn('task-box', checked && 'done')} role="img" aria-label={checked ? 'Done' : 'Not done'}>{checked && ICONS.check}</span>
+}
+
 function homeFile(text: string) {
   const path = text.trim()
   return !path.includes('\n') && /\.[A-Za-z0-9]{1,10}$/.test(path) && fileInHome(path) !== undefined ? path : undefined
@@ -374,7 +383,7 @@ export function ChatLink({ href, children }: { href?: string; children?: ReactNo
   const path = href === undefined ? undefined : homeFile(href)
   if (path) return <FileChip name={nameOf(path)} image={IMAGE.test(path)} onOpen={() => save(path)} />
   const bare = href !== undefined && children === href && /^https?:\/\//.test(href)
-  return <a href={href} target="_blank" rel="noreferrer">{bare ? shortUrl(href) : children}{bare && <span className="ml-[3px] text-[11px] text-mute">↗</span>}</a>
+  return <a href={href} target="_blank" rel="noreferrer">{bare ? shortUrl(href) : children}{bare && <I icon={ArrowUpRight01Icon} size={12} className="ml-0.5 inline align-[-1px] text-mute" />}</a>
 }
 
 function shortUrl(href: string) {
