@@ -29,7 +29,6 @@ const ChannelId = z.object({ id: z.string().check(z.maxLength(40)) })
 const ConnectionId = z.object({ connectionId: z.string().check(z.maxLength(40)) })
 const ToolCall = z.object({ connectionId: z.string().check(z.maxLength(40)), tool: z.string().check(z.maxLength(200)), name: z.string().check(z.maxLength(200)), arguments: z.record(z.string(), z.unknown()), always: z.optional(z.boolean()) })
 const ASK_EXPIRES_MS = 30 * 60_000
-const approving = new Set<string>()
 
 type Row = Selectable<Database['change_request']>
 type Runner = (input: { agentId: string; text: string }) => Promise<string>
@@ -197,19 +196,16 @@ async function ownChannel({ agentId, id }: { agentId: string; id: string }): Pro
 }
 
 async function approveCall({ actor, row, always }: { actor: Caller; row: Row; always: boolean }): Promise<Row> {
-  if (approving.has(row.id)) throw new HttpError(409, 'That request is already being approved.')
-  approving.add(row.id)
-  try {
-    const call = z.parse(ToolCall, JSON.parse(row.input))
-    if (always) await permissions.set({ actor, agentId: row.agent_id, connectionId: call.connectionId, tools: [call.tool], state: 'allow' })
-    const result = await connectionService.callApproved({ actor, agentId: row.agent_id, connectionId: call.connectionId, tool: call.tool, args: call.arguments, reason: row.why })
-    const decided = await decide({ id: row.id, status: 'approved', input: { ...call, always }, summary: row.summary, note: null, result: result.text })
-    deliver(decided)
-    emit({ name: 'change_request.approved', actor, target: { type: 'change_request', id: row.id, agentId: row.agent_id, action: row.action } })
-    return decided
-  } finally {
-    approving.delete(row.id)
-  }
+  const call = z.parse(ToolCall, JSON.parse(row.input))
+  const claimed = await db.updateTable('change_request').set({ status: 'approved', input: JSON.stringify({ ...call, always }), told: true, decided_at: new Date() })
+    .where('id', '=', row.id).where('status', '=', 'pending').returning('id').executeTakeFirst()
+  if (!claimed) throw new HttpError(409, 'That request was already answered.')
+  if (always) await permissions.set({ actor, agentId: row.agent_id, connectionId: call.connectionId, tools: [call.tool], state: 'allow' })
+  const result = await connectionService.callApproved({ actor, agentId: row.agent_id, connectionId: call.connectionId, tool: call.tool, args: call.arguments, reason: row.why })
+  const decided = await db.updateTable('change_request').set({ result: result.text, told: false }).where('id', '=', row.id).returningAll().executeTakeFirstOrThrow()
+  deliver(decided)
+  emit({ name: 'change_request.approved', actor, target: { type: 'change_request', id: row.id, agentId: row.agent_id, action: row.action } })
+  return decided
 }
 
 async function expire(): Promise<void> {
@@ -226,8 +222,10 @@ async function pendingRow({ actor, id }: { actor: Caller; id: string }): Promise
   return row
 }
 
-async function decide({ id, status, input, summary, note, result = null }: { id: string; status: 'approved' | 'denied'; input: unknown; summary: string; note: string | null; result?: string | null }): Promise<Row> {
-  return db.updateTable('change_request').set({ status, input: JSON.stringify(input), summary, note, result, decided_at: new Date() }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
+async function decide({ id, status, input, summary, note }: { id: string; status: 'approved' | 'denied'; input: unknown; summary: string; note: string | null }): Promise<Row> {
+  const row = await db.updateTable('change_request').set({ status, input: JSON.stringify(input), summary, note, decided_at: new Date() }).where('status', '=', 'pending').where('id', '=', id).returningAll().executeTakeFirst()
+  if (!row) throw new HttpError(409, 'That request was already answered.')
+  return row
 }
 
 function deliver(row: Row, attempt = 0): void {

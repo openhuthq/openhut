@@ -171,6 +171,7 @@ export const connectionService = {
   async callApproved({ actor, agentId, connectionId, tool, args, reason }: { actor: Caller; agentId: string; connectionId: string; tool: string; args: Record<string, unknown>; reason: string }): Promise<{ text: string; isError: boolean }> {
     const granted = (await connectionService.tools({ agent: { id: agentId, owner_id: '' } })).find((each) => each.connection.id === connectionId && each.spec.name === tool)
     if (!granted) return { text: `Not run: ${tool} isn't on a connection this agent can use any more.`, isError: true }
+    if (await permissions.decide({ agentId, connectionId, spec: granted.spec }) === 'deny') return { text: `Not run: ${granted.name} was set to Never before it was approved.`, isError: true }
     return run({ agentId, tool: granted, args, reason, approvedBy: actor.id })
   },
 

@@ -80,6 +80,14 @@ test('Don\'t allow tells the agent and nothing runs; Never refuses outright', as
   assert.deepEqual((await events()).slice(-2).map((each) => [each.outcome, each.approved_by]), [['denied', 'usr_permowner'], ['denied', null]])
 })
 
+test('two clicks on Allow once run the call once', async () => {
+  const asked = await connectionService.call({ agent, name: 'mcp_db-cluster-resize', args: {}, reason: 'Twice', origin: app })
+  const before = ran.length
+  const results = await Promise.allSettled([changeRequestService.approve({ actor: owner, id: idIn(asked.text) }), changeRequestService.approve({ actor: owner, id: idIn(asked.text) })])
+  assert.deepEqual(results.map((each) => each.status).sort(), ['fulfilled', 'rejected'])
+  assert.equal(ran.length, before + 1)
+})
+
 test('a request nobody answers expires and the agent hears about it', async () => {
   const asked = await connectionService.call({ agent, name: 'mcp_db-cluster-resize', args: {}, reason: 'Night run', origin: app })
   const id = idIn(asked.text)
