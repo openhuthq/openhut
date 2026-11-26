@@ -48,7 +48,8 @@ import { cn } from '@/lib/utils'
 import { ICONS } from '@/components/icons'
 import { useThreadLive, useTyping } from '@/lib/thread-live'
 import { busyAgent, LiveTitle, PresenceFaces, SeenBy, TypingNow } from '@/features/threads/live'
-import { webhookOf, WebhookMessage } from '@/features/webhooks/message'
+import { CallText, webhookOf, WebhookMessage } from '@/features/webhooks/message'
+import { callOf } from '@/features/webhooks/call'
 
 type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; work: Work; spec: SpecDataPart; asks: string[]; notified: Notified; 'webhook-setup': WebhookSetup }>
 type AgentPart = AgentMessage['parts'][number]
@@ -397,17 +398,19 @@ function UserMessage({ message, mirrors, seen }: { message: AgentMessage; mirror
   const text = textOf(message)
   const files = message.parts.flatMap((part) => part.type === 'file' ? [part] : [])
   const author = z.safeParse(Authored, message.metadata).data?.author
+  const call = callOf(message.metadata)
+  const body = call ? <CallText label={call.label} text={text} /> : text
   const me = useOwner()
   if (author && me && author !== me) return <div className="flex gap-3">
     <PersonFace name={personName(author)} email={author} size={28} />
     <span className="grid min-w-0 gap-1"><span className="text-[12px] text-mute">{personName(author)}</span>
       {files.length > 0 && <span className="flex flex-wrap gap-1.5">{files.map((file) => <SentFile key={file.url} name={file.filename ?? nameOf(file.url)} path={file.url} mediaType={file.mediaType} />)}</span>}
-      {text && <CopyMenu text={text}><span className="max-w-[420px] rounded-[4px_12px_12px_12px] bg-soft px-3.5 py-2 text-[14px]/[1.5] [overflow-wrap:anywhere] whitespace-pre-wrap text-ink pointer-coarse:select-none">{text}</span></CopyMenu>}
+      {text && <CopyMenu text={text}><span className="max-w-[420px] rounded-[4px_12px_12px_12px] bg-soft px-3.5 py-2 text-[14px]/[1.5] [overflow-wrap:anywhere] whitespace-pre-wrap text-ink pointer-coarse:select-none">{body}</span></CopyMenu>}
     </span>
   </div>
   return <div className="flex flex-col items-end gap-1.5">
     {files.length > 0 && <div className="flex max-w-[78%] flex-wrap justify-end gap-1.5">{files.map((file) => <SentFile key={file.url} name={file.filename ?? nameOf(file.url)} path={file.url} mediaType={file.mediaType} />)}</div>}
-    {text && <CopyMenu text={text}><div className="max-w-[78%] rounded-[12px_12px_4px_12px] bg-soft px-3.5 py-2 text-[14px]/[1.5] [overflow-wrap:anywhere] whitespace-pre-wrap text-ink pointer-coarse:select-none">{text}</div></CopyMenu>}
+    {text && <CopyMenu text={text}><div className="max-w-[78%] rounded-[12px_12px_4px_12px] bg-soft px-3.5 py-2 text-[14px]/[1.5] [overflow-wrap:anywhere] whitespace-pre-wrap text-ink pointer-coarse:select-none">{body}</div></CopyMenu>}
     {mirrors.length > 0 && <span className="inline-flex items-center gap-1.5 text-[12px] text-mute"><PlaceIcon platform={mirrors[0]?.platform ?? 'app'} size={12} />Sent to {mirrors.map(placeName).join(', ')}</span>}
     {seen && <SeenBy threadId={seen} />}
   </div>
