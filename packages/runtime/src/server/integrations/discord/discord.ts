@@ -6,7 +6,12 @@ import { HttpError, messageOf } from '../../platform/http-error.ts'
 const Me = z.object({ username: z.string() })
 const App = z.object({ flags: z.optional(z.number()), bot_public: z.optional(z.boolean()) })
 const Guild = z.object({ id: z.string(), name: z.string() })
-const GuildChannel = z.object({ id: z.string(), name: z.string(), type: z.number() })
+const Roles = z.object({ roles: z.array(z.object({ id: z.string(), permissions: z.string() })) })
+const Member = z.object({ roles: z.array(z.string()) })
+const Overwrite = z.object({ id: z.string(), type: z.number(), allow: z.string(), deny: z.string() })
+const GuildChannel = z.object({ id: z.string(), name: z.string(), type: z.number(), permission_overwrites: z._default(z.array(Overwrite), []) })
+const ADMINISTRATOR = 1n << 3n
+const VIEW_CHANNEL = 1n << 10n
 const TEXT = new Set([0, 5])
 const PERMISSIONS = '309237713920'
 const MESSAGE_CONTENT = (1 << 18) | (1 << 19)
@@ -27,7 +32,7 @@ export const discord = {
   async enter({ botToken, ids, bot }: { botToken: string; ids: string[]; bot: string }): Promise<void> {
     for (const id of ids) {
       const seen = await call({ path: `/channels/${id}`, botToken })
-      if (!seen.ok) throw new HttpError(400, `${bot} can't see channel ${id} (HTTP ${seen.status}). Invite it to the server and give it access to the channel.`, { param: 'allowed' })
+      if (!seen.ok) throw new HttpError(400, `${bot} can't see channel ${id}. In Discord, open the channel's settings, then Permissions, and add ${bot}. Then try again.`, { param: 'allowed' })
     }
   },
 
@@ -40,10 +45,16 @@ export const discord = {
     const guilds = await call({ path: '/users/@me/guilds', botToken })
     const list = z.safeParse(z.array(Guild), guilds.body)
     if (!guilds.ok || !list.success) throw new HttpError(502, `Discord didn't list the bot's servers (HTTP ${guilds.status}). Try again.`)
+    const me = z.safeParse(z.object({ id: z.string() }), (await call({ path: '/users/@me', botToken })).body)
     const all = await Promise.all(list.data.map(async (guild) => {
-      const channels = z.safeParse(z.array(GuildChannel), (await call({ path: `/guilds/${guild.id}/channels`, botToken })).body)
+      const [channels, roles, member] = await Promise.all([
+        call({ path: `/guilds/${guild.id}/channels`, botToken }).then((res) => z.safeParse(z.array(GuildChannel), res.body)),
+        call({ path: `/guilds/${guild.id}`, botToken }).then((res) => z.safeParse(Roles, res.body)),
+        call({ path: `/guilds/${guild.id}/members/${me.data?.id ?? ''}`, botToken }).then((res) => z.safeParse(Member, res.body)),
+      ])
+      const base = basePermissions({ guildId: guild.id, roles: roles.data?.roles ?? [], mine: member.data?.roles ?? [] })
       return (channels.success ? channels.data : []).filter((each) => TEXT.has(each.type))
-        .map((each): Conversation => ({ id: each.id, object: 'conversation', name: each.name, type: 'public', shared: false, members: 0, joined: true, group: guild.name }))
+        .map((each): Conversation => ({ id: each.id, object: 'conversation', name: each.name, type: isPrivate({ guildId: guild.id, channel: each }) ? 'private' : 'public', shared: false, members: 0, joined: canView({ guildId: guild.id, base, mine: member.data?.roles ?? [], userId: me.data?.id ?? '', channel: each }), group: guild.name }))
     }))
     return all.flat()
   },
@@ -69,4 +80,28 @@ async function call({ path, botToken }: { path: string; botToken: string }): Pro
   const res = await fetch(`${config.discordApi}${path}`, { headers: { authorization: `Bot ${botToken}` }, signal: AbortSignal.timeout(10_000) })
     .catch((err: unknown) => { throw new HttpError(502, `Discord didn't answer (${messageOf(err).replaceAll(botToken, '…')}). Try again.`) })
   return { ok: res.ok, status: res.status, body: await res.json().catch(() => undefined) }
+}
+
+type GuildChannel = z.infer<typeof GuildChannel>
+
+function basePermissions({ guildId, roles, mine }: { guildId: string; roles: { id: string; permissions: string }[]; mine: string[] }): bigint {
+  return roles.filter((role) => role.id === guildId || mine.includes(role.id)).reduce((all, role) => all | BigInt(role.permissions), 0n)
+}
+
+function isPrivate({ guildId, channel }: { guildId: string; channel: GuildChannel }): boolean {
+  const everyone = channel.permission_overwrites.find((each) => each.id === guildId)
+  return !!everyone && (BigInt(everyone.deny) & VIEW_CHANNEL) !== 0n
+}
+
+function canView({ guildId, base, mine, userId, channel }: { guildId: string; base: bigint; mine: string[]; userId: string; channel: GuildChannel }): boolean {
+  if (base & ADMINISTRATOR) return true
+  const apply = (now: bigint, overwrites: z.infer<typeof Overwrite>[]) => {
+    const deny = overwrites.reduce((all, each) => all | BigInt(each.deny), 0n)
+    const allow = overwrites.reduce((all, each) => all | BigInt(each.allow), 0n)
+    return (now & ~deny) | allow
+  }
+  const of = (match: (each: z.infer<typeof Overwrite>) => boolean) => channel.permission_overwrites.filter(match)
+  const everyone = apply(base, of((each) => each.id === guildId))
+  const roles = apply(everyone, of((each) => each.type === 0 && mine.includes(each.id)))
+  return (apply(roles, of((each) => each.type === 1 && each.id === userId)) & VIEW_CHANNEL) !== 0n
 }
