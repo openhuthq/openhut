@@ -36,7 +36,15 @@ class Ctx:
 ctx = Ctx(); m.register(ctx)
 assert sorted(tools) == ["list_things", "post_message"] and {t["toolset"] for t in tools.values()} == {"openhut-local"}, tools
 assert tools["post_message"]["schema"] == settings["tools"][0]
-assert sorted(hooks) == ["post_llm_call", "pre_gateway_dispatch", "pre_tool_call", "subagent_stop", "transform_llm_output"], hooks
+assert sorted(hooks) == ["post_llm_call", "pre_gateway_dispatch", "pre_llm_call", "pre_tool_call", "subagent_stop", "transform_llm_output"], hooks
+assert hooks["pre_llm_call"](is_first_turn=True) is None, "only a Discord thread asks for OpenHut context"
+here, thread = m.origin, {"platform": "discord", "chat_id": "777", "thread_id": "777", "parent_chat_id": "666"}
+m.origin = lambda: thread
+ANSWERS["/thread-context"] = lambda body: (200, {"object": "thread_context", "context": "Alert: cpu 99%"})
+assert hooks["pre_llm_call"](is_first_turn=False) is None
+assert hooks["pre_llm_call"](is_first_turn=True) == {"context": "Alert: cpu 99%"}
+assert calls[-1] == ("/thread-context", {"origin": thread}), calls[-1]
+m.origin = here
 assert [p.pattern for p, _ in actions] == ["^card:"]
 stamped = {"action": "modify", "args": {"origin": {"platform": "slack", "chat_id": "C1"}}}
 assert [hooks["pre_tool_call"](tool_name=n) for n in ("mcp__openhut__list_routines", "mcp__openhut__any_new_tool", "terminal", "mcp__github__x")] == [stamped, stamped, None, None]
