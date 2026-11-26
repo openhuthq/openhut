@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@openhut/common/api.ts'
 import { AgentTool, Connection, ConnectionAuthorization, ConnectionEvent, ConnectionTool, type UpdateAgentTools, type CreateConnection, type CreateConnectionAuthorization } from '@openhut/common/connections/connection.ts'
-import { request } from '@/lib/api-client'
+import { request, RequestError } from '@/lib/api-client'
 import { AGENTS_KEY, CONNECTIONS_KEY, GRANTS_KEY } from '@/lib/query-keys'
 import { asked } from '@/features/connections/asked'
 import { navigate } from '@/lib/router'
@@ -69,9 +69,12 @@ export function useAuthorizeConnection() {
       let closedAt: number | undefined
       for (let waited = 0; live.current && waited < SIGN_IN_WAIT_MS; waited += SIGN_IN_POLL_MS) {
         await sleep(SIGN_IN_POLL_MS)
-        const now = await request({ schema: ConnectionAuthorization, path: `/api/connection-authorizations/${encodeURIComponent(started.id)}` })
-        if (now.status === 'failed') throw new Error(now.error ?? 'The sign-in didn’t finish. Try again.')
-        if (now.status === 'done') return now
+        const now = await request({ schema: ConnectionAuthorization, path: `/api/connection-authorizations/${encodeURIComponent(started.id)}` }).catch((err: unknown) => {
+          if (err instanceof RequestError && err.status < 500) throw err
+          return undefined
+        })
+        if (now?.status === 'failed') throw new Error(now.error ?? 'The sign-in didn’t finish. Try again.')
+        if (now?.status === 'done') return now
         if (tab?.closed) closedAt ??= Date.now()
         if (closedAt && Date.now() - closedAt > CLOSED_GRACE_MS) throw new Error('The sign-in tab was closed before it finished. Sign in again.')
       }
