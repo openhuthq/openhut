@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { ErrorNote } from '@/components/error-note'
-import { Dots, I, ICON_BUTTON } from '@/components/kit'
+import { Dots, HINT, I, ICON_BUTTON } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { useOwner } from '@/features/people/api'
 import { personName } from '@/lib/format'
@@ -49,6 +49,8 @@ type Attachment = { key: string; name: string; image: boolean; thumb?: string; f
 
 const ChatFiles = createContext<{ agentId: string; threadId: string; save: (path: string) => void }>({ agentId: '', threadId: '', save: () => undefined })
 const IMAGE = /\.(png|jpe?g|gif|webp)$/i
+const RETRY_MS = 2000
+const RETRY_TRIES = 45
 
 export function Chat({ agent, tools, onTitle }: { agent: Agent; tools?: ReactNode; onTitle?: () => void }) {
   const thread = useAgentThread(agent.id)
@@ -68,6 +70,7 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
   const attachments = useAttachments({ agentId: agent.id, threadId: thread.id })
   const files = useMemo(() => ({ agentId: agent.id, threadId: thread.id, save: (path: string) => void saveFile({ agentId: agent.id, threadId: thread.id, path }).catch(toastError) }), [agent.id, thread.id])
   const busy = chat.status === 'submitted' || chat.status === 'streaming'
+  const retrying = useRetryOnce({ status: chat.status, error: chat.error, retry: () => void chat.regenerate() })
   useEffect(() => { if (!busy) chat.setMessages(thread.messages.map(uiMessageOf)) }, [thread.messages])
   const send = (text: string) => {
     touch(thread)
@@ -86,8 +89,38 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
     {chat.status === 'submitted' && last?.role === 'user' && <Message agent={agent} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
     <PendingAsks agent={agent} shown={new Set(chat.messages.flatMap(changesOf))} />
     {!agent.runsHere && chat.status !== 'submitted' && last?.role === 'user' && !troubleOf(agent) && <p className="m-0 text-right text-[12.5px] text-mute">{agent.runsNowhere ? `No computer runs ${agent.name} now. ${agent.canManage ? 'Run it here to get an answer.' : `Ask an admin to run ${agent.name} on their computer.`}` : `Sent to ${agent.runsOnName ?? 'your other computer'}. ${agent.name} answers when it’s on.`}</p>}
-    {chat.error && !(last && workOf(last)?.error) && <Alert variant="error-outline" role="alert"><span>{plainError(chat.error.message)}</span><Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={() => void chat.regenerate()}>Try again</Button></Alert>}
+    {retrying && <Message agent={agent} message={{ id: 'retrying', role: 'assistant', parts: [] }} live />}
+    {chat.error && !retrying && !(last && workOf(last)?.error) && <Alert variant="error-outline" role="alert"><span>{plainError(chat.error.message)}</span><Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={() => void chat.regenerate()}>Try again</Button></Alert>}
   </ChatFrame></CardReply></ChatFiles>
+}
+
+function useRetryOnce({ status, error, retry }: { status: string; error: Error | undefined; retry: () => void }) {
+  const [retrying, setRetrying] = useState(false)
+  const retried = useRef(false)
+  useEffect(() => {
+    if (status === 'ready') retried.current = false
+    if (!error || retried.current) return
+    retried.current = true
+    setRetrying(true)
+    let live = true
+    void serverBack().then(() => {
+      if (!live) return
+      setRetrying(false)
+      retry()
+    })
+    return () => {
+      live = false
+      setRetrying(false)
+    }
+  }, [status, error])
+  return retrying
+}
+
+async function serverBack() {
+  for (let tries = 0; tries < RETRY_TRIES; tries++) {
+    await new Promise((resolve) => setTimeout(resolve, RETRY_MS))
+    if (await openhut.fetch({ path: '/health' }).then((res) => res.ok, () => false)) return
+  }
 }
 
 function useAttachments({ agentId, threadId }: { agentId: string; threadId: string }) {
@@ -196,7 +229,9 @@ function Composer({ agent, busy, quiet, attachments, onSend, onStop }: { agent: 
   const touch = useMedia(TOUCH)
   const [empty, setEmpty] = useState(true)
   const picker = useRef<HTMLInputElement>(null)
-  const ready = agentState(agent) === 'running'
+  const state = agentState(agent)
+  const ready = !BLOCKED.includes(state)
+  const starting = state === 'starting' || state === 'missing'
   const nothing = empty && !attachments.items.length
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -219,7 +254,8 @@ function Composer({ agent, busy, quiet, attachments, onSend, onStop }: { agent: 
     attachments.add(Array.from(event.clipboardData.files))
   }
   return <div className="shrink-0 px-8 pb-5 phone:px-3 phone:pb-3">
-    {!ready && !busy && !quiet && <NotReady agent={agent} />}
+    {(!ready || state === 'not_answering') && !busy && !quiet && <NotReady agent={agent} />}
+    {starting && <p className={cn(HINT, 'mx-auto mb-2 flex max-w-[640px] items-center gap-1.5')} role="status"><Spinner className="mt-0 size-3" />Starting… your message will send.</p>}
     <form className="mx-auto flex max-w-[640px] flex-col gap-2 rounded-xl border border-[oklch(0%_0_0/.12)] bg-card p-2 focus-within:border-mid" onSubmit={submit}>
       {attachments.items.length > 0 && <div className="flex flex-wrap gap-1.5">{attachments.items.map((each) => <FileChip key={each.key} name={each.name} image={each.image} thumb={each.thumb} busy={!each.file} onRemove={() => attachments.remove(each.key)} />)}</div>}
       <div className="flex items-end gap-1">
@@ -234,9 +270,11 @@ function Composer({ agent, busy, quiet, attachments, onSend, onStop }: { agent: 
   </div>
 }
 
+const BLOCKED: string[] = ['stopped', 'no_seat', 'setup_failed']
+
 function placeholderOf(agent: Agent) {
   const state = agentState(agent)
-  if (state === 'running' || state === 'not_answering') return `Ask ${agent.name} anything…`
+  if (!BLOCKED.includes(state)) return `Ask ${agent.name} anything…`
   if (state === 'stopped') return `${agent.name} is stopped`
   return `${agent.name} isn't ready yet`
 }

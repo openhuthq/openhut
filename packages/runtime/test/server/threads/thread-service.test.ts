@@ -32,6 +32,7 @@ await db.insertInto('agent').values([
 ]).execute()
 
 const lost = new Set<string>()
+const dropsOnce = new Set<string>()
 const seen: { auth?: string; session?: string; body?: { stream: boolean; messages: { role: string; content: unknown }[] } } = {}
 const hermes = createServer((req, res) => {
   let raw = ''
@@ -52,7 +53,11 @@ const hermes = createServer((req, res) => {
     const ending = (finish: string) => `event: hermes.tool.progress\ndata: {"tool":"skill_view","label":"tone","toolCallId":"s","status":"running"}\n\nevent: hermes.tool.progress\ndata: {"tool":"skill_view","toolCallId":"s","status":"completed"}\n\ndata: ${JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: finish }] })}\n\ndata: [DONE]\n\n`
     if (seen.body?.messages.at(-1)?.content === 'tool only') return res.end(ending('stop'))
     if (seen.body?.messages.at(-1)?.content === 'interrupted') return res.end(ending('cancelled'))
-    if (seen.body?.messages.at(-1)?.content === 'cut off') {
+    if (seen.body?.messages.at(-1)?.content === 'drops once' && !dropsOnce.has(seen.session)) {
+      dropsOnce.add(seen.session)
+      return setTimeout(() => res.destroy(), 20)
+    }
+    if (JSON.stringify(seen.body?.messages.at(-1)?.content).includes('cut off')) {
       res.write('event: hermes.tool.progress\ndata: {"tool":"skill_view","label":"tone","toolCallId":"s","status":"running"}\n\n')
       return setTimeout(() => res.destroy(), 20)
     }
@@ -395,16 +400,22 @@ test('a card in a wake reply is saved as a card, like a live reply, never as raw
   await assert.rejects(threadService.runRoutine({ agentId: 'ag_chatwake', text: 'model down' }), /isn't ready/)
 })
 
-test('on a just-booted computer (a woken Cloud computer) a message waits for its agent to come up, then gets the reply', async (t) => {
+test('a message to an agent that is starting or restarting waits for it, then gets the reply', async () => {
   const port = (hermes.address() as AddressInfo).port
   await new Promise((resolve) => hermes.close(resolve))
-  t.mock.method(agentService, 'booting', () => true)
   setTimeout(() => hermes.listen(port, '127.0.0.1'), 1500)
   const res = await say('ag_chatrunn', 'hi')
   assert.match(res.body, /214 orders\./)
 })
 
+test('a reply cut off before any text is asked again once, in a fresh session, and arrives', async () => {
+  const res = await say('ag_chatrunn', 'drops once')
+  assert.match(res.body, /214 orders\./)
+  assert.doesNotMatch(res.body, /dropped/)
+})
+
 test('an agent that isn\'t answering ends the turn with a sentence, not a hang', async () => {
+  config.startWaitMs = 300
   await new Promise((resolve) => hermes.close(resolve))
   const thread = { id: 'ag_chatrunn' }
   const res = await say(thread.id, 'hi')

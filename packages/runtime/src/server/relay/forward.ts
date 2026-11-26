@@ -14,6 +14,7 @@ const SERVE = new URL(`../../agentd/serve.${import.meta.url.endsWith('.ts') ? 't
 const local = config.agentdInProcess ? await import(SERVE) as typeof import('../../agentd/serve.ts') : undefined
 await local?.boot()
 const links = new Map<string, Link>()
+const waiting = new Set<() => void>()
 const relayed = new Map<number, string>()
 const OFFLINE = 'The computer that runs this agent is offline. Start it, or move the agent to another computer.'
 
@@ -21,6 +22,7 @@ export const forward = {
   link({ computer, link }: { computer: string; link: Link }): void {
     links.get(computer)?.end()
     links.set(computer, link)
+    if (computer === HERE) for (const wake of waiting) wake()
   },
 
   unlink({ computer, link, revoked = false }: { computer: string; link?: Link; revoked?: boolean }): void {
@@ -48,7 +50,23 @@ export const forward = {
 
   relayedFrom: (port: number | undefined): string | undefined => port === undefined ? undefined : relayed.get(port),
 
-  online: (computer: string): boolean => links.has(computer) || (computer === HERE && !links.size),
+  online: (computer: string): boolean => links.has(computer) || (computer === HERE && !links.size && !config.hereTokenSha256),
+
+  ready({ on, ms }: { on: string; ms: number }): Promise<boolean> {
+    if (links.has(on) || on !== HERE || !config.hereTokenSha256) return Promise.resolve(true)
+    return new Promise((resolve) => {
+      const wake = () => {
+        clearTimeout(timer)
+        waiting.delete(wake)
+        resolve(true)
+      }
+      const timer = setTimeout(() => {
+        waiting.delete(wake)
+        resolve(false)
+      }, ms)
+      waiting.add(wake)
+    })
+  },
 
   computers: (): string[] => links.size ? [...links.keys()] : [HERE],
 
