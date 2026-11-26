@@ -15,7 +15,7 @@ import { ModelsStep, SeatSignIn, stepOf } from '@/features/settings/models'
 import { firstModel, runsOnChoices } from '@/features/agents/form'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { DEVICE_ICONS } from '@/components/custom/device'
-import { nameOf, useComputers } from '@/features/computers/api'
+import { useComputers } from '@/features/computers/api'
 import { HERE, type Computer } from '@/lib/openhut'
 import { useComputerProviders } from '@/features/models/api'
 import { FIELD_MENU, ModelPicker, SOFT_TRIGGER } from '@/features/models/model-picker'
@@ -104,12 +104,8 @@ function AgentForm({ steps = true }: { steps?: boolean }) {
   </form>
 }
 
-function serverName(computer: Computer): string {
-  return computer.here ? 'This server' : computer.name
-}
-
 function ComputerPicker({ computers, value, onPick, admin }: { computers: Computer[]; value: string; onPick: (id: string) => void; admin: boolean }) {
-  const name = value === HERE ? 'This server' : nameOf({ computers, id: value })
+  const name = computers.find((computer) => computer.id === value)?.name ?? 'This server'
   return <DropdownMenu>
     <DropdownMenuTrigger className={PICKER} aria-label={`Runs on: ${name}`}>
       <I icon={DEVICE_ICONS.server} size={14} className="shrink-0 text-mute" />
@@ -117,7 +113,7 @@ function ComputerPicker({ computers, value, onPick, admin }: { computers: Comput
       <I icon={UnfoldMoreIcon} size={12} className="text-mute" />
     </DropdownMenuTrigger>
     <DropdownMenuContent className={FIELD_MENU}>
-      {computers.map((computer) => <Pick key={computer.id} icon={DEVICE_ICONS.server} name={serverName(computer)} selected={computer.id === value} onClick={() => onPick(computer.id)}>
+      {computers.map((computer) => <Pick key={computer.id} icon={DEVICE_ICONS.server} name={computer.name} selected={computer.id === value} onClick={() => onPick(computer.id)}>
         <i title={computer.online ? 'Online' : 'Offline'} className={cn('size-1.5 shrink-0 rounded-full', computer.online ? 'bg-pass' : 'bg-mute-2')} />
       </Pick>)}
       {admin && <Pick icon={PlusSignIcon} name="Add a computer" onClick={() => navigate('/settings/computers?open=add-computer')} />}

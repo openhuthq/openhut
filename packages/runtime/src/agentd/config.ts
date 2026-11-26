@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { hostname } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import env from 'env-var'
@@ -17,7 +18,7 @@ export const config = {
   gatewayPort: env.get('OPENHUT_GATEWAY_PORT').default('8081').asPortNumber(), // the agents' gateway, for the fence check; on a runtime the link serves it
   build: fileOr(join(ASSETS, 'BUILD'), 'dev'), // this runtime's build, reported to the main install
   runtimeImage: env.get('OPENHUT_RUNTIME_IMAGE').default('').asString(), // the image this runtime runs as, set by install.sh join
-  name: env.get('OPENHUT_NAME').default('computer').asString(), // the name the main install shows for this computer
+  name: env.get('OPENHUT_NAME').default(hostname()).asString(), // the name the main install shows for this computer
   hostDocker: env.get('OPENHUT_HOST_DOCKER').default('unix:///host/docker.sock').asString(), // the host's Docker, for updating this runtime
 }
 

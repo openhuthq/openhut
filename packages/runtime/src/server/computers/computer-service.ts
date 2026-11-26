@@ -146,7 +146,8 @@ export async function admit(token: string | undefined): Promise<{ row: Row; toke
 async function hear({ row, link, hello }: { row: Row; link: Link; hello: z.output<typeof Hello> }): Promise<void> {
   link.features = hello.features
   link.gvisor = hello.gvisor
-  const name = row.id === HERE ? HERE_NAME : row.name || hello.name.replace(/[^\w.-]/g, '').slice(0, 64) || 'Computer'
+  const said = hello.name.replace(/[^\w.-]/g, '').slice(0, 64)
+  const name = row.id === HERE ? said || HERE_NAME : row.name || said || 'Computer'
   await db.updateTable('computer').set({ name, version: hello.version, gvisor: hello.gvisor, update_error: hello.updateError, seen_at: new Date() }).where('id', '=', row.id).execute()
   emit({ name: 'computer.online', target: { type: 'computer', id: row.id, version: hello.version } })
 }
