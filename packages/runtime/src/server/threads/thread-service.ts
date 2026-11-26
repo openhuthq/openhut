@@ -83,7 +83,7 @@ export const threadService = {
   },
 
   async removeFile({ actor, id, path }: { actor: Caller; id: string; path: string }): Promise<Deleted<'file'>> {
-    await agentService.requireEditable({ actor, id })
+    await agentService.requireUse({ actor, id })
     const name = uploadName(path)
     if (!name) throw new HttpError(400, 'Only files you sent in a chat can be deleted here.', { param: 'path' })
     const { removed } = await agentd.delete({ id, paths: [uploadPath(name)] })
@@ -92,7 +92,7 @@ export const threadService = {
   },
 
   async lookUpFiles({ actor, id, paths }: { actor: Caller; id: string; paths: string[] }): Promise<HomeFile[]> {
-    await agentService.requireEditable({ actor, id })
+    await agentService.requireUse({ actor, id })
     const wanted = [...new Set(paths)].flatMap((path) => {
       const inside = fileInHome(path)
       return inside ? [{ path, inside }] : []
@@ -107,7 +107,7 @@ export const threadService = {
   },
 
   async upload({ actor, id, file, body }: { actor: Caller; id: string; file: UploadFile; body: unknown }): Promise<ChatFile> {
-    await agentService.requireEditable({ actor, id })
+    await agentService.requireUse({ actor, id })
     if (!Buffer.isBuffer(body) || !body.length) throw new HttpError(400, 'Send the file\'s bytes as the request body, with Content-Type: application/octet-stream. Empty files can\'t be attached.')
     const saved = await agentd.write({ id, path: uploadPath(safeFileName(file.name)), body })
     const path = saved.path.slice('home/'.length)
@@ -115,7 +115,7 @@ export const threadService = {
   },
 
   async download({ actor, id, path, reply }: { actor: Caller; id: string; path: string; reply: FastifyReply }): Promise<FastifyReply> {
-    await agentService.requireEditable({ actor, id })
+    await agentService.requireUse({ actor, id })
     const inside = fileInHome(path)
     if (!inside) throw new HttpError(400, 'Only files in the agent\'s own folder can be saved.', { param: 'path' })
     const body = await agentd.read({ id, path: `home/${inside}` })
@@ -189,7 +189,7 @@ export const threadService = {
 }
 
 async function runner({ actor, id }: { actor: Caller; id: string }): Promise<AgentRow> {
-  const agent = await agentService.requireEditable({ actor, id })
+  const agent = await agentService.requireUse({ actor, id })
   return agent
 }
 

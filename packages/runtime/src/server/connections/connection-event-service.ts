@@ -27,7 +27,7 @@ export const connectionEventService = {
 async function requireReadableAgent({ actor, agentId }: { actor: Caller; agentId: string }): Promise<void> {
   const exists = await db.selectFrom('agent').select('id').where('id', '=', agentId).executeTakeFirst()
   if (!exists) return
-  await agentService.requireEditable({ actor, id: agentId })
+  await agentService.requireUse({ actor, id: agentId })
 }
 
 function eventOf(row: Pick<Selectable<Database['connection_event']>, 'id' | 'at' | 'connection_id' | 'agent_id' | 'tool' | 'reason' | 'outcome' | 'ms' | 'approved_by'> & { name: string | null; approver: string | null; approver_email: string | null }): ConnectionEvent {

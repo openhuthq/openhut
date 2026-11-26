@@ -40,7 +40,7 @@ export const channelService = {
     if (row.kind === 'telegram' && row.status === 'linking') return channelOf({ held: await recordOf(id), qr: await owned({ actor, agentId: row.agent_id }).then(() => claimLink(row), () => null) })
     if (row.kind === 'telegram') return channelOf({ held: await recordOf(id), qr: null })
     if (row.kind !== 'whatsapp' || row.status !== 'linking') return rowChannel({ row, qr: null })
-    const agent = await agentService.requireEditable({ actor, id: row.agent_id }).catch(() => null)
+    const agent = await agentService.requireUse({ actor, id: row.agent_id }).catch(() => null)
     if (!agent || (agent.owner ?? actor.email) !== actor.email) return rowChannel({ row, qr: null })
     const pairing = whatsappPairing.follow({ agentId: row.agent_id, onLinked: (phone) => whatsappLinked({ id, phone, place: placeOf(agent) }) })
     if (pairing.status === 'error') throw new HttpError(502, `WhatsApp didn't connect (${pairing.error}). Close this and try again.`)

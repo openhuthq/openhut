@@ -16,14 +16,14 @@ export const permissionController: FastifyPluginAsyncZod = async (app) => {
   app.patch('/', UpdateRequest, async (req) => {
     const actor = await who(req)
     const { agentId, connectionId, tools, permission } = req.body
-    await agentService.requireEditable({ actor, id: agentId })
+    await agentService.requireOwner({ actor, id: agentId })
     await permissions.set({ actor, agentId, connectionId: (await connectionService.get({ actor, id: connectionId })).id, tools, state: permission })
     return listOf({ req, data: await agentTools({ actor, agentId, connectionId }) })
   })
 
   app.delete('/', ListRequest, async (req) => {
     const actor = await who(req)
-    await agentService.requireEditable({ actor, id: req.query.agentId })
+    await agentService.requireOwner({ actor, id: req.query.agentId })
     await permissions.reset({ actor, ...req.query })
     return listOf({ req, data: await agentTools({ actor, ...req.query }) })
   })

@@ -20,6 +20,7 @@ const TELEGRAM_REFUSED = new Set(['logout', 'close', 'setwebhook'])
 const TELEGRAM_PATH = /^\/(?:file\/)?bot[^/]+\/([^/]+)/
 const GIT_PATH = /^\/([A-Za-z0-9][\w-]*\/[\w.-]+?)(?:\.git)?\/(info\/refs|git-upload-pack|git-receive-pack)$/
 const GIT_VERB: Record<string, string> = { 'info/refs': 'refs', 'git-upload-pack': 'fetch from', 'git-receive-pack': 'push to' }
+const GIT_PUSH = /\/git-receive-pack$|[?&]service=git-receive-pack(?:&|$)/
 const GIT_IDLE_MS = 600_000
 const GIT_FETCH_MS = 10_000
 const PLACEHOLDER = /openhut-secret-([A-Z][A-Z0-9_]{1,39})/g
@@ -31,7 +32,7 @@ export type Upstream = {
   name: string
   origin: string
   allow: (req: { method: string; path: string }) => boolean
-  credential: (agent: GatewayAgent, incoming: IncomingHttpHeaders) => Promise<string>
+  credential: (agent: GatewayAgent, incoming: IncomingHttpHeaders, path: string) => Promise<string>
   apply: (req: { out: Outgoing; secret: string }) => void
   observe?: (headers: Headers) => void
   body?: (json: Record<string, unknown>) => Record<string, unknown>
@@ -75,7 +76,7 @@ export const upstreams = new Map<string, Upstream>([
       const match = GIT_PATH.exec(path)
       return !!match && method === (match[2] === 'info/refs' ? 'GET' : 'POST')
     },
-    credential: (agent) => github.gitToken({ agentId: agent.id }),
+    credential: (agent, _incoming, path) => github.gitToken({ agentId: agent.id, push: GIT_PUSH.test(path) }),
     apply: ({ out, secret }) => { out.headers.set('authorization', `Basic ${Buffer.from(`x-access-token:${secret}`).toString('base64')}`) },
     tool: (path) => {
       const match = GIT_PATH.exec(path)
@@ -96,7 +97,7 @@ export const brokerService = {
       throw new HttpError(403, `The gateway doesn't pass ${tool} through.`)
     }
     const out = { path, headers: forwardable(req.headers) }
-    upstream.apply({ out, secret: await upstream.credential(agent, req.headers) })
+    upstream.apply({ out, secret: await upstream.credential(agent, req.headers, path) })
     const body = upstream.body && method === 'POST' ? await rewritten({ req, headers: out.headers, change: upstream.body }) : req
     const status = await relay({ url: new URL(upstream.origin + out.path), method, headers: out.headers, body, res, idleMs, observe: upstream.observe, lookup: upstream.lookup })
       .catch(async (err: unknown) => {
@@ -115,6 +116,14 @@ export const brokerService = {
       await audit({ agent, tool, reason: `Refused: ${strays.join(', ')} may not go to ${host}`, outcome: 'denied', started: Date.now() })
       throw new HttpError(403, `The gateway won't send ${strays.join(', ')} to ${host}: ${strays.map((name) => routeOf({ secrets, name })).join(' ')}`)
     }
+    const misplaced = [...new Set([
+      ...[...path.matchAll(PLACEHOLDER)].map((match) => match[1]),
+      ...Object.entries(req.headers).flatMap(([header, value]) => [...String(value ?? '').matchAll(PLACEHOLDER)].map((match) => match[1]).filter((name) => headerOf(secrets.find((secret) => secret.name === name)) !== header)),
+    ])]
+    if (misplaced.length) {
+      await audit({ agent, tool, reason: `Refused: ${misplaced.join(', ')} outside its header`, outcome: 'denied', started: Date.now() })
+      throw new HttpError(403, `The gateway puts ${misplaced.join(', ')} only in the header your owner set for it, never in the URL or another header. Leave the stand-in out: OpenHut adds the key for you.`)
+    }
     const sent = secrets.filter((secret) => secret.hosts.includes(host))
     if (!sent.length) throw new HttpError(403, `None of your keys go to ${host}. Call https://${host} directly, or ask for a key with add_secret.`)
     await brokerService.forward({
@@ -122,9 +131,6 @@ export const brokerService = {
       upstream: {
         name: host, origin: keyedRoute.origin(host), allow: () => true, credential: async () => '', tool: () => tool, lookup: guardedLookup,
         apply: ({ out }) => {
-          const fill = (text: string, encode: (value: string) => string) => text.replace(PLACEHOLDER, (_, name: string) => encode(sent.find((secret) => secret.name === name)?.value ?? ''))
-          out.path = fill(out.path, encodeURIComponent)
-          for (const [name, value] of out.headers) out.headers.set(name, fill(value, (each) => each))
           for (const secret of sent) {
             const [header, format] = splitHeader(secret.header)
             out.headers.set(header, format.replaceAll('{value}', secret.value))
@@ -134,6 +140,10 @@ export const brokerService = {
     })
     await secretService.used({ ids: sent.map((secret) => secret.id) })
   },
+}
+
+function headerOf(secret: HeldSecret | undefined): string | undefined {
+  return secret && splitHeader(secret.header)[0].toLowerCase()
 }
 
 function splitHeader(header: string): [string, string] {

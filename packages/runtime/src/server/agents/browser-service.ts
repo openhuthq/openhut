@@ -15,7 +15,7 @@ export const browserService = {
     try {
       if (!sameOrigin(req)) throw new HttpError(403, 'Only the OpenHut app can open an agent\'s browser.')
       const actor = await who(req)
-      const row = await agentService.requireEditable({ actor, id: agentId })
+      const row = await agentService.requireUse({ actor, id: agentId })
       if (!row.web_browser) throw new HttpError(409, `Turn on Browser for ${row.name} first.`)
       const live = liveBrowser({ id: agentId, fps, onLine: (line) => socket.send(line), onEnd: () => socket.close() })
       socket.on('message', (data) => {

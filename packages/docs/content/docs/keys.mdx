@@ -20,7 +20,7 @@ On the agent, open **More › Keys**. Each key shows the hosts it's sent to and 
 
 The agent calls the service through OpenHut's gateway instead of directly: `https://api.stripe.com/v1/charges` becomes `$OPENHUT_GATEWAY/x/api.stripe.com/v1/charges`, sent with its own `Authorization: Agent $OPENHUT_AGENT_TOKEN`. The gateway adds the header you saw on the card, like `Authorization: Bearer <key>`, and forwards it over HTTPS.
 
-The agent's terminal also has `$OPENHUT_SECRET_<NAME>`, a stand-in (`openhut-secret-<NAME>`), never the key. Where a service wants the key in another header or in the URL, the agent writes the stand-in there and the gateway swaps in the key.
+The agent's terminal also has `$OPENHUT_SECRET_<NAME>`, a stand-in (`openhut-secret-<NAME>`), never the key. The key only ever goes in the header on the card: a request with a stand-in in the URL, the query or any other header is refused, so the key can't be echoed back to the agent.
 
 ## What it guards against
 
@@ -30,6 +30,6 @@ The agent's terminal also has `$OPENHUT_SECRET_<NAME>`, a stand-in (`openhut-sec
 
 ## Limits
 
-- The gateway swaps stand-ins in headers and the URL, not in request bodies.
+- The gateway sends a key only in the one header set for it, never in the URL, another header or the request body. A service that wants the key anywhere else can't use it through OpenHut yet.
 - Agents can still reach other HTTPS hosts directly, without keys. Denying unknown hosts outright is planned.
 - Git push to GitHub keeps its own route through the GitHub app (see [Apps](/apps)).
