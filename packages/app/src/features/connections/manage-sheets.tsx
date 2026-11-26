@@ -4,10 +4,12 @@ import type { OpenHutAgent } from '@/lib/openhut'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/empty-state'
 import { Button, buttonVariants } from '@/components/ui/button'
-import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item'
+import { Menu } from '@base-ui/react/menu'
+import { DropdownMenuContent, menuItemVariants } from '@/components/ui/dropdown-menu'
+import { Face } from '@/features/agents/face'
 import { ConfirmButton } from '@/components/confirm-button'
 import { Loaded } from '@/components/loaded'
-import { AlertCircleIcon } from '@hugeicons/core-free-icons'
+import { ArrowDown01Icon, RefreshIcon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { useAgents, useCreateGrant, useDeleteGrant, useGrants } from '@/features/agents/api'
 import { agentPath } from '@/app/routes'
 import { openSignInTab, useAuthorizeConnection, useConnections, useConnectionTools, useDeleteConnection, useReconnect } from '@/features/connections/api'
@@ -37,14 +39,27 @@ export function AgentGrants({ connection, agents }: { connection: Connection; ag
   const deleteGrant = useDeleteGrant()
   const saving = (agentId: string) => (createGrant.isPending && createGrant.variables.agentId === agentId) || (deleteGrant.isPending && deleteGrant.variables.agentId === agentId)
   if (!agents.length) return <EmptyState inline line="No agents yet." />
-  return <>{agents.map((agent) => {
-    const grant = grants.data?.find((each) => each.agentId === agent.id)
-    return <div key={agent.id} className="flex items-center gap-2 pr-1">
-      <div className="min-w-0 flex-1"><AgentCheck agent={agent} checked={!!grant} disabled={!grants.data || !agent.canEdit || saving(agent.id)}
-        onChange={() => grant ? deleteGrant.mutate(grant, { onError: toastError }) : createGrant.mutate({ agentId: agent.id, connectionId: connection.id }, { onError: toastError })} /></div>
-      {grant && <a href={agentPath({ agentId: agent.id, dialog: 'apps', detail: connection.id })} className={cn(buttonVariants({ variant: 'ghost' }), PILL)} title={`What ${agent.name} may do in ${connection.name}`}>Permissions</a>}
-    </div>
-  })}</>
+  const granted = agents.filter((agent) => grants.data?.some((each) => each.agentId === agent.id))
+  const summary = !granted.length ? 'No agents yet' : granted.length === 1 ? granted[0].name : `${granted[0].name} and ${granted.length - 1} more`
+  return <Menu.Root>
+    <Menu.Trigger aria-label="Who can use it" className="flex h-10 w-full items-center gap-2.5 rounded-lg border border-hair bg-card px-2.5 text-left text-[13px] text-ink hover:bg-hover data-popup-open:bg-hover">
+      {granted.length > 0 && <span className="flex shrink-0">{granted.slice(0, 4).map((agent, index) => <Face key={agent.id} agent={agent} size={24} className={cn('rounded-full ring-2 ring-card', index > 0 && '-ml-1.5')} />)}</span>}
+      <span className="min-w-0 flex-1 truncate">{summary}</span>
+      <I icon={ArrowDown01Icon} size={14} className="text-mute" />
+    </Menu.Trigger>
+    <DropdownMenuContent className="min-w-(--anchor-width)">{agents.map((agent) => {
+      const grant = grants.data?.find((each) => each.agentId === agent.id)
+      return <div key={agent.id} className="flex items-center gap-1">
+        <Menu.CheckboxItem closeOnClick={false} checked={!!grant} disabled={!grants.data || !agent.canEdit || saving(agent.id)} className={cn(menuItemVariants({ size: 'tall' }), 'min-w-0 flex-1')}
+          onCheckedChange={() => grant ? deleteGrant.mutate(grant, { onError: toastError }) : createGrant.mutate({ agentId: agent.id, connectionId: connection.id }, { onError: toastError })}>
+          <span className="grid size-4 shrink-0 place-items-center rounded-[4px] border border-mid data-checked:border-ink data-checked:bg-ink" data-checked={grant ? '' : undefined}><Menu.CheckboxItemIndicator className="flex text-white"><I icon={Tick02Icon} size={11} /></Menu.CheckboxItemIndicator></span>
+          <Face agent={agent} size={24} />
+          <span className="grid min-w-0 leading-tight"><span className="truncate text-[13px] text-ink">{agent.name}</span><span className="truncate text-[11.5px] text-mute">{agent.instructions.split('\n')[0] || 'No instructions yet'}</span></span>
+        </Menu.CheckboxItem>
+        {grant && <a href={agentPath({ agentId: agent.id, dialog: 'apps', detail: connection.id })} className={cn(buttonVariants({ variant: 'ghost' }), PILL, 'shrink-0')} title={`What ${agent.name} may do in ${connection.name}`}>Permissions</a>}
+      </div>
+    })}</DropdownMenuContent>
+  </Menu.Root>
 }
 
 export function ConnectionSheet({ connectionId, connected }: { connectionId: string; connected: boolean }) {
@@ -85,7 +100,7 @@ function successLine(connection: Connection) {
 const PROBLEMS: Record<Exclude<Connection['status'], 'connected'>, { title: string; note: string }> = {
   signed_out: { title: 'Sign-in expired', note: 'Reconnect to keep using it.' },
   rejected: { title: 'Login rejected', note: 'Reconnect to fix it.' },
-  failing: { title: 'Not working lately', note: 'Its last few calls failed. Reconnect if it keeps happening.' },
+  failing: { title: 'Not working lately', note: 'Its last few calls didn’t go through. Reconnect if it keeps happening.' },
 }
 
 function ManageSheet({ connection, agents }: { connection: Connection; agents: OpenHutAgent[] }) {
@@ -95,7 +110,6 @@ function ManageSheet({ connection, agents }: { connection: Connection; agents: O
   const [keying, setKeying] = useState(false)
   const problem = connection.status === 'connected' ? undefined : PROBLEMS[connection.status]
   const field = KEY_FIELDS[connection.kind]
-  const busy = authorize.isPending || reconnect.isPending || keying
   const returned = new URLSearchParams(location.search).get('error') ?? undefined
   const start = () => {
     if (connection.signIn) authorize.mutate({ connectionId: connection.id, tab: openSignInTab() }, { onSuccess: (done) => { if (done) toast(`${connection.name} is reconnected`) }, onError: toastError })
@@ -107,22 +121,26 @@ function ManageSheet({ connection, agents }: { connection: Connection; agents: O
     if (field) reconnect.mutate({ [field.name]: String(new FormData(event.currentTarget).get(field.name) ?? '') }, { onSuccess: () => { setKeying(false); toast(`${connection.name} is reconnected`) } })
   }
   const label = authorize.isPending ? 'Finish in your browser…' : 'Reconnect'
-  return <SetupSheet brand={connectionBrand(connection)} title={connection.name} blurb={kindNote(connection)} error={returned ?? formError(reconnect.error, field ? [field.name] : [])} onClose={close}
+  const blurb = problem ? <span className="flex min-w-0 items-center gap-1.5" title={problem.note}>
+    <span className="size-1.5 shrink-0 rounded-full bg-hue-amber" /><span className="shrink-0 font-medium text-hue-amber">{problem.title}</span><span className="text-mute">·</span><span className="truncate">{kindNote(connection)}</span>
+  </span> : kindNote(connection)
+  const action = <Button variant="secondary" aria-expanded={field ? keying : undefined} disabled={authorize.isPending || reconnect.isPending} onClick={() => keying ? setKeying(false) : start()}
+    className={cn('shrink-0 gap-1.5 text-[13px]', problem && 'bg-[color-mix(in_oklch,var(--hue-amber)_16%,transparent)] text-[color-mix(in_oklch,var(--hue-amber)_60%,black)] hover:bg-[color-mix(in_oklch,var(--hue-amber)_24%,transparent)]')}>
+    <I icon={RefreshIcon} size={14} />{label}
+  </Button>
+  return <SetupSheet brand={connectionBrand(connection)} title={connection.name} blurb={blurb} action={action} error={returned ?? formError(reconnect.error, field ? [field.name] : [])} onClose={close}
     safe={`Added ${shortDate.format(new Date(connection.createdAt))}`}
     foot={<>
       <ConfirmButton variant="danger" disabled={!connection.canDelete} question={`Delete ${connection.name}?`} detail="Every agent stops being able to use it." action="Delete" onConfirm={() => remove.mutate(undefined, { onError: toastError })}>Delete</ConfirmButton>
-      {!problem && <Button variant="secondary" disabled={busy} onClick={start}>{label}</Button>}
       <Button variant={keying ? 'secondary' : 'primary'} onClick={close}>Done</Button>
     </>}>
-    {problem && <ItemGroup className="rounded-lg">
-      <Item size="sm"><I icon={AlertCircleIcon} size={16} className="text-hue-amber" /><ItemContent stacked><ItemTitle>{problem.title}</ItemTitle><ItemDescription className="text-xs">{problem.note}</ItemDescription></ItemContent>
-        <Button variant="ghost" className={PILL} disabled={busy} onClick={start}>{label}</Button></Item>
-    </ItemGroup>}
-    {keying && field && <form onSubmit={save} className="flex animate-grow flex-col gap-2">
-      <Field label={field.label} error={fieldError(reconnect.error, field.name)}><Input mono name={field.name} type="password" required autoFocus autoComplete="off" placeholder={field.placeholder} /></Field>
-      <span className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={() => setKeying(false)}>Cancel</Button><Button type="submit" variant="primary" disabled={reconnect.isPending}>{reconnect.isPending ? 'Checking…' : 'Save'}</Button></span>
+    {keying && field && <form onSubmit={save} className="flex animate-grow flex-col gap-2 rounded-lg border border-hair bg-tint p-3">
+      <Field label={problem ? `${problem.title}. ${field.label}` : field.label} error={fieldError(reconnect.error, field.name)}>
+        <span className="flex gap-2"><Input mono name={field.name} type="password" required autoFocus autoComplete="off" placeholder={field.placeholder} className="min-w-0 flex-1" />
+          <Button type="button" variant="ghost" onClick={() => setKeying(false)}>Cancel</Button><Button type="submit" variant="primary" disabled={reconnect.isPending}>{reconnect.isPending ? 'Checking…' : 'Save'}</Button></span>
+      </Field>
     </form>}
-    <Section title="Who can use it"><div className="flex flex-col gap-0.5 rounded-lg border border-hair bg-card p-1"><AgentGrants connection={connection} agents={agents} /></div></Section>
+    <Section title="Who can use it"><AgentGrants connection={connection} agents={agents} /></Section>
     <Tools connection={connection} />
   </SetupSheet>
 }
