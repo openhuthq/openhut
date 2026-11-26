@@ -8,6 +8,7 @@ import type { GatewayAgent } from '../agents/agent-service.ts'
 import { channelService } from '../channels/channel-service.ts'
 import { STAND_IN } from '../integrations/slack/slack.ts'
 import { providers } from '../models/providers/index.ts'
+import { github } from '../integrations/github/github.ts'
 
 const IDLE_MS = 120_000
 const QUIET_MS = 60_000
@@ -15,6 +16,10 @@ const STRIPPED = new Set(['authorization', 'x-api-key', 'cookie', 'proxy-authori
 const UNRELAYED = new Set(['connection', 'keep-alive', 'transfer-encoding', 'set-cookie', 'alt-svc', 'strict-transport-security'])
 const TELEGRAM_REFUSED = new Set(['logout', 'close', 'setwebhook'])
 const TELEGRAM_PATH = /^\/(?:file\/)?bot[^/]+\/([^/]+)/
+const GIT_PATH = /^\/([A-Za-z0-9][\w-]*\/[\w.-]+?)(?:\.git)?\/(info\/refs|git-upload-pack|git-receive-pack)$/
+const GIT_VERB: Record<string, string> = { 'info/refs': 'refs', 'git-upload-pack': 'fetch from', 'git-receive-pack': 'push to' }
+const GIT_IDLE_MS = 600_000
+const GIT_FETCH_MS = 10_000
 const lastQuiet = new Map<string, number>()
 
 export type Upstream = {
@@ -25,6 +30,8 @@ export type Upstream = {
   apply: (req: { out: Outgoing; secret: string }) => void
   observe?: (headers: Headers) => void
   body?: (json: Record<string, unknown>) => Record<string, unknown>
+  tool?: (path: string) => string | undefined
+  idleMs?: number
 }
 
 export type Outgoing = { path: string; headers: Headers }
@@ -55,14 +62,29 @@ export const upstreams = new Map<string, Upstream>([
     credential: (agent) => channelService.slackToken({ agentId: agent.id }),
     apply: ({ out, secret }) => { out.headers.set('authorization', `Bearer ${secret}`) },
   }],
+  ['github', {
+    name: 'github',
+    origin: 'https://github.com',
+    allow: ({ method, path }) => {
+      const match = GIT_PATH.exec(path)
+      return !!match && method === (match[2] === 'info/refs' ? 'GET' : 'POST')
+    },
+    credential: (agent) => github.gitToken({ agentId: agent.id }),
+    apply: ({ out, secret }) => { out.headers.set('authorization', `Basic ${Buffer.from(`x-access-token:${secret}`).toString('base64')}`) },
+    tool: (path) => {
+      const match = GIT_PATH.exec(path)
+      return match ? `github ${GIT_VERB[match[2]]} ${match[1]}` : undefined
+    },
+    idleMs: GIT_IDLE_MS,
+  }],
 ])
 
 export const brokerService = {
-  async forward({ agent, upstream, path, req, res, idleMs = IDLE_MS }: Forward): Promise<void> {
+  async forward({ agent, upstream, path, req, res, idleMs = upstream.idleMs ?? IDLE_MS }: Forward): Promise<void> {
     const started = Date.now()
     const method = req.method ?? 'GET'
     const pathname = path.split('?')[0]
-    const tool = `${upstream.name} ${method} ${pathname.replace(/\/bot[^/]+/, '/bot…')}`
+    const tool = upstream.tool?.(pathname) ?? `${upstream.name} ${method} ${pathname.replace(/\/bot[^/]+/, '/bot…')}`
     if (!upstream.allow({ method, path: pathname })) {
       await audit({ agent, tool, reason: 'Not on the allowed list', outcome: 'denied', started })
       throw new HttpError(403, `The gateway doesn't pass ${tool} through.`)
@@ -122,12 +144,20 @@ function headersOf(incoming: IncomingHttpHeaders): Headers {
 }
 
 async function audit({ agent, tool, reason, outcome, started }: { agent: GatewayAgent; tool: string; reason: string; outcome: 'allowed' | 'denied' | 'failed'; started: number }): Promise<void> {
-  if (outcome === 'allowed' && tool.endsWith('/getUpdates')) {
+  if (outcome === 'allowed' && tool.startsWith('github refs ')) return
+  const quietMs = quietFor(tool)
+  if (outcome === 'allowed' && quietMs) {
     const key = `${agent.id} ${tool}`
-    if (started - (lastQuiet.get(key) ?? 0) < QUIET_MS) return
+    if (started - (lastQuiet.get(key) ?? 0) < quietMs) return
     lastQuiet.set(key, started)
   }
   await db.insertInto('connection_event').values({ agent_id: agent.id, connection_id: null, tool, reason, outcome, ms: Date.now() - started }).execute()
+}
+
+function quietFor(tool: string): number {
+  if (tool.endsWith('/getUpdates')) return QUIET_MS
+  if (tool.startsWith('github fetch from ')) return GIT_FETCH_MS
+  return 0
 }
 
 type Forward = { agent: GatewayAgent; upstream: Upstream; path: string; req: IncomingMessage; res: ServerResponse; idleMs?: number }

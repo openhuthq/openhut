@@ -1,6 +1,9 @@
 import { createSign } from 'node:crypto'
 import * as z from 'zod/mini'
 import { guardedFetch } from '../../platform/network.ts'
+import { db } from '../../platform/db.ts'
+import { HttpError } from '../../platform/http-error.ts'
+import { unseal } from '../../platform/secrets.ts'
 import type { Connector, ConnectorContext, ToolSpec } from '../connector.ts'
 import { MCP_SERVERS, mcp } from '../mcp/mcp.ts'
 
@@ -11,7 +14,7 @@ const App = z.object({ appId: z.number(), slug: z.string(), pem: z.string() })
 const Config = z.extend(App, { installationId: z.number(), botId: z.number() })
 const GIT: ToolSpec = {
   name: 'git_credentials',
-  description: 'Get the shell commands that let git clone, pull and push in your terminal as the bot, for one hour. Run them, then use plain https://github.com URLs. Call it again when git says the token expired.',
+  description: 'Get the shell commands that let git clone, pull and push in your terminal as the bot. Run them once, then use plain https://github.com URLs: git goes through OpenHut, which adds the key.',
   schema: { type: 'object', properties: {} },
 }
 const tokens = new Map<number, { at: number; token: string }>()
@@ -43,10 +46,16 @@ export const github = {
     tools: async (ctx) => [GIT, ...await remote.tools(await asBot(ctx))],
     call: async (ctx) => {
       if (ctx.tool !== GIT.name) return remote.call({ ...await asBot(ctx), tool: ctx.tool, args: ctx.args })
-      const config = configOf(ctx.config)
-      return { text: gitSetup({ config, token: await mint(config) }), isError: false }
+      return { text: gitSetup(configOf(ctx.config)), isError: false }
     },
   } satisfies Connector,
+
+  async gitToken({ agentId }: { agentId: string }): Promise<string> {
+    const row = await db.selectFrom('connection as c').innerJoin('connection_grant as g', 'g.connection_id', 'c.id').select('c.config')
+      .where('g.agent_id', '=', agentId).where('c.kind', '=', 'github').orderBy('c.created_at').executeTakeFirst()
+    if (!row) throw new HttpError(403, 'No GitHub connection is granted to this agent. Ask for one with ask_to_connect.')
+    return fresh(configOf(JSON.parse(unseal(row.config))))
+  },
 }
 
 function configOf(stored: unknown): GithubConfig {
@@ -56,10 +65,12 @@ function configOf(stored: unknown): GithubConfig {
 }
 
 async function asBot(ctx: ConnectorContext): Promise<ConnectorContext> {
-  const config = configOf(ctx.config)
+  return { ...ctx, config: { headers: { Authorization: `Bearer ${await fresh(configOf(ctx.config))}` } } }
+}
+
+async function fresh(config: GithubConfig): Promise<string> {
   const cached = tokens.get(config.installationId)
-  const token = cached && Date.now() - cached.at < TOKEN_FRESH_MS ? cached.token : await mint(config)
-  return { ...ctx, config: { headers: { Authorization: `Bearer ${token}` } } }
+  return cached && Date.now() - cached.at < TOKEN_FRESH_MS ? cached.token : mint(config)
 }
 
 async function mint(config: GithubConfig): Promise<string> {
@@ -68,14 +79,16 @@ async function mint(config: GithubConfig): Promise<string> {
   return token
 }
 
-function gitSetup({ config, token }: { config: GithubConfig; token: string }): string {
+function gitSetup(config: GithubConfig): string {
   const bot = `${config.slug}[bot]`
   return [
     'Run these in your terminal:',
-    `git config --global credential.https://github.com.helper '!f() { echo username=x-access-token; echo password=${token}; }; f'`,
+    'git config --global --unset-all credential.https://github.com.helper; true',
+    'git config --global url."$OPENHUT_GATEWAY/u/github/".insteadOf https://github.com/',
+    'git config --global "http.$OPENHUT_GATEWAY/.extraHeader" "Authorization: Agent $OPENHUT_AGENT_TOKEN"',
     `git config --global user.name '${bot}'`,
     `git config --global user.email '${config.botId}+${bot}@users.noreply.github.com'`,
-    'Then git clone https://github.com/OWNER/REPO.git, commit and push as usual. The token lasts one hour and reaches only the repositories the bot is installed on.',
+    'Then git clone https://github.com/OWNER/REPO.git, commit and push as usual. It reaches only the repositories the bot is installed on.',
   ].join('\n')
 }
 
