@@ -32,7 +32,7 @@ const SelfChange = z.object({ name: UpdateAgentFields.name, instructions: Update
 const ChannelChange = z.object({ id: z.string().check(z.maxLength(40)), open: z.optional(z.boolean()), allowed: z.optional(z.array(z.string().check(z.maxLength(20))).check(z.maxLength(50))) })
 const ChannelId = z.object({ id: z.string().check(z.maxLength(40)) })
 const ConnectionId = z.object({ connectionId: z.string().check(z.maxLength(40)) })
-const ToolCall = z.object({ connectionId: z.string().check(z.maxLength(40)), tool: z.string().check(z.maxLength(200)), name: z.string().check(z.maxLength(200)), arguments: z.record(z.string(), z.unknown()), always: z.optional(z.boolean()) })
+const ToolCall = z.object({ connectionId: z.string().check(z.maxLength(40)), tool: z.string().check(z.maxLength(200)), name: z.string().check(z.maxLength(200)), arguments: z.record(z.string(), z.unknown()), action: z.optional(z.object({ name: z.string().check(z.maxLength(200)), label: z.string().check(z.maxLength(200)) })), always: z.optional(z.boolean()) })
 const WebhookChange = z.object({ name: WebhookName })
 const ASK_EXPIRES_MS = 30 * 60_000
 
@@ -164,7 +164,8 @@ async function summaryOf({ action, input, agentId }: { action: ChangeAction; inp
     }
     case 'call_tool': {
       const connection = await db.selectFrom('connection').select('name').where('id', '=', String(input.connectionId)).executeTakeFirstOrThrow()
-      return `Run ${String(input.tool)} on ${connection.name}`
+      const inner = input.action as { label: string } | undefined
+      return inner ? `${connection.name}: ${inner.label}` : `Run ${String(input.tool)} on ${connection.name}`
     }
     case 'propose_connection': return `Connect ${String(input.name)}`
     case 'add_secret': return `Save a key, ${String(input.name)}, sent only to ${(input.hosts as string[]).join(', ')}`
@@ -245,7 +246,7 @@ async function approveCall({ actor, row, always }: { actor: Caller; row: Row; al
   const claimed = await db.updateTable('change_request').set({ status: 'approved', input: JSON.stringify({ ...call, always }), told: true, decided_at: new Date() })
     .where('id', '=', row.id).where('status', '=', 'pending').returning('id').executeTakeFirst()
   if (!claimed) throw new HttpError(409, 'That request was already answered.')
-  if (always) await permissions.set({ actor, agentId: row.agent_id, connectionId: call.connectionId, tools: [call.tool], state: 'allow' })
+  if (always) await permissions.set({ actor, agentId: row.agent_id, connectionId: call.connectionId, tools: [call.action?.name ?? call.tool], state: 'allow' })
   const result = await connectionService.callApproved({ actor, agentId: row.agent_id, connectionId: call.connectionId, tool: call.tool, args: call.arguments, reason: row.why })
   const decided = await db.updateTable('change_request').set({ result: result.text, told: false }).where('id', '=', row.id).returningAll().executeTakeFirstOrThrow()
   deliver(decided)
