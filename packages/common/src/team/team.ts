@@ -70,6 +70,7 @@ export const InstallSettings = z.object({
   google: z.object({ set: z.boolean(), signIn: z.boolean(), clientId: z.nullable(z.string()), signInRedirectUri: z.string(), connectionsRedirectUri: z.string() }),
   smtp: z.object({ set: z.boolean(), host: z.nullable(z.string()), port: z.nullable(z.number()), user: z.nullable(z.string()), from: z.nullable(z.string()) }),
   usageData: z.boolean(),
+  githubFooter: z.boolean(),
 })
 export type InstallSettings = z.infer<typeof InstallSettings>
 
@@ -84,5 +85,6 @@ export const UpdateInstallSettings = z.object({
   smtpPassword: z.optional(z.string().check(z.maxLength(500))),
   smtpFrom: z.optional(Email),
   usageData: z.optional(z.boolean()),
+  githubFooter: z.optional(z.boolean()),
 })
 export type UpdateInstallSettings = z.infer<typeof UpdateInstallSettings>

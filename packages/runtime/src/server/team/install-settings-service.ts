@@ -25,6 +25,7 @@ export const installSettingsService = {
       google: { set: !!google, signIn: settings.googleSignIn(), clientId: google?.id ?? null, signInRedirectUri: googleRedirectUri(), connectionsRedirectUri: connectionService.redirectUrl() },
       smtp: { set: !!mail, host: mail?.host ?? null, port: mail?.port ?? null, user: mail?.user || null, from: mail?.from ?? null },
       usageData: settings.usageData(),
+      githubFooter: settings.githubFooter(),
     }
   },
 
@@ -50,6 +51,7 @@ export const installSettingsService = {
       await settings.setSmtp({ host, from, port: patch.smtpPort ?? current?.port ?? 587, user: patch.smtpUser ?? current?.user ?? '', password: patch.smtpPassword || current?.password || '' })
     }
     if (patch.usageData !== undefined) await settings.setUsageData(patch.usageData)
+    if (patch.githubFooter !== undefined) await settings.setGithubFooter(patch.githubFooter)
     emit({ name: 'security.updated', actor, target: { type: 'settings', id: 'security', fields: Object.keys(patch) } })
     return installSettingsService.get({ actor })
   },

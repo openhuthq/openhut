@@ -6,6 +6,7 @@ import { faceService } from '../../../src/plugins/github/faces.ts'
 import { MARK } from '../../../src/plugins/github/sign.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { seal } from '../../../src/server/platform/secrets.ts'
+import { settings } from '../../../src/server/platform/settings.ts'
 import { refresh, signIn } from '../../server/agents/signed-in.ts'
 
 await migrate()
@@ -68,4 +69,11 @@ test('agents with GitHub are told to add the OpenHut-Agent trailer to their comm
   const ctx = { agent, gateway: '', token: '', channelKey: '', channels: [], secrets: [] }
   assert.match(github.hermes({ ...ctx, connections: [{ name: 'GitHub', kind: 'github' }] }).prompt ?? '', /git commit --trailer "OpenHut-Agent: Database"/)
   assert.equal(github.hermes({ ...ctx, connections: [{ name: 'Linear', kind: 'linear' }] }).prompt, '')
+})
+
+test('with signing turned off in Admin, bodies go to GitHub as written', async () => {
+  await settings.setGithubFooter(false)
+  assert.deepEqual(await call('create_pull_request', { title: 'Index', body: 'Adds an index.' }), { title: 'Index', body: 'Adds an index.' })
+  await settings.setGithubFooter(true)
+  assert.match(String((await call('create_pull_request', { body: 'Adds an index.' })).body), /<!-- openhut -->/)
 })
