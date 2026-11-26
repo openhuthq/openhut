@@ -99,6 +99,10 @@ async function upgrade(): Promise<void> {
   await allowOnly({ table: 'change_request', column: 'status', values: ['pending', 'approved', 'denied', 'expired'] })
   await allowOnly({ table: 'channel', column: 'kind', values: ChannelKind.options })
   await allowOnly({ table: 'connection', column: 'kind', values: ConnectionKind.options })
+  const { rows } = await sql<{ found: string | null }>`select to_regclass('routine')::text as found`.execute(db)
+  if (rows[0]?.found) await sql`insert into inbox_source (id, agent_id, kind, name, origin, created_at, plan, at, cron, until, next_run_at, run_id, run_status, run_picked_at, run_at, run_text, failures)
+    select id, agent_id, 'schedule', name, origin, created_at, plan, at, cron, until, next_run_at, run_id, run_status, run_picked_at, run_at, run_text, failures from routine
+    on conflict (id) do nothing`.execute(db)
 }
 
 async function allowOnly({ table, column, values }: { table: string; column: string; values: readonly string[] }): Promise<void> {

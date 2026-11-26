@@ -32,9 +32,15 @@ create table change_request (
   id text primary key, agent_id text not null references agent(id) on delete cascade, action text not null, input text not null, summary text not null,
   why text not null, origin text not null, status text not null default 'pending' check (status in ('pending', 'approved', 'denied')), note text,
   told boolean not null default false, created_at timestamptz not null default now(), decided_at timestamptz);
+create table routine (
+  id text primary key, agent_id text not null references agent(id) on delete cascade, name text not null, plan text not null,
+  at timestamptz, cron text, until timestamptz, origin text not null, next_run_at timestamptz, created_at timestamptz not null default now(),
+  run_id text, run_status text check (run_status in ('open', 'told', 'quiet', 'failed')), run_picked_at timestamptz, run_at timestamptz, run_text text,
+  failures integer not null default 0);
 insert into person (id, email, role) values ('usr_old00001', 'old@example.com', 'owner');
 insert into agent (id, name, owner_id, instructions, net, channel_key) values ('agt_old00001', 'Old', 'usr_old00001', '', 1, 'k');
-insert into connection (id, kind, name, owner_id, config) values ('con_old00001', 'postgres', 'Old db', 'usr_old00001', '{}')`
+insert into connection (id, kind, name, owner_id, config) values ('con_old00001', 'postgres', 'Old db', 'usr_old00001', '{}');
+insert into routine (id, agent_id, name, plan, cron, origin, next_run_at, failures) values ('rt_old00001', 'agt_old00001', 'Check slow queries', 'Look.', '0 9 * * 1-5', '{"platform":"api_server","chat_id":"openhut-x","place":"the OpenHut app"}', '2030-01-01T09:00:00Z', 1)`
 
 test('a database from build 0.6.499 upgrades at startup and keeps its rows', async () => {
   for (const statement of BUILD_499.split(';')) await sql.raw(statement).execute(db)
@@ -53,4 +59,11 @@ test('a database from build 0.6.499 upgrades at startup and keeps its rows', asy
   await sql`insert into channel (id, agent_id, kind, status, owner_address) values ('chn_old00001', 'agt_old00001', 'telegram', 'linking', '')`.execute(db)
   await assert.rejects(sql`insert into connection_event (agent_id, tool, reason, outcome, ms) values ('agt_old00001', 't', '', 'maybe', 1)`.execute(db))
   assert.equal((await db.selectFrom('agent').select('name').where('id', '=', 'agt_old00001').executeTakeFirstOrThrow()).name, 'Old')
+
+  const copied = await db.selectFrom('inbox_source').selectAll().where('agent_id', '=', 'agt_old00001').execute()
+  assert.equal(copied.length, 1)
+  assert.equal(copied[0].kind, 'schedule')
+  assert.equal(copied[0].cron, '0 9 * * 1-5')
+  assert.equal(copied[0].failures, 1)
+  assert.equal(new Date(copied[0].next_run_at ?? 0).toISOString(), '2030-01-01T09:00:00.000Z')
 })
