@@ -27,7 +27,7 @@ const { gatewayServer } = await import('../../../src/server/gateway/gateway-serv
 const { keyedRoute } = await import('../../../src/server/gateway/broker.ts')
 const { changeRequestService } = await import('../../../src/server/agents/change-request-service.ts')
 const { secretService } = await import('../../../src/server/agents/secret-service.ts')
-const { renderFiles } = await import('../../../src/server/agents/hermes-files.ts')
+const { hermesFiles } = await import('../../../src/core/hermes.ts')
 const { runSet } = await import('../../../src/server/agents/run-set.ts')
 keyedRoute.origin = () => `http://127.0.0.1:${(fake.address() as AddressInfo).port}`
 
@@ -77,9 +77,9 @@ test('add_secret waits for the owner, who pastes the value; it is stored sealed 
 })
 
 test('the agent gets a stand-in in its env and instructions, never the value', () => {
-  const files = renderFiles({
+  const files = hermesFiles({
     agent: { id: 'ag_secagent', name: 'Pulse', instructions: '#', slots: { primary: { provider: 'claude', model: 'sonnet' } } as never, net: 81, code_execution: true, web_browser: false },
-    ownerName: 'o', token, channelKey: 'k', channels: [], connections: [], secrets: [{ name: 'STRIPE_KEY', hosts: ['api.stripe.com'] }],
+    token, channelKey: 'k', channels: [], connections: [], secrets: [{ name: 'STRIPE_KEY', hosts: ['api.stripe.com'] }],
   })
   assert.match(files['.env'], /^OPENHUT_SECRET_STRIPE_KEY=openhut-secret-STRIPE_KEY$/m)
   assert.match(files['SOUL.md'], /\$OPENHUT_GATEWAY\/x\/api\.stripe\.com\//)

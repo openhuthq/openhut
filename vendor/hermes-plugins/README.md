@@ -28,7 +28,7 @@ Lines we added are marked `OpenHut`. To offer upstream: the same setting, withou
 Its `transform_llm_output` hook sends the finished reply to the gateway's `POST /cards/render`, which posts the card to
 Slack as Block Kit in the turn's thread and answers with the reply's words, or swaps the card for a text version on
 other chats. The desktop app (`api_server`) is left alone: the thread stream renders cards itself. A Slack card button
-comes back through `register_slack_action_handler` and `inject_message` as the person's reply. `hermes-files.ts`
+comes back through `register_slack_action_handler` and `inject_message` as the person's reply. `core/hermes.ts`
 enables it (`plugins.enabled`) and allows `allow_gateway_injection`.
 It also registers the agent's `post_message` tool (toolset `openhut-post`): the gateway's `POST /messages/target` checks the
 channel and chat are the agent's own and answers with the Hermes target, which goes to Hermes's own `send_message` helper,

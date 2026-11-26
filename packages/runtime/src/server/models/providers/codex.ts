@@ -26,8 +26,7 @@ export const codex: Provider = {
   },
   route: ({ model }) => ({ provider: 'openai-codex', model }),
   setup: ({ gateway, token }) => ({
-    env: [`HERMES_CODEX_BASE_URL=${gateway}/u/codex`],
-    yaml: '',
+    env: { HERMES_CODEX_BASE_URL: `${gateway}/u/codex` },
     auth: { version: 1, active_provider: 'openai-codex', providers: { 'openai-codex': { auth_mode: 'chatgpt', tokens: { access_token: token, refresh_token: 'held-by-the-gateway' } } } },
   }),
 }
