@@ -80,7 +80,7 @@ function InviteButton() {
   return <Popover open={opened} onOpenChange={(on) => open(on ? 'invite' : undefined)}>
     <PopoverTrigger render={<Button type="button" variant="primary" className={cn(PILL, 'gap-1')} />}><I icon={PlusSignIcon} size={14} />Invite</PopoverTrigger>
     <PopoverContent className="flex w-[300px] flex-col gap-2.5 rounded-xl p-3 text-[13px]">
-      <ToggleGroup aria-label="Role" value={role} onPick={(picked) => setRole(picked === 'admin' ? 'admin' : 'member')} className="grid grid-cols-2">
+      <ToggleGroup variant="segmented" aria-label="Role" value={role} onPick={(picked) => setRole(picked === 'admin' ? 'admin' : 'member')} className="grid grid-cols-2">
         <ToggleGroupItem value="member" className="justify-center">Member</ToggleGroupItem>
         <ToggleGroupItem value="admin" className="justify-center">Admin</ToggleGroupItem>
       </ToggleGroup>
