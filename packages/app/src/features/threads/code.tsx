@@ -7,7 +7,7 @@ type Lit = { code: string; lines: ThemedToken[][] }
 
 let shiki: Promise<HighlighterCore> | undefined
 
-const highlighter = () => shiki ??= Promise.all([import('shiki/core'), import('shiki/engine/javascript'), import('shiki/themes/github-dark.mjs')])
+const highlighter = () => shiki ??= Promise.all([import('shiki/core'), import('shiki/engine/javascript'), import('shiki/themes/github-light.mjs')])
   .then(([core, engine, theme]) => core.createHighlighterCore({ themes: [theme.default], langs: [], engine: engine.createJavaScriptRegexEngine() }))
 
 async function tokens({ code, lang }: { code: string; lang: string }): Promise<ThemedToken[][] | undefined> {
@@ -15,7 +15,7 @@ async function tokens({ code, lang }: { code: string; lang: string }): Promise<T
   const grammar = bundledLanguages[lang as keyof typeof bundledLanguages]
   if (!grammar) return undefined
   await found.loadLanguage(grammar)
-  return found.codeToTokensBase(code, { lang, theme: 'github-dark' })
+  return found.codeToTokensBase(code, { lang, theme: 'github-light' })
 }
 
 function fenceOf(node: ExtraProps['node']) {
@@ -39,8 +39,8 @@ export function CodeBlock({ node }: ExtraProps) {
   const ready = lit && code.startsWith(lit.code) ? lit : undefined
   return <div className="code-block">
     <div className="code-head">
-      <span>{lang || 'code'}</span>
-      <CopyButton text={code} label="Copy" variant="bare" size="xs" className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 font-sans text-[12px] text-night-muted hover:bg-white/10 hover:text-white" />
+      <span>{lang}</span>
+      <CopyButton text={code} label="Copy" variant="ghost" className="text-mute not-disabled:hover:text-ink" />
     </div>
     <pre><code>{ready
       ? <>{ready.lines.map((line, index) => <Fragment key={index}>{index > 0 && '\n'}{line.map((token, at) => <span key={at} style={{ color: token.color }}>{token.content}</span>)}</Fragment>)}{code.slice(ready.code.length)}</>
