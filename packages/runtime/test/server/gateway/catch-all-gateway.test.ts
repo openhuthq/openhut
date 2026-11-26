@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import type { AddressInfo } from 'node:net'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { changeRequestService } from '../../../src/server/agents/change-request-service.ts'
+import { asks } from '../../../src/core/asks.ts'
 import { connectionService } from '../../../src/server/connections/connection-service.ts'
 import { gatewayServer } from '../../../src/server/gateway/gateway-server.ts'
 import { permissions } from '../../../src/server/permissions/permissions.ts'
@@ -47,17 +47,17 @@ test('each call through a catch-all tool follows the permission of the action it
 
   await permissions.set({ actor: owner, agentId: 'ag_doagent', connectionId: 'cn_dofake0001', tools: ['*delete'], state: 'ask' })
   const asked = await invoke('databases/db-cluster-delete')
-  assert.match(asked.text, /^Waiting for your owner's OK \(chg_[a-z0-9]+\): DigitalOcean: Delete a database\./)
+  assert.match(asked.text, /^Asked for approval \(ask_[a-z0-9]+\): DigitalOcean: Delete a database\./)
 
   const unknown = await invoke('apps/app-mystery')
   assert.match(unknown.text, /: DigitalOcean: App mystery\./)
   assert.deepEqual(fake.invoked, ['databases/db-cluster-list'])
 
   const unnamed = await client.callTool({ name: 'call_tool', arguments: { reason: 'Sneaky', name: 'mcp_mcp_invoke_tool', arguments: { name: '*read' }, origin: { platform: 'api_server', chat_id: 'openhut-dosession' } } }) as { content: { text: string }[] }
-  assert.match(unnamed.content[0].text, /^Waiting for your owner's OK/)
+  assert.match(unnamed.content[0].text, /^Asked for approval/)
 
-  const id = /chg_[a-z0-9]+/.exec(asked.text)?.[0] ?? ''
-  await changeRequestService.approve({ actor: owner, id, always: true })
+  const id = /ask_[a-z0-9]+/.exec(asked.text)?.[0] ?? ''
+  await asks.approve({ actor: owner, id, answer: { always: true } })
   assert.deepEqual(fake.invoked, ['databases/db-cluster-list', 'databases/db-cluster-delete'])
   assert.equal(fake.lookups.filter((each) => each.endsWith('databases/db-cluster-delete')).length, 2)
 

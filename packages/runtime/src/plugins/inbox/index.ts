@@ -1,8 +1,7 @@
 import * as z from 'zod'
-import { definePlugin, defineTool } from '../../core/plugin.ts'
+import { defineAsk, definePlugin, defineTool } from '../../core/plugin.ts'
 import { routineService } from '../../server/inbox/routines.ts'
-import { inboxService } from '../../server/inbox/inbox-service.ts'
-import { changeTool } from '../asks/change.ts'
+import { inboxService, urlOf } from '../../server/inbox/inbox-service.ts'
 import { deliveryTargetController, inboxReceiver, routineController, webhookController } from '../../server/inbox/inbox-controller.ts'
 import { createTables } from './tables.ts'
 
@@ -29,7 +28,17 @@ export const inbox = definePlugin({
       input: { id: z.string().max(40), reason: z.string().max(200).describe('Short, past tense, for the log: "Paid on Nov 26".') },
       run: ({ id, reason }, { agent }) => routineService.cancel({ agentId: agent.id, id, reason }),
     }),
-    add_webhook: changeTool({ action: 'add_webhook', description: 'Ask for a webhook: an address another service (like DigitalOcean alerts) calls when something happens. Each call comes to you as a message in this chat, with the raw payload. Once approved you get the address; your owner keeps the secret.', input: { name: z.string().min(1).max(60).describe('What calls it, in a few words: "DigitalOcean Postgres alerts".') } }),
+  },
+  asks: {
+    add_webhook: defineAsk({
+      input: z.object({ name: z.string().trim().min(1).max(60).describe('What calls it, in a few words: "DigitalOcean Postgres alerts".') }),
+      tool: 'Ask for a webhook: an address another service (like DigitalOcean alerts) calls when something happens. Each call comes to you as a message in this chat, with the raw payload. Once approved you get the address; your owner keeps the secret.',
+      title: ({ input }) => `Add a webhook named ${input.name}`,
+      run: async ({ actor, ask: { agentId, input, origin } }) => {
+        const { id } = await inboxService.createSource({ actor, agentId, name: input.name, origin })
+        return `Its address is ${urlOf(id)}. Calls to it come to this chat. Your owner has the secret and puts both into the sender (DigitalOcean: a webhook notification channel signed with that secret).`
+      },
+    }),
   },
   wakes: {
     due: ({ agentId }) => inboxService.due({ agentId }),

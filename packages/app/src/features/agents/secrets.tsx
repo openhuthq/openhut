@@ -48,10 +48,10 @@ export function SecretCard({ agent, change, busy, error, send }: CardProps) {
   const hosts = Array.isArray(change.input.hosts) ? change.input.hosts.map(String) : []
   const form = `secret-${change.id}`
   const save = (value: string) => {
-    send('approve', { token: value })
+    send('approve', { answer: { value } })
     void client.invalidateQueries({ queryKey: secretsKey(agent.id) })
   }
-  return <RequestCard agent={agent} change={change} error={error} decided={change.status === 'approved' ? { label: 'Key saved', tone: 'success' } : undefined}
+  return <RequestCard agent={agent} change={change} error={error} decided={change.status === 'done' ? { label: 'Key saved', tone: 'success' } : undefined}
     icon={<I icon={Key01Icon} size={22} className="text-hue-amber" />} action={{ icon: SquareLock01Icon, hue: 'text-hue-green' }}
     title={<>{agent.name} needs a key: <b>{name}</b></>}
     actions={<>
@@ -59,7 +59,7 @@ export function SecretCard({ agent, change, busy, error, send }: CardProps) {
       <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => send('deny', {})}>Not now</Button>
     </>}>
     <span className="text-[13px] text-body">{agent.name} never sees it. It's only sent to {hosts.join(', ')}.</span>
-    {change.status === 'pending' && agent.canEdit && <form id={form} onSubmit={(event) => save(formValues(event)('value'))}>
+    {change.status === 'open' && agent.canEdit && <form id={form} onSubmit={(event) => save(formValues(event)('value'))}>
       <Input type="password" name="value" aria-label={`Paste the ${name} key`} placeholder={`Paste the ${name} key`} autoComplete="off" spellCheck={false} required maxLength={4000} />
     </form>}
     <Details>

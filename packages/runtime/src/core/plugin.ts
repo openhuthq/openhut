@@ -6,6 +6,7 @@ import type { GatewayAgent } from '../server/agents/agent-service.ts'
 import type { Slots } from '../server/models/model-slots.ts'
 import type { RenderedChannel } from '../plugins/channels/index.ts'
 import type { Origin } from '../server/inbox/routines.ts'
+import type { Caller } from '../server/team/identity.ts'
 
 export type HermesCtx = {
   agent: { id: string; name: string; instructions: string; slots: Slots; net: number; code_execution: boolean; web_browser: boolean }
@@ -35,8 +36,20 @@ export type Tool<S extends z.ZodRawShape = z.ZodRawShape> = {
 
 export type Wake = { id: string; text: string; origin: Origin }
 
+export type AskOf<I> = { id: string; agentId: string; input: I; why: string; origin: Origin }
+
+export type AskKind<I extends z.ZodObject = z.ZodObject, A extends z.ZodObject | undefined = undefined> = {
+  input: I
+  tool?: string
+  answer?: A
+  title(x: { agentId: string; input: z.infer<I> }): string | Promise<string>
+  run(x: { actor: Caller; ask: AskOf<z.infer<I>>; answer: A extends z.ZodObject ? z.infer<A> : undefined }): Promise<string | void>
+  declined?(x: { actor: Caller; ask: AskOf<z.infer<I>> }): Promise<void>
+}
+
 export type Plugin = {
   name: string
+  asks?: Record<string, AskKind<z.ZodObject, z.ZodObject | undefined>>
   hermes?: (ctx: HermesCtx) => HermesPart
   tools?: Record<string, Tool>
   hooks?: Record<string, (x: { agent: GatewayAgent; args: Record<string, unknown>; origin: unknown }) => Promise<unknown>>
@@ -54,6 +67,8 @@ export type Plugin = {
 }
 
 export const definePlugin = <const P extends Plugin>(plugin: P): P => plugin
+
+export const defineAsk = <I extends z.ZodObject, A extends z.ZodObject | undefined = undefined>(kind: AskKind<I, A>): AskKind<I, A> => kind
 
 export const defineTool = <S extends z.ZodRawShape>(tool: Tool<S>): Tool<S> => tool
 

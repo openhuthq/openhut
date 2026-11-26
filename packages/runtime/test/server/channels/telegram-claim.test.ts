@@ -88,7 +88,7 @@ test('an invite link lets one more person in, once', async () => {
   await assert.rejects(channelService.telegramJoin({ agentId: 'ag_other00', code: 'x'.repeat(22), person: alex }), /expired/)
 })
 
-test('a Telegram /start <invite> reaching the agent goes to the channels plugin through pre_gateway_dispatch, and the agent never sees it', async () => {
+test('a Telegram /start <invite> reaching the agent goes to the channels plugin through pre_gateway_dispatch, and the agent never sees it or anything else a stranger sends', async () => {
   const server = gatewayServer.create().listen(0, '127.0.0.1')
   await new Promise((resolve) => server.once('listening', resolve))
   const incoming = async (body: unknown) => (await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/hooks/pre_gateway_dispatch`, { method: 'POST', headers: { authorization: `Agent ${agentToken({ id: 'ag_tgclaim1', epoch: 0 })}`, 'content-type': 'application/json' }, body: JSON.stringify({ args: { event: body, gateway: null }, origin: {} }) })).json()
@@ -96,11 +96,14 @@ test('a Telegram /start <invite> reaching the agent goes to the channels plugin 
   const code = /\?start=([\w-]{22})$/.exec(invite.url)?.[1] ?? ''
   const from = { platform: 'telegram', user_id: '555000111', user_name: 'Robin', chat_id: '555000111' }
   const skip = { result: { action: 'skip', reason: 'openhut invite' } }
-  assert.deepEqual(await incoming({ text: 'hello there', source: from }), { result: null })
+  assert.deepEqual(await incoming({ text: 'hello there', source: from }), { result: { action: 'skip', reason: 'openhut stranger' } })
+  assert.deepEqual(await incoming({ text: '/start', source: from }), { result: { action: 'skip', reason: 'openhut stranger' } })
+  assert.deepEqual(await incoming({ text: 'hello there', source: { ...from, user_id: '123456789', chat_id: '123456789' } }), { result: null }, 'the owner gets through')
   assert.deepEqual(await incoming({ text: `/start ${code}`, source: { ...from, platform: 'slack' } }), { result: null })
   assert.deepEqual(await incoming({ text: `/start@juniper_test_bot ${code}`, source: from, raw_message: null }), skip)
   assert.ok((await channelService.get({ actor, id: channelId })).allowed.includes('555000111'))
   assert.equal(sent.at(-1)?.text, 'Hi Robin, you\'re in. Ask me anything.')
+  assert.deepEqual(await incoming({ text: 'hello there', source: from }), { result: null }, 'once in, they get through')
   assert.deepEqual(await incoming({ text: `/start ${code}`, source: from }), skip, 'a used invite is still kept from the agent')
   assert.equal(sent.at(-1)?.text, 'That invite link expired or was already used. Ask for a new one.')
   server.close()

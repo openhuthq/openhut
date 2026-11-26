@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { wakes } from '../../../src/core/wakes.ts'
-import { changeRequestService } from '../../../src/server/agents/change-request-service.ts'
+import { asks } from '../../../src/core/asks.ts'
 import { inboxService } from '../../../src/server/inbox/inbox-service.ts'
 import { routineService } from '../../../src/server/inbox/routines.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
@@ -47,22 +47,22 @@ test('an app routine run is picked, run once in the app chat however often it is
 })
 
 test('a decision asked from WhatsApp is left to the Hermes plugin; one asked in the app is delivered, and a failed turn is tried again', async (t) => {
-  const fromWhatsApp = /chg_[a-z0-9]+/.exec(await changeRequestService.ask({ agentId: 'ag_appwagnt', action: 'update_self', input: { name: 'Op' }, why: 'x', origin: whatsapp }))?.[0] ?? ''
-  await changeRequestService.deny({ actor: owner, id: fromWhatsApp })
+  const fromWhatsApp = /ask_[a-z0-9]+/.exec(await asks.create({ agentId: 'ag_appwagnt', kind: 'update_self', input: { name: 'Op' }, why: 'x', origin: whatsapp }))?.[0] ?? ''
+  await asks.decline({ actor: owner, id: fromWhatsApp })
   deliver('ag_appwagnt')
   await settled()
   assert.equal(told.length, 1)
   t.mock.timers.enable({ apis: ['setTimeout'] })
   fail = 1
-  const fromApp = /chg_[a-z0-9]+/.exec(await changeRequestService.ask({ agentId: 'ag_appwagnt', action: 'update_self', input: { name: 'Ops' }, why: 'x', origin: app }))?.[0] ?? ''
-  await changeRequestService.deny({ actor: owner, id: fromApp })
+  const fromApp = /ask_[a-z0-9]+/.exec(await asks.create({ agentId: 'ag_appwagnt', kind: 'update_self', input: { name: 'Ops' }, why: 'x', origin: app }))?.[0] ?? ''
+  await asks.decline({ actor: owner, id: fromApp })
   for (let i = 0; i < 50 && told.length < 3; i++) {
     await new Promise((resolve) => setImmediate(resolve))
     t.mock.timers.tick(30_000)
   }
   await settled()
   assert.deepEqual(told.slice(1).map((each) => each.text.slice(0, `[OpenHut asks:${fromApp}] Not approved`.length)), [`[OpenHut asks:${fromApp}] Not approved`, `[OpenHut asks:${fromApp}] Not approved`])
-  const row = await db.selectFrom('change_request').select('told').where('id', '=', fromApp).executeTakeFirstOrThrow()
+  const row = await db.selectFrom('ask').select('told').where('id', '=', fromApp).executeTakeFirstOrThrow()
   assert.equal(row.told, true)
   assert.ok((await wakes.due({ agentId: 'ag_appwagnt' })).every((wake) => wake.origin.platform !== 'api_server'))
 })
