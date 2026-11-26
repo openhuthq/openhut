@@ -1,4 +1,5 @@
-import { LIVE_DELTA_MS, LIVE_TYPING_MS, type AgentLive, type LiveDown, type LivePerson, type ThreadLive } from '@openhut/common/live.ts'
+import type { Subagent } from '@openhut/common/agents/subagent.ts'
+import { LIVE_DELTA_MS, LIVE_TYPING_MS, type AgentLive, type LiveDown, type LivePerson, type LiveThreadBoard, type ThreadLive } from '@openhut/common/live.ts'
 
 export type Viewer = { person: Omit<LivePerson, 'state'>; send: (message: LiveDown) => void }
 export type LiveTurnHandle = { delta: (input: { part: string; text: string }) => void; step: (label: string) => void; end: () => void }
@@ -9,9 +10,13 @@ const rooms = new Map<string, Map<object, Viewer>>()
 const typists = new Map<string, Map<string, NodeJS.Timeout>>()
 const agents = new Map<string, AgentLive>()
 const turns = new Map<string, Turn>()
+const owners = new Map<string, string>()
+const subagents = new Map<string, Subagent[]>()
+const watchers: (() => void)[] = []
 
 export const liveThreads = {
-  join({ thread, key, viewer }: { thread: string; key: object; viewer: Viewer }): void {
+  join({ thread, agentId, key, viewer }: { thread: string; agentId: string; key: object; viewer: Viewer }): void {
+    owners.set(thread, agentId)
     const room = rooms.get(thread) ?? new Map<object, Viewer>()
     rooms.set(thread, room)
     room.set(key, viewer)
@@ -26,6 +31,7 @@ export const liveThreads = {
     if (![...room.values()].some((each) => each.person.id === viewer.person.id)) stopTyping({ thread, person: viewer.person.id })
     if (!room.size) rooms.delete(thread)
     presence(thread)
+    forget(thread)
   },
 
   drop(key: object): void {
@@ -43,16 +49,21 @@ export const liveThreads = {
       typing.set(person, setTimeout(() => {
         stopTyping({ thread, person })
         presence(thread)
+        changed()
       }, LIVE_TYPING_MS).unref())
       typists.set(thread, typing)
     }
     if (!typing.size) typists.delete(thread)
-    if (was !== on) presence(thread)
+    if (was !== on) {
+      presence(thread)
+      changed()
+    }
   },
 
-  turn({ thread, turnId, answering }: { thread: string; turnId: string; answering: string[] }): LiveTurnHandle {
+  turn({ thread, agentId, turnId, answering }: { thread: string; agentId: string; turnId: string; answering: string[] }): LiveTurnHandle {
     const turn: Turn = { turnId, seq: 0, text: '', buffer: '' }
     turns.set(thread, turn)
+    owners.set(thread, agentId)
     const flush = () => {
       clearTimeout(turn.timer)
       turn.timer = undefined
@@ -67,6 +78,7 @@ export const liveThreads = {
       if (now?.state === agent.state && now.step === agent.step) return
       agents.set(thread, agent)
       presence(thread)
+      changed()
     }
     const base = { turnId, ...answering.length && { answering } }
     broadcast({ thread, message: { type: 'turn', thread, turnId, state: 'started' } })
@@ -92,14 +104,58 @@ export const liveThreads = {
         agents.delete(thread)
         broadcast({ thread, message: { type: 'turn', thread, turnId, state: 'done' } })
         presence(thread)
+        forget(thread)
+        changed()
       },
     }
+  },
+
+  board(): Map<string, { threads: LiveThreadBoard[]; subagents: Subagent[] }> {
+    const board = new Map<string, { threads: LiveThreadBoard[]; subagents: Subagent[] }>()
+    const of = (agentId: string) => {
+      const found = board.get(agentId) ?? { threads: [], subagents: [] }
+      board.set(agentId, found)
+      return found
+    }
+    for (const [thread, agentId] of owners) {
+      const typing = typingPeople(thread)
+      const agent = agents.get(thread) ?? IDLE
+      if (agent.state !== 'idle' || typing.length) of(agentId).threads.push({ id: thread, agent, typing })
+    }
+    for (const [agentId, list] of subagents) of(agentId).subagents = list
+    return board
+  },
+
+  subagents({ agentId, list }: { agentId: string; list: Subagent[] }): void {
+    if (list.length) subagents.set(agentId, list)
+    else subagents.delete(agentId)
+    changed()
+  },
+
+  watch(listener: () => void): void {
+    watchers.push(listener)
   },
 
   catchUp(thread: string): ThreadLive {
     const turn = turns.get(thread)
     return { object: 'thread_live', thread, turnId: turn?.turnId ?? null, seq: turn?.seq ?? 0, text: turn?.text ?? '', agent: agents.get(thread) ?? IDLE }
   },
+}
+
+function typingPeople(thread: string): Omit<LivePerson, 'state'>[] {
+  const typing = typists.get(thread)
+  if (!typing) return []
+  const people = new Map<string, Omit<LivePerson, 'state'>>()
+  for (const { person } of rooms.get(thread)?.values() ?? []) if (typing.has(person.id)) people.set(person.id, person)
+  return [...people.values()]
+}
+
+function forget(thread: string): void {
+  if (!rooms.has(thread) && !turns.has(thread)) owners.delete(thread)
+}
+
+function changed(): void {
+  for (const listener of watchers) listener()
 }
 
 function stopTyping({ thread, person }: { thread: string; person: string }): void {

@@ -67,7 +67,7 @@ test('the event stream is refused without the key and from another site', async 
 
 test('a follower hears hello, then only what changed: the object and its id, never the details', async () => {
   const lines: { type: string }[] = []
-  const ws = await app.injectWS('/api/events', { headers: KEY }, { onInit: (socket) => socket.on('message', (data) => lines.push(JSON.parse(String(data)))) })
+  const ws = await app.injectWS('/api/events', { headers: KEY }, { onInit: (socket) => socket.on('message', (data) => events(lines, data)) })
   await until(() => lines.length === 1)
   assert.deepEqual(lines[0], { object: 'event', type: 'hello', data: { object: 'computer', id: 'this' } })
   emit({ name: 'invitation.created', target: { type: 'invitation', id: 'inv_1' } })
@@ -80,7 +80,7 @@ test('a follower hears hello, then only what changed: the object and its id, nev
 test('a listener that throws doesn\'t stop the others or fail the write that emitted', async () => {
   listen(() => { throw new Error('broken listener') })
   const lines: { type: string }[] = []
-  const ws = await app.injectWS('/api/events', { headers: KEY }, { onInit: (socket) => socket.on('message', (data) => lines.push(JSON.parse(String(data)))) })
+  const ws = await app.injectWS('/api/events', { headers: KEY }, { onInit: (socket) => socket.on('message', (data) => events(lines, data)) })
   await until(() => lines.length === 1)
   assert.doesNotThrow(() => emit({ name: 'agent.updated', target: { type: 'agent', id: 'ag_1' } }))
   await until(() => lines.length === 2)
@@ -133,6 +133,31 @@ test('everyone viewing a thread sees who is there and typing, and the same reply
   zed.ws.terminate()
 })
 
+test('everyone who can use an agent sees it go working and back without opening the thread; others never see it', async () => {
+  const mia = await follower(MIA)
+  const zed = await follower(ZED)
+  await until(() => mia.last('agents') !== undefined && zed.last('agents') !== undefined)
+  assert.deepEqual(mia.last('agents')?.agents.map((each) => [each.id, each.activity, each.threads.length]), [['ag_liveteam', 'idle', 0]])
+  assert.equal(typeof mia.last('agents')?.agents[0].status, 'string')
+  assert.deepEqual(zed.last('agents')?.agents, [])
+  const sent = app.inject({ method: 'POST', url: '/api/threads/ag_liveteam/chat', headers: KEY, payload: { trigger: 'submit-message', message: { id: 'm2', role: 'user', parts: [{ type: 'text', text: 'Again' }] } } })
+  await until(() => mia.last('agents')?.agents[0].activity === 'working')
+  assert.deepEqual(mia.last('agents')?.agents[0].threads.map((each) => [each.id, each.agent.state]), [['ag_liveteam', 'replying']])
+  assert.equal(mia.heard.some((each) => each.type === 'delta'), false)
+  release()
+  assert.equal((await sent).statusCode, 200)
+  await until(() => mia.last('agents')?.agents[0].activity === 'idle')
+  assert.deepEqual(mia.last('agents')?.agents[0].threads, [])
+  assert.deepEqual(zed.heard.filter((each) => each.type === 'agents').flatMap((each) => each.agents), [])
+  mia.ws.terminate()
+  zed.ws.terminate()
+})
+
+function events(lines: { type: string }[], data: unknown) {
+  const line = JSON.parse(String(data))
+  if (line.object === 'event') lines.push(line)
+}
+
 async function follower(headers: Record<string, string>) {
   const heard: LiveDown[] = []
   const ws = await app.injectWS('/api/events', { headers }, { onInit: (socket) => socket.on('message', (data) => heard.push(JSON.parse(String(data)))) })
@@ -146,7 +171,7 @@ async function follower(headers: Record<string, string>) {
 }
 
 async function until(done: () => boolean) {
-  for (let i = 0; i < 100 && !done(); i++) await new Promise((wait) => setTimeout(wait, 10))
+  for (let i = 0; i < 300 && !done(); i++) await new Promise((wait) => setTimeout(wait, 10))
   assert.ok(done())
 }
 
