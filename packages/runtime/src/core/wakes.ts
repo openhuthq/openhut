@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { agentService } from '../server/agents/agent-service.ts'
 import { HttpError } from '../server/platform/http-error.ts'
 import type { Wake } from './plugin.ts'
 import { plugins } from './plugins.ts'
@@ -8,6 +9,7 @@ const nudged: ((agentId: string) => void)[] = []
 
 export const wakes = {
   async due({ agentId }: { agentId: string }): Promise<Wake[]> {
+    if (agentService.restartPending(agentId)) return []
     const found = await Promise.all(plugins().map(async (plugin) => (await plugin.wakes?.due({ agentId }) ?? []).map((wake) => ({
       id: `${plugin.name}:${wake.id}`,
       text: `[OpenHut ${plugin.name}:${wake.id}] ${wake.text}`,

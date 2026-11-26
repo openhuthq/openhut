@@ -49,6 +49,7 @@ async function seed(): Promise<void> {
 export function fakeAgentd({ path = process.env.AGENTD_SOCK }: { path?: string } = {}) {
   const files = new Map<string, string>()
   const applied = new Map<string, boolean>()
+  const applies: { id: string; at: number }[] = []
   const failing = new Set<string>()
   const features = { whatsapp: false, browser: false }
   const image = { ready: true }
@@ -63,6 +64,7 @@ export function fakeAgentd({ path = process.env.AGENTD_SOCK }: { path?: string }
       const key = `${req.id}/${req.path}`
       if (req.cmd === 'write') files.set(key, Buffer.from(lines[1] ?? '', 'base64').toString('utf8'))
       if (req.cmd === 'apply' && !failing.has(req.id)) applied.set(req.id, req.running)
+      if (req.cmd === 'apply') applies.push({ id: req.id, at: Date.now() })
       if (req.cmd === 'rm') applied.delete(req.id)
       if (req.cmd === 'stop' && applied.has(req.id)) applied.set(req.id, false)
       const states = Object.fromEntries([...applied].map(([id, running]) => [id, running ? 'running' : 'exited']))
@@ -75,5 +77,5 @@ export function fakeAgentd({ path = process.env.AGENTD_SOCK }: { path?: string }
     })
   }).listen(path)
   server.unref()
-  return { files, applied, failing, features, image }
+  return { files, applied, applies, failing, features, image }
 }

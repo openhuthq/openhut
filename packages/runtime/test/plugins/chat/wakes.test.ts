@@ -61,7 +61,8 @@ test('a decision asked from WhatsApp is left to the Hermes plugin; one asked in 
     t.mock.timers.tick(30_000)
   }
   await settled()
-  assert.deepEqual(told.slice(1).map((each) => each.text.slice(0, `[OpenHut asks:${fromApp}] Not approved`.length)), [`[OpenHut asks:${fromApp}] Not approved`, `[OpenHut asks:${fromApp}] Not approved`])
+  assert.equal(told.length, 3)
+  for (const each of told.slice(1)) assert.match(each.text, /^\[OpenHut asks:wk_[a-z0-9]+\] Your owner answered your ask:\n- Not approved: Rename to Ops\./)
   const row = await db.selectFrom('ask').select('told').where('id', '=', fromApp).executeTakeFirstOrThrow()
   assert.equal(row.told, true)
   assert.ok((await wakes.due({ agentId: 'ag_appwagnt' })).every((wake) => wake.origin.platform !== 'api_server'))

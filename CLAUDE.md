@@ -32,8 +32,10 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   and a part under the app chat's reply (`afterTurn`, like asks' `data-asks`). The subagents plugin keeps each agent's running sub-agents in memory from the `subagent_start`/`subagent_stop` hooks and serves them at `/api/agents/:id/subagents` for the sidebar.
   Anything an agent needs its owner's OK for is an ask: a plugin declares its kinds as `asks: { <kind>: defineAsk({ input, title, run,
   tool?, answer?, declined? }) }`, and `core/asks.ts` owns the rest (the `ask` table, `/api/asks`, an MCP tool per kind with `tool`,
-  the notes the agent gets, the sweep that expires them). Its whole API is `asks.create` (returns the text for the agent) and
+  the notes the agent gets, the sweep that expires them, and one wake per chat once nothing there is open or 30 s after its last answer). Its whole API is `asks.create` (returns the text for the agent) and
   `asks.approve` (owner-checked and idempotent); `run` may run twice after a crash, so keep it repeatable.
+  Anything that restarts an agent for new access (grants, agent edits, an ask's `run`) goes through `agentService.quietly`: the restart waits
+  until the agent's gateway has been quiet for 10 s, and `wakes.due` holds every wake for that agent until it has been applied.
   `connectorCall` may rewrite an app call's arguments just before the connector runs it (`connection-service` `run()`): `plugins/github` signs PR, issue and first-comment bodies with the agent's face there.
   An agent and its control, memory, skills, routines, channels and messages are rows in the local `record` table
   (`platform/records.ts`, secrets sealed with the install secret); `agents/run-set.ts` applies them to the agents this computer
