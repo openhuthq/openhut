@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { AddressInfo } from 'node:net'
 import { wakes } from '../../src/core/wakes.ts'
-import { changeRequestService } from '../../src/server/agents/change-request-service.ts'
+import { asks } from '../../src/core/asks.ts'
 import { gatewayServer } from '../../src/server/gateway/gateway-server.ts'
 import { inboxService } from '../../src/server/inbox/inbox-service.ts'
 import { routineService } from '../../src/server/inbox/routines.ts'
@@ -29,19 +29,19 @@ const url = (path: string) => `http://127.0.0.1:${(server.address() as AddressIn
 test.after(() => server.close())
 
 test('every plugin\'s due wakes come back as one list, each named and prefixed [OpenHut <plugin>:<id>]', async () => {
-  const fromApp = /chg_[a-z0-9]+/.exec(await changeRequestService.ask({ agentId: 'ag_wakeagnt', action: 'update_self', input: { name: 'Ops' }, why: 'x', origin: app }))?.[0] ?? ''
-  const fromWhatsApp = /chg_[a-z0-9]+/.exec(await changeRequestService.ask({ agentId: 'ag_wakeagnt', action: 'update_self', input: { name: 'Op' }, why: 'x', origin: whatsapp }))?.[0] ?? ''
+  const fromApp = /ask_[a-z0-9]+/.exec(await asks.create({ agentId: 'ag_wakeagnt', kind: 'update_self', input: { name: 'Ops' }, why: 'x', origin: app }))?.[0] ?? ''
+  const fromWhatsApp = /ask_[a-z0-9]+/.exec(await asks.create({ agentId: 'ag_wakeagnt', kind: 'update_self', input: { name: 'Op' }, why: 'x', origin: whatsapp }))?.[0] ?? ''
   nudged.length = 0
-  await changeRequestService.deny({ actor: owner, id: fromApp })
-  await changeRequestService.deny({ actor: owner, id: fromWhatsApp })
+  await asks.decline({ actor: owner, id: fromApp })
+  await asks.decline({ actor: owner, id: fromWhatsApp })
   assert.deepEqual(nudged, ['ag_wakeagnt'], 'only an app-origin decision nudges the app chat')
   const routine = /rt_[a-z0-9]+/.exec(await routineService.schedule({ agentId: 'ag_wakeagnt', input: { name: 'Chase Acme', plan: 'Nudge.', cron: '0 9 * * *', origin: whatsapp } }))?.[0] ?? ''
   await db.updateTable('inbox_source').set({ next_run_at: new Date(Date.now() - 60_000) }).where('id', '=', routine).execute()
   await inboxService.tick()
   const due = await wakes.due({ agentId: 'ag_wakeagnt' })
-  assert.deepEqual(due.map((wake) => wake.id.replace(/_[a-z0-9]+$/, '_*')).sort(), ['asks:chg_*', 'asks:chg_*', 'inbox:ru_*'])
+  assert.deepEqual(due.map((wake) => wake.id.replace(/_[a-z0-9]+$/, '_*')).sort(), ['asks:ask_*', 'asks:ask_*', 'inbox:ru_*'])
   for (const wake of due) assert.ok(wake.text.startsWith(`[OpenHut ${wake.id}] `), wake.text)
-  assert.ok(!due.some((wake) => /\[OpenHut chg_|\[Routine /.test(wake.text)), 'no second, older prefix')
+  assert.ok(!due.some((wake) => /\[OpenHut ask_|\[Routine /.test(wake.text)), 'no second, older prefix')
   assert.deepEqual(due.find((wake) => wake.id === `asks:${fromApp}`)?.origin, app)
 
   const listed = await (await fetch(url('/wakes'), { headers })).json() as { data: { id: string }[] }

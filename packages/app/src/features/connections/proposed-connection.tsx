@@ -29,10 +29,10 @@ export function ProposedConnectionCard({ agent, change, busy, error, send }: Car
   if (!proposal) return null
   const brand = brandOf({ app: 'mcp', url: proposal.url })
   const glyph: BrandName = isBrand(brand) ? brand : 'mcp'
-  const editable = change.status === 'pending' && agent.canEdit
+  const editable = change.status === 'open' && agent.canEdit
   const move = ({ group, permission }: { group: ToolGroup; permission: Permission }) => setGroups(groups.map((each) => each.group === group ? { ...each, permission } : each))
   const shown = all ? groups : groups.slice(0, SHOWN)
-  const decided = { approved: { label: `${proposal.name} is connected`, tone: 'success' as const }, denied: { label: 'Not connected', tone: 'secondary' as const }, pending: undefined, expired: EXPIRED }[change.status]
+  const decided = { done: { label: `${proposal.name} is connected`, tone: 'success' as const }, declined: { label: 'Not connected', tone: 'secondary' as const }, open: undefined, expired: EXPIRED }[change.status]
   return <RequestCard agent={agent} change={change} error={connecting ? undefined : error} decided={decided} icon={<Glyph name={glyph} size={22} />} action={{ icon: PlugSocketIcon, hue: 'text-hue-blue' }}
     title={<>{agent.name} wants to connect {proposal.name}{proposal.line && `, ${proposal.line}`}.</>}
     actions={<>
@@ -52,7 +52,7 @@ export function ProposedConnectionCard({ agent, change, busy, error, send }: Car
       <DetailRow label="Server">{proposal.url}</DetailRow>
       {proposal.token.scopes?.length ? <DetailRow label="Token needs">{proposal.token.scopes.join(', ')}</DetailRow> : null}
     </Details>
-    {connecting && <ConnectDialog agent={agent} proposal={proposal} glyph={glyph} busy={busy} error={error} onClose={() => setConnecting(false)} onConnect={(token) => send('approve', { input: { ...proposal, groups }, token })} />}
+    {connecting && <ConnectDialog agent={agent} proposal={proposal} glyph={glyph} busy={busy} error={error} onClose={() => setConnecting(false)} onConnect={(token) => send('approve', { answer: { groups, key: token } })} />}
   </RequestCard>
 }
 

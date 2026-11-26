@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
 import { CheckmarkCircle02Icon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
-import type { ChangeRequest } from '@openhut/common/agents/change-request.ts'
+import type { Ask } from '@openhut/common/asks/ask.ts'
 import { ErrorNote } from '@/components/error-note'
 import { I } from '@/components/kit'
 import { Face } from '@/features/agents/face'
@@ -11,19 +11,19 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 export type Decided = { label: string; tone: 'success' | 'secondary' }
 export type Action = { icon: IconSvgElement; hue: string }
 
-const DEFAULT_DECIDED: Record<ChangeRequest['status'], Decided | undefined> & { expired: Decided } = {
-  pending: undefined,
-  approved: { label: 'Approved', tone: 'success' },
-  denied: { label: 'Not approved', tone: 'secondary' },
+const DEFAULT_DECIDED: Record<Ask['status'], Decided | undefined> & { expired: Decided } = {
+  open: undefined,
+  done: { label: 'Approved', tone: 'success' },
+  declined: { label: 'Not approved', tone: 'secondary' },
   expired: { label: 'Expired. No one answered in time.', tone: 'secondary' },
 }
 
 export const EXPIRED = DEFAULT_DECIDED.expired
 
 export function RequestCard({ agent, change, icon, action, title, decided = DEFAULT_DECIDED[change.status], error, actions, children }: {
-  agent: Agent; change: ChangeRequest; icon: ReactNode; action?: Action; title: ReactNode; decided?: Decided; error?: string; actions?: ReactNode; children?: ReactNode
+  agent: Agent; change: Ask; icon: ReactNode; action?: Action; title: ReactNode; decided?: Decided; error?: string; actions?: ReactNode; children?: ReactNode
 }) {
-  const pending = change.status === 'pending'
+  const pending = change.status === 'open'
   return <div className="flex max-w-[560px] min-w-0 flex-col gap-3.5 rounded-xl bg-sidebar p-4">
     <div className="flex min-w-0 items-start gap-3">
       <span className="relative grid size-8 shrink-0 place-items-center">{icon}

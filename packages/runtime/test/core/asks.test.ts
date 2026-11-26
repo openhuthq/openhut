@@ -3,16 +3,19 @@ import assert from 'node:assert/strict'
 import type { AddressInfo } from 'node:net'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { appWakes } from '../../plugins/chat/app-wakes.ts'
-import { gatewayServer } from '../../../src/server/gateway/gateway-server.ts'
-import { changeRequestService } from '../../../src/server/agents/change-request-service.ts'
-import { db, migrate } from '../../../src/server/platform/db.ts'
-import { agentToken, seal } from '../../../src/server/platform/secrets.ts'
-import { runSet } from '../../../src/server/agents/run-set.ts'
-import { fakeAgentd, refresh, signIn } from './signed-in.ts'
-import { connectionService } from '../../../src/server/connections/connection-service.ts'
-import { mcp } from '../../../src/server/integrations/mcp/mcp.ts'
-import { permissions } from '../../../src/server/permissions/permissions.ts'
+import { appWakes } from '../plugins/chat/app-wakes.ts'
+import { gatewayServer } from '../../src/server/gateway/gateway-server.ts'
+import { asks, asksPlugin } from '../../src/core/asks.ts'
+import { defineAsk } from '../../src/core/plugin.ts'
+import * as z from 'zod'
+import { sql } from 'kysely'
+import { db, migrate } from '../../src/server/platform/db.ts'
+import { agentToken, seal } from '../../src/server/platform/secrets.ts'
+import { runSet } from '../../src/server/agents/run-set.ts'
+import { fakeAgentd, refresh, signIn } from '../server/agents/signed-in.ts'
+import { connectionService } from '../../src/server/connections/connection-service.ts'
+import { mcp } from '../../src/server/integrations/mcp/mcp.ts'
+import { permissions } from '../../src/server/permissions/permissions.ts'
 
 fakeAgentd()
 await migrate()
@@ -35,7 +38,7 @@ await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/api/v1/m
 const app = { platform: 'api_server', chat_id: 'openhut-chgsession' }
 const whatsapp = { platform: 'whatsapp', chat_id: '15550002222@s.whatsapp.net', chat_type: 'dm' }
 const textOf = (result: Awaited<ReturnType<Client['callTool']>>) => (result.content as { text: string }[])[0].text
-const idIn = (text: string) => /chg_[a-z0-9]+/.exec(text)?.[0] ?? ''
+const idIn = (text: string) => /ask_[a-z0-9]+/.exec(text)?.[0] ?? ''
 
 test('get_self shows the agent its name, instructions and channels', async () => {
   const self = JSON.parse(textOf(await client.callTool({ name: 'get_self', arguments: {} })))
@@ -47,26 +50,26 @@ test('a rename waits for approval, the owner edits it, and the decision goes bac
   const refused = await client.callTool({ name: 'update_self', arguments: { why: 'Clearer name.', name: 'Ops' } })
   assert.equal(refused.isError, true)
   const asked = textOf(await client.callTool({ name: 'update_self', arguments: { why: 'Clearer name.', name: 'Ops', origin: app } }))
-  assert.match(asked, /^Asked for approval \(chg_[a-z0-9]+\): Rename to Ops\. Nothing has changed yet\./)
+  assert.match(asked, /^Asked for approval \(ask_[a-z0-9]+\): Rename to Ops\. Nothing has changed yet\./)
   const id = idIn(asked)
   assert.equal((await db.selectFrom('agent').select('name').where('id', '=', 'ag_chgagent').executeTakeFirstOrThrow()).name, 'Dev')
-  assert.deepEqual(await changeRequestService.inChat({ agentId: 'ag_chgagent', since: new Date(Date.now() - 60_000) }), [id])
+  assert.deepEqual(await asks.inChat({ agentId: 'ag_chgagent', since: new Date(Date.now() - 60_000) }), [id])
 
-  const approved = await changeRequestService.approve({ actor: owner, id, input: { name: 'Ops Bot' } })
-  assert.equal(approved.status, 'approved')
-  assert.equal(approved.summary, 'Rename to Ops Bot')
+  const approved = await asks.approve({ actor: owner, id, answer: { name: 'Ops Bot' } })
+  assert.equal(approved.status, 'done')
+  assert.equal(approved.title, 'Rename to Ops Bot')
   assert.equal((await db.selectFrom('agent').select('name').where('id', '=', 'ag_chgagent').executeTakeFirstOrThrow()).name, 'Ops Bot')
   await settled()
   assert.deepEqual(told.map((each) => each.agentId), ['ag_chgagent'])
   assert.match(told[0].text, new RegExp(`^\\[OpenHut asks:${id}\\] Approved and done: Rename to Ops Bot\\.`))
-  await assert.rejects(changeRequestService.approve({ actor: owner, id }), /already approved/)
+  assert.equal((await asks.approve({ actor: owner, id, answer: { name: 'Other' } })).title, 'Rename to Ops Bot', 'approving an answered ask returns it as it is')
 })
 
 test('a denied request from WhatsApp reaches the agent through the plugin\'s wakes poll, once, and never through the app', async () => {
   const asked = textOf(await client.callTool({ name: 'update_channel', arguments: { why: 'Let the team in.', id: 'ch_chgwhats', open: true, origin: whatsapp } }))
   const id = idIn(asked)
   assert.match(asked, /Change who can message it on WhatsApp/)
-  await changeRequestService.deny({ actor: owner, id, note: 'Not yet' })
+  await asks.decline({ actor: owner, id, note: 'Not yet' })
   const heard = told.length
   deliver('ag_chgagent')
   await settled()
@@ -93,9 +96,9 @@ test('an agent can ask for Discord with its bot token, and the token stays out o
   const token = 'fake-discord-bot-token-aaaa.bbbbbb.fake-discord-bot-token-cccc'
   const asked = await client.callTool({ name: 'add_channel', arguments: { why: 'The team lives on Discord', kind: 'discord', botToken: token, allowed: ['123456789012345678'], origin: app } })
   assert.notEqual(asked.isError, true)
-  const row = await db.selectFrom('change_request').select(['summary', 'input']).where('action', '=', 'add_channel').orderBy('created_at', 'desc').executeTakeFirstOrThrow()
-  assert.equal(row.summary, 'Add Discord')
-  assert.doesNotMatch(row.summary, /fake-discord/)
+  const row = await db.selectFrom('ask').select(['title', 'input']).where('kind', '=', 'add_channel').orderBy('created_at', 'desc').executeTakeFirstOrThrow()
+  assert.equal(row.title, 'Add Discord')
+  assert.doesNotMatch(row.title, /fake-discord/)
   const noChannels = await client.callTool({ name: 'add_channel', arguments: { why: 'x', kind: 'discord', botToken: token, origin: app } })
   assert.notEqual(noChannels.isError, true, 'the owner picks its channels in OpenHut')
 })
@@ -103,15 +106,15 @@ test('an agent can ask for Discord with its bot token, and the token stays out o
 test('a decision the agent never heard about is sent again by the chat plugin\'s next tick', async () => {
   const asked = textOf(await client.callTool({ name: 'update_self', arguments: { why: 'Shorter.', name: 'Op', origin: app } }))
   const id = idIn(asked)
-  await changeRequestService.deny({ actor: owner, id })
+  await asks.decline({ actor: owner, id })
   await settled()
-  await db.updateTable('change_request').set({ told: false }).where('id', '=', id).execute()
+  await db.updateTable('ask').set({ told: false }).where('id', '=', id).execute()
   const before = told.length
   deliver('ag_chgagent')
   await settled()
   assert.equal(told.length, before + 1)
   assert.match(told.at(-1)?.text ?? '', new RegExp(`^\\[OpenHut asks:${id}\\] Not approved`))
-  assert.equal((await db.selectFrom('change_request').select('told').where('id', '=', id).executeTakeFirstOrThrow()).told, true)
+  assert.equal((await db.selectFrom('ask').select('told').where('id', '=', id).executeTakeFirstOrThrow()).told, true)
 })
 
 test('approving again after a crash is safe: a channel already removed counts as done, and the agent can\'t ask to add one it has', async () => {
@@ -121,7 +124,7 @@ test('approving again after a crash is safe: a channel already removed counts as
   const asked = textOf(await client.callTool({ name: 'remove_channel', arguments: { why: 'Not used.', id: 'ch_chgwhats', origin: app } }))
   const id = idIn(asked)
   await db.deleteFrom('channel').where('id', '=', 'ch_chgwhats').execute()
-  assert.equal((await changeRequestService.approve({ actor: owner, id })).status, 'approved')
+  assert.equal((await asks.approve({ actor: owner, id })).status, 'done')
 })
 
 const DIGITALOCEAN = {
@@ -149,10 +152,10 @@ test('a proposed connection the owner approves with a token becomes a granted co
   assert.notEqual(asked.isError, true)
   const id = idIn(textOf(asked))
   assert.match(textOf(asked), /Connect DigitalOcean/)
-  await assert.rejects(changeRequestService.approve({ actor: owner, id }), /Paste the DigitalOcean token/)
+  await assert.rejects(asks.approve({ actor: owner, id }), /Paste the DigitalOcean token/)
   const edited = { ...DIGITALOCEAN, groups: DIGITALOCEAN.groups.map((each) => each.group === 'update' ? { ...each, permission: 'deny' } : each) }
-  const approved = await changeRequestService.approve({ actor: owner, id, input: edited, token: ` ${secret} ` })
-  assert.equal(approved.status, 'approved')
+  const approved = await asks.approve({ actor: owner, id, answer: { groups: edited.groups, key: ` ${secret} ` } })
+  assert.equal(approved.status, 'done')
   assert.deepEqual(probes, [{ url: DIGITALOCEAN.url, headers: { Authorization: `Bearer ${secret}` } }])
   const connection = await db.selectFrom('connection').select(['id', 'kind', 'name', 'config']).where('name', '=', 'DigitalOcean').executeTakeFirstOrThrow()
   assert.equal(connection.kind, 'mcp')
@@ -163,9 +166,9 @@ test('a proposed connection the owner approves with a token becomes a granted co
   const states = await permissions.list({ agentId: 'ag_chgagent', connectionId: connection.id, tools: DO_TOOLS })
   assert.deepEqual(states.map((each) => [each.name, each.permission]), [['db-cluster-get', 'allow'], ['db-cluster-resize', 'deny'], ['db-cluster-delete', 'deny']])
   await settled()
-  const row = await db.selectFrom('change_request').select(['input', 'summary']).where('id', '=', id).executeTakeFirstOrThrow()
+  const row = await db.selectFrom('ask').select(['input', 'title']).where('id', '=', id).executeTakeFirstOrThrow()
   const seen = [asked, await client.callTool({ name: 'get_self', arguments: {} })].map((each) => JSON.stringify(each.content))
-  for (const text of [row.input, row.summary, JSON.stringify(approved), ...told.map((each) => each.text), ...seen]) assert.doesNotMatch(text, new RegExp(secret))
+  for (const text of [row.input, row.title, JSON.stringify(approved), ...told.map((each) => each.text), ...seen]) assert.doesNotMatch(text, new RegExp(secret))
   assert.match(told.at(-1)?.text ?? '', new RegExp(`^\\[OpenHut asks:${id}\\] Approved and done: Connect DigitalOcean\\.`))
   mock.restoreAll()
 })
@@ -181,7 +184,7 @@ test('DigitalOcean\'s one invoke-anything tool asks first instead of landing und
   mock.method(connectionService, 'specs', async () => DO_REMOTE_TOOLS)
   const approveWith = async ({ name, groups }: { name: string; groups: typeof DIGITALOCEAN.groups }) => {
     const id = idIn(textOf(await client.callTool({ name: 'propose_connection', arguments: { ...DIGITALOCEAN, name, origin: app } })))
-    await changeRequestService.approve({ actor: owner, id, input: { ...DIGITALOCEAN, name, groups }, token: 'dop_v1_token' })
+    await asks.approve({ actor: owner, id, answer: { groups, key: 'dop_v1_token' } })
     const connection = await db.selectFrom('connection').select('id').where('name', '=', name).executeTakeFirstOrThrow()
     const states = await permissions.list({ agentId: 'ag_chgagent', connectionId: connection.id, tools: DO_REMOTE_TOOLS })
     return Object.fromEntries(states.map((each) => [each.name, [each.group, each.permission]]))
@@ -197,21 +200,65 @@ test('DigitalOcean\'s one invoke-anything tool asks first instead of landing und
 test('a bad token leaves no connection behind, and choosing to set it up themselves tells the agent to give steps', async () => {
   mock.method(mcp, 'probe', async () => { throw new Error('401 Unauthorized') })
   const id = idIn(textOf(await client.callTool({ name: 'propose_connection', arguments: { ...DIGITALOCEAN, name: 'Fly', url: 'https://mcp.fly.example/mcp', origin: app } })))
-  await assert.rejects(changeRequestService.approve({ actor: owner, id, token: 'wrong-token' }), /didn't answer as an MCP server/)
+  await assert.rejects(asks.approve({ actor: owner, id, answer: { key: 'wrong-token' } }), /didn't answer as an MCP server/)
   assert.equal(await db.selectFrom('connection').select('id').where('name', '=', 'Fly').executeTakeFirst(), undefined)
-  await changeRequestService.deny({ actor: owner, id, note: 'I’ll set it up myself' })
+  await asks.decline({ actor: owner, id, note: 'I’ll set it up myself' })
   await settled()
-  assert.match(told.at(-1)?.text ?? '', /Not connected: Connect Fly\. They chose: "I’ll set it up myself"\..*numbered steps/)
+  assert.match(told.at(-1)?.text ?? '', /Not approved: Connect Fly\. They said: "I’ll set it up myself"/)
+  assert.match(((await client.listTools()).tools.find((tool) => tool.name === 'propose_connection')?.description ?? ''), /numbered steps/)
   const twice = await client.callTool({ name: 'propose_connection', arguments: { ...DIGITALOCEAN, groups: [DIGITALOCEAN.groups[0], DIGITALOCEAN.groups[0]], origin: app } })
   assert.equal(twice.isError, true)
   mock.restoreAll()
 })
 
-test('requests list newest first, and ones made at the same moment keep one order', async () => {
-  await db.updateTable('change_request').set({ created_at: new Date('2026-11-26T10:00:00Z') }).where('agent_id', '=', 'ag_chgagent').execute()
-  const ids = (await changeRequestService.list({ actor: owner, agentId: 'ag_chgagent' })).map((each) => each.id)
+test('asks list newest first, and ones made at the same moment keep one order', async () => {
+  await db.updateTable('ask').set({ created_at: new Date('2026-11-26T10:00:00Z') }).where('agent_id', '=', 'ag_chgagent').execute()
+  const ids = (await asks.list({ agentId: 'ag_chgagent' })).map((each) => each.id)
   assert.ok(ids.length > 1)
   assert.deepEqual(ids, [...ids].sort().reverse())
+})
+
+test('asking for the same thing twice while it is open gives back the first ask', async () => {
+  const first = idIn(textOf(await client.callTool({ name: 'update_self', arguments: { why: 'Same.', name: 'Twin', origin: app } })))
+  const again = idIn(textOf(await client.callTool({ name: 'update_self', arguments: { why: 'Same again.', name: 'Twin', origin: app } })))
+  assert.equal(again, first)
+  await asks.decline({ actor: owner, id: first })
+})
+
+test('an ask whose kind no plugin defines any more expires with a standard note', async () => {
+  await db.insertInto('ask').values({ id: 'ask_gonekind', agent_id: 'ag_chgagent', kind: 'gone_kind', input: '{}', title: 'Do a gone thing', why: 'x', origin: JSON.stringify(app) }).execute()
+  const gone = (await asks.list({ agentId: 'ag_chgagent' })).find((each) => each.id === 'ask_gonekind')
+  assert.equal(gone?.status, 'expired')
+  const row = await db.selectFrom('ask').select('reply').where('id', '=', 'ask_gonekind').executeTakeFirstOrThrow()
+  assert.match(row.reply ?? '', /Do a gone thing didn't happen: OpenHut can't do this kind of ask any more\./)
+})
+
+test('two plugins can\'t define one ask kind, and a kind with a tool becomes an MCP tool with why', async () => {
+  const kind = defineAsk({ input: z.object({ x: z.string() }), tool: 'Do x.', title: () => 'X', run: async () => undefined })
+  assert.throws(() => asksPlugin([{ name: 'a', asks: { do_x: kind } }, { name: 'b', asks: { do_x: kind } }]), /Two plugins define the ask do_x/)
+  const plugin = asksPlugin([{ name: 'a', asks: { do_x: kind } }])
+  assert.deepEqual(Object.keys(plugin.tools ?? {}), ['do_x'])
+  assert.deepEqual(Object.keys(plugin.tools?.do_x.input ?? {}), ['why', 'x'])
+})
+
+test('change requests from before the upgrade become asks with the same ids, and a pending one can still be approved', async () => {
+  await db.schema.createTable('change_request').ifNotExists()
+    .addColumn('id', 'text', (col) => col.primaryKey()).addColumn('agent_id', 'text').addColumn('action', 'text').addColumn('input', 'text').addColumn('summary', 'text')
+    .addColumn('why', 'text').addColumn('origin', 'text').addColumn('status', 'text').addColumn('note', 'text').addColumn('told', 'boolean')
+    .addColumn('created_at', 'timestamptz').addColumn('decided_at', 'timestamptz').addColumn('expires_at', 'timestamptz').addColumn('result', 'text').execute()
+  const old = { agent_id: 'ag_chgagent', why: 'Old.', origin: JSON.stringify(app), created_at: new Date(), expires_at: null, result: null }
+  await sql`insert into change_request (id, agent_id, action, input, summary, why, origin, status, note, told, created_at, decided_at, expires_at, result) values
+    ('chg_oldpend1', ${old.agent_id}, 'update_self', '{"name":"Legacy"}', 'Rename to Legacy', ${old.why}, ${old.origin}, 'pending', null, false, now(), null, null, null),
+    ('chg_olddeny1', ${old.agent_id}, 'update_self', '{"name":"Nope"}', 'Rename to Nope', ${old.why}, ${old.origin}, 'denied', 'No', true, now(), now(), null, null)`.execute(db)
+  await migrate()
+  await migrate()
+  const rows = await db.selectFrom('ask').select(['id', 'kind', 'status', 'title', 'note']).where('id', 'like', 'chg_old%').orderBy('id').execute()
+  assert.deepEqual(rows, [
+    { id: 'chg_olddeny1', kind: 'update_self', status: 'declined', title: 'Rename to Nope', note: 'No' },
+    { id: 'chg_oldpend1', kind: 'update_self', status: 'open', title: 'Rename to Legacy', note: null },
+  ])
+  assert.equal((await asks.approve({ actor: owner, id: 'chg_oldpend1' })).status, 'done')
+  assert.equal((await db.selectFrom('agent').select('name').where('id', '=', 'ag_chgagent').executeTakeFirstOrThrow()).name, 'Legacy')
 })
 
 test.after(() => { void client.close(); server.close() })

@@ -22,7 +22,8 @@ import { settings } from '../platform/settings.ts'
 import { connectionRecords, type Secret } from './connection-records.ts'
 import { redact } from './redact.ts'
 import { permissions } from '../permissions/permissions.ts'
-import { changeRequestService } from '../agents/change-request-service.ts'
+import { asks } from '../../core/asks.ts'
+import { routineService } from '../inbox/routines.ts'
 
 const COLUMNS = ['id', 'kind', 'name', 'account', 'sign_in', 'owner_id', 'created_at'] as const
 const MAX_REPLY = 64_000
@@ -33,6 +34,7 @@ const queues = new Map<string, Promise<unknown>>()
 const toolCache = new Map<string, { at: number; tools: ToolSpec[] }>()
 const actionCache = new Map<string, Map<string, ToolSpec>>()
 const JOURNAL = 100
+const ASK_EXPIRES_MS = 30 * 60_000
 const JOURNAL_TEXT = 4000
 const journal = new Map<string, AppCall[]>()
 const redirectUrl = () => `${callbackBase()}/api/connection-authorizations/callback`
@@ -171,7 +173,8 @@ export const connectionService = {
     }
     if (state === 'ask') {
       const inner = action && { name: action.spec.name, label: action.label }
-      const asked = await changeRequestService.ask({ agentId: agent.id, action: 'call_tool', input: { connectionId: connection.id, tool: spec.name, name, arguments: args, action: inner }, why: reason, origin })
+      const expires = await routineService.inRun(agent.id) ? new Date(Date.now() + ASK_EXPIRES_MS) : undefined
+      const asked = await asks.create({ agentId: agent.id, kind: 'call_tool', input: { connectionId: connection.id, tool: spec.name, name, arguments: args, action: inner }, why: reason, origin, expires })
       await record({ agentId: agent.id, connectionId: connection.id, tool: name, reason, outcome: 'asked', app: connection.name, spec, action, args })
       return { text: asked, isError: false }
     }
