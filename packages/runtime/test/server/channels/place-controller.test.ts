@@ -5,7 +5,7 @@ import { validatorCompiler } from 'fastify-type-provider-zod'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { seal } from '../../../src/server/platform/secrets.ts'
 import { answerErrors } from '../../../src/server/platform/http-error.ts'
-import { placeService } from '../../../src/server/channels/place-service.ts'
+import { channelService } from '../../../src/server/channels/channel-service.ts'
 import { placeController } from '../../../src/server/channels/place-controller.ts'
 import { split } from '../../../src/server/integrations/discord/discord.ts'
 import { fakeAgentd, refresh, signIn } from '../agents/signed-in.ts'
@@ -35,7 +35,7 @@ await app.register(placeController, { prefix: '/api/agents/:id/places' })
 await app.ready()
 
 function fakeDiscord(t: TestContext, { limited = 0 } = {}) {
-  const calls: { method: string; path: string; body: { content?: string; name?: string } }[] = []
+  const calls: { method: string; path: string; body: { content?: string } }[] = []
   let left = limited
   let next = 100
   t.mock.method(globalThis, 'fetch', async (url: string | URL, init?: RequestInit) => {
@@ -44,11 +44,9 @@ function fakeDiscord(t: TestContext, { limited = 0 } = {}) {
     calls.push({ method, path, body: init?.body ? JSON.parse(String(init.body)) : {} })
     assert.equal(new Headers(init?.headers).get('authorization'), `Bot ${TOKEN}`)
     if (path.startsWith('/users/@me') || path.startsWith('/guilds')) return Response.json(path === '/users/@me/guilds' ? [{ id: GUILD, name: 'Acme' }] : path === `/guilds/${GUILD}/channels` ? [{ id: OPS, name: 'ops', type: 0 }] : path === `/guilds/${GUILD}` ? { roles: [] } : path === '/users/@me' ? { id: '1', username: 'ops' } : { roles: [] })
-    if (method === 'GET') return Response.json({ id: path.split('/')[2], guild_id: GUILD })
+    if (method === 'GET') return Response.json({ id: path.split('/')[2], parent_id: path.includes('8888') ? OPS : RANDOM })
     if (left-- > 0) return Response.json({ message: 'You are being rate limited.', retry_after: 0.01 }, { status: 429 })
-    if (path.endsWith('/threads')) return Response.json({ id: '7777777777777777777' })
-    const channel = path.split('/')[2]
-    return Response.json({ id: String(next++), channel_id: channel })
+    return Response.json({ id: String(next++) })
   })
   return calls
 }
@@ -61,23 +59,21 @@ test('places are the Discord channels the agent has connected, with readable nam
   assert.equal((await app.inject({ url: '/api/agents/ag_nobody00/places', headers: KEY })).statusCode, 404)
 })
 
-test('send posts to the channel, splits long text, waits out a rate limit, and can start a thread', async (t) => {
+test('send posts to the channel with the agent\'s bot, splits long text and waits out a rate limit', async (t) => {
   const calls = fakeDiscord(t, { limited: 1 })
-  const text = `${'a'.repeat(1500)}\n${'b'.repeat(1500)}`
-  const sent = await placeService.send({ agentId: 'ag_placeops', place: PLACE, text, startThread: 'Nightly report' })
-  assert.deepEqual(sent, { url: `https://discord.com/channels/${GUILD}/${OPS}/100`, messageId: '100', threadId: '7777777777777777777' })
+  await channelService.send({ agentId: 'ag_placeops', place: PLACE, text: `${'a'.repeat(1500)}\n${'b'.repeat(1500)}` })
   const posts = calls.filter((each) => each.method === 'POST')
-  assert.deepEqual(posts.map((each) => each.path), [`/channels/${OPS}/messages`, `/channels/${OPS}/messages`, `/channels/${OPS}/messages/100/threads`, '/channels/7777777777777777777/messages'])
-  assert.equal(posts[1]?.body.content, 'a'.repeat(1500))
-  assert.equal(posts[3]?.body.content, 'b'.repeat(1500))
+  assert.deepEqual(posts.map((each) => each.path), [`/channels/${OPS}/messages`, `/channels/${OPS}/messages`, `/channels/${OPS}/messages`])
+  assert.deepEqual(posts.slice(1).map((each) => each.body.content), ['a'.repeat(1500), 'b'.repeat(1500)])
 })
 
-test('send posts into an existing thread, and refuses a channel the agent has not connected', async (t) => {
+test('send posts into a thread of a connected channel, and refuses another channel\'s thread or a channel the agent has not connected', async (t) => {
   const calls = fakeDiscord(t)
-  await placeService.send({ agentId: 'ag_placeops', place: { ...PLACE, thread_id: '8888888888888888888' }, text: 'done' })
+  await channelService.send({ agentId: 'ag_placeops', place: { ...PLACE, thread_id: '8888888888888888888' }, text: 'done' })
   assert.ok(calls.some((each) => each.method === 'POST' && each.path === '/channels/8888888888888888888/messages'))
-  await assert.rejects(placeService.send({ agentId: 'ag_placeops', place: { ...PLACE, chat_id: RANDOM, chat_name: '#random' }, text: 'hi' }), /Can't post in #random/)
-  await assert.rejects(placeService.send({ agentId: 'ag_placeops', place: { platform: 'telegram', chat_id: '123456789', chat_name: 'your Telegram' }, text: 'hi' }), /can't post to telegram yet/)
+  await assert.rejects(channelService.send({ agentId: 'ag_placeops', place: { ...PLACE, thread_id: '9999999999999999999' }, text: 'hi' }), /isn't in the channel/)
+  await assert.rejects(channelService.send({ agentId: 'ag_placeops', place: { ...PLACE, chat_id: RANDOM, chat_name: '#random' }, text: 'hi' }), /Can't post in #random/)
+  await assert.rejects(channelService.send({ agentId: 'ag_placeops', place: { platform: 'telegram', chat_id: '123456789', chat_name: 'your Telegram' }, text: 'hi' }), /can't post to telegram yet/)
 })
 
 test('long text splits at line breaks, then spaces, under Discord\'s 2000 characters', () => {

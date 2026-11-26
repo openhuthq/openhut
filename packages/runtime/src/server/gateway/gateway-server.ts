@@ -21,6 +21,8 @@ const PER_AGENT = 8
 // Background polls (Telegram's long poll, the plugin's wakes poll every 15 s) aren't the agent at work, so they don't count toward its request limit.
 const LONG_POLL = /^(\/u\/telegram\/bot[^/]+\/getUpdates|\/wakes)$/
 const MAX_BODY = 1 << 20
+const REFUSED_LOG_MS = 60_000
+const lastRefused = new Map<string, number>()
 const LIMITS = { requestTimeout: 600_000, headersTimeout: 10_000, connectionsCheckingInterval: 2_000 }
 
 export const gatewayServer = {
@@ -49,7 +51,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const mcp = path === '/api/v1/mcp' && req.method === 'POST' ? await readBody(req) : undefined
   // Hermes's MCP keepalives and tool listings aren't work either; only a tool call is.
   const listening = LONG_POLL.test(path) || (path === '/api/v1/mcp' && ![mcp].flat().some((message) => (message as { method?: string } | undefined)?.method === 'tools/call'))
-  if (!listening && activity.count(agent.id) >= PER_AGENT) return json(res, 429, errorBody({ status: 429, message: `This agent already has ${PER_AGENT} requests running. Wait for them.` }), true)
+  if (!listening && activity.count(agent.id) >= PER_AGENT) return refused({ agentId: agent.id, path, res })
   if (!listening) {
     activity.started(agent.id)
     res.on('close', () => activity.ended(agent.id))
@@ -71,6 +73,14 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   if (hook && req.method === 'POST') return json(res, 200, await runHook({ agent, hook: hook[1], body: await readBody(req) }))
   if (path.startsWith('/test-llm/') && config.modelMode === 'test') return testModel({ path, body: await readBody(req), res })
   json(res, 404, errorBody({ status: 404, message: `No route ${path}.` }))
+}
+
+function refused({ agentId, path, res }: { agentId: string; path: string; res: ServerResponse }): void {
+  if (Date.now() - (lastRefused.get(agentId) ?? 0) >= REFUSED_LOG_MS) {
+    lastRefused.set(agentId, Date.now())
+    log.warn({ event: 'gateway.too_many', agentId, path, open: activity.count(agentId) })
+  }
+  json(res, 429, errorBody({ status: 429, message: `This agent already has ${PER_AGENT} requests running. Wait for them.` }), true)
 }
 
 async function readBody(req: IncomingMessage): Promise<unknown> {

@@ -1,4 +1,4 @@
-import { test } from 'node:test'
+import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { AddressInfo } from 'node:net'
 import { wakes } from '../../src/core/wakes.ts'
@@ -7,6 +7,7 @@ import { gatewayServer } from '../../src/server/gateway/gateway-server.ts'
 import { inboxService } from '../../src/server/inbox/inbox-service.ts'
 import { routineService } from '../../src/server/inbox/routines.ts'
 import { db, migrate } from '../../src/server/platform/db.ts'
+import { log } from '../../src/server/platform/events.ts'
 import { agentToken, seal } from '../../src/server/platform/secrets.ts'
 import { fakeAgentd, refresh, signIn } from '../server/agents/signed-in.ts'
 
@@ -64,4 +65,17 @@ test('a report goes to the plugin named in the wake id', async () => {
   assert.ok(decision)
   await wakes.report({ agentId: 'ag_wakeagnt', id: decision.id, body: { picked: true, said: 'Told them.' } })
   assert.ok(!(await wakes.due({ agentId: 'ag_wakeagnt' })).some((wake) => wake.id === decision.id), 'asks has no said; picked is enough')
+})
+
+test('a channel wake nobody picks up is logged once, five minutes on, and an app wake never is', async () => {
+  const warned = mock.method(log, 'warn', () => undefined)
+  const at = new Date('2026-01-01T10:00:00Z')
+  for (const [id, origin] of [['wh_wakestck', whatsapp], ['wh_wakeappx', app]] as const) {
+    await db.insertInto('inbox_source').values({ id, agent_id: 'ag_wakeagnt', kind: 'webhook', name: id, origin: JSON.stringify(origin) }).execute()
+    await db.insertInto('inbox_item').values({ id: `hd_${id.slice(3)}`, source_id: id, agent_id: 'ag_wakeagnt', digest: id, text: 'x', created_at: at }).execute()
+  }
+  const stuck = () => warned.mock.calls.map((call) => call.arguments[0] as { event: string; item: string }).filter((entry) => entry.event === 'inbox.not_picked' && entry.item.startsWith('hd_wake'))
+  for (const minutes of [4, 5.5, 6.5]) await inboxService.tick({ now: new Date(at.getTime() + minutes * 60_000) })
+  assert.deepEqual(stuck().map((entry) => entry.item), ['hd_wakestck'])
+  warned.mock.restore()
 })
