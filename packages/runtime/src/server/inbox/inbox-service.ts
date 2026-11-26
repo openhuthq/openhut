@@ -3,6 +3,7 @@ import type { IncomingHttpHeaders } from 'node:http'
 import type { Selectable } from 'kysely'
 import type { Deleted } from '@openhut/common/api.ts'
 import type { Routine } from '@openhut/common/routines/routine.ts'
+import type { WebhookCall } from '@openhut/common/webhooks/summary.ts'
 import type { DeliveryTarget, Webhook, WebhookChannel } from '@openhut/common/webhooks/webhook.ts'
 import { agentService } from '../agents/agent-service.ts'
 import { channelService, type PostTarget } from '../channels/channel-service.ts'
@@ -158,6 +159,13 @@ export const inboxService = {
     return threadService.bySession({ agentId, session: origin.chat_id })
   },
 
+  async webhookCall({ agentId, id }: { agentId: string; id: string }): Promise<WebhookCall | undefined> {
+    const row = await db.selectFrom('inbox_item').innerJoin('inbox_source', 'inbox_source.id', 'inbox_item.source_id').select(['inbox_source.id', 'inbox_source.kind', 'inbox_source.name', 'inbox_item.text'])
+      .where('inbox_item.id', '=', id).where('inbox_item.agent_id', '=', agentId).executeTakeFirst()
+    if (row?.kind !== 'webhook') return undefined
+    return { source: { kind: 'webhook', id: row.id, name: row.name }, payload: payloadOf(bodyOf(row.text)) }
+  },
+
   async answered({ agentId, id, threadId, said }: { agentId: string; id: string; threadId: string; said: string }): Promise<void> {
     const row = await db.selectFrom('inbox_item').innerJoin('inbox_source', 'inbox_source.id', 'inbox_item.source_id').select(['inbox_source.kind', 'inbox_source.name', 'inbox_source.origin'])
       .where('inbox_item.id', '=', id).where('inbox_item.agent_id', '=', agentId).executeTakeFirst()
@@ -268,10 +276,20 @@ function chatOf(origin: Origin & { place?: string }): Origin {
   return rest
 }
 
+const bodyOf = (text: string): string => text.slice(text.indexOf('\n\n') + 2)
+
+function payloadOf(body: string): unknown {
+  try {
+    return JSON.parse(body)
+  } catch {
+    return body
+  }
+}
+
 async function lastPayloads(ids: string[]): Promise<Map<string, string>> {
   if (!ids.length) return new Map()
   const rows = await db.selectFrom('inbox_item').select(['source_id', 'text']).distinctOn('source_id').where('source_id', 'in', ids).orderBy('source_id').orderBy('created_at', 'desc').execute()
-  return new Map(rows.map((row) => [row.source_id, row.text.slice(row.text.indexOf('\n\n') + 2, row.text.indexOf('\n\n') + 2 + PREVIEW_MAX)]))
+  return new Map(rows.map((row) => [row.source_id, bodyOf(row.text).slice(0, PREVIEW_MAX)]))
 }
 
 function channelOf(row: Pick<SourceRow, 'origin'>): WebhookChannel {

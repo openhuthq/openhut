@@ -69,7 +69,7 @@ test('a decision asked from WhatsApp is left to the Hermes plugin; one asked in 
   assert.ok((await wakes.due({ agentId: 'ag_appwagnt' })).every((wake) => wake.origin.platform !== 'api_server'))
 })
 
-test('every webhook call runs on the server in a web thread of its own, and a routine set in WhatsApp is left to the Hermes plugin', async () => {
+test('every webhook call runs on the server in a web thread of its own, its message says which webhook and holds the payload, and a routine set in WhatsApp is left to the Hermes plugin', async () => {
   const before = told.length
   for (const id of ['wh_appwnone', 'wh_appwtwoo']) {
     await db.insertInto('inbox_source').values({ id, agent_id: 'ag_appwagnt', kind: 'webhook', name: `Hook ${id}`, origin: JSON.stringify({ platform: 'api_server', chat_id: 'openhut-inbox' }) }).execute()
@@ -81,6 +81,10 @@ test('every webhook call runs on the server in a web thread of its own, and a ro
   const threads = await db.selectFrom('chat_thread').select(['id', 'title', 'origin', 'mirrors']).where('agent_id', '=', 'ag_appwagnt').orderBy('title').execute()
   assert.deepEqual(threads.map((thread) => [thread.title, JSON.parse(thread.origin).platform, thread.mirrors]), [['Hook wh_appwnone', 'webhook', '[]'], ['Hook wh_appwtwoo', 'webhook', '[]']])
   assert.deepEqual(new Set(ran.map((each) => each.threadId)), new Set(threads.map((thread) => thread.id)))
+  assert.deepEqual(ran.map((each) => each.metadata).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))), [
+    { source: { kind: 'webhook', id: 'wh_appwnone', name: 'Hook wh_appwnone' }, payload: { from: 'wh_appwnone' } },
+    { source: { kind: 'webhook', id: 'wh_appwtwoo', name: 'Hook wh_appwtwoo' }, payload: { from: 'wh_appwtwoo' } },
+  ])
   assert.equal(runsOnServer({ id: 'inbox:ru_x', text: '', origin: whatsapp }), false)
   assert.equal(runsOnServer({ id: 'inbox:ru_x', text: '', origin: { platform: 'discord', chat_id: '1' } }), true)
 })

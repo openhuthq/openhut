@@ -4,8 +4,9 @@ import type { Selectable } from 'kysely'
 import { createUIMessageStream, pipeUIMessageStreamToResponse, readUIMessageStream, type UIMessage, type UIMessageChunk } from 'ai'
 import { applySpecPatch, pipeJsonRender, SPEC_DATA_PART_TYPE, type JsonPatch } from '@json-render/core'
 import * as z from 'zod/mini'
-import { AGENT_HOME, ChatMessage, fileInHome, MAX_FILES, MessageValue, ToolProgress, UPLOADS, uploadName, type ChatCall, type ChatFile, type HomeFile, type SendChat, type Thread, type ThreadOrigin, type ThreadWithMessages, type UploadFile } from '@openhut/common/threads/thread.ts'
+import { AGENT_HOME, ChatMessage, fileInHome, MAX_FILES, MessageValue, ToolProgress, UPLOADS, uploadName, Work, type ChatCall, type ChatFile, type HomeFile, type SendChat, type Thread, type ThreadOrigin, type ThreadWithMessages, type UploadFile } from '@openhut/common/threads/thread.ts'
 import type { Place } from '@openhut/common/channels/channel.ts'
+import type { ThreadLive } from '@openhut/common/live.ts'
 import type { Deleted } from '@openhut/common/api.ts'
 import { agentd } from '../platform/agentd.ts'
 import { db, findRow } from '../platform/db.ts'
@@ -26,6 +27,7 @@ import { peopleOf, type Caller } from '../team/identity.ts'
 import { plugins } from '../../core/plugins.ts'
 import { providers } from '../models/providers/index.ts'
 import { turnWork } from './work.ts'
+import { liveThreads, type LiveTurnHandle } from './live.ts'
 
 const TURN_MS = 15 * 60_000
 const SEED = 20
@@ -90,6 +92,11 @@ export const threadService = {
     const chat = await chatOf(id)
     const said = await saidOf(chat)
     return { ...threadOf({ chat, said, waiting: await waitingOn() }), messages: said.map((each) => withoutPlumbing(each.message)) }
+  },
+
+  async live({ actor, id }: { actor: Caller; id: string }): Promise<ThreadLive> {
+    await agentService.requireVisible({ actor, id: await threadService.agentIdOf(id) })
+    return liveThreads.catchUp(id)
   },
 
   agentIdOf: async (id: string): Promise<string> => (await chatOf(id)).agent.id,
@@ -243,9 +250,10 @@ export const threadService = {
     const work = turnWork({ agent, started })
     const asked = together({ messages: said.map((each) => each.message), shared: agent.shared || peopleOf(agent.people).length > 0 })
     let answered = false
+    const live = liveThreads.turn({ thread: chat.id, turnId: answerId, answering: answering(said) })
     const answer = async (writer: { write: (chunk: UIMessageChunk) => void }, retry: boolean) => {
       const message = await seeded({ said, session, message: asked })
-      for await (const chunk of answerStream({ agent, session, message, signal: abort.signal, work, retry })) {
+      for await (const chunk of answerStream({ agent, session, message, signal: abort.signal, work, retry, live })) {
         if (chunk.type === 'text-delta' || chunk.type === SPEC_DATA_PART_TYPE) answered = true
         writer.write(chunk)
       }
@@ -275,6 +283,7 @@ export const threadService = {
           await write({ chat, message: { ...answer, id: answerId }, session })
           if (!isAborted) await afterAnswer({ chat, message: answer })
         }
+        live.end()
         busy.delete(agent.id)
         log.info({ event: 'agent.chat', agent: agent.id, ms: Date.now() - started, aborted: isAborted })
       },
@@ -283,16 +292,17 @@ export const threadService = {
     await pipeUIMessageStreamToResponse({ response: reply.raw, stream })
   },
 
-  async runRoutine({ agentId, threadId = agentId, text }: { agentId: string; threadId?: string; text: string }): Promise<string> {
+  async runRoutine({ agentId, threadId = agentId, text, metadata }: { agentId: string; threadId?: string; text: string; metadata?: Record<string, unknown> }): Promise<string> {
     await idle(agentId)
     busy.add(agentId)
+    let live: LiveTurnHandle | undefined
     try {
       const chat = await chatOf(threadId)
       if (chat.agent.id !== agentId) throw new HttpError(404, MISSING)
       const agent = chat.agent
       const last = (await saidOf(chat)).at(-1)?.message
       const retried = last?.role === 'user' && textOf(last) === text ? last : undefined
-      const asked: ChatMessage | undefined = chat.row ? retried ?? { id: nextId(), role: 'user', parts: [{ type: 'text', text }], metadata: { author: chat.row.title } } : undefined
+      const asked: ChatMessage | undefined = chat.row ? retried ?? { id: nextId(), role: 'user', parts: [{ type: 'text', text }], metadata: { ...metadata, author: chat.row.title } } : undefined
       if (asked && !retried) await write({ chat, message: asked })
       const said = await saidOf(chat)
       const id = nextId()
@@ -300,8 +310,10 @@ export const threadService = {
       const message = asked ? await seeded({ said, session, message: asked }) : { id, role: 'user' as const, parts: [{ type: 'text', text }] }
       const started = Date.now()
       const work = turnWork({ agent, started })
+      const turn = liveThreads.turn({ thread: chat.id, turnId: id, answering: answering(said) })
+      live = turn
       const chunks = async function* (): AsyncGenerator<UIMessageChunk> {
-        yield* answerStream({ agent, session, message, signal: AbortSignal.timeout(TURN_MS), work })
+        yield* answerStream({ agent, session, message, signal: AbortSignal.timeout(TURN_MS), work, live: turn })
         const done = work.done({})
         if (done) yield { type: 'data-work', id: 'work', data: done }
         yield* await afterTurn({ agentId, since: started })
@@ -317,9 +329,23 @@ export const threadService = {
       }
       return reply
     } finally {
+      live?.end()
       busy.delete(agentId)
     }
   }
+}
+
+function toLive({ live, chunk }: { live: LiveTurnHandle; chunk: UIMessageChunk }): void {
+  if (chunk.type === 'text-delta') return live.delta({ part: chunk.id, text: chunk.delta })
+  if (chunk.type !== 'data-work') return
+  const calls = z.safeParse(Work, chunk.data).data?.calls ?? []
+  const call = calls.findLast((each) => each.status === 'running') ?? calls.at(-1)
+  if (call) live.step(call.status === 'running' ? call.label : call.past)
+}
+
+function answering(said: Said[]): string[] {
+  const asked = said.slice(said.findLastIndex((each) => each.message.role !== 'user') + 1)
+  return [...new Set(asked.flatMap((each) => z.safeParse(Authored, each.message).data?.metadata.author ?? []))]
 }
 
 async function runner({ actor, id }: { actor: Caller; id: string }): Promise<AgentRow> {
@@ -498,8 +524,14 @@ async function callAgent({ agent, session, message, signal }: { agent: AgentRow;
   return res.body
 }
 
-function answerStream(input: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal; work: TurnWork; retry?: boolean }): ReadableStream<UIMessageChunk> {
-  return joinText(pipeJsonRender(relayed(input)))
+function answerStream({ live, ...input }: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal; work: TurnWork; retry?: boolean; live: LiveTurnHandle }): ReadableStream<UIMessageChunk> {
+  const tapped = pipeJsonRender(relayed(input)).pipeThrough(new TransformStream<UIMessageChunk, UIMessageChunk>({
+    transform: (chunk, controller) => {
+      toLive({ live, chunk })
+      controller.enqueue(chunk)
+    },
+  }))
+  return joinText(tapped)
 }
 
 async function afterTurn({ agentId, since }: { agentId: string; since: number }): Promise<UIMessageChunk[]> {
