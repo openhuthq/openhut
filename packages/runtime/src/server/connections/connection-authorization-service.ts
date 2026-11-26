@@ -5,6 +5,7 @@ import type { Database } from '../platform/db-schema.ts'
 import { seal, unseal } from '../platform/secrets.ts'
 import { CONNECTION_TITLES as TITLES, GOOGLE_KINDS, SIGN_IN_KINDS, type ConnectionAuthorization, type CreateConnectionAuthorization } from '@openhut/common/connections/connection.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
+import { emit } from '../platform/events.ts'
 import { asks } from '../../core/asks.ts'
 import { github } from '../integrations/github/github.ts'
 import { google, type GoogleKind } from '../integrations/google/google.ts'
@@ -14,6 +15,7 @@ import { callbackBase, connectionService } from './connection-service.ts'
 import type { Secret } from './connection-records.ts'
 
 const SIGN_IN_MS = 15 * 60_000
+export const INSTALL_REQUESTED = 'GitHub sent your install request to the account\'s owner. OpenHut connects it as soon as they approve.'
 
 export const connectionAuthorizationService = {
   async create({ actor, kind: chosen, name, url: given, connectionId, askId, permissions }: { actor: Caller } & CreateConnectionAuthorization): Promise<ConnectionAuthorization> {
@@ -68,7 +70,10 @@ export const connectionAuthorizationService = {
 
 async function finishing({ state, code, error, installation_id: installationId, setup_action: action, sign }: { state?: string; code?: string; error?: string; installation_id?: string; setup_action?: string; sign?: Pending }): Promise<{ kind?: SignInKind; connectionId?: string; error?: string }> {
   if (!sign) return { error: 'This sign-in expired or was already used. Start it again.' }
-  if (sign.kind === 'github' && action === 'request') return { kind: sign.kind, error: 'GitHub sent your install request to the account\'s owner. Connect again once they approve it.' }
+  if (sign.kind === 'github' && action === 'request') {
+    if (sign.askId) emit({ name: 'github.install_requested', actor: sign.actor, target: { type: 'ask', id: sign.askId }, properties: { permissions: sign.permissions ?? {} } })
+    return { kind: sign.kind, error: sign.askId ? INSTALL_REQUESTED : 'GitHub sent your install request to the account\'s owner. Connect again once they approve it.' }
+  }
   const grant = sign.kind === 'github' ? installationId : code
   if (error || !grant) return { kind: sign.kind, error: `${TITLES[sign.kind]} didn't approve OpenHut (${error ?? 'no code'}).` }
   let connectionId = sign.connectionId

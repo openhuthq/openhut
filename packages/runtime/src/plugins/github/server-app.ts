@@ -4,6 +4,7 @@ import * as z from 'zod/mini'
 import { CreateGithubApp, CreateGithubConnection, ListGithubAccounts, UpdateGithubApp, type GithubAccount, type GithubAppInfo, type GithubInstallation } from '@openhut/common/connections/github-app.ts'
 import type { Connection } from '@openhut/common/connections/connection.ts'
 import { connectionService } from '../../server/connections/connection-service.ts'
+import { installWaits } from './waits.ts'
 import { github } from '../../server/integrations/github/github.ts'
 import { publicAddress } from '../../server/platform/address.ts'
 import { db } from '../../server/platform/db.ts'
@@ -115,6 +116,11 @@ export const serverAppController: FastifyPluginAsyncZod = async (app) => {
     return listOf({ req, data: await serverAppService.installations() })
   })
 
+  app.get('/waits', WaitsRequest, async (req) => {
+    await who(req)
+    return { object: 'list', url: req.url, hasMore: false, data: await installWaits.waiting({ askIds: req.query.askId.split(',').slice(0, 50) }) }
+  })
+
   app.post('/connections', ConnectRequest, async (req) => serverAppService.connect({ actor: await who(req), ...req.body }))
 
   app.post('/requests', async (req) => serverAppService.ask({ actor: await who(req) }))
@@ -136,6 +142,7 @@ export const serverAppController: FastifyPluginAsyncZod = async (app) => {
 
 const AccountsRequest = { schema: { querystring: ListGithubAccounts } }
 const CreateRequest = { schema: { body: CreateGithubApp } }
+const WaitsRequest = { schema: { querystring: z.object({ askId: z.string().check(z.maxLength(2000)) }) } }
 const ConnectRequest = { schema: { body: CreateGithubConnection } }
 const UpdateRequest = { schema: { body: UpdateGithubApp } }
 const StateRequest = { schema: { querystring: z.object({ state: z.optional(z.string()) }) } }
