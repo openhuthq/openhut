@@ -25,8 +25,9 @@ export function testModel({ path, body, res }: { path: string; body: unknown; re
   log.info({ event: 'test_llm.request', messages: messages.length, lastRole: last.role, tools: toolNames.length, callTool })
   const reply = replyTo({ last, callTool, shell: toolNames.find((name) => name === 'terminal' || name === 'Bash'), schedule: toolNames.find((name) => name.endsWith('schedule_routine')), ask: toolNames.find((name) => name.endsWith('ask_to_connect')), names: toolNames })
   const base = { id: `cmpl-${Date.now()}`, created: Math.floor(Date.now() / 1000), model: request.model ?? 'openhut-test' }
-  const toolCalls = reply.tool ? [{ id: `call_${Date.now()}`, type: 'function', function: { name: reply.tool.name, arguments: reply.tool.args } }] : undefined
-  const finish = reply.tool ? 'tool_calls' : 'stop'
+  const calls = reply.tools ?? (reply.tool ? [reply.tool] : [])
+  const toolCalls = calls.length ? calls.map((tool, index) => ({ id: `call_${Date.now()}_${index}`, type: 'function', function: { name: tool.name, arguments: tool.args } })) : undefined
+  const finish = toolCalls ? 'tool_calls' : 'stop'
   if (request.stream) {
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' })
     const delta = { role: 'assistant', ...(reply.content && { content: reply.content }), ...(toolCalls && { tool_calls: toolCalls.map((call, index) => ({ index, ...call })) }) }
@@ -52,7 +53,7 @@ export function testAnthropic({ req, body, res }: { req: IncomingMessage; body: 
     .end(JSON.stringify({ id: `msg_${Date.now()}`, type: 'message', role: 'assistant', model: request.model ?? 'openhut-test', content: [{ type: 'text', text }], stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 } }))
 }
 
-function replyTo({ last, callTool, shell, schedule, ask, names }: { last: { role?: string; content?: unknown }; callTool: string | undefined; shell: string | undefined; schedule: string | undefined; ask: string | undefined; names: string[] }): { content?: string; tool?: { name: string; args: string } } {
+function replyTo({ last, callTool, shell, schedule, ask, names }: { last: { role?: string; content?: unknown }; callTool: string | undefined; shell: string | undefined; schedule: string | undefined; ask: string | undefined; names: string[] }): { content?: string; tool?: { name: string; args: string }; tools?: { name: string; args: string }[] } {
   const handed = last.role === 'tool' ? /```spec\\n((?:[^`\\]|\\.)*?)```/.exec(asText(last.content))?.[1] : undefined
   if (handed) return { content: `Here is what I need.\n\n\`\`\`spec\n${JSON.parse(`"${handed}"`)}\`\`\`` }
   if (last.role === 'tool') return { content: `TOOL RESULT: ${asText(last.content).slice(0, 20_000)}` }
@@ -60,6 +61,9 @@ function replyTo({ last, callTool, shell, schedule, ask, names }: { last: { role
   if (routine) return { content: `ROUTINE RAN: ${routine}` }
   const wanted = /routine:\s*(\{[\s\S]+\})\s*$/i.exec(lastText(last.content))?.[1]
   if (wanted && schedule) return { tool: { name: schedule, args: wanted } }
+  const many = z.safeParse(z.array(DirectCall), jsonOf(/calls:\s*(\[[\s\S]+\])\s*$/i.exec(lastText(last.content))?.[1])).data
+  const found = many?.flatMap((call) => names.filter((name) => name.endsWith(call.tool)).slice(0, 1).map((name) => ({ name, args: JSON.stringify(call.args ?? {}) })))
+  if (found?.length) return { tools: found }
   const direct = DirectCall.safeParse(jsonOf(/call:\s*(\{[\s\S]+\})\s*$/i.exec(lastText(last.content))?.[1])).data
   const named = direct && names.find((name) => name.endsWith(direct.tool))
   if (direct && named) return { tool: { name: named, args: JSON.stringify(direct.args ?? {}) } }
