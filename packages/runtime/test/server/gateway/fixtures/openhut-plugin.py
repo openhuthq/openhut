@@ -115,6 +115,10 @@ before = len(calls)
 hooks["post_llm_call"](user_message="[OpenHut inbox:ru_other1] not ours", assistant_response="x")
 hooks["post_llm_call"](user_message="hello", assistant_response="x")
 assert len(calls) == before, "only a wake this plugin injected is reported"
+while not m.notices.empty(): m.notices.get()
+assert hooks["pre_llm_call"](turn_id="tu_1", user_message="hi") is None
+hooks["post_llm_call"](turn_id="tu_1", user_message="hi", assistant_response="x")
+assert [m.notices.get(), m.notices.get()] == [("/turn-state", {"turn": "tu_1", "state": "start"}), ("/turn-state", {"turn": "tu_1", "state": "end"})], "each turn's start and end go to the gateway in the background"
 os.environ["OPENHUT_GATEWAY"] = "http://127.0.0.1:9"
 assert hooks["transform_llm_output"](response_text="CARD", platform="slack") is None
 assert hooks["pre_gateway_dispatch"](event=event("/start abcdefghijklmnop")) is None

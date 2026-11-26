@@ -35,8 +35,8 @@ def register(ctx):
     for tool in ctx.get_config("tools", []) or []:
         ctx.register_tool(name=tool["name"], toolset=LOCAL_TOOLSET, schema=tool, handler=local(tool["name"]))
     ctx.register_hook("pre_tool_call", stamp)
+    ctx.register_hook("pre_llm_call", started)
     ctx.register_hook("post_llm_call", said)
-    ctx.register_hook("pre_llm_call", primed)
     for name in ctx.get_config("hooks", []) or []:
         ctx.register_hook(name, dispatch if name == "pre_gateway_dispatch" else forward(name))
     for prefix in ctx.get_config("slack_actions", []) or []:
@@ -152,6 +152,18 @@ def poll(ctx):
         time.sleep(POLL_SECONDS)
 
 
+def turn(state):
+    def hook(turn_id="", **_):
+        if turn_id and os.environ.get("OPENHUT_GATEWAY"):
+            notices.put(("/turn-state", {"turn": str(turn_id), "state": state}))
+    return hook
+
+
+def started(**kwargs):
+    turn("start")(**kwargs)
+    return primed(**kwargs)
+
+
 def warn(key, message):
     if warned.get(key) == message:
         return
@@ -180,7 +192,8 @@ def primed(is_first_turn=False, **_):
     return {"context": found} if found else None
 
 
-def said(user_message="", assistant_response="", **_):
+def said(user_message="", assistant_response="", turn_id="", **_):
+    turn("end")(turn_id=turn_id)
     match = WAKE.search(str(user_message or ""))
     if not match:
         where = origin()

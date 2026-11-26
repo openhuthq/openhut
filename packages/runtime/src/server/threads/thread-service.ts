@@ -13,6 +13,7 @@ import type { Database } from '../platform/db-schema.ts'
 import { emit, listen, log } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { forward } from '../relay/forward.ts'
+import { config } from '../platform/config.ts'
 import { deleted } from '../platform/responses.ts'
 import { unseal } from '../platform/secrets.ts'
 import { agentService } from '../agents/agent-service.ts'
@@ -48,6 +49,7 @@ export const busy = new Set<string>()
 const cache = new Map<string, Promise<Said[]>>()
 const IDLE_POLL_MS = 1000
 const IDLE_WAIT_MS = 10 * 60_000
+const STARTING_STATUS = [502, 503, 504]
 const SILENT = /^\s*\[?(SILENT|NO[_ ]REPLY)\]?\s*$/i
 const Authored = z.object({ metadata: z.object({ author: z.string() }) })
 const Woken = z.object({ metadata: z.object({ wake: z.literal(true) }) })
@@ -241,9 +243,9 @@ export const threadService = {
     const work = turnWork({ agent, started })
     const asked = together({ messages: said.map((each) => each.message), shared: agent.shared || peopleOf(agent.people).length > 0 })
     let answered = false
-    const answer = async (writer: { write: (chunk: UIMessageChunk) => void }) => {
+    const answer = async (writer: { write: (chunk: UIMessageChunk) => void }, retry: boolean) => {
       const message = await seeded({ said, session, message: asked })
-      for await (const chunk of answerStream({ agent, session, message, signal: abort.signal, work })) {
+      for await (const chunk of answerStream({ agent, session, message, signal: abort.signal, work, retry })) {
         if (chunk.type === 'text-delta' || chunk.type === SPEC_DATA_PART_TYPE) answered = true
         writer.write(chunk)
       }
@@ -251,13 +253,13 @@ export const threadService = {
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
         writer.write({ type: 'start', messageId: answerId })
-        const failed = await answer(writer).catch(async (err: unknown) => {
+        const failed = await answer(writer, true).catch(async (err: unknown) => {
           if (!(err instanceof LostTurn)) throw err
           // Hermes lost a turn of this session (its gateway was killed mid-turn, e.g. by an update) and
           // pauses the session for good; carry on in a fresh session, seeded with the chat so far.
           log.warn({ event: 'agent.session_lost', agent: agent.id, session })
           session = `${sessionOf([], said[0]?.id)}.${nextId()}`
-          await answer(writer)
+          await answer(writer, false)
         }).then(() => undefined, (err: unknown) => err)
         const done = work.done({ error: failed === undefined ? undefined : messageOf(failed) })
         if (done) writer.write({ type: 'data-work', id: 'work', data: done })
@@ -475,21 +477,28 @@ async function idle(id: string): Promise<void> {
 }
 
 async function callAgent({ agent, session, message, signal }: { agent: AgentRow; session: string; message: OpenAiMessage; signal: AbortSignal }): Promise<ReadableStream<Uint8Array>> {
-  const ask = () => forward.fetch({ agent, path: '/v1/chat/completions', init: {
-    method: 'POST',
-    headers: { authorization: `Bearer ${unseal(agent.channel_key)}`, 'content-type': 'application/json', 'x-hermes-session-id': session },
-    body: JSON.stringify({ model: 'hermes-agent', stream: true, messages: [{ role: 'system', content: CHAT_NOTE }, message] }),
-    signal: AbortSignal.any([signal, AbortSignal.timeout(TURN_MS)]),
-  } }).catch(async (err: unknown) => {
-    if (!signal.aborted && agentService.booting()) return new Promise<Response>((resolve) => setTimeout(() => resolve(ask()), IDLE_POLL_MS))
-    throw err
-  })
+  const until = Date.now() + config.startWaitMs
+  const ask = async (): Promise<Response> => {
+    const res = await forward.fetch({ agent, path: '/v1/chat/completions', init: {
+      method: 'POST',
+      headers: { authorization: `Bearer ${unseal(agent.channel_key)}`, 'content-type': 'application/json', 'x-hermes-session-id': session },
+      body: JSON.stringify({ model: 'hermes-agent', stream: true, messages: [{ role: 'system', content: CHAT_NOTE }, message] }),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(TURN_MS)]),
+    } }).catch((err: unknown) => err instanceof Error ? err : new Error(String(err)))
+    const starting = res instanceof Error || STARTING_STATUS.includes(res.status)
+    if (!starting || signal.aborted || Date.now() > until) {
+      if (res instanceof Error) throw res
+      return res
+    }
+    await new Promise((resolve) => setTimeout(resolve, IDLE_POLL_MS))
+    return ask()
+  }
   const res = await ask().catch(() => { throw new HttpError(502, signal.aborted ? 'Stopped.' : `${agent.name} isn't answering. Try again, or stop it and start it again.`) })
   if (!res.ok || !res.body) throw new HttpError(502, `${agent.name} couldn't answer. Try again, or stop it and start it again.`)
   return res.body
 }
 
-function answerStream(input: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal; work: TurnWork }): ReadableStream<UIMessageChunk> {
+function answerStream(input: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal; work: TurnWork; retry?: boolean }): ReadableStream<UIMessageChunk> {
   return joinText(pipeJsonRender(relayed(input)))
 }
 
@@ -498,7 +507,7 @@ async function afterTurn({ agentId, since }: { agentId: string; since: number })
   return parts.flatMap((part) => part ? [part as UIMessageChunk] : [])
 }
 
-function relayed(input: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal; work: TurnWork }): ReadableStream<UIMessageChunk> {
+function relayed(input: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal; work: TurnWork; retry?: boolean }): ReadableStream<UIMessageChunk> {
   return new ReadableStream({
     start: (controller) => {
       const writer = { write: (chunk: UIMessageChunk) => controller.enqueue(chunk) }
@@ -544,37 +553,45 @@ function foldCard(message: UIMessage): UIMessage {
   }) }
 }
 
-async function relay({ agent, session, message, writer, signal, work }: { agent: AgentRow; session: string; message: ChatMessage; writer: { write: (chunk: UIMessageChunk) => void }; signal: AbortSignal; work?: TurnWork }): Promise<string | undefined> {
+async function relay({ agent, session, message, writer, signal, work, retry = false }: { agent: AgentRow; session: string; message: ChatMessage; writer: { write: (chunk: UIMessageChunk) => void }; signal: AbortSignal; work?: TurnWork; retry?: boolean }): Promise<string | undefined> {
   const body = await callAgent({ agent, session, message: await openAiOf({ agentId: agent.id, message }), signal })
   let text = 0
   let open = false
   let finish: string | null | undefined
   let ended = false
-  for await (const event of sseEvents({ body, signal, agentName: agent.name })) {
-    if (event.data === '[DONE]') {
-      ended = true
-      break
+  const events = sseEvents({ body, signal, agentName: agent.name, retry })
+  const next = () => events.next().catch((err: unknown) => { throw err instanceof LostTurn && text ? new Error(dropped(agent.name)) : err })
+  try {
+    for (let step = await next(); !step.done; step = await next()) {
+      const event = step.value
+      if (event.data === '[DONE]') {
+        ended = true
+        break
+      }
+      if (event.name === 'hermes.tool.progress') {
+        if (open) writer.write({ type: 'text-end', id: `t${text}` })
+        open = false
+        const shown = await work?.tool(z.safeParse(ToolProgress, parseJson(event.data)).data ?? {})
+        if (shown) writer.write({ type: 'data-work', id: 'work', data: shown })
+        continue
+      }
+      const chunk = z.safeParse(Chunk, parseJson(event.data)).data
+      if (chunk?.error?.message === 'unknown_execution' && !text) throw new LostTurn()
+      if (chunk?.error) throw new Error(modelFailure({ name: agent.name, message: chunk.error.message }))
+      finish = chunk?.choices?.[0]?.finish_reason ?? finish
+      const delta = chunk?.choices?.[0]?.delta?.content
+      if (!delta) continue
+      if (!open) writer.write({ type: 'text-start', id: `t${++text}` })
+      open = true
+      writer.write({ type: 'text-delta', id: `t${text}`, delta })
     }
-    if (event.name === 'hermes.tool.progress') {
-      if (open) writer.write({ type: 'text-end', id: `t${text}` })
-      open = false
-      const shown = await work?.tool(z.safeParse(ToolProgress, parseJson(event.data)).data ?? {})
-      if (shown) writer.write({ type: 'data-work', id: 'work', data: shown })
-      continue
-    }
-    const chunk = z.safeParse(Chunk, parseJson(event.data)).data
-    if (chunk?.error?.message === 'unknown_execution' && !text) throw new LostTurn()
-    if (chunk?.error) throw new Error(modelFailure({ name: agent.name, message: chunk.error.message }))
-    finish = chunk?.choices?.[0]?.finish_reason ?? finish
-    const delta = chunk?.choices?.[0]?.delta?.content
-    if (!delta) continue
-    if (!open) writer.write({ type: 'text-start', id: `t${++text}` })
-    open = true
-    writer.write({ type: 'text-delta', id: `t${text}`, delta })
+  } finally {
+    await events.return(undefined)
   }
   if (open) writer.write({ type: 'text-end', id: `t${text}` })
   if (text) return undefined
   if (finish === 'cancelled') return `Stopped: ${agent.name} was interrupted before it answered. Ask again.`
+  if (!ended && !finish && retry && !signal.aborted) throw new LostTurn()
   if (!ended && !finish) return dropped(agent.name)
   return `Stopped: ${agent.name} ended its turn without an answer. Ask again.`
 }
@@ -600,14 +617,15 @@ function modelFailure({ name, message }: { name: string; message: string }): str
   return `${name}'s model failed: ${message.slice(0, 300)}`
 }
 
-async function* sseEvents({ body, signal, agentName }: { body: ReadableStream<Uint8Array>; signal: AbortSignal; agentName: string }): AsyncGenerator<{ name: string; data: string }> {
+async function* sseEvents({ body, signal, agentName, retry = false }: { body: ReadableStream<Uint8Array>; signal: AbortSignal; agentName: string; retry?: boolean }): AsyncGenerator<{ name: string; data: string }> {
   const decoder = new TextDecoder()
   let buffer = ''
   const reads = body[Symbol.asyncIterator]()
   try {
     for (;;) {
       const next = await reads.next().catch((err: unknown) => {
-        throw signal.aborted ? err : new Error(dropped(agentName))
+        if (signal.aborted) throw err
+        throw retry ? new LostTurn() : new Error(dropped(agentName))
       })
       if (next.done) return
       buffer += decoder.decode(next.value, { stream: true }).replace(/\r\n/g, '\n')

@@ -63,8 +63,9 @@ function failed(): string[] {
   return existsSync(FAILED) ? readFileSync(FAILED, 'utf8').split('\n').filter(Boolean) : []
 }
 
-async function follow(image: string): Promise<void> {
+async function follow({ image, hash }: { image: string; hash: string }): Promise<void> {
   if (!image || !config.runtimeImage || image === config.runtimeImage || failed().includes(image)) return
+  if (hash && hash === config.runtimeHash) return
   const docker = (...args: string[]) => run('docker', ['-H', config.hostDocker, ...args])
   if (await docker('container', 'inspect', 'openhut-runtime-update').then(() => true, () => false)) return
   console.log(`link: following the main install to ${image}`)
@@ -111,9 +112,10 @@ function dial(): void {
       if (message.type !== 'welcome') return
       if (typeof message.token === 'string' && /^ohj_[\w-]{20,100}$/.test(message.token)) writeFileSync(LINK, `${address} ${message.token}\n`, { mode: 0o600 })
       const image = typeof message.runtimeImage === 'string' ? message.runtimeImage : ''
+      const hash = typeof message.runtimeHash === 'string' ? message.runtimeHash : ''
       try { writeFileSync(LINKED, `${new Date().toISOString()}\n`) } catch { console.log('link: no /run to mark the link in') }
       wait = 1_000
-      void follow(image).catch((err: unknown) => console.error(`link: couldn't start the update: ${String(err)}`))
+      void follow({ image, hash }).catch((err: unknown) => console.error(`link: couldn't start the update: ${String(err)}`))
       const tell = () => void hello(image).then((said) => link.say(said))
       tell()
       const again = setInterval(tell, HELLO_MS)

@@ -121,7 +121,7 @@ export const computerService = {
       emit({ name: 'computer.offline', target: { type: 'computer', id: row.id } })
     })
     forward.link({ computer: row.id, link })
-    link.mux.say({ type: 'welcome', runtimeImage: config.runtimeImage, ...token && { token } })
+    link.mux.say({ type: 'welcome', runtimeImage: config.runtimeImage, runtimeHash: config.runtimeHash, ...token && { token } })
   },
 }
 

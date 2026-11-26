@@ -7,6 +7,7 @@ import * as z from 'zod/mini'
 const PackageJson = z.object({ version: z.string() })
 const BUILD = fileOr(new URL('../../../../../BUILD', import.meta.url), 'dev')
 const RUNTIME_IMAGE = fileOr(new URL('../../../../../RUNTIME_IMAGE', import.meta.url), '')
+const RUNTIME_HASH = fileOr(new URL('../../../../../RUNTIME_HASH', import.meta.url), '')
 
 // Every environment variable the server reads lives here (the agent host has its own, agentd/config.ts).
 const DATA = env.get('OPENHUT_DATA').default('/data/app').asString() // where the database and files live
@@ -49,6 +50,7 @@ export const config = {
   secret: env.get('OPENHUT_SECRET').asString(), // the install's auth secret from the OS keychain (desktop); removed from the env below
   version: PackageJson.parse(JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'))).version,
   build: BUILD,
+  runtimeHash: RUNTIME_HASH, // the hash of what that runtime runs; a computer whose runtime has it keeps running
   runtimeImage: env.get('OPENHUT_RUNTIME_IMAGE').default(RUNTIME_IMAGE).asString(), // the openhut-runtime image this build pairs with; every computer follows it
   hereTokenSha256: env.get('OPENHUT_HERE_TOKEN_SHA256').asString(), // sha256 of the token this install's own runtime links with (main-start.sh)
   installDir: env.get('OPENHUT_INSTALL_DIR').default('/data').asString(), // the update request, log and lock the updater shares
@@ -56,6 +58,7 @@ export const config = {
   claudeHostBin: env.get('OPENHUT_CLAUDE').default('claude').asString(), // the Claude CLI the server runs itself for the seat sign-in
   path: env.get('PATH').default('/usr/bin:/bin').asString(), // the PATH Claude sign-in runs with
   started: Math.floor(Date.now() / 1000),
+  startWaitMs: 180_000, // how long a chat message waits for its agent to start or restart before it fails; tests shorten it
   quietMs: 10_000, // how long an agent's gateway stays quiet before a restart for new access; tests shorten it
 }
 delete process.env.OPENHUT_SECRET

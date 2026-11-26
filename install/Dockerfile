@@ -32,7 +32,9 @@ COPY packages/runtime/src /opt/openhut/packages/runtime/src
 COPY packages/runtime/test/agentd /opt/openhut/packages/runtime/test/agentd
 COPY packages/app/package.json /opt/openhut/packages/app/
 COPY --from=web /src/packages/app/dist /opt/openhut/packages/app/dist
-RUN printf '%s\n' "$BUILD" > /opt/openhut/BUILD && chmod -R go-w /opt/openhut
+RUN printf '%s\n' "$BUILD" > /opt/openhut/BUILD && cd /opt/openhut && \
+    find install vendor package-lock.json packages/runtime/package.json packages/common/package.json packages/common/src/tunnel packages/runtime/src/agentd -type f | \
+    LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-64 > RUNTIME_HASH && chmod -R go-w /opt/openhut
 
 FROM --platform=$BUILDPLATFORM $ALPINE AS agent
 ARG TARGETARCH

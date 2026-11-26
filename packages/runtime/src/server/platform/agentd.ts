@@ -7,6 +7,7 @@ import { forward } from '../relay/forward.ts'
 import { HERE } from '../team/home.ts'
 
 const TIMEOUT_MS = 180_000
+const LINK_WAIT_MS = 60_000
 const MAX_LIVE_LINE = 8 << 20
 const Features = z.object({ whatsapp: z.boolean(), browser: z.boolean() })
 const Failure = z.object({ ok: z.literal(false), error: z.string() })
@@ -14,8 +15,8 @@ const Change = z.enum(['created', 'started', 'restarted', 'stopped', 'pending', 
 type On = { on?: string }
 
 export const agentd = {
-  health: ({ on = HERE }: On = {}) => ask({ on, request: { cmd: 'health' }, doing: 'check its health', schema: z.object({ firewall: z.boolean(), imageReady: z.optional(z.boolean()), gvisor: z.optional(z.boolean()), features: z.optional(Features) }) }),
-  ps: ({ on = HERE }: On = {}) => ask({ on, request: { cmd: 'ps' }, doing: 'list the agents', schema: z.object({ states: z.record(z.string(), z.string()) }) }),
+  health: ({ on = HERE }: On = {}) => ask({ on, wait: false, request: { cmd: 'health' }, doing: 'check its health', schema: z.object({ firewall: z.boolean(), imageReady: z.optional(z.boolean()), gvisor: z.optional(z.boolean()), features: z.optional(Features) }) }),
+  ps: ({ on = HERE }: On = {}) => ask({ on, wait: false, request: { cmd: 'ps' }, doing: 'list the agents', schema: z.object({ states: z.record(z.string(), z.string()) }) }),
   apply: ({ id, net, files, browser, running, force = false, restart = true, on }: { id: string; net: number; files: AgentFiles; browser: boolean; running: boolean; force?: boolean; restart?: boolean } & On) =>
     ask({ on, request: { cmd: 'apply', id, net, files, browser, running, force, restart }, doing: 'set up the agent', schema: z.object({ applied: z.string(), change: Change }) }),
   stop: ({ id, on }: { id: string } & On) => ask({ on, request: { cmd: 'stop', id }, doing: 'stop the agent', schema: z.object({ stopped: z.string() }) }),
@@ -30,7 +31,7 @@ export const agentd = {
   delete: ({ id, paths }: { id: string; paths: string[] }) => ask({ request: { cmd: 'delete', id, paths }, doing: 'delete the files', schema: z.object({ removed: z.array(z.string()) }) }),
   stat: ({ id, paths }: { id: string; paths: string[] }) => ask({ request: { cmd: 'stat', id, paths }, doing: 'look for the files', schema: z.object({ files: z.array(z.object({ path: z.string(), size: z.number() })) }) }),
   usage: async ({ since }: { since: number }) => ({
-    usage: (await everywhere((on) => ask({ on, request: { cmd: 'usage', since }, doing: 'read the agents\' usage', schema: z.object({ usage: z.record(z.string(), z.number()) }) }).then((reply) => reply.usage))) ?? {},
+    usage: (await everywhere((on) => ask({ on, wait: false, request: { cmd: 'usage', since }, doing: 'read the agents\' usage', schema: z.object({ usage: z.record(z.string(), z.number()) }) }).then((reply) => reply.usage))) ?? {},
   }),
 }
 
@@ -85,8 +86,9 @@ async function everywhere<T>(each: (on: string) => Promise<Record<string, T>>): 
   return Object.fromEntries(settled.flatMap(({ on, said }) => Object.entries(said ?? {}).filter(([id]) => runsOn.get(id) === on)))
 }
 
-async function ask<S extends z.ZodMiniType>({ on, request, body, doing, schema }: { on?: string; request: Record<string, unknown>; body?: string; doing: string; schema: S }): Promise<z.output<S>> {
+async function ask<S extends z.ZodMiniType>({ on, wait = true, request, body, doing, schema }: { on?: string; wait?: boolean; request: Record<string, unknown>; body?: string; doing: string; schema: S }): Promise<z.output<S>> {
   const computer = on ?? await forward.computerOf(typeof request.id === 'string' ? request.id : undefined)
+  if (wait && !await forward.ready({ on: computer, ms: LINK_WAIT_MS })) throw new HttpError(503, 'Agents can\'t run on this computer right now. OpenHut keeps trying.')
   const reply = await send({ on: computer, request, body, doing })
   const failure = z.safeParse(Failure, reply)
   if (failure.success) throw new HttpError(502, `OpenHut couldn't ${doing}: ${failure.data.error}. Restart OpenHut and try again.`)

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import type { AddressInfo } from 'node:net'
 import { manifest } from '../../src/core/hooks.ts'
 import { gatewayServer } from '../../src/server/gateway/gateway-server.ts'
+import { activity } from '../../src/server/gateway/activity.ts'
 import { db, migrate } from '../../src/server/platform/db.ts'
 import { agentToken, seal } from '../../src/server/platform/secrets.ts'
 
@@ -46,4 +47,12 @@ test('hooks no plugin handles and unknown tools are 404, and a request that does
   assert.equal((await call('/tools/nope', { args: {} })).status, 404)
   assert.equal((await call('/hooks/transform_llm_output', { args: 'nope' })).status, 400)
   assert.equal((await call('/slack-actions', { body: {} })).status, 400)
+})
+
+test('an agent\'s Hermes reports each turn\'s start and end, which keeps a restart waiting while the turn runs', async () => {
+  assert.equal((await call('/turn-state', { turn: 'tu_hook1', state: 'start' })).status, 200)
+  assert.equal(activity.inTurn('ag_hookagnt'), true)
+  assert.equal((await call('/turn-state', { turn: 'tu_hook1', state: 'end' })).status, 200)
+  assert.equal(activity.inTurn('ag_hookagnt'), false)
+  assert.equal((await call('/turn-state', { turn: '', state: 'later' })).status, 400)
 })
