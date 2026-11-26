@@ -5,6 +5,7 @@ import json
 import os
 import queue
 import re
+import sys
 import threading
 import time
 import urllib.error
@@ -15,7 +16,8 @@ from gateway.session_context import get_session_env
 from .slack_transport import broker_slack
 
 OURS = "mcp__openhut__"
-ORIGIN_FIELDS = ("platform", "chat_id", "chat_type", "chat_name", "thread_id", "user_id", "user_name", "scope_id")
+ORIGIN_FIELDS = ("platform", "chat_id", "chat_type", "chat_name", "thread_id", "parent_chat_id", "user_id", "user_name", "scope_id")
+RECORDED = ("discord",)
 LOCAL_TOOLSET = "openhut-local"
 WAKE = re.compile(r"\[OpenHut (\w+:\w+)\]")
 POLL_SECONDS = 15
@@ -23,6 +25,7 @@ ANSWERED = ("pre_", "transform_")
 NOTIFY_SECONDS = 5
 STRANGER = {"action": "skip", "reason": "openhut stranger"}
 injected = set()
+warned = {}
 notices = queue.Queue()
 allowing = threading.Lock()
 
@@ -32,7 +35,7 @@ def register(ctx):
     for tool in ctx.get_config("tools", []) or []:
         ctx.register_tool(name=tool["name"], toolset=LOCAL_TOOLSET, schema=tool, handler=local(tool["name"]))
     ctx.register_hook("pre_tool_call", stamp)
-    ctx.register_hook("pre_llm_call", turn("start"))
+    ctx.register_hook("pre_llm_call", started)
     ctx.register_hook("post_llm_call", said)
     for name in ctx.get_config("hooks", []) or []:
         ctx.register_hook(name, dispatch if name == "pre_gateway_dispatch" else forward(name))
@@ -85,8 +88,8 @@ def notify():
         path, body = notices.get()
         try:
             gateway(path, body, timeout=NOTIFY_SECONDS)
-        except Exception:
-            pass
+        except Exception as err:
+            warn(path, describe(err))
 
 
 def dispatch(**kwargs):
@@ -135,27 +138,69 @@ def poll(ctx):
     while True:
         try:
             for wake in gateway("/wakes")["data"]:
-                if wake["id"] not in injected:
-                    if not ctx.inject_message(wake["text"], origin=wake["origin"]):
-                        continue
-                    injected.add(wake["id"])
-                gateway("/wakes/" + wake["id"], {"picked": True})
-        except Exception:
-            pass
+                try:
+                    if wake["id"] not in injected:
+                        if not ctx.inject_message(wake["text"], origin=wake["origin"]):
+                            warn("wake " + wake["id"], "Hermes refused to start a turn at " + json.dumps(wake["origin"]) + "; its log says why")
+                            continue
+                        injected.add(wake["id"])
+                    gateway("/wakes/" + wake["id"], {"picked": True})
+                except Exception as err:
+                    warn("wake " + wake["id"], describe(err))
+        except Exception as err:
+            warn("wake poll", describe(err))
         time.sleep(POLL_SECONDS)
 
 
 def turn(state):
     def hook(turn_id="", **_):
         if turn_id and os.environ.get("OPENHUT_GATEWAY"):
-            notices.put(("/turns", {"turn": str(turn_id), "state": state}))
+            notices.put(("/turn-state", {"turn": str(turn_id), "state": state}))
     return hook
+
+
+def started(**kwargs):
+    turn("start")(**kwargs)
+    return primed(**kwargs)
+
+
+def warn(key, message):
+    if warned.get(key) == message:
+        return
+    warned[key] = message
+    print("openhut: " + key + ": " + message, file=sys.stderr, flush=True)
+
+
+def describe(err):
+    if isinstance(err, urllib.error.HTTPError):
+        try:
+            return "gateway answered " + str(err.code) + ": " + json.load(err).get("error", {}).get("message", "")
+        except Exception:
+            return "gateway answered " + str(err.code)
+    return type(err).__name__ + ": " + str(err)
+
+
+def primed(is_first_turn=False, **_):
+    where = origin()
+    if not is_first_turn or where.get("platform") not in RECORDED or not where.get("thread_id"):
+        return None
+    try:
+        found = gateway("/thread-context", {"origin": where}).get("context")
+    except Exception as err:
+        warn("thread context", describe(err))
+        return None
+    return {"context": found} if found else None
 
 
 def said(user_message="", assistant_response="", turn_id="", **_):
     turn("end")(turn_id=turn_id)
     match = WAKE.search(str(user_message or ""))
-    if not match or match.group(1) not in injected:
+    if not match:
+        where = origin()
+        if where.get("platform") in RECORDED:
+            notices.put(("/turns", {"user": str(user_message or ""), "reply": str(assistant_response or ""), "origin": where}))
+        return
+    if match.group(1) not in injected:
         return
     try:
         gateway("/wakes/" + match.group(1), {"said": str(assistant_response or "")})

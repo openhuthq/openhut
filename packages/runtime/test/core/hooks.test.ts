@@ -50,9 +50,9 @@ test('hooks no plugin handles and unknown tools are 404, and a request that does
 })
 
 test('an agent\'s Hermes reports each turn\'s start and end, which keeps a restart waiting while the turn runs', async () => {
-  assert.equal((await call('/turns', { turn: 'tu_hook1', state: 'start' })).status, 200)
+  assert.equal((await call('/turn-state', { turn: 'tu_hook1', state: 'start' })).status, 200)
   assert.equal(activity.inTurn('ag_hookagnt'), true)
-  assert.equal((await call('/turns', { turn: 'tu_hook1', state: 'end' })).status, 200)
+  assert.equal((await call('/turn-state', { turn: 'tu_hook1', state: 'end' })).status, 200)
   assert.equal(activity.inTurn('ag_hookagnt'), false)
-  assert.equal((await call('/turns', { turn: '', state: 'later' })).status, 400)
+  assert.equal((await call('/turn-state', { turn: '', state: 'later' })).status, 400)
 })

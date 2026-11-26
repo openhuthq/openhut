@@ -270,7 +270,7 @@ function settling(agent: Agent | undefined) {
 function writeGrant(client: QueryClient, grant: Grant, change: (grants: Grant[]) => Grant[]) {
   client.setQueryData<Grant[]>(grantsKey({ agentId: grant.agentId }), (grants) => grants && change(grants))
   client.setQueryData<Grant[]>(grantsKey({ connectionId: grant.connectionId }), (grants) => grants && change(grants))
-  return client.invalidateQueries({ queryKey: CONNECTIONS_KEY })
+  void client.invalidateQueries({ queryKey: CONNECTIONS_KEY })
 }
 
 function writeChannel(client: QueryClient, channel: Channel) {

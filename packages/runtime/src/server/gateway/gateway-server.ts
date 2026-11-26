@@ -13,7 +13,8 @@ import { testAnthropic, testModel } from './test-model.ts'
 import { brokerService, upstreams } from './broker.ts'
 import { activity } from './activity.ts'
 import { wakes } from '../../core/wakes.ts'
-import { APP_PLATFORM } from '../../core/plugin.ts'
+import { runsOnServer } from '../../plugins/chat/wakes.ts'
+import { reportTurn, threadContext } from '../../plugins/chat/turns.ts'
 
 export { toolList } from '../../plugins/connections/index.ts'
 
@@ -22,6 +23,8 @@ const PER_AGENT = 8
 const LONG_POLL = /^(\/u\/telegram\/bot[^/]+\/getUpdates|\/wakes)$/
 const MAX_BODY = 1 << 20
 const Turn = z.object({ turn: z.string().check(z.minLength(1), z.maxLength(200)), state: z.enum(['start', 'end']) })
+const REFUSED_LOG_MS = 60_000
+const lastRefused = new Map<string, number>()
 const LIMITS = { requestTimeout: 600_000, headersTimeout: 10_000, connectionsCheckingInterval: 2_000 }
 
 export const gatewayServer = {
@@ -50,7 +53,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const mcp = path === '/api/v1/mcp' && req.method === 'POST' ? await readBody(req) : undefined
   // Hermes's MCP keepalives and tool listings aren't work either; only a tool call is.
   const listening = LONG_POLL.test(path) || (path === '/api/v1/mcp' && ![mcp].flat().some((message) => (message as { method?: string } | undefined)?.method === 'tools/call'))
-  if (!listening && activity.count(agent.id) >= PER_AGENT) return json(res, 429, errorBody({ status: 429, message: `This agent already has ${PER_AGENT} requests running. Wait for them.` }), true)
+  if (!listening && activity.count(agent.id) >= PER_AGENT) return refused({ agentId: agent.id, path, res })
   if (!listening) {
     activity.started(agent.id)
     res.on('close', () => activity.ended(agent.id))
@@ -61,10 +64,12 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const upstream = brokered && upstreams.get(brokered[1])
   if (brokered && upstream) return brokerService.forward({ agent, upstream, path: brokered[2] + url.search, req, res })
   if (path === '/api/v1/mcp') return serveMcp({ server: mcpOf(agent), req, res, body: mcp })
-  if (path === '/wakes' && req.method === 'GET') return json(res, 200, { object: 'list', url: path, hasMore: false, data: (await wakes.due({ agentId: agent.id })).filter((wake) => wake.origin.platform !== APP_PLATFORM) })
+  if (path === '/wakes' && req.method === 'GET') return json(res, 200, { object: 'list', url: path, hasMore: false, data: (await wakes.due({ agentId: agent.id })).filter((wake) => !runsOnServer(wake)) })
+  if (path === '/thread-context' && req.method === 'POST') return json(res, 200, await threadContext({ agentId: agent.id, body: await readBody(req) }))
+  if (path === '/turns' && req.method === 'POST') return json(res, 200, await reportTurn({ agentId: agent.id, body: await readBody(req) }))
   const wake = /^\/wakes\/(\w+:\w+)$/.exec(path)
   if (wake && req.method === 'POST') return json(res, 200, await wakes.report({ agentId: agent.id, id: wake[1], body: await readBody(req) }))
-  if (path === '/turns' && req.method === 'POST') return json(res, 200, turned({ agentId: agent.id, body: await readBody(req) }))
+  if (path === '/turn-state' && req.method === 'POST') return json(res, 200, turned({ agentId: agent.id, body: await readBody(req) }))
   const local = /^\/tools\/(\w+)$/.exec(path)
   if (local && req.method === 'POST') return json(res, 200, await runLocal({ agent, name: local[1], body: await readBody(req) }))
   if (path === '/slack-actions' && req.method === 'POST') return json(res, 200, await runSlackAction({ agent, body: await readBody(req) }))
@@ -79,6 +84,14 @@ function turned({ agentId, body }: { agentId: string; body: unknown }): { ok: tr
   if (!found.success) throw new HttpError(400, 'Send a turn id and whether it started or ended.')
   activity.turn({ agentId, turn: found.data.turn, state: found.data.state })
   return { ok: true }
+}
+
+function refused({ agentId, path, res }: { agentId: string; path: string; res: ServerResponse }): void {
+  if (Date.now() - (lastRefused.get(agentId) ?? 0) >= REFUSED_LOG_MS) {
+    lastRefused.set(agentId, Date.now())
+    log.warn({ event: 'gateway.too_many', agentId, path, open: activity.count(agentId) })
+  }
+  json(res, 429, errorBody({ status: 429, message: `This agent already has ${PER_AGENT} requests running. Wait for them.` }), true)
 }
 
 async function readBody(req: IncomingMessage): Promise<unknown> {

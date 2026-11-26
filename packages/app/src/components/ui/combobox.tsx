@@ -1,4 +1,5 @@
 import type { ComponentProps } from 'react'
+import { Autocomplete as AutocompletePrimitive } from '@base-ui/react/autocomplete'
 import { Combobox as ComboboxPrimitive } from '@base-ui/react/combobox'
 import { menuItemVariants, menuPopupClass } from '@/components/ui/dropdown-menu'
 import { ICONS } from '@/components/icons'
@@ -8,6 +9,8 @@ export const Combobox = ComboboxPrimitive.Root
 export const ComboboxList = ComboboxPrimitive.List
 export const ComboboxEmpty = ComboboxPrimitive.Empty
 export const ComboboxItemIndicator = ComboboxPrimitive.ItemIndicator
+export const Autocomplete = AutocompletePrimitive.Root
+export const AutocompleteInput = AutocompletePrimitive.Input
 
 export function ComboboxChips({ className, children, ...props }: ComponentProps<typeof ComboboxPrimitive.Chips>) {
   return <ComboboxPrimitive.InputGroup className="flex min-h-8 min-w-0 cursor-text flex-wrap items-center gap-1 rounded-lg border border-hair bg-card p-[3px] focus-within:border-mid data-disabled:cursor-not-allowed data-disabled:opacity-60">
@@ -36,4 +39,8 @@ export function ComboboxContent({ className, ...props }: ComponentProps<typeof C
 
 export function ComboboxItem({ className, ...props }: ComponentProps<typeof ComboboxPrimitive.Item>) {
   return <ComboboxPrimitive.Item className={cn(menuItemVariants(), 'gap-1.5 [&>svg]:size-3', className)} {...props} />
+}
+
+export function AutocompleteItem({ className, ...props }: ComponentProps<typeof AutocompletePrimitive.Item>) {
+  return <AutocompletePrimitive.Item className={cn(menuItemVariants(), 'gap-1.5', className)} {...props} />
 }

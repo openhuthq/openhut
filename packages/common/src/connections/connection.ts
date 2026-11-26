@@ -11,7 +11,7 @@ export const CONNECTION_TITLES: Record<ConnectionKind, string> = {
   google: 'Google Workspace', google_chat: 'Google Chat', google_contacts: 'Google Contacts', google_search: 'Google Search', excalidraw: 'Excalidraw', mcp: 'MCP server',
 }
 
-export const ConnectionStatus = z.enum(['connected', 'failing', 'no_calls'])
+export const ConnectionStatus = z.enum(['connected', 'signed_out', 'rejected', 'failing'])
 export type ConnectionStatus = z.infer<typeof ConnectionStatus>
 
 export const Connection = z.object({

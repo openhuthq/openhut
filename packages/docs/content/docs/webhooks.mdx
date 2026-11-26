@@ -4,7 +4,7 @@ description: Give an agent an address other services call when something happens
 icon: ops
 ---
 
-A **webhook** is an address on your OpenHut that another service calls when something happens: an alert fires, a deploy finishes, a form is sent. Each call reaches the agent as a message in the chat you pick, with the raw payload, and the agent does what its instructions say about it.
+A **webhook** is an address on your OpenHut that another service calls when something happens: an alert fires, a deploy finishes, a form is sent. Each call starts a thread in the web app (or in the Discord channel you pick), with the raw payload, and the agent does what its instructions say about it. See [Threads](/threads).
 
 ## Add one
 
@@ -14,7 +14,7 @@ Ask the agent:
 Watch our DigitalOcean Postgres and tell #db-alerts when an alert fires.
 ```
 
-It asks for a webhook, and a card shows up in the chat. **Approve** creates it; the calls go to the chat the agent asked in. The agent learns the address, never the secret: open **Get the address and secret** on the card to copy both.
+It asks for a webhook, and a card shows up in the chat. **Approve** creates it. The agent learns the address, never the secret. It then posts a setup card with the steps for the service, the **Address** with **Copy** and the secret with **Copy secret**, both read from the webhook itself, so they're always right. Press **Done** once it's set up. In Discord it sends the steps and the address instead; copy the secret from OpenHut.
 
 Or add one yourself: **More › Webhooks** on the agent's panel, type what calls it and **Add webhook**.
 
@@ -22,7 +22,7 @@ Each webhook shows:
 
 - **Address**: paste it into the service that calls it.
 - **Secret**: the service signs each call with it, or sends it as a token. **New secret** replaces it; calls signed with the old one stop working.
-- **Posts in**: the OpenHut app or any chat on the agent's channels.
+- **Runs in**: **Here in the web app** (the default), where you can reply in each call's thread, or one of the agent's channels, like a Discord channel. A thread that runs in Discord continues there; the web app shows it with **Open in Discord ↗**.
 
 Delete a webhook with the trash icon. Calls to its address stop at once.
 

@@ -46,6 +46,8 @@ A step that failed says why, in red, and the line counts it (*1 failed*). A step
 
 An agent can post in its own channels without anyone messaging it first, like a morning report in your team's Slack, Discord or Telegram. It can post only where it already answers: the Slack or Discord channels you picked for it, and the Telegram or WhatsApp chats of people allowed to message it. Ask it in a chat, or in its instructions, to "post the numbers in #ops every morning".
 
+**Notify** sets where it tells people when nobody is talking to it, like after a webhook call or a routine: a default Discord channel and, in plain words, rules such as "outages go to #alerts, everything else to #ops". Each message it posts this way shows under its reply in the app.
+
 ## Run code and Browser
 
 Under **Allowed to**, **Run code** lets the agent run code in its own container. **Browser** gives it a real web browser; **Open** shows what it has open, live, and lets you take over to log in. A web page can carry text written to mislead an agent, so turn Browser on only for agents that need it.

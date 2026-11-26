@@ -11,6 +11,7 @@ import { GoogleClientGuide } from '@/features/connections/google-client'
 import { useInstallSettings, useUpdateInstallSettings } from '@/features/settings/admin'
 import { useIsAdmin } from '@/features/people/api'
 import { useAskForGithub, useGithubApp, useGithubSetup } from '@/features/settings/github-app'
+import { connectStep } from '@/features/settings/github-setup'
 import { CopyButton } from '@/components/copy-button'
 import { Busy, PILL, SetupSheet } from '@/components/kit'
 import { fieldError, formError } from '@/lib/api-client'
@@ -144,10 +145,12 @@ function GitHubSheet(props: FlowProps) {
   const admin = useIsAdmin()
   const info = useGithubApp().data
   const askAdmin = useAskForGithub()
-  const setup = useGithubSetup({ onClose: close })
+  const [ready, setReady] = useState(false)
+  const setup = useGithubSetup({ onClose: close, onDone: () => setReady(true) })
   if (!info) return null
-  if (admin && (!info.app || setup.started)) return <SetupSheet {...sheetOf(item)} onClose={close} {...setup.sheet} />
-  if (info.app) return <QuickSheet {...props} />
+  const step = connectStep({ admin, app: !!info.app, started: setup.started, ready })
+  if (step === 'setup') return <SetupSheet {...sheetOf(item)} onClose={close} {...setup.sheet} />
+  if (step === 'connect') return <QuickSheet {...props} />
   return <SetupSheet {...sheetOf(item)} blurb="An admin sets GitHub up once for your team." onClose={close}
     foot={<><Button type="button" variant="secondary" onClick={close}>Cancel</Button>
       {info.asked ? <span className="inline-flex h-8 items-center gap-1.5 px-1 text-[13px] text-mute"><i className="size-1.5 rounded-full bg-amber" />Asked. Waiting for an admin to set up GitHub</span>
@@ -166,7 +169,8 @@ export function useQuickConnect() {
   const authorize = useAuthorizeConnection()
   const create = useCreateConnection()
   const taken = (useConnections().data ?? []).map((connection) => connection.name)
-  const direct = (item: Integration) => QUICK.has(item.name) || GOOGLE_KINDS.some((kind) => kind === item.name)
+  const github = !!useGithubApp().data?.app
+  const direct = (item: Integration) => (item.name === 'github' ? github : QUICK.has(item.name)) || GOOGLE_KINDS.some((kind) => kind === item.name)
   const connect = (item: Integration, opened?: Window | null) => {
     const name = uniqueName({ title: item.title, taken })
     if (item.name === 'excalidraw') return create.mutate({ kind: 'excalidraw', name }, { onError: toastError })

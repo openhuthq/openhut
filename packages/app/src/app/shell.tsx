@@ -35,16 +35,16 @@ export function Shell({ route, overlay }: { route: ShellRoute; overlay: 'setting
     return () => window.removeEventListener('keydown', key)
   }, [])
   const contacts: Contact[] = (agents.data ?? [])
-    .map((agent) => ({ agent, thread: threads.data?.find((thread) => thread.agentId === agent.id) }))
+    .map((agent) => ({ agent, threads: threads.data?.filter((thread) => thread.agentId === agent.id) ?? [] }))
     .sort((a, b) => lastSeen(b) - lastSeen(a))
   const newAgent = () => navigate(activeId ? agentPath({ agentId: activeId, dialog: 'new' }) : '/new')
   order.current = contacts.map(({ agent }) => agent.id)
   return <SidebarContext value={{ collapsed: hidden }}><div className="relative flex h-dvh overflow-hidden bg-card pt-[env(safe-area-inset-top)] phone:bg-sidebar pb-[env(safe-area-inset-bottom)] text-left">
     {hidden && <ShowSidebar onExpand={() => setCollapsed(false)} onNew={newAgent} />}
-    <Sidebar contacts={contacts} activeId={activeId} collapsed={hidden} onCollapse={() => setCollapsed((on) => !on)} onNew={newAgent} />
+    <Sidebar contacts={contacts} activeId={activeId} threadId={route.page === 'agent' ? route.threadId : undefined} collapsed={hidden} onCollapse={() => setCollapsed((on) => !on)} onNew={newAgent} />
     {route.page === 'agent' && (phone
-      ? <PhonePage key={route.agentId}><AgentView agentId={route.agentId} dialog={route.dialog} detail={route.detail} /></PhonePage>
-      : <AgentView key={route.agentId} agentId={route.agentId} dialog={route.dialog} detail={route.detail} />)}
+      ? <PhonePage key={route.agentId}><AgentView agentId={route.agentId} threadId={route.threadId} dialog={route.dialog} detail={route.detail} /></PhonePage>
+      : <AgentView key={route.agentId} agentId={route.agentId} threadId={route.threadId} dialog={route.dialog} detail={route.detail} />)}
     {route.page === 'home' && agents.data && <Home first={contacts[0]?.agent.id} adding={route.adding} overlaid={!!overlay} />}
     {route.page === 'missing' && <Redirect to="/" />}
   </div></SidebarContext>
@@ -78,6 +78,6 @@ function saveCollapsed(collapsed: boolean) {
   try { localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0') } catch { return }
 }
 
-function lastSeen({ agent, thread }: Contact) {
-  return Math.max(Date.parse(agent.createdAt), thread ? Date.parse(thread.updatedAt) : 0)
+function lastSeen({ agent, threads }: Contact) {
+  return Math.max(Date.parse(agent.createdAt), ...threads.map((thread) => Date.parse(thread.updatedAt)))
 }

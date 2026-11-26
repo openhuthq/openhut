@@ -9,9 +9,9 @@ import { useJsonRenderMessage } from '@json-render/react'
 import { ArrowLeft01Icon, ArrowUp02Icon, ArrowUpRight01Icon, Attachment01Icon, Cancel01Icon, Copy01Icon, EraserIcon, File01Icon, Image01Icon, PlayIcon } from '@hugeicons/core-free-icons'
 import { openhut, type OpenHutAgent } from '@/lib/openhut'
 import type { Agent } from '@openhut/common/agents/agent.ts'
-import { ChatCall, fileInHome, MAX_FILE_BYTES, MAX_FILES, ToolProgress, Work, type ChatFile, type ChatMessage, type ThreadWithMessages } from '@openhut/common/threads/thread.ts'
+import { ChatCall, fileInHome, MAX_FILE_BYTES, MAX_FILES, ToolProgress, Work, type ChatFile, type ChatMessage } from '@openhut/common/threads/thread.ts'
 import { Alert } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { DropdownMenuItem, LongPressMenu } from '@/components/ui/dropdown-menu'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
@@ -27,7 +27,11 @@ import { agentState } from '@/components/status-badge'
 import { troubleOf } from '@/features/agents/status'
 import { useAgents, useUpdateAgent } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
-import { deleteUpload, saveFile, threadPath, uploadFile, useAgentThread, useClearChat, useHomeFiles, useThumb, useTouchThread } from '@/features/threads/api'
+import { deleteUpload, saveFile, threadPath, uploadFile, useClearChat, useHomeFiles, useResumeMirror, useThread, useThumb, useTouchThread, type ThreadWithMessages } from '@/features/threads/api'
+import { Notified, PLATFORM_WORD, placeName, sourceOf, startedIn, type SourcedThread } from '@/features/threads/places'
+import type { Place } from '@openhut/common/channels/channel.ts'
+import { PlaceIcon } from '@/features/routines/target-picker'
+import { WebhookSetup, WebhookSetupCard } from '@/features/webhooks/setup-card'
 import { homePathsIn, linkHomeFiles, RASTER } from '@/features/threads/files'
 import { ConfirmIcon } from '@/components/confirm-button'
 import { errorUnder, legacyWork, withoutCards } from '@/features/threads/steps'
@@ -43,7 +47,7 @@ import { TOUCH, useMedia } from '@/lib/media'
 import { cn } from '@/lib/utils'
 import { ICONS } from '@/components/icons'
 
-type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; work: Work; spec: SpecDataPart; asks: string[] }>
+type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; work: Work; spec: SpecDataPart; asks: string[]; notified: Notified; 'webhook-setup': WebhookSetup }>
 type AgentPart = AgentMessage['parts'][number]
 type Attachment = { key: string; name: string; image: boolean; thumb?: string; file?: ChatFile }
 
@@ -52,8 +56,8 @@ const IMAGE = /\.(png|jpe?g|gif|webp)$/i
 const RETRY_MS = 2000
 const RETRY_TRIES = 45
 
-export function Chat({ agent, tools, onTitle }: { agent: Agent; tools?: ReactNode; onTitle?: () => void }) {
-  const thread = useAgentThread(agent.id)
+export function Chat({ agent, threadId, tools, onTitle }: { agent: Agent; threadId: string; tools?: ReactNode; onTitle?: () => void }) {
+  const thread = useThread({ agentId: agent.id, threadId })
   if (agentState(agent) === 'stopped') return <ChatFrame agent={agent} tools={tools} onTitle={onTitle}><Asleep agent={agent} /></ChatFrame>
   if (!thread.data) return <ChatFrame agent={agent} tools={tools} onTitle={onTitle}><div className="m-auto"><ErrorNote message={thread.error?.message} /></div></ChatFrame>
   return <ThreadView key={thread.data.id} thread={thread.data} agent={agent} tools={tools} onTitle={onTitle} />
@@ -81,10 +85,10 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
   const shown = agent.runsHere ? chat.messages : chat.messages.filter((message) => message.role === 'user' || message.parts.some((part) => part.type !== 'step-start'))
   const last = shown.at(-1)
   const clear = agent.canEdit && chat.messages.length > 0 && !busy && !attachments.uploading && <ClearChat agent={agent} threadId={thread.id} attachments={attachments} />
-  return <ChatFiles value={files}><CardReply value={(text) => { if (!busy) send(text) }}><ChatFrame agent={agent} tools={<>{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={<Composer agent={agent} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void chat.stop()} />}>
+  return <ChatFiles value={files}><CardReply value={(text) => { if (!busy) send(text) }}><ChatFrame agent={agent} thread={thread} tools={<>{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={thread.readOnly ? <ContinueBar thread={thread} /> : <Composer agent={agent} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void chat.stop()} />}>
     {shown.length ? <>
       <Day iso={thread.updatedAt} />
-      {shown.map((message) => <Message key={message.id} agent={agent} message={message} live={busy && message === last} onRetry={!busy && message === last ? () => void chat.regenerate() : undefined} />)}
+      {shown.map((message) => <Message key={message.id} agent={agent} message={message} mirrors={thread.mirrorPaused || thread.readOnly ? [] : thread.mirrors ?? []} live={busy && message === last} onRetry={!busy && message === last ? () => void chat.regenerate() : undefined} />)}
     </> : <ChatEmpty agent={agent} />}
     {chat.status === 'submitted' && last?.role === 'user' && <Message agent={agent} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
     <PendingAsks agent={agent} shown={new Set(chat.messages.flatMap(changesOf))} />
@@ -178,7 +182,7 @@ function useAttachments({ agentId, threadId }: { agentId: string; threadId: stri
 
 type Attachments = ReturnType<typeof useAttachments>
 
-function ChatFrame({ agent, composer, tools, onTitle, onFiles, children }: { agent: Agent; composer?: ReactNode; tools?: ReactNode; onTitle?: () => void; onFiles?: (files: File[]) => void; children: ReactNode }) {
+function ChatFrame({ agent, thread, composer, tools, onTitle, onFiles, children }: { agent: Agent; thread?: SourcedThread; composer?: ReactNode; tools?: ReactNode; onTitle?: () => void; onFiles?: (files: File[]) => void; children: ReactNode }) {
   const back = usePhoneBack()
   const log = useRef<HTMLDivElement>(null)
   const sidebar = useContext(SidebarContext)
@@ -208,7 +212,7 @@ function ChatFrame({ agent, composer, tools, onTitle, onFiles, children }: { age
       <Button type="button" variant="bare" aria-label="All agents" className={cn(ICON_BUTTON, 'float hidden size-10 justify-self-start rounded-full bg-card text-ink phone:grid')} onClick={back}><I icon={ArrowLeft01Icon} size={20} /></Button>
       {onTitle
         ? <Button type="button" variant="bare" className="float flex h-10 min-w-0 items-center gap-2 rounded-full bg-card pr-4 pl-1.5 text-ink" onClick={onTitle}><Face agent={agent} size={28} /><span className="truncate text-[16px] font-semibold">{agent.name}</span></Button>
-        : <><Face agent={agent} size={26} /><span className="min-w-0 truncate text-[14px] font-semibold">{agent.name}</span></>}
+        : <><Face agent={agent} size={26} /><span className="shrink-0 text-[14px] font-semibold">{agent.name}</span>{thread && <ThreadSource thread={thread} />}</>}
       <span className="float ml-auto flex items-center gap-0.5 phone:h-10 phone:justify-self-end phone:rounded-full phone:bg-card phone:px-1">{tools}</span>
     </div>
     <div ref={log} className="fade-t flex flex-1 flex-col overflow-auto px-8 py-5 phone:px-4" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80 }}>
@@ -216,6 +220,40 @@ function ChatFrame({ agent, composer, tools, onTitle, onFiles, children }: { age
     </div>
     {composer}
   </section>
+}
+
+function ThreadSource({ thread }: { thread: SourcedThread }) {
+  const origin = thread.origin
+  const resume = useResumeMirror(thread)
+  const paused = !!thread.mirrorPaused && !!thread.mirrors?.length
+  const mirrors = thread.readOnly ? [] : (thread.mirrors ?? []).filter((mirror) => paused || !(origin?.platform === mirror.platform && placeName(mirror) === sourceOf(thread).label))
+  if (!origin?.url && !mirrors.length) return null
+  const started = origin?.url && <a href={origin.url} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-1 text-mute no-underline hover:text-ink">
+    <span className="truncate">Started in {startedIn(thread)}</span><I icon={ArrowUpRight01Icon} size={12} />
+  </a>
+  return <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-mute phone:hidden">
+    {started}
+    {started && mirrors.length > 0 && <span aria-hidden="true">·</span>}
+    {mirrors.length > 0 && !paused && <span className="truncate">Also posting to {mirrors.map(placeName).join(', ')}</span>}
+    {paused && <span className="truncate">Paused posting to {mirrors.map(placeName).join(', ')}</span>}
+    {paused && <><span aria-hidden="true">·</span><Button type="button" variant="link" className="h-auto p-0 text-[12.5px] font-normal text-ink" disabled={resume.isPending} onClick={() => resume.mutate(undefined, { onError: toastError })}>Resume</Button></>}
+  </span>
+}
+
+function ContinueBar({ thread }: { thread: SourcedThread }) {
+  const place = thread.mirrors?.[0]
+  const where = place ? PLATFORM_WORD[place.platform] ?? place.platform : 'the other app'
+  return <div className="shrink-0 px-8 pb-5 phone:px-3 phone:pb-3">
+    <div className="mx-auto flex max-w-[640px] items-center gap-2.5 rounded-xl bg-sidebar py-2.5 pr-2.5 pl-3.5 text-[13.5px] text-body phone:flex-wrap">
+      {place && <PlaceIcon platform={place.platform} size={16} />}
+      <span className="min-w-0 flex-1">This conversation continues in {place ? placeName(place) : where}</span>
+      {thread.continueUrl && <a href={thread.continueUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'secondary', size: 'sm' })}>Open in {where}<span className="text-[11px] text-mute">↗</span></a>}
+    </div>
+  </div>
+}
+
+function NotifiedRow({ notified }: { notified: Notified[number] }) {
+  return <span className="inline-flex items-center gap-1.5 text-[12.5px] text-mute" title={notified.text}><PlaceIcon platform={notified.place.platform} size={12} />Notified {placeName(notified.place)}</span>
 }
 
 function Day({ iso }: { iso: string }) {
@@ -294,10 +332,10 @@ function NotReady({ agent }: { agent: Agent }) {
 }
 
 function ClearChat({ agent, threadId, attachments }: { agent: Agent; threadId: string; attachments: Attachments }) {
-  const clearChat = useClearChat(agent.id)
+  const clearChat = useClearChat({ agentId: agent.id, threadId })
   const uploads = attachments.items.flatMap((item) => item.file ? [item.file.path] : [])
   return <ConfirmIcon label="Clear chat" icon={EraserIcon} question="Clear this chat? Memory stays; files you sent are deleted." action="Clear" busy={clearChat.isPending}
-    onConfirm={(done) => clearChat.mutate({ threadId, uploads }, { onSuccess: () => { attachments.clear(); done() }, onError: toastError })} />
+    onConfirm={(done) => clearChat.mutate({ uploads }, { onSuccess: () => { attachments.clear(); done() }, onError: toastError })} />
 }
 
 function useOffline(agent: Agent) {
@@ -305,8 +343,8 @@ function useOffline(agent: Agent) {
   return home && !home.online
 }
 
-function Message({ agent, message, live, onRetry }: { agent: Agent; message: AgentMessage; live: boolean; onRetry?: () => void }) {
-  return message.role === 'user' ? <UserMessage message={message} /> : <AgentReply agent={agent} message={message} live={live} onRetry={onRetry} />
+function Message({ agent, message, mirrors = [], live, onRetry }: { agent: Agent; message: AgentMessage; mirrors?: Place[]; live: boolean; onRetry?: () => void }) {
+  return message.role === 'user' ? <UserMessage message={message} mirrors={mirrors} /> : <AgentReply agent={agent} message={message} live={live} onRetry={onRetry} />
 }
 
 function AgentReply({ agent, message, live, onRetry }: { agent: Agent; message: AgentMessage; live: boolean; onRetry?: () => void }) {
@@ -328,6 +366,8 @@ function AgentReply({ agent, message, live, onRetry }: { agent: Agent; message: 
         ? <div key={index} className="msg-t"><Markdown remarkPlugins={plugins} components={{ a: ChatLink, code: FileCode, pre: CodeBlock, input: TaskBox, table: WideTable }}>{live ? settled(bullets(block.text)) : bullets(block.text)}</Markdown></div>
         : hasSpec && <MessageCard key={index} spec={spec} loading={live} />)}
       {ids.length > 0 && <AskCards agent={agent} ids={ids} />}
+      {message.parts.map((part, index) => part.type === 'data-webhook-setup' && <WebhookSetupCard key={index} agentId={agentId} card={part.data} />)}
+      {message.parts.flatMap((part, index) => part.type === 'data-notified' ? part.data.map((each, at) => <NotifiedRow key={`${index}-${at}`} notified={each} />) : [])}
       {live && !blocks.length && !work?.calls.some((call) => call.status === 'running') && <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>}
       {!live && error !== undefined && <span className="flex flex-wrap items-center gap-2 text-[13.5px] text-mute-2 italic">{error}{onRetry && <RetryButton onRetry={onRetry} />}</span>}
     </div></CopyMenu>
@@ -336,7 +376,7 @@ function AgentReply({ agent, message, live, onRetry }: { agent: Agent; message: 
 
 const Authored = z.object({ author: z.string() })
 
-function UserMessage({ message }: { message: AgentMessage }) {
+function UserMessage({ message, mirrors }: { message: AgentMessage; mirrors: Place[] }) {
   const text = textOf(message)
   const files = message.parts.flatMap((part) => part.type === 'file' ? [part] : [])
   const author = z.safeParse(Authored, message.metadata).data?.author
@@ -351,6 +391,7 @@ function UserMessage({ message }: { message: AgentMessage }) {
   return <div className="flex flex-col items-end gap-1.5">
     {files.length > 0 && <div className="flex max-w-[78%] flex-wrap justify-end gap-1.5">{files.map((file) => <SentFile key={file.url} name={file.filename ?? nameOf(file.url)} path={file.url} mediaType={file.mediaType} />)}</div>}
     {text && <CopyMenu text={text}><div className="max-w-[78%] rounded-[12px_12px_4px_12px] bg-soft px-3.5 py-2 text-[14px]/[1.5] [overflow-wrap:anywhere] whitespace-pre-wrap text-ink pointer-coarse:select-none">{text}</div></CopyMenu>}
+    {mirrors.length > 0 && <span className="inline-flex items-center gap-1.5 text-[12px] text-mute"><PlaceIcon platform={mirrors[0]?.platform ?? 'app'} size={12} />Sent to {mirrors.map(placeName).join(', ')}</span>}
   </div>
 }
 
@@ -483,6 +524,8 @@ function uiMessageOf(message: ChatMessage): AgentMessage {
     if (part.type === 'data-work') return z.safeParse(Work, part.data).data ? [{ type: 'data-work', id: 'work', data: z.parse(Work, part.data) }] : []
     if (part.type === 'data-calls') return [{ type: 'data-calls', data: z.safeParse(z.array(ChatCall), part.data).data ?? [] }]
     if (part.type === 'data-asks' || part.type === 'data-changes') return [{ type: 'data-asks', data: z.safeParse(z.array(z.string()), part.data).data ?? [] }]
+    if (part.type === 'data-webhook-setup') return z.safeParse(WebhookSetup, part.data).data ? [{ type: 'data-webhook-setup', data: z.parse(WebhookSetup, part.data) }] : []
+    if (part.type === 'data-notified') return z.safeParse(Notified, part.data).data ? [{ type: 'data-notified', data: z.parse(Notified, part.data) }] : []
     if (part.type === 'data-spec') return [{ type: 'data-spec', data: part.data as SpecDataPart }]
     if (part.type === 'file' && typeof part.url === 'string' && typeof part.mediaType === 'string') return [{ type: 'file', url: part.url, mediaType: part.mediaType, filename: typeof part.filename === 'string' ? part.filename : undefined }]
     return []

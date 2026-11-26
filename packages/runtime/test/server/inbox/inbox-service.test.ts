@@ -1,4 +1,4 @@
-import { test } from 'node:test'
+import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHmac } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
@@ -11,6 +11,7 @@ import { asks } from '../../../src/core/asks.ts'
 import { inboxReceiver } from '../../../src/server/inbox/inbox-controller.ts'
 import { inboxService } from '../../../src/server/inbox/inbox-service.ts'
 import { routineService } from '../../../src/server/inbox/routines.ts'
+import { channelService } from '../../../src/server/channels/channel-service.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { answerErrors } from '../../../src/server/platform/http-error.ts'
 import { agentToken, seal } from '../../../src/server/platform/secrets.ts'
@@ -106,7 +107,7 @@ test('a rotated secret stops the old one, and a deleted hook is gone', async () 
   assert.equal((await post({ id: hook.id, body: '{"a":2}', headers: { authorization: `Bearer ${rotated.secret}` } })).statusCode, 404)
 })
 
-test('add_webhook waits for approval; approving creates the webhook, tells the agent its address, and Slack deliveries arrive through the plugin\'s wakes poll', async () => {
+test('add_webhook waits for approval; approving creates the webhook and tells the agent its address, and its calls run on the server, never through the plugin\'s wakes poll', async () => {
   const server = gatewayServer.create().listen(0, '127.0.0.1')
   await new Promise((resolve) => server.once('listening', resolve))
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
@@ -118,15 +119,11 @@ test('add_webhook waits for approval; approving creates the webhook, tells the a
   const text = (asked.content as { text: string }[])[0].text
   assert.match(text, /^Asked for approval \(ask_[a-z0-9]+\): Add a webhook named DO Postgres alerts\./)
   const id = /ask_[a-z0-9]+/.exec(text)?.[0] ?? ''
-  const hooksBefore = await db.selectFrom('inbox_source').select('id').where('name', '=', 'DO Postgres alerts').where('origin', 'like', '%slack%').execute()
-  assert.equal(hooksBefore.length, 0)
-
   const known = new Set((await inboxService.webhooks({ actor: owner, agentId: 'ag_hookpuls' })).map((each) => each.id))
   const approved = await asks.approve({ actor: owner, id })
   assert.equal(approved.status, 'done')
   const hook = (await inboxService.webhooks({ actor: owner, agentId: 'ag_hookpuls' })).find((each) => !known.has(each.id))
   const hookId = hook?.id ?? ''
-  assert.equal(hook?.place, '#db-alerts')
 
   const headers = { authorization: `Agent ${token}`, 'content-type': 'application/json' }
   const decision = (await (await fetch(`${base}/wakes`, { headers })).json() as { data: { id: string; text: string }[] }).data.find((wake) => wake.id.startsWith('asks:wk_'))
@@ -135,10 +132,6 @@ test('add_webhook waits for approval; approving creates the webhook, tells the a
 
   const body = alert('evt-slack')
   assert.equal((await post({ id: hookId, body, headers: { 'x-digitalocean-signature': doSigned({ secret: hook?.secret ?? '', body }) } })).statusCode, 200)
-  const due = (await (await fetch(`${base}/wakes`, { headers })).json() as { data: { id: string; text: string; origin: unknown }[] }).data.filter((wake) => wake.id.startsWith('inbox:hd_'))
-  assert.equal(due.length, 1)
-  assert.deepEqual(due[0].origin, slack)
-  assert.equal((await fetch(`${base}/wakes/${due[0].id}`, { method: 'POST', headers, body: JSON.stringify({ picked: true }) })).status, 200)
   assert.equal((await (await fetch(`${base}/wakes`, { headers })).json() as { data: { id: string }[] }).data.filter((wake) => wake.id.startsWith('inbox:hd_')).length, 0)
   const self = JSON.parse(((await client.callTool({ name: 'get_self', arguments: {} })).content as { text: string }[])[0].text)
   assert.ok(self.webhooks.some((each: { url: string }) => each.url.endsWith(hookId)))
@@ -158,8 +151,6 @@ test('a routine moves to another place the agent posts, and can run with no end 
   assert.equal(moved.place, 'the OpenHut app')
   assert.equal(moved.until, null)
   await assert.rejects(inboxService.updateRoutine({ actor: owner, id, target: 'nowhere' }), /Pick where it posts/)
-  const webhook = await inboxService.createSource({ actor: owner, agentId: 'ag_hookpuls', name: 'Moves', target: targets[1].id })
-  assert.equal(webhook.place, '#db-alerts')
 })
 
 test('the owner sees the last payload a webhook got', async () => {
@@ -193,4 +184,15 @@ test('a member who can chat with a whole-team agent can\'t touch its webhooks or
   ]) await assert.rejects(attempt, { status: 403 })
   assert.equal((await db.selectFrom('inbox_source').select('id').where('name', 'in', ['Mine', 'Sneaky', 'Renamed']).execute()).length, 0)
   assert.equal((await asks.approve({ actor: owner, id: 'chg_hookmmbr' })).status, 'done')
+})
+
+test('a webhook\'s channel is the app unless set to a place the agent posts in', async () => {
+  const humans = { platform: 'discord', chat_id: '777', chat_name: '#agents-humans' }
+  const places = mock.method(channelService, 'places', async () => [humans])
+  const hook = await inboxService.createSource({ actor: owner, agentId: 'ag_hookpuls', name: 'Home' })
+  assert.equal(hook.channel, 'app')
+  assert.deepEqual((await inboxService.updateWebhook({ actor: owner, id: hook.id, channel: humans })).channel, humans)
+  await assert.rejects(inboxService.updateWebhook({ actor: owner, id: hook.id, channel: { ...humans, chat_id: '1' } }), /Pick a channel from the list/)
+  assert.equal((await inboxService.updateWebhook({ actor: owner, id: hook.id, channel: 'app' })).channel, 'app')
+  places.mock.restore()
 })

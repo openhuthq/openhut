@@ -11,6 +11,7 @@ import { discord } from '../../server/integrations/discord/discord.ts'
 import { whatsapp } from '../../server/integrations/whatsapp/whatsapp.ts'
 import { channelService } from '../../server/channels/channel-service.ts'
 import { channelController } from '../../server/channels/channel-controller.ts'
+import { placeController } from '../../server/channels/place-controller.ts'
 import { log } from '../../server/platform/events.ts'
 import { describeIssues, HttpError, messageOf } from '../../server/platform/http-error.ts'
 import { createTables } from './tables.ts'
@@ -33,7 +34,7 @@ export type RenderedChannel =
 export const channels = definePlugin({
   name: 'channels',
   migrate: createTables,
-  routes: () => ({ '/api/channels': channelController }),
+  routes: () => ({ '/api/channels': channelController, '/api/agents/:id/places': placeController }),
   start: () => void channelService.resumeTelegramClaims().catch((err: unknown) => log.warn({ event: 'telegram.claim_resume_failed', error: messageOf(err) })),
   hermes: ({ agent, channels: list, gateway, token }) => {
     const parts = list.map((channel) => partOf({ channel, gateway, token, net: agent.net }))

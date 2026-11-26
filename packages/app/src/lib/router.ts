@@ -1,8 +1,10 @@
 import { useLayoutEffect, useSyncExternalStore } from 'react'
+import { isStale } from './build.ts'
 
 const MOVED = 'openhut:navigate'
 
 export function navigate(to: string, replace = false) {
+  if (isStale()) return location.assign(to)
   if (replace) history.replaceState(null, '', to)
   else history.pushState(null, '', to)
   dispatchEvent(new Event(MOVED))

@@ -37,6 +37,14 @@ ctx = Ctx(); m.register(ctx)
 assert sorted(tools) == ["list_things", "post_message"] and {t["toolset"] for t in tools.values()} == {"openhut-local"}, tools
 assert tools["post_message"]["schema"] == settings["tools"][0]
 assert sorted(hooks) == ["post_llm_call", "pre_gateway_dispatch", "pre_llm_call", "pre_tool_call", "subagent_stop", "transform_llm_output"], hooks
+assert hooks["pre_llm_call"](is_first_turn=True) is None, "only a Discord thread asks for OpenHut context"
+here, thread = m.origin, {"platform": "discord", "chat_id": "777", "thread_id": "777", "parent_chat_id": "666"}
+m.origin = lambda: thread
+ANSWERS["/thread-context"] = lambda body: (200, {"object": "thread_context", "context": "Alert: cpu 99%"})
+assert hooks["pre_llm_call"](is_first_turn=False) is None
+assert hooks["pre_llm_call"](is_first_turn=True) == {"context": "Alert: cpu 99%"}
+assert calls[-1] == ("/thread-context", {"origin": thread}), calls[-1]
+m.origin = here
 assert [p.pattern for p, _ in actions] == ["^card:"]
 stamped = {"action": "modify", "args": {"origin": {"platform": "slack", "chat_id": "C1"}}}
 assert [hooks["pre_tool_call"](tool_name=n) for n in ("mcp__openhut__list_routines", "mcp__openhut__any_new_tool", "terminal", "mcp__github__x")] == [stamped, stamped, None, None]
@@ -110,7 +118,7 @@ assert len(calls) == before, "only a wake this plugin injected is reported"
 while not m.notices.empty(): m.notices.get()
 assert hooks["pre_llm_call"](turn_id="tu_1", user_message="hi") is None
 hooks["post_llm_call"](turn_id="tu_1", user_message="hi", assistant_response="x")
-assert [m.notices.get(), m.notices.get()] == [("/turns", {"turn": "tu_1", "state": "start"}), ("/turns", {"turn": "tu_1", "state": "end"})], "each turn's start and end go to the gateway in the background"
+assert [m.notices.get(), m.notices.get()] == [("/turn-state", {"turn": "tu_1", "state": "start"}), ("/turn-state", {"turn": "tu_1", "state": "end"})], "each turn's start and end go to the gateway in the background"
 os.environ["OPENHUT_GATEWAY"] = "http://127.0.0.1:9"
 assert hooks["transform_llm_output"](response_text="CARD", platform="slack") is None
 assert hooks["pre_gateway_dispatch"](event=event("/start abcdefghijklmnop")) is None

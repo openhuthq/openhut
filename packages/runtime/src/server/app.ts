@@ -31,7 +31,7 @@ answerErrors(app)
 app.setValidatorCompiler(validatorCompiler)
 app.setSerializerCompiler(serializerCompiler)
 app.addHook('onSend', async (_req, reply) => {
-  reply.header('referrer-policy', 'no-referrer').header('x-frame-options', 'DENY')
+  reply.header('referrer-policy', 'no-referrer').header('x-frame-options', 'DENY').header('x-openhut-build', config.build)
 })
 
 await app.register(websocket, { options: { maxPayload: 1 << 20 } })

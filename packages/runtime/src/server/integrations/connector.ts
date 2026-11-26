@@ -4,7 +4,7 @@ import { describeIssues } from '../platform/http-error.ts'
 export function nativeConnector<C>({ config, tools }: { config: z.ZodMiniType<C>; tools: Record<string, NativeTool<C>> }): Connector {
   return {
     // ponytail: every native tool today is Postgres' read-only kind; take annotations per tool when a native one writes.
-    tools: async () => Object.entries(tools).map(([name, tool]) => ({ name, description: tool.description, schema: z.toJSONSchema(tool.input), annotations: { readOnlyHint: true } })),
+    tools: async () => Object.entries(tools).map(([name, tool]) => ({ name, description: tool.description, schema: z.toJSONSchema(tool.input), annotations: { title: tool.title, readOnlyHint: true } })),
     call: async ({ config: stored, tool, args }) => {
       const spec = Object.hasOwn(tools, tool) ? tools[tool] : undefined
       if (!spec) return { text: `No tool named ${tool}. Use ${Object.keys(tools).join(', ')}.`, isError: true }
@@ -15,8 +15,8 @@ export function nativeConnector<C>({ config, tools }: { config: z.ZodMiniType<C>
   }
 }
 
-export function nativeTool<C, S extends z.ZodMiniObject>(tool: { description: string; input: S; run: (call: { config: C; args: z.infer<S> }) => Promise<unknown> }): NativeTool<C> {
-  return { description: tool.description, input: tool.input, run: ({ config, args }) => tool.run({ config, args: z.parse(tool.input, args) }) }
+export function nativeTool<C, S extends z.ZodMiniObject>(tool: { title: string; description: string; input: S; run: (call: { config: C; args: z.infer<S> }) => Promise<unknown> }): NativeTool<C> {
+  return { title: tool.title, description: tool.description, input: tool.input, run: ({ config, args }) => tool.run({ config, args: z.parse(tool.input, args) }) }
 }
 
 function argumentProblem(issues: z.core.$ZodIssue[]): string {
@@ -32,4 +32,4 @@ export type ConnectorContext = { config: unknown; refresh: (renew: (latest: Reco
 export type ToolSpec = { name: string; description: string; schema: Record<string, unknown>; annotations?: ToolAnnotations; meta?: Record<string, unknown> }
 export type ToolAnnotations = { title?: string; readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean }
 export type ToolResult = { text: string; isError: boolean }
-type NativeTool<C> = { description: string; input: z.ZodMiniObject; run: (call: { config: C; args: unknown }) => Promise<unknown> }
+type NativeTool<C> = { title: string; description: string; input: z.ZodMiniObject; run: (call: { config: C; args: unknown }) => Promise<unknown> }
