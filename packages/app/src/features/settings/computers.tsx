@@ -43,7 +43,7 @@ function ComputerRow({ computer, admin, updating, onRemoved }: { computer: Compu
   const [asking, setAsking] = useState(false)
   return <Row icon={<ComputerMark computer={computer} />} title={computer.here ? <>{computer.name} <span className="text-mute">· this machine</span></> : computer.name} note={updating ? 'Updating…' : noteOf(computer)}>
     {updating && <Spinner className="mt-0" />}
-    {admin && !computer.here && <Button type="button" variant="secondary" className={cn(PILL, 'text-fail')} disabled={remove.isPending} onClick={() => setAsking(true)}>Remove</Button>}
+    {admin && !computer.here && <Button type="button" variant="danger" className={PILL} disabled={remove.isPending} onClick={() => setAsking(true)}>Remove</Button>}
     <ConfirmDialog open={asking} onOpenChange={setAsking} question={`Remove ${computer.name}?`} detail="It disconnects and can’t run agents for this install anymore. You can add it again later." action="Remove"
       onConfirm={() => remove.mutate({ id: computer.id }, { onSuccess: (removed) => onRemoved({ name: computer.name, command: removed.uninstall }), onError: (error) => toast(`Couldn’t remove ${computer.name}`, error.message) })} />
   </Row>

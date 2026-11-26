@@ -67,8 +67,8 @@ export function AppsSettings() {
 function AppAction({ status, item, href, quick }: { status: ReturnType<typeof appStatus>; item: Integration | undefined; href: string | undefined; quick: ReturnType<typeof useQuickConnect> }) {
   if (status) return href ? <a href={href} className="no-underline"><StatusBadge status={status} /></a> : <StatusBadge status={status} />
   if (!item) return null
-  if (quick.direct(item)) return <Button type="button" variant="secondary" className={PILL} disabled={quick.pending} onClick={() => quick.connect(item)}>Connect</Button>
-  return <a href={`/connections/new/${item.name}`} className={cn(buttonVariants({ variant: 'secondary' }), PILL)}>Connect</a>
+  if (quick.direct(item)) return <Button type="button" variant="ghost" className={PILL} disabled={quick.pending} onClick={() => quick.connect(item)}>Connect</Button>
+  return <a href={`/connections/new/${item.name}`} className={cn(buttonVariants({ variant: 'ghost' }), PILL)}>Connect</a>
 }
 
 function ConnectedRow({ connection, agents }: { connection: Connection; agents: OpenHutAgent[] }) {
