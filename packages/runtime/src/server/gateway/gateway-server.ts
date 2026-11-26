@@ -92,18 +92,21 @@ function agentMcp(agent: GatewayAgent): McpServer {
     return text(result.text, result.isError)
   })
   server.registerTool('ask_to_connect', {
-    description: 'Ask the person to connect an app you need and can\'t reach yet. You get a card: put it in your reply. One app at a time.',
+    description: 'Ask the person to connect the apps you need and can\'t reach yet, all in one card. You get the card: put it in your reply.',
     inputSchema: {
-      app: z.enum(ConnectionKind.options),
-      why: z.string().min(1).max(300).describe('One or two sentences for the person: what you will do with it, and how to make the access if they need to (a read-only role, a token\'s scopes).'),
-      url: z.url({ protocol: /^https$/ }).max(500).optional().describe('For app mcp: the server\'s URL.'),
-      name: z.string().min(1).max(60).optional().describe('For app mcp: what to call it, like DigitalOcean.'),
-      auth: z.enum(MCP_AUTH).optional().describe('For app mcp: how the server lets you in. header for a token (DigitalOcean), sign_in for OAuth (Cloudflare\'s servers, like https://observability.mcp.cloudflare.com/mcp), public for none.'),
+      why: z.string().min(1).max(300).describe('One or two sentences for the person: what the apps are for, and how to make the access if they need to (a read-only role, a token\'s scopes).'),
+      apps: z.array(z.object({
+        app: z.enum(ConnectionKind.options),
+        line: z.string().min(1).max(80).optional().describe('What you\'ll do with it, a few plain words: "open tickets for the SRE team".'),
+        url: z.url({ protocol: /^https$/ }).max(500).optional().describe('For app mcp: the server\'s URL.'),
+        name: z.string().min(1).max(60).optional().describe('For app mcp: what to call it, like Cloudflare.'),
+        auth: z.enum(MCP_AUTH).optional().describe('For app mcp: how the server lets you in. header for a token, sign_in for OAuth (Cloudflare\'s servers, like https://observability.mcp.cloudflare.com/mcp), public for none.'),
+      })).min(1).max(8),
     },
-  }, async ({ app, why, url, name, auth }) => {
-    if ((url || name || auth) && app !== 'mcp') return text('Only app mcp takes a url, a name or auth. Leave them out.', true)
-    if (app === 'mcp' && !url) return text('Send the MCP server\'s url with app mcp.', true)
-    return text(`Put this card in your reply, after a sentence on what you need:\n\n${askCard({ agentId: agent.id, app, url, name, auth, why })}`)
+  }, async ({ why, apps }) => {
+    if (apps.some(({ app, url, name, auth }) => (url || name || auth) && app !== 'mcp')) return text('Only app mcp takes a url, a name or auth. Leave them out.', true)
+    if (apps.some(({ app, url }) => app === 'mcp' && !url)) return text('Send the MCP server\'s url with app mcp.', true)
+    return text(`Put this card in your reply, after a sentence on what you need:\n\n${askCard({ asks: apps.map((each) => ({ ...each, agentId: agent.id })), why })}`)
   })
   server.registerTool('schedule_routine', {
     description: 'Use this whenever something needs a follow-up later: a promise you made, a reply you\'re waiting on, a date someone mentioned. Don\'t wait to be asked. Then tell the person in one line what you set up. Check list_routines first, and don\'t set up the same follow-up twice. Each run starts in the chat where you call this, with that chat\'s history.',
@@ -139,6 +142,26 @@ function agentMcp(agent: GatewayAgent): McpServer {
   })
   ask({ name: 'update_channel', action: 'update_channel', description: 'Ask to change who can message you on one of your channels.', shape: { id: z.string().max(40), open: z.boolean().optional(), allowed: z.array(z.string().max(20)).max(50).optional().describe('The whole new list.') } })
   ask({ name: 'remove_channel', action: 'remove_channel', description: 'Ask to remove one of your channels.', shape: { id: z.string().max(40) } })
+  ask({
+    name: 'propose_connection', action: 'propose_connection',
+    description: 'Propose connecting an app that isn\'t on ask_to_connect\'s list, through its official remote MCP server that takes a token. Your owner sees a card, makes the token with your guide and pastes it in OpenHut; you never see it. Say what each kind of tool may do.',
+    shape: {
+      name: z.string().min(1).max(60).describe('The app, like DigitalOcean.'),
+      line: z.string().max(120).optional().describe('What it is to the person, a few plain words: "where your database runs".'),
+      url: z.url({ protocol: /^https$/ }).max(500).describe('The official remote MCP server, like https://mcp.digitalocean.com/mcp.'),
+      token: z.object({
+        label: z.string().min(1).max(60).describe('What the token is called, like DigitalOcean token.'),
+        guide: z.string().min(1).max(300).describe('One or two plain sentences: where to make it and what access to give.'),
+        link: z.url({ protocol: /^https$/ }).max(500).describe('The page where they make it.'),
+        scopes: z.array(z.string().max(100)).max(30).optional().describe('The scopes it needs, as the app names them.'),
+      }),
+      groups: z.array(z.object({
+        group: z.enum(['read', 'create', 'update', 'delete', 'other']),
+        label: z.string().min(1).max(80).describe('What these tools do here, in plain words: "Read database info".'),
+        permission: z.enum(['allow', 'ask', 'deny']).describe('allow runs without asking, ask waits for their OK each time, deny never runs. Usually: read allow, create and update ask, delete deny.'),
+      })).min(1).max(5).describe('One entry per kind of tool the job needs.'),
+    },
+  })
   ask({ name: 'request_connection', action: 'request_connection', description: 'Ask for a connection that already exists in OpenHut (get_self lists them). For an app nobody connected yet, use ask_to_connect.', shape: { connectionId: z.string().max(40) } })
   return server
 }

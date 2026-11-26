@@ -1,3 +1,4 @@
+import { starterInstructions } from '@openhut/common/asks/ask.ts'
 import type { Selectable } from 'kysely'
 import { AgentRecord, ControlRecord, canUse, inSidebar, type Access, type Agent, type CreateAgent, type AgentHealth, type AgentStatus, type Grant, type UpdateAgent } from '@openhut/common/agents/agent.ts'
 import type { Deleted } from '@openhut/common/api.ts'
@@ -80,7 +81,7 @@ export const agentService = {
     const health = await requireComputer(runsOn)
     const access = await teamOnly({ owner: actor.email, people, sidebars })
     const id = newId('ag')
-    const value: AgentRecord = { name: clean, instructions: (instructions || `# ${clean}\n\nYou are ${clean}. Answer briefly.`).slice(0, 20_000), face: face ?? null, wanted: 'stopped', createdAt: new Date().toISOString() }
+    const value: AgentRecord = { name: clean, instructions: (instructions || starterInstructions(clean)).slice(0, 20_000), face: face ?? null, wanted: 'stopped', createdAt: new Date().toISOString() }
     await recordsService.put({ collection: 'agent', id, workspace: ws, parent: actor.email, personal: !shared, value })
     const control: ControlRecord = { runsOn, model: model ?? DEFAULT_MODEL, codeExecution: true, browser: !!health.features?.browser, grants: [], ...access }
     await recordsService.put({ collection: 'control', parent: id, workspace: ws, personal: !shared, value: control })

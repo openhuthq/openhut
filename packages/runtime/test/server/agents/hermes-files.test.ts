@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { CARD_PROMPT } from '@openhut/common/cards/card.ts'
-import { ASK_PROMPT } from '@openhut/common/asks/ask.ts'
+import { ASK_PROMPT, INTERVIEW_PROMPT, starterInstructions } from '@openhut/common/asks/ask.ts'
 import { renderFiles, type RenderedChannel } from '../../../src/server/agents/hermes-files.ts'
 import { config } from '../../../src/server/platform/config.ts'
 import { resolveSlots } from '../../../src/server/models/model-slots.ts'
@@ -152,6 +152,15 @@ test('SOUL.md names the connected apps in one line, and adds only the ask and ca
   assert.equal(render([])['SOUL.md'], `# Dev\n${ASK_PROMPT}${CARD_PROMPT}`)
   const files = renderFiles({ agent, ownerName: 'owner', token: 't', channelKey: 'k'.repeat(32), channels: [], connections: [{ name: 'Excalidraw', kind: 'excalidraw' }, { name: 'Orders\nDB', kind: 'postgres' }] })
   assert.equal(files['SOUL.md'], `# Dev\n\n## Connected apps\n\nThe openhut tools reach: Excalidraw, Orders DB (postgres). Call list_tools to see what each one does, and use it before doing the same work by hand.\n${ASK_PROMPT}${CARD_PROMPT}`)
+})
+
+test('a new agent with its starter instructions is told to interview the person in its first chat, and stops once it has a job', () => {
+  const fresh = renderFiles({ agent: { ...agent, name: 'Pulse', instructions: starterInstructions('Pulse') }, ownerName: 'owner', token: 't', channelKey: 'k'.repeat(32), channels: [], connections: [] })
+  assert.equal(fresh['SOUL.md'], `${starterInstructions('Pulse')}\n${INTERVIEW_PROMPT}${ASK_PROMPT}${CARD_PROMPT}`)
+  assert.match(INTERVIEW_PROMPT, /update_self/)
+  assert.match(INTERVIEW_PROMPT, /ask_to_connect/)
+  assert.match(INTERVIEW_PROMPT, /propose_connection/)
+  assert.doesNotMatch(render([])['SOUL.md'], /Your first chat/)
 })
 
 test('the gateway is the agent\'s subnet address, or the agent gateway when one is set', (t) => {

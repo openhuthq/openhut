@@ -1,7 +1,7 @@
 import * as z from 'zod/mini'
 import { Timestamp } from '../api.ts'
 
-export const ChangeAction = z.enum(['update_self', 'add_channel', 'update_channel', 'remove_channel', 'request_connection', 'call_tool'])
+export const ChangeAction = z.enum(['update_self', 'add_channel', 'update_channel', 'remove_channel', 'request_connection', 'call_tool', 'propose_connection'])
 export type ChangeAction = z.infer<typeof ChangeAction>
 
 export const ChangeRequest = z.object({
@@ -22,7 +22,7 @@ export type ChangeRequest = z.infer<typeof ChangeRequest>
 export const ListChangeRequests = z.object({ agentId: z.string().check(z.maxLength(40)) })
 export type ListChangeRequests = z.infer<typeof ListChangeRequests>
 
-export const ApproveChangeRequest = z.object({ input: z.optional(z.record(z.string(), z.unknown())), always: z.optional(z.boolean()) })
+export const ApproveChangeRequest = z.object({ input: z.optional(z.record(z.string(), z.unknown())), always: z.optional(z.boolean()), token: z.optional(z.string().check(z.maxLength(4000))) })
 export type ApproveChangeRequest = z.infer<typeof ApproveChangeRequest>
 
 export const DenyChangeRequest = z.object({ note: z.optional(z.string().check(z.maxLength(500))) })

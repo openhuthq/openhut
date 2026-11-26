@@ -19,25 +19,29 @@ await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/api/v1/m
 
 const call = (args: Record<string, unknown>) => client.callTool({ name: 'ask_to_connect', arguments: args }) as Promise<{ content: { text: string }[]; isError?: boolean }>
 
-test('ask_to_connect gives a card that opens the sheet for this agent', async () => {
-  const result = await call({ app: 'postgres', why: 'To watch postgres-eu for regressions.' })
+test('ask_to_connect gives one card listing every app, each opening its sheet for this agent', async () => {
+  const result = await call({ why: 'One short sign-in each.', apps: [{ app: 'postgres', line: 'read your database' }, { app: 'github' }, { app: 'linear', line: 'open tickets' }] })
   assert.ok(!result.isError)
-  assert.match(result.content[0].text, /```spec\n/)
-  assert.match(result.content[0].text, /https:\/\/openhut\.dev\/open#\/connections\/new\/postgres\?for=ag_askagent/)
+  const text = result.content[0].text
+  assert.match(text, /```spec\n/)
+  assert.match(text, /"title":"Connect apps"/)
+  assert.equal(text.match(/"type":"Connect"/g)?.length, 3)
+  for (const app of ['postgres', 'github', 'linear']) assert.match(text, new RegExp(`https://openhut\\.dev/open#/connections/new/${app}\\?for=ag_askagent`))
 })
 
 test('ask_to_connect fills in an MCP server and refuses a url for anything else', async () => {
-  const mcp = await call({ app: 'mcp', why: 'CPU and alerts.', url: 'https://mcp.digitalocean.com/mcp', name: 'DigitalOcean' })
+  const mcp = await call({ why: 'CPU and alerts.', apps: [{ app: 'mcp', url: 'https://mcp.digitalocean.com/mcp', name: 'DigitalOcean' }] })
   assert.match(mcp.content[0].text, /\/connections\/new\/mcp\?for=ag_askagent&url=https%3A%2F%2Fmcp\.digitalocean\.com%2Fmcp&name=DigitalOcean/)
-  assert.match(mcp.content[0].text, /"title":"DigitalOcean"/)
+  assert.match(mcp.content[0].text, /"title":"Connect DigitalOcean"/)
   assert.match(mcp.content[0].text, /"brand":"digitalocean"/)
-  const cloudflare = await call({ app: 'mcp', why: 'Workers logs.', url: 'https://observability.mcp.cloudflare.com/mcp', name: 'Cloudflare', auth: 'sign_in' })
+  const cloudflare = await call({ why: 'Workers logs.', apps: [{ app: 'mcp', url: 'https://observability.mcp.cloudflare.com/mcp', name: 'Cloudflare', auth: 'sign_in' }] })
   assert.match(cloudflare.content[0].text, /name=Cloudflare&auth=sign_in/)
-  assert.equal((await call({ app: 'postgres', why: 'x', auth: 'sign_in' })).isError, true)
-  assert.equal((await call({ app: 'mcp', why: 'x' })).isError, true)
-  assert.equal((await call({ app: 'github', why: 'x', url: 'https://example.com' })).isError, true)
-  assert.equal((await call({ app: 'mcp', why: 'x', url: 'http://example.com/mcp' })).isError, true)
-  assert.equal((await call({ app: 'oracle', why: 'x' })).isError, true)
+  assert.equal((await call({ why: 'x', apps: [{ app: 'postgres', auth: 'sign_in' }] })).isError, true)
+  assert.equal((await call({ why: 'x', apps: [{ app: 'github' }, { app: 'mcp' }] })).isError, true)
+  assert.equal((await call({ why: 'x', apps: [{ app: 'github', url: 'https://example.com' }] })).isError, true)
+  assert.equal((await call({ why: 'x', apps: [{ app: 'mcp', url: 'http://example.com/mcp' }] })).isError, true)
+  assert.equal((await call({ why: 'x', apps: [{ app: 'oracle' }] })).isError, true)
+  assert.equal((await call({ why: 'x', apps: [] })).isError, true)
 })
 
 test.after(() => { void client.close(); server.close() })

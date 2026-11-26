@@ -36,6 +36,7 @@ export function cardText(card: CardSpec): string {
       case 'Chart': return [String(props.title), `\`\`\`\n${barsText(props)}\n\`\`\``]
       case 'Image': return [`${props.alt}: ${props.url}`]
       case 'LinkButton': return [`${props.label}: ${props.url}`]
+      case 'Connect': return [`${props.title}${props.subtitle ? ` · ${props.subtitle}` : ''}: ${props.url}`]
       case 'Actions': return actionsText(card, element.children ?? [])
       default: return []
     }

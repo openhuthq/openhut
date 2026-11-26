@@ -28,6 +28,7 @@ const components = {
   Actions: { props: z.object({}) },
   Button: { props: z.object({ id: z.string().max(50), label: z.string().max(75), style: z.enum(['primary', 'danger']).optional() }) },
   LinkButton: { props: z.object({ label: z.string().max(75), url: z.url() }) },
+  Connect: { props: z.object({ title: z.string().max(150), brand: z.string().max(40).optional(), subtitle: z.string().max(300).optional(), url: z.url() }) },
 }
 
 export const cardCatalog = defineCatalog(schema, { components })

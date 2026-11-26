@@ -16,6 +16,8 @@ import { useConnections } from '@/features/connections/api'
 import { connectionBrand } from '@/features/connections/catalog'
 import { agentPath } from '@/app/routes'
 import { request } from '@/lib/api-client'
+import { CONNECTIONS_KEY, GRANTS_KEY } from '@/lib/query-keys'
+import { ProposedConnectionCard } from '@/features/connections/proposed-connection'
 
 import { navigate } from '@/lib/router'
 import { plainKey, toolLabel } from '@/lib/tool-label'
@@ -40,6 +42,7 @@ function useDecide(agentId: string) {
     onSuccess: (decided) => {
       client.setQueryData<ChangeRequest[]>(changesKey(agentId), (all) => all?.map((each) => each.id === decided.id ? decided : each))
       if (decided.action === 'call_tool') void client.invalidateQueries({ queryKey: ['agent-tools', agentId] })
+      if (decided.action === 'propose_connection') void Promise.all([CONNECTIONS_KEY, GRANTS_KEY].map((queryKey) => client.invalidateQueries({ queryKey })))
     },
   })
 }
@@ -62,6 +65,7 @@ function ChangeCard({ agent, change }: { agent: Agent; change: ChangeRequest }) 
   const decide = useDecide(agent.id)
   const props = { agent, change, busy: decide.isPending, error: decide.error?.message, send: (verb: 'approve' | 'deny', body: object) => decide.mutate({ id: change.id, verb, body }) }
   if (change.action === 'call_tool') return <ToolCallCard {...props} />
+  if (change.action === 'propose_connection') return <ProposedConnectionCard {...props} />
   return <SettingsCard {...props} />
 }
 
