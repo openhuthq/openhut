@@ -13,7 +13,6 @@ export const GithubAppInfo = z.object({
     ownerAvatar: z.string(),
     settingsUrl: z.string(),
     installUrl: z.string(),
-    logo: z.boolean(),
     repositories: z.nullable(z.number()),
   })),
   asked: z.boolean(),
@@ -34,8 +33,6 @@ export const CreateGithubApp = z.object({
 export type CreateGithubApp = z.infer<typeof CreateGithubApp>
 
 export const GithubAppLaunch = z.object({ object: z.literal('github_app_launch'), url: z.string() })
-
-export const UpdateGithubApp = z.object({ logo: z.boolean() })
 
 export const GithubInstallation = z.object({
   object: z.literal('github_installation'),

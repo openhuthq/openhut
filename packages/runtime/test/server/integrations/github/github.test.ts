@@ -5,7 +5,7 @@ import { github } from '../../../../src/server/integrations/github/github.ts'
 import { settings } from '../../../../src/server/platform/settings.ts'
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
-const APP = { id: 42, slug: 'acme-openhut', name: 'acme-openhut', owner: 'acme', ownerType: 'Organization' as const, ownerAvatar: 'https://avatars.githubusercontent.com/u/1', pem: privateKey.export({ type: 'pkcs1', format: 'pem' }).toString(), botId: 99, logo: false }
+const APP = { id: 42, slug: 'acme-openhut', name: 'acme-openhut', owner: 'acme', ownerType: 'Organization' as const, ownerAvatar: 'https://avatars.githubusercontent.com/u/1', pem: privateKey.export({ type: 'pkcs1', format: 'pem' }).toString(), botId: 99 }
 
 test('the server\'s app is made on the chosen owner, comes back to this server, and installs come back to the connection callback', () => {
   const org = github.manifest({ owner: 'acme', ownerType: 'Organization', name: 'acme-openhut', address: 'https://agents.acme.dev', state: 's1' })

@@ -10,4 +10,4 @@ OpenHut restarts once and agents pick up where they left off. Your main install 
 
 If the new version doesn't start, OpenHut goes back to the previous one with your data as it was, and shows **Try again**.
 
-Only owners and admins can update.
+Only owners and admins can update. If an update doesn't start and the reason says the update request couldn't be cleared, run `chmod 666 /var/lib/docker/volumes/openhut-data/_data/update/request` on the server and press **Update now** again.

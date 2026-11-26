@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { HttpError } from '../platform/http-error.ts'
@@ -28,6 +28,7 @@ export function lastUpdate(): LastUpdate | null {
 export async function request({ appVersion = '', sha256 }: { appVersion?: string; sha256: string }): Promise<{ updating: boolean }> {
   if (await installing()) throw new HttpError(409, 'An install or update is already running. Try again when it finishes.')
   mkdirSync(join(config.installDir, 'update'), { recursive: true })
+  rmSync(REQUEST, { force: true })
   writeFileSync(REQUEST, `${sha256} ${appVersion}\n`)
   chmodSync(REQUEST, 0o666)
   return { updating: true }

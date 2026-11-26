@@ -10,7 +10,7 @@ const Smtp = z.object({ host: z.string(), port: z.number(), user: z.string(), pa
 const CodexTokens = z.object({ accessToken: z.string(), refreshToken: z.string() })
 const GithubApp = z.object({
   id: z.number(), slug: z.string(), name: z.string(), owner: z.string(), ownerType: z.enum(['User', 'Organization']), ownerAvatar: z.string(),
-  pem: z.string(), botId: z.number(), logo: z.boolean(),
+  pem: z.string(), botId: z.number(),
 })
 const StoredCatalog = z.object({ at: z.string(), models: z.array(ProviderModel) })
 const loaded = await db.selectFrom('install_setting').select(['name', 'value']).execute()

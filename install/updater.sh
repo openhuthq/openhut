@@ -9,6 +9,10 @@ apply() { # <sha256 the runtime checked> <app version>
   else OPENHUT_APP_VERSION=$2 OPENHUT_UPDATER=1 sh "$d/install.sh"; code=$?; fi
   rm -rf "$d"; echo "$code" > "$EXIT"
 }
+clear_request() {
+  true 2>/dev/null > "$REQUEST" && return 0
+  docker run --rm -v openhut-data:/data --entrypoint rm "$(docker container inspect -f '{{.Image}}' "$(hostname)")" -f "$REQUEST" >/dev/null 2>&1 && [ ! -s "$REQUEST" ]
+}
 
 old=$(docker container inspect -f '{{.Image}}' openhut-updater-old 2>/dev/null) && { docker rm -f openhut-updater-old >/dev/null; docker image rm "$old" >/dev/null 2>&1; }
 exec 9>/data/install.lock
@@ -24,8 +28,10 @@ while :; do
   if [ -s "$REQUEST" ] && flock -n 9; then
     sha='' version=''
     read -r sha version < "$REQUEST" || true
-    : > "$REQUEST"
-    if printf '%s' "$sha" | grep -Eqx '[0-9a-f]{64}' && case $version in *[!0-9.]*) false ;; esac; then apply "$sha" "$version" > "$LOG" 2>&1
+    if ! clear_request; then
+      echo "openhut: couldn't clear the update request $REQUEST ($(stat -c '%a, owner %u' "$REQUEST" 2>/dev/null)), so it was skipped. Make it writable with chmod 666 $REQUEST and update again." | tee "$LOG"
+      echo 4 > "$EXIT"; sleep 60
+    elif printf '%s' "$sha" | grep -Eqx '[0-9a-f]{64}' && case $version in *[!0-9.]*) false ;; esac; then apply "$sha" "$version" > "$LOG" 2>&1
     else echo "openhut: ignored an update request that isn't a sha256 and a version"; fi
     flock -u 9
   fi

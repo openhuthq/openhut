@@ -21,7 +21,7 @@ test('with no server app, a member asks an admin, GitHub can\'t be connected, an
   assert.throws(() => serverAppService.create({ actor: member, owner: 'acme', ownerType: 'Organization', name: 'acme-openhut' }), /owner or an admin/)
 })
 
-test('the setup posts the manifest to GitHub, the callback stores the app and opens the logo step; connecting then installs it', async (t) => {
+test('the setup posts the manifest to GitHub, the callback stores the app and opens the done step; connecting then installs it', async (t) => {
   const app = Fastify()
   app.setValidatorCompiler(validatorCompiler)
   app.setSerializerCompiler(serializerCompiler)
@@ -36,7 +36,7 @@ test('the setup posts the manifest to GitHub, the callback stores the app and op
     : Response.json({ id: 99 }))
   const back = await app.inject({ method: 'GET', url: `/api/github-app/callback?state=${state}&code=c1` })
   assert.equal(back.statusCode, 302)
-  assert.equal(back.headers.location, '/settings/admin?open=github-logo')
+  assert.equal(back.headers.location, '/settings/admin?open=github-done')
   assert.match((await app.inject({ method: 'GET', url: `/api/github-app/callback?state=${state}&code=c1` })).body, /expired or was already used/)
   assert.equal(settings.githubApp()?.slug, 'acme-openhut')
   assert.deepEqual(settings.githubAsks(), [])
@@ -50,7 +50,7 @@ test('the setup posts the manifest to GitHub, the callback stores the app and op
 })
 
 test('a member gives access to picked repositories of an installation; repositories the app can\'t reach are refused', async (t) => {
-  await settings.setGithubApp({ id: 7, slug: 'acme-openhut', name: 'acme-openhut', owner: 'acme', ownerType: 'Organization', ownerAvatar: '', pem: (await import('node:crypto')).generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs1', format: 'pem' }).toString(), botId: 99, logo: true })
+  await settings.setGithubApp({ id: 7, slug: 'acme-openhut', name: 'acme-openhut', owner: 'acme', ownerType: 'Organization', ownerAvatar: '', pem: (await import('node:crypto')).generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs1', format: 'pem' }).toString(), botId: 99 })
   t.mock.method(globalThis, 'fetch', async (input: string) => {
     const path = new URL(input).pathname
     if (path === '/app/installations') return Response.json([{ id: 5, account: { login: 'acme', type: 'Organization', avatar_url: 'https://a/acme' } }])

@@ -41,7 +41,7 @@ export const github = {
   async created(code: string): Promise<GithubApp> {
     const app = await call({ path: `/app-manifests/${encodeURIComponent(code)}/conversions`, method: 'POST', schema: z.object({ id: z.number(), slug: z.string(), name: z.string(), pem: z.string(), owner: Owner }) })
     const bot = await call({ path: `/users/${encodeURIComponent(`${app.slug}[bot]`)}`, schema: z.object({ id: z.number() }) })
-    return { id: app.id, slug: app.slug, name: app.name, owner: app.owner.login, ownerType: app.owner.type, ownerAvatar: app.owner.avatar_url, pem: app.pem, botId: bot.id, logo: false }
+    return { id: app.id, slug: app.slug, name: app.name, owner: app.owner.login, ownerType: app.owner.type, ownerAvatar: app.owner.avatar_url, pem: app.pem, botId: bot.id }
   },
 
   async accounts(login: string): Promise<{ login: string; name: string; type: 'User' | 'Organization'; avatarUrl: string; appName: string }[]> {

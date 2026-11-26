@@ -19,6 +19,15 @@ test('an update is a request file for whatever swaps the container, not an insta
   assert.equal(readFileSync(join(dir, 'update', 'request'), 'utf8'), `${'a'.repeat(64)} 0.6.0\n`)
 })
 
+test('a request left read-only by an older version or by hand is replaced with one the updater can clear', async () => {
+  const { request } = await import('../../../src/server/admin/update-request.ts')
+  const { chmodSync, statSync } = await import('node:fs')
+  const file = join(dir, 'update', 'request')
+  chmodSync(file, 0o444)
+  await request({ appVersion: '0.6.1', sha256: 'b'.repeat(64) })
+  assert.equal(statSync(file).mode & 0o777, 0o666)
+})
+
 test('a failed install reports the installer\'s last "openhut:" line as the reason', () => {
   writeFileSync(join(dir, 'update.log'), '==> OpenHut\nWaiting for OpenHut......\n==> The new release didn\'t come up. Going back to the previous one\nopenhut: the new release didn\'t come up, so the previous one is running again\n')
   writeFileSync(join(dir, 'update.log.exit'), '1\n')

@@ -1,3 +1,4 @@
+import type { Ask } from '@openhut/common/asks/ask.ts'
 import type { ChatCall, ToolCall, ToolProgress, Work } from '@openhut/common/threads/thread.ts'
 import { toolLabel } from '../../lib/tool-label.ts'
 
@@ -92,7 +93,21 @@ export function summaryOf(work: Work): string {
 
 export function troubleOf(work: Work) {
   const count = (status: ToolCall['status']) => work.calls.filter((call) => call.status === status).length
-  return { failed: count('failed'), blocked: count('blocked'), asked: count('asked') }
+  return { failed: count('failed'), blocked: count('blocked'), asked: count('asked'), declined: count('declined') }
+}
+
+const ANSWERED = { open: 'asked', done: 'done', declined: 'declined', expired: 'declined' } as const
+
+export function settleAsks({ work, asks }: { work: Work; asks: Ask[] }): Work {
+  const left = [...asks]
+  const calls = work.calls.map((call) => {
+    if (call.status !== 'asked') return call
+    const index = left.findIndex((ask) => ask.kind === call.tool || (ask.kind === 'call_tool' && ask.input.tool === call.tool))
+    if (index < 0) return call
+    const [ask] = left.splice(index, 1)
+    return { ...call, status: ANSWERED[ask.status] }
+  })
+  return { ...work, calls }
 }
 
 export function noReplyOf(work: Work): string {

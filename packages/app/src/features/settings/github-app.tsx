@@ -3,11 +3,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckmarkCircle02Icon } from '@hugeicons/core-free-icons'
 import { GithubAccount, GithubAppInfo, GithubAppLaunch, type CreateGithubApp } from '@openhut/common/connections/github-app.ts'
 import { List } from '@openhut/common/api.ts'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Glyph } from '@/components/glyph'
-import { BRAND_ICONS } from '@/components/brand-icons'
 import { Busy, I, PILL, SetupSheet } from '@/components/kit'
 import { Field } from '@/features/connections/sheet'
 import { Row, Rows } from '@/features/settings/kit'
@@ -48,7 +47,6 @@ export function GitHubDialogs({ opened }: { opened: string | null }) {
   if (!info || !opened?.startsWith('github')) return null
   const close = () => open()
   if (!info.app) return opened === 'github' ? <SetupGitHubDialog onClose={close} /> : null
-  if (opened === 'github-logo') return <LogoStep info={info} onClose={close} />
   if (opened === 'github-done') return <DoneStep info={info} onClose={close} />
   return <ManageGitHubDialog info={info} onClose={close} />
 }
@@ -122,41 +120,20 @@ function SetupGitHubDialog({ onClose }: { onClose: () => void }) {
     {owner && <div className="flex flex-col gap-1.5">
       <span className="text-xs font-medium text-mute">App name</span>
       <Input mono value={name} maxLength={34} onInput={(event) => setName(event.currentTarget.value)} aria-label="App name" />
-      <div className="mt-1.5"><BotPreview name={name.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-')}>Last step on GitHub: drop in this logo (we’ll open the page and download the file for you)</BotPreview></div>
+      <div className="mt-1.5"><BotPreview name={name.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-')}>Confirm on GitHub and it’s ready</BotPreview></div>
     </div>}
   </SetupSheet>
 }
 
-async function downloadLogo(): Promise<void> {
-  const image = new Image()
-  image.src = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="-6 -6 36 36"><rect x="-6" y="-6" width="36" height="36" fill="#fff"/>${BRAND_ICONS.openhut.svg ?? ''}</svg>`)}`
-  await image.decode()
-  const canvas = Object.assign(document.createElement('canvas'), { width: 512, height: 512 })
-  canvas.getContext('2d')?.drawImage(image, 0, 0)
-  Object.assign(document.createElement('a'), { href: canvas.toDataURL('image/png'), download: 'openhut-logo.png' }).click()
-}
-
-function LogoCard({ name, note, done }: { name: string; note: string; done?: boolean }) {
+function AppCard({ name, note }: { name: string; note: string }) {
   return <div className="flex items-center gap-3.5 rounded-lg bg-sidebar px-3.5 py-3">
     <span className="grid size-14 shrink-0 place-items-center rounded-[10px] bg-card shadow-[0_0_0_1px_var(--hair)]"><Glyph name="openhut" size={38} /></span>
     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
       <span className="flex items-center gap-1 text-[13px] text-ink"><span className="font-medium">{name}[bot]</span><BotTag /></span>
       <span className="text-[12px] text-mute">{note}</span>
     </span>
-    {done ? <I icon={CheckmarkCircle02Icon} size={20} className="text-hue-green" /> : <Button type="button" variant="ghost" className={PILL} onClick={() => void downloadLogo()}>Download logo</Button>}
+    <I icon={CheckmarkCircle02Icon} size={20} className="text-hue-green" />
   </div>
-}
-
-function LogoStep({ info, onClose }: { info: GithubAppInfo; onClose: () => void }) {
-  const app = info.app
-  const added = useGithubAppChange(() => request({ schema: GithubAppInfo, path: PATH, method: 'PATCH', body: { logo: true } }))
-  useEffect(() => { void downloadLogo() }, [])
-  if (!app) return null
-  return <SetupSheet modal brand="github" title="Almost done: add the logo" blurb={`GitHub created ${app.name} on ${app.owner}. It can’t take a logo from us, so add it on GitHub.`} onClose={onClose}
-    safe="We downloaded openhut-logo.png. Drop it in under Display information."
-    foot={<><Button type="button" variant="ghost" onClick={() => added.mutate(undefined, { onSuccess: () => open('github-done') })}>I’ve added it</Button><Button type="button" variant="primary" onClick={() => window.open(app.settingsUrl, '_blank', 'noreferrer')}>Open GitHub app settings</Button></>}>
-    <LogoCard name={app.slug} note="openhut-logo.png · 512 × 512" />
-  </SetupSheet>
 }
 
 function DoneStep({ info, onClose }: { info: GithubAppInfo; onClose: () => void }) {
@@ -164,7 +141,7 @@ function DoneStep({ info, onClose }: { info: GithubAppInfo; onClose: () => void 
   if (!app) return null
   return <SetupSheet modal brand="github" title="GitHub is set up" blurb={`${app.name} is ready. Agents can open pull requests on ${app.owner}.`} onClose={onClose}
     foot={<Button type="button" variant="primary" onClick={onClose}>Done</Button>}>
-    <LogoCard name={app.slug} note={`${app.logo ? 'Logo added' : 'No logo yet'}${repos(app.repositories, ' · installed on ')}`} done />
+    <AppCard name={app.slug} note={`Created on ${app.owner}${repos(app.repositories, ' · installed on ')}`} />
   </SetupSheet>
 }
 
@@ -172,13 +149,12 @@ function ManageGitHubDialog({ info, onClose }: { info: GithubAppInfo; onClose: (
   const app = info.app
   const remove = useGithubAppChange(() => request({ schema: GithubAppInfo, path: PATH, method: 'DELETE' }))
   if (!app) return null
-  const link = (href: string, label: string) => <a href={href} target="_blank" rel="noreferrer" className={cn(PILL, 'inline-flex h-8 items-center rounded-lg px-3 text-ink no-underline hover:bg-soft')}>{label}</a>
+  const link = (href: string, label: string) => <a href={href} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'ghost' }), PILL)}>{label}</a>
   return <SetupSheet modal brand="github" title="GitHub" blurb="This server’s GitHub App. Agents open pull requests as it." onClose={onClose}
     safe="Removing it disconnects every GitHub connection on this server."
     foot={<><Button type="button" variant="danger" disabled={remove.isPending} onClick={() => remove.mutate(undefined, { onSuccess: onClose })}>Remove</Button><Button type="button" variant="primary" onClick={onClose}>Done</Button></>}>
     <Rows>
       <Row icon={<Avatar url={app.ownerAvatar} name={app.owner} org={app.ownerType === 'Organization'} size={20} />} title={`${app.name}[bot]`} note={`On ${app.owner}`}>{link(app.settingsUrl, 'Edit')}</Row>
-      <Row icon={<Glyph name="openhut" size={20} />} title="Logo" note={app.logo ? 'Added' : 'Not added yet: drop openhut-logo.png in under Display information'}>{link(app.settingsUrl, 'Open on GitHub')}</Row>
       <Row icon={<Glyph name="github" size={20} />} title="Installed on" note={app.repositories === null ? 'GitHub didn’t answer' : repos(app.repositories, '')}>{link(app.installUrl, 'Install')}</Row>
     </Rows>
   </SetupSheet>

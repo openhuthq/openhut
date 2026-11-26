@@ -119,6 +119,7 @@ function AgentRow({ agent, thread, active, phone }: { agent: OpenHutAgent; threa
   const children = useSubagents(agent.wanted === 'running' && agent.online ? agent.id : undefined)
   const [choice, setChoice] = useState<boolean | undefined>(() => readExpanded()[agent.id])
   const working = children.filter((child) => child.status === 'working').length
+  useTick(working > 0)
   const shown = children.filter((child) => !child.gone).length
   const open = (choice ?? active) && shown > 0
   const idle = agent.online ? troubleOf(agent) ?? (agent.summary || 'Say hello') : 'Offline'
@@ -234,4 +235,13 @@ function You() {
       <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}><I icon={Logout01Icon} size={15} className="text-mute" />Sign out</DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
+}
+
+function useTick(ticking: boolean): void {
+  const [, setNow] = useState(0)
+  useEffect(() => {
+    if (!ticking) return
+    const tick = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(tick)
+  }, [ticking])
 }
