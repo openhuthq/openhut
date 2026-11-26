@@ -4,7 +4,7 @@ description: Give an agent an address other services call when something happens
 icon: ops
 ---
 
-A **webhook** is an address on your OpenHut that another service calls when something happens: an alert fires, a deploy finishes, a form is sent. Calls about the same thing, like an alert and its recovery, share one thread in the web app (or in the Discord channel you pick). Each call shows as a short line of what happened, like **Triggered · 80%**, with the raw payload under **Show payload**, and the agent does what its instructions say about it. See [Threads](/threads).
+A **webhook** is an address on your OpenHut that another service calls when something happens: an alert fires, a deploy finishes, a form is sent. Each call reaches the agent in a thread in the web app (or in the Discord channel you pick), and the agent does what its instructions say about it. Related calls, like an alert and its recovery, share one thread. Each call shows as a short line of what happened, like **Triggered · 80%**, with the raw payload under **Show payload**. See [Threads](/threads).
 
 ## Add one
 
@@ -23,7 +23,11 @@ Each webhook shows:
 - **Address**: paste it into the service that calls it.
 - **Secret**: the service signs each call with it, or sends it as a token. **New secret** replaces it; calls signed with the old one stop working.
 - **Runs in**: **Here in the web app** (the default), where you can reply in each call's thread, or one of the agent's channels, like a Discord channel. A thread that runs in Discord continues there; the web app shows it with **Open in Discord ↗**.
-- **Threads**: **Keep related together** (the default) puts calls about the same alert in one thread. **New thread each call** starts a thread for every call, for forms, orders and signups.
+- **Threads**: **Keep related together** (the default) puts calls about the same thing in one thread, so an alert and its recovery read as one story. **New thread each call** suits forms, orders and signups. The agent picks one when it asks for the webhook, and you or the agent can change it later. In a Discord channel, each call starts its own thread.
+
+## How calls are grouped
+
+The first time a webhook is called, the agent looks at the payload and decides what makes calls belong together (for a DigitalOcean alert, the alert rule), how to title each thread and how to label each call. You don't set anything. A sender can also pick the thread itself with an `X-Group-Key` header: calls with the same value share a thread.
 
 Delete a webhook with the trash icon. Calls to its address stop at once.
 
@@ -44,7 +48,7 @@ Calls without one get `401`.
 ## Limits
 
 - A call's body can be up to 256 KB; bigger ones get `413`.
-- The same body twice within 10 minutes counts once, so a service that retries doesn't wake the agent twice.
+- A call the service sends again counts once, so a retry doesn't wake the agent twice. OpenHut knows a resend by its delivery id within 24 hours (`X-GitHub-Delivery`, `Idempotency-Key`, `webhook-id`, or an `id` at the top of the payload), or by the same body within 10 minutes when there's no id.
 - Up to 120 calls in 15 minutes per webhook; more get `429`.
 - The payload is data, not instructions: the agent reads it and follows its own instructions, not what the payload says.
 - Keep the agent running. A call that comes while it's stopped reaches it once it starts; for the OpenHut app, only if that's within about 10 minutes.

@@ -82,8 +82,8 @@ test('every webhook call runs on the server in a web thread of its own, its mess
   assert.deepEqual(threads.map((thread) => [thread.title, JSON.parse(thread.origin).platform, thread.mirrors]), [['Hook wh_appwnone', 'webhook', '[]'], ['Hook wh_appwtwoo', 'webhook', '[]']])
   assert.deepEqual(new Set(ran.map((each) => each.threadId)), new Set(threads.map((thread) => thread.id)))
   assert.deepEqual(ran.map((each) => each.metadata).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))), [
-    { source: { kind: 'webhook', id: 'wh_appwnone', name: 'Hook wh_appwnone' }, payload: { from: 'wh_appwnone' } },
-    { source: { kind: 'webhook', id: 'wh_appwtwoo', name: 'Hook wh_appwtwoo' }, payload: { from: 'wh_appwtwoo' } },
+    { author: 'Hook wh_appwnone', call: { webhookId: 'wh_appwnone' }, source: { kind: 'webhook', id: 'wh_appwnone', name: 'Hook wh_appwnone' }, payload: { from: 'wh_appwnone' } },
+    { author: 'Hook wh_appwtwoo', call: { webhookId: 'wh_appwtwoo' }, source: { kind: 'webhook', id: 'wh_appwtwoo', name: 'Hook wh_appwtwoo' }, payload: { from: 'wh_appwtwoo' } },
   ])
   assert.equal(runsOnServer({ id: 'inbox:ru_x', text: '', origin: whatsapp }), false)
   assert.equal(runsOnServer({ id: 'inbox:ru_x', text: '', origin: { platform: 'discord', chat_id: '1' } }), true)

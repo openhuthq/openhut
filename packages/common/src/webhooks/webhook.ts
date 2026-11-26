@@ -7,6 +7,9 @@ export type WebhookChannel = z.infer<typeof WebhookChannel>
 
 export const WEBHOOK_NAME_MAX = 60
 
+export const WebhookThreads = z.enum(['group', 'each'])
+export type WebhookThreads = z.infer<typeof WebhookThreads>
+
 export const Webhook = z.object({
   id: z.string(),
   object: z.literal('webhook'),
@@ -18,6 +21,7 @@ export const Webhook = z.object({
   platform: z.string(),
   target: z.string(),
   place: z.string(),
+  threads: WebhookThreads,
   lastAt: z.nullable(Timestamp),
   lastPayload: z.nullable(z.string()),
   createdAt: Timestamp,
@@ -35,7 +39,7 @@ export type ListWebhooks = z.infer<typeof ListWebhooks>
 export const CreateWebhook = z.object({ agentId: z.string().check(z.maxLength(40)), name: WebhookName, channel: z.optional(WebhookChannel), target: z.optional(z.string().check(z.maxLength(40))) })
 export type CreateWebhook = z.infer<typeof CreateWebhook>
 
-export const UpdateWebhook = z.object({ name: z.optional(WebhookName), channel: z.optional(WebhookChannel), target: z.optional(z.string().check(z.maxLength(40))) })
+export const UpdateWebhook = z.object({ name: z.optional(WebhookName), channel: z.optional(WebhookChannel), target: z.optional(z.string().check(z.maxLength(40))), threads: z.optional(WebhookThreads) })
 export type UpdateWebhook = z.infer<typeof UpdateWebhook>
 
 export const WEBHOOK_SETUP_PROMPT = 'Whenever you ask a person to set up one of your webhooks in another service, call show_webhook_setup with the steps. Never type a webhook\'s address or secret into the chat yourself: the card shows the real ones.'

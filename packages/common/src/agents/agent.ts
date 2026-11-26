@@ -43,6 +43,8 @@ export const Agent = z.object({
   inSidebar: z._default(z.boolean(), true),
   owner: z._default(z.nullable(z.string()), null),
   canManage: z._default(z.boolean(), true),
+  applying: z._default(z.boolean(), false),
+  applyError: z._default(z.nullable(z.string()), null),
   createdAt: Timestamp,
 })
 export type Agent = z.infer<typeof Agent>

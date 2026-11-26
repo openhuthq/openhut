@@ -18,6 +18,7 @@ import { config } from '../platform/config.ts'
 import { deleted } from '../platform/responses.ts'
 import { unseal } from '../platform/secrets.ts'
 import { agentService } from '../agents/agent-service.ts'
+import { apply } from '../agents/apply.ts'
 import { HERE, HOME } from '../team/home.ts'
 import { newId } from '../platform/secrets.ts'
 import { channelService } from '../channels/channel-service.ts'
@@ -312,7 +313,7 @@ export const threadService = {
       const agent = chat.agent
       const last = (await saidOf(chat)).at(-1)?.message
       const retried = last?.role === 'user' && textOf(last) === text ? last : undefined
-      const asked: ChatMessage | undefined = chat.row ? retried ?? { id: nextId(), role: 'user', parts: [{ type: 'text', text }], metadata: { ...metadata, author: chat.row.title } } : undefined
+      const asked: ChatMessage | undefined = chat.row ? retried ?? { id: nextId(), role: 'user', parts: [{ type: 'text', text }], metadata: { author: chat.row.title, ...metadata } } : undefined
       if (asked && !retried) await write({ chat, message: asked })
       const said = await saidOf(chat)
       const id = nextId()
@@ -514,6 +515,7 @@ async function idle(id: string): Promise<void> {
 }
 
 async function callAgent({ agent, session, message, signal }: { agent: AgentRow; session: string; message: OpenAiMessage; signal: AbortSignal }): Promise<ReadableStream<Uint8Array>> {
+  await apply.settled(agent.id)
   const until = Date.now() + config.startWaitMs
   const ask = async (): Promise<Response> => {
     const res = await forward.fetch({ agent, path: '/v1/chat/completions', init: {
