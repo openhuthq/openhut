@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Cancel01Icon, PlusSignIcon, SquareLock02Icon, Tick02Icon, UnfoldMoreIcon, UserMultipleIcon } from '@hugeicons/core-free-icons'
+import { Cancel01Icon, PlusSignIcon, Tick02Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import type { IconSvgElement } from '@hugeicons/react'
 import type { ProviderId } from '@openhut/common/models/provider.ts'
 import { Button } from '@/components/ui/button'
@@ -20,6 +20,7 @@ import { HERE, type Computer } from '@/lib/openhut'
 import { useComputerProviders } from '@/features/models/api'
 import { FIELD_MENU, ModelPicker, SOFT_TRIGGER } from '@/features/models/model-picker'
 import { FacePicker } from '@/features/agents/face-picker'
+import { AccessPicker, type Access } from '@/features/agents/access'
 import { formValues } from '@/lib/form'
 import { TOUCH, useMedia } from '@/lib/media'
 import { navigate, open, useOpen } from '@/lib/router'
@@ -56,7 +57,7 @@ function AgentForm({ steps = true }: { steps?: boolean }) {
   const providers = useComputerProviders('local')
   const [picked, setPicked] = useState<string | null>(null)
   const [runsOn, setRunsOn] = useState(HERE)
-  const [shared, setShared] = useState(false)
+  const [access, setAccess] = useState<Access>({ shared: false, people: [] })
   const me = useMe().data?.user
   const computers = runsOnChoices(useComputers().data)
   const [wanted, setWanted] = useState<ProviderId>()
@@ -86,7 +87,7 @@ function AgentForm({ steps = true }: { steps?: boolean }) {
   return <form className="flex w-full flex-col items-center gap-4" onSubmit={(event) => {
     if (event.target !== event.currentTarget) return
     const field = formValues(event)
-    if (model) createAgent.mutate({ name: field('name').trim() || name, face: field('face'), model, runsOn, shared })
+    if (model) createAgent.mutate({ name: field('name').trim() || name, face: field('face'), model, runsOn, ...access })
   }}>
     {signing && <SeatSignIn start={seat} onClose={() => setSigning(false)} onDone={() => setSigning(false)} />}
     {setup && setup !== 'claude' && <ModelsStep id={setup} />}
@@ -96,7 +97,7 @@ function AgentForm({ steps = true }: { steps?: boolean }) {
     <div className="flex w-full flex-col divide-y divide-hair border-y border-hair text-left">
       <Row title="Model"><ModelPicker providers={providers} value={model} onPick={setPicked} onSetUp={admin ? setUp : undefined} label="Model" className={PICKER} /></Row>
       <Row title="Runs on"><ComputerPicker computers={computers} value={runsOn} onPick={setRunsOn} admin={admin} /></Row>
-      <Row title="Access"><AccessPicker shared={shared} onPick={setShared} /></Row>
+      <Row title="Access"><AccessPicker owner={me?.email ?? ''} value={access} onChange={setAccess} className={PICKER} /></Row>
       <Row title="Owner"><span className={cn(PICKER, 'pointer-events-none')}>{me && <PersonFace name={me.name} email={me.email} size={16} />}<span className="min-w-0 flex-1 truncate text-left">{me?.name ?? ''}</span></span></Row>
     </div>
     <Button type="submit" variant="primary" className="h-10 w-full justify-center rounded-[10px] text-[15px]" disabled={createAgent.isPending || !model}>{createAgent.isPending ? 'Creating…' : 'Create agent'}</Button>
@@ -117,21 +118,6 @@ function ComputerPicker({ computers, value, onPick, admin }: { computers: Comput
         <i title={computer.online ? 'Online' : 'Offline'} className={cn('size-1.5 shrink-0 rounded-full', computer.online ? 'bg-pass' : 'bg-mute-2')} />
       </Pick>)}
       {admin && <Pick icon={PlusSignIcon} name="Add a computer" onClick={() => navigate('/settings/computers?open=add-computer')} />}
-    </DropdownMenuContent>
-  </DropdownMenu>
-}
-
-function AccessPicker({ shared, onPick }: { shared: boolean; onPick: (shared: boolean) => void }) {
-  const name = shared ? 'Shared with team' : 'Only you'
-  return <DropdownMenu>
-    <DropdownMenuTrigger className={PICKER} aria-label={`Access: ${name}`}>
-      <I icon={shared ? UserMultipleIcon : SquareLock02Icon} size={14} className="shrink-0 text-mute" />
-      <span className="min-w-0 flex-1 truncate text-left">{name}</span>
-      <I icon={UnfoldMoreIcon} size={12} className="text-mute" />
-    </DropdownMenuTrigger>
-    <DropdownMenuContent className={FIELD_MENU}>
-      <Pick icon={SquareLock02Icon} name="Only you" selected={!shared} onClick={() => onPick(false)} />
-      <Pick icon={UserMultipleIcon} name="Shared with team" selected={shared} onClick={() => onPick(true)} />
     </DropdownMenuContent>
   </DropdownMenu>
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { BrowserIcon, SidebarRight01Icon, AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, SparklesIcon, UserMultipleIcon } from '@hugeicons/core-free-icons'
+import { BrowserIcon, SidebarRight01Icon, AiBrain01Icon, ArrowRight01Icon, BookOpen01Icon, Delete02Icon, MoreHorizontalIcon, PlayIcon, SourceCodeIcon, StopIcon, PencilEdit02Icon, SparklesIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { DialogClose, DialogTitle } from '@/components/ui/dialog'
@@ -14,6 +14,7 @@ import { agentPath, type AgentDialog } from '@/app/routes'
 import { useDeleteAgent, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
 import { useFeatures } from '@/features/computers/api'
 import { CanUse } from '@/features/agents/agent-connections'
+import { AccessPicker } from '@/features/agents/access'
 import { BrowserPreview } from '@/features/agents/browser'
 import { ChannelRows } from '@/features/agents/channels'
 import { Face } from '@/features/agents/face'
@@ -49,7 +50,7 @@ export function Panel({ agent, naming, watching, onHide }: { agent: Agent; namin
     <div className="-mx-2.5 flex flex-col gap-px">
       <ModelRows agent={agent} />
       <RunsOnRow agent={agent} />
-      <SharedRow agent={agent} />
+      <AccessRow agent={agent} />
     </div>
     <ChannelRows agent={agent} />
     <CanUse agent={agent} />
@@ -70,12 +71,10 @@ export function Panel({ agent, naming, watching, onHide }: { agent: Agent; namin
 
 const LABEL = 'pb-1.5 text-[12px]/[16px] text-mute'
 
-// Only the owner shares: everyone on the team can then open and chat with it.
-function SharedRow({ agent }: { agent: Agent }) {
+function AccessRow({ agent }: { agent: Agent }) {
   const updateAgent = useUpdateAgent(agent.id)
-  if (!agent.canManage) return null
-  return <label className={ROW}><I icon={UserMultipleIcon} size={15} className="text-mute" />Shared with team<Switch className="ml-auto" checked={agent.shared} aria-label="Shared with team" disabled={updateAgent.isPending}
-    onCheckedChange={(on) => updateAgent.mutate({ shared: on }, { onError: toastError })} /></label>
+  return <AccessPicker owner={agent.owner ?? agent.ownerId} value={{ shared: agent.shared, people: agent.people }} title="Access" className={cn(ROW, 'data-disabled:hover:bg-transparent')} disabled={!agent.canManage}
+    onChange={(access) => updateAgent.mutate(access, { onError: toastError })} />
 }
 
 function AgentActions({ agent, watching }: { agent: Agent; watching: boolean }) {
