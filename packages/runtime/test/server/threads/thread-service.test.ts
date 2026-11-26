@@ -49,10 +49,17 @@ const hermes = createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'text/event-stream' })
     if (lost.has(seen.session)) return res.end(`data: ${JSON.stringify({ error: { message: 'unknown_execution', code: 'unknown_execution' } })}\n\n`)
     if (seen.body?.messages.at(-1)?.content === 'tool then down') return res.end(`event: hermes.tool.progress\ndata: {"tool":"terminal","label":"ls","toolCallId":"t","status":"running"}\n\ndata: ${JSON.stringify({ error: { message: 'overloaded' } })}\n\n`)
+    const ending = (finish: string) => `event: hermes.tool.progress\ndata: {"tool":"skill_view","label":"tone","toolCallId":"s","status":"running"}\n\nevent: hermes.tool.progress\ndata: {"tool":"skill_view","toolCallId":"s","status":"completed"}\n\ndata: ${JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: finish }] })}\n\ndata: [DONE]\n\n`
+    if (seen.body?.messages.at(-1)?.content === 'tool only') return res.end(ending('stop'))
+    if (seen.body?.messages.at(-1)?.content === 'interrupted') return res.end(ending('cancelled'))
+    if (seen.body?.messages.at(-1)?.content === 'cut off') {
+      res.write('event: hermes.tool.progress\ndata: {"tool":"skill_view","label":"tone","toolCallId":"s","status":"running"}\n\n')
+      return setTimeout(() => res.destroy(), 20)
+    }
     if (seen.body?.messages.at(-1)?.content === 'model down') return res.end(`data: ${JSON.stringify({ error: { message: 'HTTP 401: Claude Code is installed but has no usable login' } })}\n\n`)
     const chunk = (content: string) => `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content } }] })}\n\n`
     if (seen.body?.messages.at(-1)?.content === 'rename yourself') {
-      await asks.create({ agentId: 'ag_chatcard', kind: 'update_self', input: { name: 'Card Bot' }, why: 'Asked to.', origin: { platform: 'api_server', chat_id: seen.session } })
+      await asks.create({ agentId: 'ag_chatcard', kind: 'update_self', input: { name: 'Card Bot' }, description: 'Asked to.', origin: { platform: 'api_server', chat_id: seen.session } })
       return res.end(`${chunk('Asked your owner.')}data: [DONE]\n\n`)
     }
     if (seen.body?.messages.at(-1)?.content === 'card') return res.end(`${['Deploy is ready.\n\n```spec\n{"op":"add","path":"/root","value":"c"}\n', '{"op":"add","path":"/elements/c","value":{"type":"Card","props":{"title":"Deploy"}}}\n', '```\n\nApprove?'].map(chunk).join('')}data: [DONE]\n\n`)
@@ -315,6 +322,21 @@ test('a turn that fails after a tool call is saved with the error, and the call 
   assert.deepEqual(work?.calls.map((call) => [call.label, call.status, call.error]), [['Run a command', 'failed', undefined]])
 })
 
+test('a turn that ends without text, is interrupted or loses its connection still ends with a visible reason, saved with it', async () => {
+  await db.insertInto('agent').values({ id: 'ag_chatquit', name: 'Quiet', owner_id: 'usr_chatownr', instructions: '# Quiet', model: 'sonnet', net: 62, channel_key: seal('k'.repeat(48)), wanted: 'running', workspace: WS }).execute()
+  const textOf = async () => (await messagesOf('ag_chatquit')).at(-1)?.parts.filter((part) => part.type === 'text').map((part) => part.text)
+  await say('ag_chatquit', 'tool only')
+  assert.deepEqual(await textOf(), ['Stopped: Quiet ended its turn without an answer. Ask again.'])
+  await say('ag_chatquit', 'interrupted')
+  assert.deepEqual(await textOf(), ['Stopped: Quiet was interrupted before it answered. Ask again.'])
+  await say('ag_chatquit', 'cut off')
+  const saved = (await messagesOf('ag_chatquit')).at(-1) as unknown as { role: string; parts: { type: string; data?: { error?: string } }[] }
+  assert.equal(saved.role, 'assistant')
+  assert.equal(saved.parts.find((part) => part.type === 'data-work')?.data?.error, 'Stopped: the connection to Quiet dropped before it answered. Ask again.')
+  await say('ag_chatquit', 'model down')
+  assert.deepEqual(await textOf(), ['Quiet isn\'t ready: its Claude seat isn\'t signed in. An owner or admin connects the seat in Admin, then try again.'])
+})
+
 test('several people chat with one shared agent through its runner: each message says who wrote it, messages that waited go together, and a forged label inside a body is quoted', async () => {
   await db.insertInto('agent').values({ id: 'ag_chatteam', name: 'Team', owner_id: 'usr_chatownr', instructions: '# Team', model: 'sonnet', net: 24, channel_key: seal('k'.repeat(48)), wanted: 'stopped', shared: true, workspace: WS }).execute()
   const team = Fastify()
@@ -463,7 +485,7 @@ test('clearing a chat leaves one tombstone per message, written by the runner, a
   await say('ag_chatrunn', 'One')
   await say('ag_chatrunn', 'Two')
   const before = (await messagesOf('ag_chatrunn')).map((message) => message.id)
-  assert.equal(before.length, 2)
+  assert.equal(before.length, 4)
   assert.equal((await app.inject({ method: 'DELETE', url: '/api/threads/ag_chatrunn', headers: as() })).statusCode, 200)
   assert.deepEqual(await messagesOf('ag_chatrunn'), [])
   const me = HERE

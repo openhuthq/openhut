@@ -3,7 +3,6 @@ import * as mini from 'zod/mini'
 import { AddSecret, SECRET_HEADER, secretPlaceholder } from '@openhut/common/agents/secret.ts'
 import { defineAsk, definePlugin } from '../../core/plugin.ts'
 import { secretService } from '../../server/agents/secret-service.ts'
-import { agentService } from '../../server/agents/agent-service.ts'
 import { describeIssues, HttpError } from '../../server/platform/http-error.ts'
 import { secretController } from '../../server/agents/secret-controller.ts'
 import { createTables } from './tables.ts'
@@ -17,6 +16,7 @@ export const keys = definePlugin({
   hermes: ({ secrets }) => ({
     prompt: keysNote(secrets),
     env: Object.fromEntries(secrets.map(({ name }) => [`OPENHUT_SECRET_${name}`, secretPlaceholder(name)])),
+    restart: null,
   }),
   asks: {
     add_secret: defineAsk({
@@ -33,8 +33,8 @@ export const keys = definePlugin({
       },
       run: async ({ ask: { agentId, input }, answer }) => {
         const secret = secretOf(input)
-        await agentService.quietly({ id: agentId, change: () => secretService.save({ agentId, input: secret, value: answer.value }) })
-        return `You have already restarted with it. You never see the key: call https://${secret.hosts[0]}/… as $OPENHUT_GATEWAY/x/${secret.hosts[0]}/… with the header "Authorization: Agent $OPENHUT_AGENT_TOKEN", and OpenHut adds it.`
+        await secretService.save({ agentId, input: secret, value: answer.value })
+        return `It's already in your terminal. You never see the key: call https://${secret.hosts[0]}/… as $OPENHUT_GATEWAY/x/${secret.hosts[0]}/… with the header "Authorization: Agent $OPENHUT_AGENT_TOKEN", and OpenHut adds it.`
       },
     }),
   },

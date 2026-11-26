@@ -28,10 +28,3 @@ test('the test model answers card: with a reply that holds a card, in a chat or 
     assert.match(content, /"title":"Droplet"/)
   }
 })
-
-test('the test model says nothing after the tools of a (quietly) turn', () => {
-  let body = ''
-  const res = { writeHead: () => res, end: (chunk: string) => { body = chunk } } as unknown as ServerResponse
-  testModel({ path: '/test-llm/v1/chat/completions', body: { messages: [{ role: 'user', content: '(quietly) call: {"tool":"update_self","args":{}}' }, { role: 'tool', content: 'ok' }] }, res })
-  assert.equal(JSON.parse(body).choices[0].message.content, null)
-})

@@ -1,6 +1,6 @@
 import * as z from 'zod'
 import { CONNECTION_TITLES, ConnectionKind, type CreateConnection } from '@openhut/common/connections/connection.ts'
-import { defineAsk, definePlugin, defineTool } from '../../core/plugin.ts'
+import { AskDescription, defineAsk, definePlugin, defineTool } from '../../core/plugin.ts'
 import { agentService } from '../../server/agents/agent-service.ts'
 import { permissions } from '../../server/permissions/permissions.ts'
 import { db } from '../../server/platform/db.ts'
@@ -10,6 +10,8 @@ import { connectionService, type AgentTool } from '../../server/connections/conn
 import { connectionAuthorizationController, connectionController, connectionEventController, connectionToolController } from '../../server/connections/connection-controller.ts'
 import { grantController } from '../../server/agents/agent-controller.ts'
 import { permissionController } from '../../server/permissions/permission-controller.ts'
+import { labelOf } from '../../server/threads/work.ts'
+import { github } from '../../server/integrations/github/github.ts'
 import { createTables } from './tables.ts'
 
 const STATE = z.enum(['allow', 'ask', 'deny'])
@@ -55,12 +57,12 @@ export const connections = definePlugin({
     call_tool: defineTool({
       description: 'Run a tool from list_tools. Some tools wait for your owner\'s OK: then the call returns at once, and the result comes back to you as a message.',
       input: {
-        reason: z.string().min(1).max(500).describe('Why you need this, in a few words. Shown in the audit.'),
+        description: AskDescription,
         name: z.string().max(100),
         arguments: z.record(z.string(), z.unknown()).default({}),
         connectionId: z.string().max(100).optional(),
       },
-      run: ({ reason, name, arguments: args, connectionId }, { agent, origin }) => connectionService.call({ agent, name, args, connectionId, reason, origin }),
+      run: ({ description, name, arguments: args, connectionId }, { agent, origin }) => connectionService.call({ agent, name, args, connectionId, reason: description, origin }),
     }),
   },
   asks: {
@@ -88,20 +90,22 @@ export const connections = definePlugin({
     call_tool: defineAsk({
       input: z.object({
         connectionId: z.string().max(40), tool: z.string().max(200), name: z.string().max(200), arguments: z.record(z.string(), z.unknown()),
-        action: z.object({ name: z.string().max(200), label: z.string().max(200) }).optional(), always: z.boolean().optional(),
+        action: z.object({ name: z.string().max(200), label: z.string().max(200) }).optional(), destructive: z.boolean().optional(), always: z.boolean().optional(),
       }),
       answer: z.object({ always: z.boolean().optional().describe('Always allow this from now on') }),
       title: async ({ input }) => {
-        const connection = await db.selectFrom('connection').select('name').where('id', '=', input.connectionId).executeTakeFirstOrThrow()
-        return input.action ? `${connection.name}: ${input.action.label}` : `Run ${input.tool} on ${connection.name}`
+        const connection = await db.selectFrom('connection').select(['name', 'kind']).where('id', '=', input.connectionId).executeTakeFirstOrThrow()
+        const named = connection.kind === 'github' ? github.askTitle({ tool: input.tool, args: input.arguments }) : undefined
+        return named ?? labelOf({ name: input.action?.name ?? input.tool, app: connection.name, title: input.action?.label }).label
       },
-      run: async ({ actor, ask: { agentId, input, why }, answer }) => {
+      run: async ({ actor, ask: { agentId, input, description }, answer }) => {
+        if (answer.always && input.destructive) throw new HttpError(400, 'This can\'t be undone, so it can only be allowed once.')
         if (answer.always) await permissions.set({ actor, agentId, connectionId: input.connectionId, tools: [input.action?.name ?? input.tool], state: 'allow' })
-        const result = await connectionService.callApproved({ actor, agentId, connectionId: input.connectionId, tool: input.tool, args: input.arguments, reason: why })
+        const result = await connectionService.callApproved({ actor, agentId, connectionId: input.connectionId, tool: input.tool, args: input.arguments, reason: description })
         return `${answer.always ? 'From now on it runs without asking. ' : ''}The result:\n\n${result.text}`
       },
-      declined: async ({ actor, ask: { agentId, input, why } }) => {
-        await db.insertInto('connection_event').values({ agent_id: agentId, connection_id: input.connectionId, tool: input.name, reason: why.slice(0, 500), outcome: 'denied', ms: 0, approved_by: actor.id }).execute()
+      declined: async ({ actor, ask: { agentId, input, description } }) => {
+        await db.insertInto('connection_event').values({ agent_id: agentId, connection_id: input.connectionId, tool: input.name, reason: description, outcome: 'denied', ms: 0, approved_by: actor.id }).execute()
       },
     }),
   },

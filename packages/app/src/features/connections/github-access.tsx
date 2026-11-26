@@ -62,7 +62,8 @@ export function GitHubAskRow({ agent, ask, compact }: { agent: Agent; ask: Ask; 
     <div className={cn('flex min-w-0 items-center gap-3', compact ? 'h-7' : 'min-h-11 rounded-lg px-2')} data-ask={ask.id}>
       <span className="grid size-6 shrink-0 place-items-center"><Glyph name="github" size={compact ? 16 : 20} /></span>
       <span className={cn('flex min-w-0 flex-1 flex-col', compact ? 'text-[13px]' : 'text-[13.5px]')}>
-        <span className="flex min-w-0 items-center gap-1 whitespace-nowrap"><span className="shrink-0 text-ink">GitHub</span>{app && !note && <><span className="text-mute">·</span><Avatar url={app.ownerAvatar} name={app.owner} org={app.ownerType === 'Organization'} size={20} /><span className="truncate text-ink">{app.owner}</span></>}</span>
+        <span className="flex min-w-0 items-center gap-1 whitespace-nowrap"><span className="shrink-0 text-ink">GitHub</span>{app && !note && <><span className="text-mute">·</span><Avatar url={app.ownerAvatar} name={app.owner} org={app.ownerType === 'Organization'} size={20} /><span className="truncate text-ink">{app.owner}</span></>}{compact && <><span className="text-mute">·</span><span className="truncate text-mute">{ask.description}</span></>}</span>
+        {!note && !compact && <span className="truncate text-[12.5px] text-mute">{ask.description}</span>}
         {note && !compact && <span className="flex items-center gap-1.5 text-[12px] text-mute">{dot && <i className="size-1.5 animate-[blinkdot_1s_infinite] rounded-full bg-amber" />}{note}</span>}
       </span>
       {ask.status === 'done' && <span className={cn('inline-flex items-center gap-1.5 text-ink', compact ? 'text-[12.5px]' : 'h-7 text-[13px]')}><I icon={CheckmarkCircle02Icon} size={compact ? 14 : 16} className="text-hue-green" />{!compact && 'Connected'}</span>}

@@ -1,4 +1,4 @@
-import type * as z from 'zod'
+import * as z from 'zod'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import type { Kysely } from 'kysely'
 import type { Database } from '../server/platform/db-schema.ts'
@@ -23,6 +23,7 @@ export type HermesPart = {
   config?: Record<string, unknown>
   env?: Record<string, string>
   auth?: object
+  restart?: unknown
 }
 
 export type ToolResult = string | { text: string; isError: boolean } | { send: { target: string; message: string } }
@@ -36,7 +37,12 @@ export type Tool<S extends z.ZodRawShape = z.ZodRawShape> = {
 
 export type Wake = { id: string; text: string; origin: Origin }
 
-export type AskOf<I> = { id: string; agentId: string; input: I; why: string; origin: Origin }
+export const AskDescription = z.string()
+  .min(3, 'Add a description: one short sentence for your owner about what this is for, like "Push the changelog fix to openhuthq/openhut".')
+  .max(120, 'Keep the description to one short sentence under 120 characters, like "Push the changelog fix to openhuthq/openhut".')
+  .describe('One short sentence for your owner, in plain words, about what this is for: no tool names, no jargon. Like "Push the changelog fix to openhuthq/openhut".')
+
+export type AskOf<I> = { id: string; agentId: string; input: I; description: string; origin: Origin }
 
 export type AskKind<I extends z.ZodObject = z.ZodObject, A extends z.ZodObject | undefined = undefined> = {
   input: I

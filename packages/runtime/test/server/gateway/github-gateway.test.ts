@@ -26,8 +26,9 @@ const { db, migrate } = await import('../../../src/server/platform/db.ts')
 const { agentToken, seal } = await import('../../../src/server/platform/secrets.ts')
 const { gatewayServer } = await import('../../../src/server/gateway/gateway-server.ts')
 const { upstreams } = await import('../../../src/server/gateway/broker.ts')
-const { github } = await import('../../../src/server/integrations/github/github.ts')
+const { github, GIT_SPECS } = await import('../../../src/server/integrations/github/github.ts')
 const { permissions } = await import('../../../src/server/permissions/permissions.ts')
+const { connectionService } = await import('../../../src/server/connections/connection-service.ts')
 upstreams.get('github')!.origin = `http://127.0.0.1:${(fake.address() as AddressInfo).port}`
 
 await migrate()
@@ -51,12 +52,13 @@ after(() => {
   fake.close()
 })
 const ask = (agent: string, path: string, method = 'GET') => realFetch(`${gw}/u/github${path}`, { method, headers: { authorization: `Agent ${agentToken({ id: agent, epoch: 0 })}` } })
-const gitPermission = (state: 'allow' | 'ask' | 'deny') => permissions.set({ actor: { id: 'usr_gitowner', email: 'git@example.com', role: 'owner' }, agentId: 'ag_gitgrant', connectionId: 'cn_gitgithub', tools: ['git_credentials'], state })
+const owner = { id: 'usr_gitowner', email: 'git@example.com', role: 'owner' as const }
+const gitPermission = (state: 'allow' | 'ask' | 'deny', tools = ['git_read', 'git_push']) => permissions.set({ actor: owner, agentId: 'ag_gitgrant', connectionId: 'cn_gitgithub', tools, state })
 const events = () => db.selectFrom('connection_event').select(['tool', 'outcome']).where('agent_id', '=', 'ag_gitgrant').orderBy('id').execute()
 
-test('git_credentials hands out config only: no GitHub token in the reply or in ~/.gitconfig, and plain git clones and pushes through the gateway', async () => {
+test('git_read hands out config only: no GitHub token in the reply or in ~/.gitconfig, and plain git clones and pushes through the gateway', async () => {
   await gitPermission('allow')
-  const reply = await github.connector.call({ config: app, refresh: async () => ({}), tool: 'git_credentials', args: {} })
+  const reply = await github.connector.call({ config: app, refresh: async () => ({}), tool: 'git_read', args: {} })
   assert.ok(!reply.text.includes('ghs_'))
   const home = mkdtempSync(join(tmpdir(), 'openhut-agent-home-'))
   const env = { ...process.env, HOME: home, GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0', OPENHUT_GATEWAY: gw, OPENHUT_AGENT_TOKEN: agentToken({ id: 'ag_gitgrant', epoch: 0 }) }
@@ -77,22 +79,48 @@ test('git_credentials hands out config only: no GitHub token in the reply or in 
   assert.deepEqual(await events(), [{ tool: 'github fetch from acme/api', outcome: 'allowed' }, { tool: 'github push to acme/api', outcome: 'allowed' }])
 })
 
-test('git_credentials gates git: Never refuses everything, Ask fetches but refuses push, Always pushes', async () => {
+test('git is two permissions: Read code and Push branches; Never refuses, Ask first pushes only once approved, Always pushes', async (t) => {
+  const connection = { id: 'cn_gitgithub', kind: 'github' as const, name: 'GitHub' }
+  t.mock.method(connectionService, 'tools', async () => GIT_SPECS.map((spec) => ({ name: `github_${spec.name}`, connection, spec })))
   const push = () => ask('ag_gitgrant', '/acme/api.git/git-receive-pack', 'POST')
   const pushRefs = () => ask('ag_gitgrant', '/acme/api.git/info/refs?service=git-receive-pack')
   const fetchRefs = () => ask('ag_gitgrant', '/acme/api.git/info/refs?service=git-upload-pack')
-  await gitPermission('ask')
+  await permissions.reset({ actor: owner, agentId: 'ag_gitgrant', connectionId: 'cn_gitgithub' })
+  const listed = await permissions.list({ agentId: 'ag_gitgrant', connectionId: 'cn_gitgithub', tools: GIT_SPECS })
+  assert.deepEqual(listed.map((each) => [each.name, each.description, each.group, each.permission]), [['git_read', 'Read code', 'read', 'allow'], ['git_push', 'Push branches', 'create', 'ask']])
   assert.equal((await fetchRefs()).status, 200)
   const refused = await pushRefs()
   assert.equal(refused.status, 403)
-  assert.match(await refused.text(), /Pushing needs git_credentials set to Always/)
+  assert.match(await refused.text(), /Pushing to acme\/api waits for your owner's OK\. Call call_tool github_git_push with repo acme\/api/)
   assert.equal((await push()).status, 403)
+  const asked = await connectionService.call({ agent: { id: 'ag_gitgrant', owner_id: 'usr_gitowner' }, name: 'github_git_push', args: { repo: 'acme/api', branch: 'fix-docs' }, reason: 'Fix the changelog', origin: { platform: 'api_server', chat_id: 'openhut-git' } })
+  assert.match(asked.text, /\): Push to GitHub · acme\/api \(fix-docs\)\./)
+  assert.equal((await pushRefs()).status, 403, 'not until the owner answers')
+  await db.updateTable('ask').set({ status: 'done', answered_at: new Date() }).where('id', '=', /ask_[a-z0-9]+/.exec(asked.text)?.[0] ?? '').execute()
+  assert.equal((await pushRefs()).status, 200, 'allowed once opens a short window for that repo')
+  assert.equal((await ask('ag_gitgrant', '/acme/other.git/info/refs?service=git-receive-pack')).status, 403, 'and only that repo')
+  await gitPermission('deny', ['git_push'])
+  assert.equal((await fetchRefs()).status, 200)
+  assert.equal((await pushRefs()).status, 403)
+  const blocked = connectionService.callsSince({ agentId: 'ag_gitgrant', since: 0 }).at(-1)
+  assert.deepEqual([blocked?.outcome, blocked?.connectionId, blocked?.spec?.name], ['denied', 'cn_gitgithub', 'git_push'])
   await gitPermission('deny')
   assert.equal((await fetchRefs()).status, 403)
-  assert.equal((await pushRefs()).status, 403)
   await gitPermission('allow')
   assert.equal((await fetchRefs()).status, 200)
   assert.equal((await pushRefs()).status, 200)
+})
+
+test('the old git_credentials setting splits in two: Never and Always carry over to both, Ask first keeps the defaults', async () => {
+  const { splitGitPermission } = await import('../../../src/plugins/github/tables.ts')
+  await permissions.reset({ actor: owner, agentId: 'ag_gitgrant', connectionId: 'cn_gitgithub' })
+  const states = async () => (await db.selectFrom('tool_permission').select(['tool', 'state']).where('agent_id', '=', 'ag_gitgrant').orderBy('tool').execute()).map((row) => [row.tool, row.state])
+  for (const [old, after] of [['deny', [['git_push', 'deny'], ['git_read', 'deny']]], ['allow', [['git_push', 'allow'], ['git_read', 'allow']]], ['ask', []]] as const) {
+    await permissions.reset({ actor: owner, agentId: 'ag_gitgrant', connectionId: 'cn_gitgithub' })
+    await gitPermission(old, ['git_credentials'])
+    await splitGitPermission(db)
+    assert.deepEqual(await states(), after)
+  }
 })
 
 test('only git smart HTTP passes, and only for an agent granted GitHub', async () => {

@@ -10,7 +10,7 @@ export const Ask = z.object({
   kind: z.string(),
   agentId: z.string(),
   title: z.string(),
-  why: z.string(),
+  description: z.string(),
   input: z.record(z.string(), z.unknown()),
   status: AskStatus,
   note: z.nullable(z.string()),

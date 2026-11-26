@@ -27,7 +27,7 @@ const SEED = 20
 const SEED_CHARS = 2000
 const SpecPatch = z.object({ type: z.literal('patch'), patch: z.looseObject({ op: z.string(), path: z.string() }) })
 const Chunk = z.object({
-  choices: z.optional(z.array(z.object({ delta: z.optional(z.object({ content: z.optional(z.nullable(z.string())) })) }))),
+  choices: z.optional(z.array(z.object({ delta: z.optional(z.object({ content: z.optional(z.nullable(z.string())) })), finish_reason: z.optional(z.nullable(z.string())) }))),
   error: z.optional(z.object({ message: z.string() })),
 })
 const FilePart = z.object({ type: z.literal('file'), mediaType: z.string().check(z.maxLength(100)), filename: z.optional(z.string().check(z.maxLength(255))), url: z.string().check(z.maxLength(1024)) })
@@ -140,9 +140,13 @@ export const threadService = {
     let session = sessionOf(said)
     const work = turnWork({ agent, started })
     const asked = together({ messages: said.map((each) => each.message), shared: agent.shared || peopleOf(agent.people).length > 0 })
+    let answered = false
     const answer = async (writer: { write: (chunk: UIMessageChunk) => void }) => {
       const message = await seeded({ said, session, message: asked })
-      for await (const chunk of answerStream({ agent, session, message, signal: abort.signal, work })) writer.write(chunk)
+      for await (const chunk of answerStream({ agent, session, message, signal: abort.signal, work })) {
+        if (chunk.type === 'text-delta' || chunk.type === SPEC_DATA_PART_TYPE) answered = true
+        writer.write(chunk)
+      }
     }
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
@@ -157,6 +161,7 @@ export const threadService = {
         }).then(() => undefined, (err: unknown) => err)
         const done = work.done({ error: failed === undefined ? undefined : messageOf(failed) })
         if (done) writer.write({ type: 'data-work', id: 'work', data: done })
+        if (failed !== undefined && !done && !answered && !abort.signal.aborted) stopped({ writer, reason: messageOf(failed) })
         if (failed !== undefined) throw failed
         for (const part of await afterTurn({ agentId: agent.id, since: started })) writer.write(part)
         writer.write({ type: 'finish' })
@@ -320,8 +325,20 @@ async function afterTurn({ agentId, since }: { agentId: string; since: number })
 
 function relayed(input: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal; work: TurnWork }): ReadableStream<UIMessageChunk> {
   return new ReadableStream({
-    start: (controller) => relay({ ...input, writer: { write: (chunk) => controller.enqueue(chunk) } }).then(() => controller.close(), (err: unknown) => controller.error(err)),
+    start: (controller) => {
+      const writer = { write: (chunk: UIMessageChunk) => controller.enqueue(chunk) }
+      return relay({ ...input, writer }).then((reason) => {
+        if (reason) stopped({ writer, reason })
+        controller.close()
+      }, (err: unknown) => controller.error(err))
+    },
   })
+}
+
+function stopped({ writer, reason }: { writer: { write: (chunk: UIMessageChunk) => void }; reason: string }): void {
+  writer.write({ type: 'text-start', id: 'stopped' })
+  writer.write({ type: 'text-delta', id: 'stopped', delta: reason })
+  writer.write({ type: 'text-end', id: 'stopped' })
 }
 
 function joinText(stream: ReadableStream<UIMessageChunk>): ReadableStream<UIMessageChunk> {
@@ -352,12 +369,17 @@ function foldCard(message: UIMessage): UIMessage {
   }) }
 }
 
-async function relay({ agent, session, message, writer, signal, work }: { agent: AgentRow; session: string; message: ChatMessage; writer: { write: (chunk: UIMessageChunk) => void }; signal: AbortSignal; work?: TurnWork }): Promise<void> {
+async function relay({ agent, session, message, writer, signal, work }: { agent: AgentRow; session: string; message: ChatMessage; writer: { write: (chunk: UIMessageChunk) => void }; signal: AbortSignal; work?: TurnWork }): Promise<string | undefined> {
   const body = await callAgent({ agent, session, message: await openAiOf({ agentId: agent.id, message }), signal })
   let text = 0
   let open = false
-  for await (const event of sseEvents(body)) {
-    if (event.data === '[DONE]') break
+  let finish: string | null | undefined
+  let ended = false
+  for await (const event of sseEvents({ body, signal, agentName: agent.name })) {
+    if (event.data === '[DONE]') {
+      ended = true
+      break
+    }
     if (event.name === 'hermes.tool.progress') {
       if (open) writer.write({ type: 'text-end', id: `t${text}` })
       open = false
@@ -368,6 +390,7 @@ async function relay({ agent, session, message, writer, signal, work }: { agent:
     const chunk = z.safeParse(Chunk, parseJson(event.data)).data
     if (chunk?.error?.message === 'unknown_execution' && !text) throw new LostTurn()
     if (chunk?.error) throw new Error(modelFailure({ name: agent.name, message: chunk.error.message }))
+    finish = chunk?.choices?.[0]?.finish_reason ?? finish
     const delta = chunk?.choices?.[0]?.delta?.content
     if (!delta) continue
     if (!open) writer.write({ type: 'text-start', id: `t${++text}` })
@@ -375,9 +398,15 @@ async function relay({ agent, session, message, writer, signal, work }: { agent:
     writer.write({ type: 'text-delta', id: `t${text}`, delta })
   }
   if (open) writer.write({ type: 'text-end', id: `t${text}` })
+  if (text) return undefined
+  if (finish === 'cancelled') return `Stopped: ${agent.name} was interrupted before it answered. Ask again.`
+  if (!ended && !finish) return dropped(agent.name)
+  return `Stopped: ${agent.name} ended its turn without an answer. Ask again.`
 }
 
 class LostTurn extends Error {}
+
+const dropped = (name: string): string => `Stopped: the connection to ${name} dropped before it answered. Ask again.`
 
 function modelFailure({ name, message }: { name: string; message: string }): string {
   log.warn({ event: 'agent.chat_failed', agent: name, error: message.slice(0, 500) })
@@ -386,18 +415,27 @@ function modelFailure({ name, message }: { name: string; message: string }): str
   return `${name}'s model failed: ${message.slice(0, 300)}`
 }
 
-async function* sseEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<{ name: string; data: string }> {
+async function* sseEvents({ body, signal, agentName }: { body: ReadableStream<Uint8Array>; signal: AbortSignal; agentName: string }): AsyncGenerator<{ name: string; data: string }> {
   const decoder = new TextDecoder()
   let buffer = ''
-  for await (const bytes of body) {
-    buffer += decoder.decode(bytes, { stream: true }).replace(/\r\n/g, '\n')
-    for (let end = buffer.indexOf('\n\n'); end >= 0; end = buffer.indexOf('\n\n')) {
-      const lines = buffer.slice(0, end).split('\n').filter((line) => !line.startsWith(':'))
-      buffer = buffer.slice(end + 2)
-      const name = lines.find((line) => line.startsWith('event:'))?.slice(6).trim() ?? 'message'
-      const data = lines.filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trimStart()).join('\n')
-      if (data) yield { name, data }
+  const reads = body[Symbol.asyncIterator]()
+  try {
+    for (;;) {
+      const next = await reads.next().catch((err: unknown) => {
+        throw signal.aborted ? err : new Error(dropped(agentName))
+      })
+      if (next.done) return
+      buffer += decoder.decode(next.value, { stream: true }).replace(/\r\n/g, '\n')
+      for (let end = buffer.indexOf('\n\n'); end >= 0; end = buffer.indexOf('\n\n')) {
+        const lines = buffer.slice(0, end).split('\n').filter((line) => !line.startsWith(':'))
+        buffer = buffer.slice(end + 2)
+        const name = lines.find((line) => line.startsWith('event:'))?.slice(6).trim() ?? 'message'
+        const data = lines.filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trimStart()).join('\n')
+        if (data) yield { name, data }
+      }
     }
+  } finally {
+    await reads.return?.().catch(() => undefined)
   }
 }
 

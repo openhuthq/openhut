@@ -9,6 +9,7 @@ import { channelService } from '../channels/channel-service.ts'
 import { STAND_IN } from '../integrations/slack/slack.ts'
 import { providers } from '../models/providers/index.ts'
 import { github } from '../integrations/github/github.ts'
+import { connectionService } from '../connections/connection-service.ts'
 import { secretService, type HeldSecret } from '../agents/secret-service.ts'
 import { guardedLookup } from '../platform/network.ts'
 
@@ -76,7 +77,10 @@ export const upstreams = new Map<string, Upstream>([
       const match = GIT_PATH.exec(path)
       return !!match && method === (match[2] === 'info/refs' ? 'GET' : 'POST')
     },
-    credential: (agent, _incoming, path) => github.gitToken({ agentId: agent.id, push: GIT_PUSH.test(path) }),
+    credential: (agent, _incoming, path) => {
+      const repo = GIT_PATH.exec(path.split('?')[0])?.[1]
+      return github.gitToken({ agentId: agent.id, push: GIT_PUSH.test(path), repo, refused: (call) => connectionService.refused({ agentId: agent.id, tool: `github_${call.spec.name}`, ...call, args: repo ? { repo } : {} }) })
+    },
     apply: ({ out, secret }) => { out.headers.set('authorization', `Basic ${Buffer.from(`x-access-token:${secret}`).toString('base64')}`) },
     tool: (path) => {
       const match = GIT_PATH.exec(path)

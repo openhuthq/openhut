@@ -45,13 +45,13 @@ test('a read runs at once and its secrets are hidden', async () => {
 test('a write waits for the OK, runs on approval and the result reaches the agent', async () => {
   const before = ran.length
   const asked = await connectionService.call({ agent, name: 'mcp_db-cluster-resize', args: { size: 'db-s-2vcpu' }, reason: 'Queries are waiting', origin: app })
-  assert.match(asked.text, /^Asked for approval \(ask_[a-z0-9]+\): Run db-cluster-resize on DigitalOcean\./)
+  assert.match(asked.text, /^Asked for approval \(ask_[a-z0-9]+\): Resize db cluster in DigitalOcean\./)
   assert.equal(ran.length, before)
   const approved = await asks.approve({ actor: owner, id: idIn(asked.text) })
   assert.equal(approved.status, 'done')
   assert.deepEqual(ran.at(-1), { tool: 'db-cluster-resize', args: { size: 'db-s-2vcpu' } })
   await settle()
-  assert.match(told.at(-1) ?? '', /Approved and done: Run db-cluster-resize on DigitalOcean\. The result:\n\n\{"ran":"db-cluster-resize","password":"\[hidden\]"\}/)
+  assert.match(told.at(-1) ?? '', /Approved and done: Resize db cluster in DigitalOcean\. The result:\n\n\{"ran":"db-cluster-resize","password":"\[hidden\]"\}/)
   assert.deepEqual((await events()).slice(-2), [
     { tool: 'mcp_db-cluster-resize', outcome: 'asked', approved_by: null },
     { tool: 'mcp_db-cluster-resize', outcome: 'allowed', approved_by: 'usr_permowner' },
@@ -74,7 +74,7 @@ test('Don\'t allow tells the agent and nothing runs; Never refuses outright', as
   const asked = await connectionService.call({ agent, name: 'mcp_db-cluster-resize', args: {}, reason: 'Bigger', origin: app })
   await asks.decline({ actor: owner, id: idIn(asked.text) })
   await settle()
-  assert.match(told.at(-1) ?? '', /Not approved: Run db-cluster-resize on DigitalOcean\./)
+  assert.match(told.at(-1) ?? '', /Not approved: Resize db cluster in DigitalOcean\./)
   const never = await connectionService.call({ agent, name: 'mcp_db-cluster-delete', args: {}, reason: 'Clean up', origin: app })
   assert.equal(never.isError, true)
   assert.match(never.text, /^Not allowed/)

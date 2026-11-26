@@ -57,7 +57,7 @@ after(() => {
 })
 
 test('add_secret waits for the owner, who pastes the value; it is stored sealed and the agent hears only that it was saved', async () => {
-  const asked = textOf(await client.callTool({ name: 'add_secret', arguments: { why: 'To check failed payments.', name: 'STRIPE_KEY', hosts: ['api.stripe.com'], origin: { platform: 'api_server', chat_id: 'openhut-sec' } } }))
+  const asked = textOf(await client.callTool({ name: 'add_secret', arguments: { description: 'To check failed payments.', name: 'STRIPE_KEY', hosts: ['api.stripe.com'], origin: { platform: 'api_server', chat_id: 'openhut-sec' } } }))
   const id = /ask_[a-z0-9]+/.exec(asked)?.[0] ?? ''
   assert.match(asked, /Save a key, STRIPE_KEY, sent only to api\.stripe\.com/)
   await assert.rejects(asks.approve({ actor: owner, id }), /Paste the key/)

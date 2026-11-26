@@ -244,3 +244,24 @@ Your owner's instructions below override this section.
 - When you report work, say what happened and what you need next.`)
   assert.doesNotMatch(TALK_PROMPT, /Claude|GPT|Hermes/)
 })
+
+test('the restart key moves only for what Hermes reads at boot: the token, the provider and the channel set, not the prompt, model, grants, keys or run-code', () => {
+  const key = (over: Partial<Omit<HermesCtx, 'gateway'>> = {}) => hermesFiles({ agent, token: 'ag_chantest.token', channelKey: 'k'.repeat(32), channels: [], connections: [], secrets: [], ...over })['restart.key']
+  const telegram = (allowed: string[]): RenderedChannel => ({ kind: 'telegram', audience: { open: false, ownerAddress: '123456789', allowed } })
+  const base = key()
+  assert.match(base, /^[0-9a-f]{64}\n$/)
+  for (const live of [
+    { agent: { ...agent, name: 'Ops', instructions: '# Ops\nNew job.' } },
+    { agent: { ...agent, slots: slots('claude:opus') } },
+    { agent: { ...agent, code_execution: false } },
+    { connections: [{ name: 'Sales DB', kind: 'postgres' }] },
+    { secrets: [{ name: 'STRIPE_KEY', hosts: ['api.stripe.com'] }] },
+  ]) assert.equal(key(live), base, JSON.stringify(live))
+  assert.equal(key({ channels: [telegram(['555555555'])] }), key({ channels: [telegram(['555555555', '666666666'])] }), 'a Telegram audience is live')
+  for (const restart of [
+    { token: 'ag_chantest.other' },
+    { agent: { ...agent, slots: slots('codex:gpt-5.5') } },
+    { channels: [telegram([])] },
+    { channels: [{ kind: 'discord', audience: { open: false, ownerAddress: '', allowed: ['1'] }, botToken: 'x' } as RenderedChannel] },
+  ]) assert.notEqual(key(restart), base, JSON.stringify(restart))
+})

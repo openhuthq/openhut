@@ -84,10 +84,8 @@ export const channelService = {
     if (!known) {
       const facts = await agentService.find({ id: agentId })
       const add = (value: ChannelRecord): ChannelRecord => ({ ...value, allowed: [...new Set([...value.allowed, person.userId])], names: { ...value.names, [person.userId]: person.name } })
-      await agentService.quietly({ id: agentId, change: async () => {
-        await recordsService.put({ collection: 'channel', id: row.id, parent: agentId, workspace: facts.workspace, personal: facts.personal, value: add(current), secret: held.secret, reapply: (latest) => ({ value: add(ChannelRecord.parse(latest.value)), secret: latest.secret }) })
-        await runSet.apply({ workspace: facts.workspace, id: agentId }).catch((err: unknown) => log.warn({ event: 'telegram.join_apply_failed', agent: agentId, error: messageOf(err) }))
-      } })
+      await recordsService.put({ collection: 'channel', id: row.id, parent: agentId, workspace: facts.workspace, personal: facts.personal, value: add(current), secret: held.secret, reapply: (latest) => ({ value: add(ChannelRecord.parse(latest.value)), secret: latest.secret }) })
+      await runSet.apply({ workspace: facts.workspace, id: agentId }).catch((err: unknown) => log.warn({ event: 'telegram.join_apply_failed', agent: agentId, error: messageOf(err) }))
       emit({ name: 'channel.updated', target: { type: 'channel', id: row.id, kind: 'telegram', agentId } })
     }
     await telegram.send({ botToken, chatId: person.chatId, text: welcome(person.name) }).catch(() => undefined)

@@ -23,8 +23,7 @@ export function testModel({ path, body, res }: { path: string; body: unknown; re
   const toolNames = (request.tools ?? []).map((tool) => tool.function?.name ?? tool.name).filter((name) => name !== undefined)
   const callTool = toolNames.find((name) => name.endsWith('call_tool'))
   log.info({ event: 'test_llm.request', messages: messages.length, lastRole: last.role, tools: toolNames.length, callTool })
-  const nudge = (message: { content?: unknown }) => /returned an empty response/.test(asText(message.content))
-  const quiet = (last.role === 'tool' || nudge(last)) && /\(quietly\)/.test(asText(messages.findLast((message) => message.role === 'user' && !nudge(message))?.content))
+  const quiet = messages.some((message) => message.role === 'tool') && messages.some((message) => message.role === 'user' && asText(message.content).includes('then go quiet'))
   const reply = quiet ? {} : replyTo({ last, callTool, shell: toolNames.find((name) => name === 'terminal' || name === 'Bash'), schedule: toolNames.find((name) => name.endsWith('schedule_routine')), names: toolNames })
   const base = { id: `cmpl-${Date.now()}`, created: Math.floor(Date.now() / 1000), model: request.model ?? 'openhut-test' }
   const calls = reply.tools ?? (reply.tool ? [reply.tool] : [])
@@ -68,7 +67,7 @@ function replyTo({ last, callTool, shell, schedule, names }: { last: { role?: st
   const named = direct && names.find((name) => name.endsWith(direct.tool))
   if (direct && named) return { tool: { name: named, args: JSON.stringify(direct.args ?? {}) } }
   const sql = /sql:\s*([\s\S]+?)\s*$/i.exec(asText(last.content))?.[1]
-  if (sql && callTool) return { tool: { name: callTool, args: JSON.stringify({ reason: 'The user asked for data', name: 'postgres_query', arguments: { sql } }) } }
+  if (sql && callTool) return { tool: { name: callTool, args: JSON.stringify({ description: 'Look up the data the user asked for', name: 'postgres_query', arguments: { sql } }) } }
   const command = /browser:\s*([a-z][a-z -]*(?:\s+[^\s'"`$;&|<>\\]+)*)\s*"?\s*$/i.exec(lastText(last.content))?.[1]
   if (command && shell) return { tool: { name: shell, args: JSON.stringify({ command: `agent-browser ${command}`, description: 'Use the browser' }) } }
   const card = /\bcard:\s*([\w -]+?)\s*(?:now\b|$)/im.exec(asText(last.content))?.[1]
