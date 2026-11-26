@@ -1,6 +1,6 @@
 import type { Selectable } from 'kysely'
 import type { Deleted } from '@openhut/common/api.ts'
-import { ADDRESS, ChannelRecord, ChannelSecrets, type Channel, type ChannelKind, type Conversation, type CreateChannel, type TelegramInvite, type UpdateChannel } from '@openhut/common/channels/channel.ts'
+import { ADDRESS, ChannelRecord, ChannelSecrets, type Channel, type ChannelKind, type Conversation, type CreateChannel, type Place, type TelegramInvite, type UpdateChannel } from '@openhut/common/channels/channel.ts'
 import { db } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { log, emit } from '../platform/events.ts'
@@ -21,6 +21,9 @@ import { whatsappPairing } from './whatsapp-pairing.ts'
 import { telegramCodes, welcome, type Person } from './telegram-codes.ts'
 
 const CHANNEL_KINDS = new Set<ChannelKind>(['slack', 'discord'])
+const SENDERS: Record<string, (input: { botToken: string; place: Place; text: string }) => Promise<void>> = {
+  discord: ({ botToken, place, text }) => discord.post({ botToken, channelId: place.thread_id ?? place.chat_id, text }),
+}
 const LABEL = { slack: 'Slack', whatsapp: 'WhatsApp', telegram: 'Telegram', discord: 'Discord' } as const
 
 export const channelService = {
@@ -154,6 +157,23 @@ export const channelService = {
       }
     }
     return targets
+  },
+
+  async places({ agentId }: { agentId: string }): Promise<Place[]> {
+    const targets = await channelService.postTargets({ agentId })
+    return targets.map((each) => ({ platform: each.target.split(':')[0] ?? '', chat_id: each.chat, chat_name: each.place })).filter((place) => place.platform in SENDERS)
+  },
+
+  async send({ agentId, place, text }: { agentId: string; place: Place; text: string }): Promise<void> {
+    const sender = SENDERS[place.platform]
+    if (!sender) throw new HttpError(400, `OpenHut can't post to ${place.platform} yet. Pick a Discord channel.`)
+    if (!text.trim()) throw new HttpError(400, 'Send the text to post.')
+    const target = (await channelService.postTargets({ agentId })).find((each) => each.target === `${place.platform}:${place.chat_id}`)
+    if (!target) throw new HttpError(400, `Can't post in ${place.chat_name || 'that channel'}. Connect it to the agent first.`)
+    const row = await db.selectFrom('channel').select('secrets').where('id', '=', target.channel).executeTakeFirstOrThrow()
+    const botToken = ChannelSecrets.parse(JSON.parse(unseal(row.secrets))).botToken
+    if (!botToken) throw new HttpError(409, 'This channel has no bot token. Connect it again on the agent\'s page.')
+    await sender({ botToken, place, text })
   },
 
   async postTarget({ agentId, channel, chat }: { agentId: string; channel: string; chat?: string }): Promise<PostTarget> {

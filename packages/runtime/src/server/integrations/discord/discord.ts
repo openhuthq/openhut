@@ -1,5 +1,5 @@
 import * as z from 'zod/mini'
-import type { Conversation, Sent } from '@openhut/common/channels/channel.ts'
+import type { Conversation } from '@openhut/common/channels/channel.ts'
 import { config } from '../../platform/config.ts'
 import { HttpError, messageOf } from '../../platform/http-error.ts'
 
@@ -18,8 +18,6 @@ const MESSAGE_CONTENT = (1 << 18) | (1 << 19)
 const MAX_LENGTH = 2000
 const RETRIES = 3
 const MAX_WAIT_MS = 30_000
-const Posted = z.object({ id: z.string(), channel_id: z.string() })
-const Channel = z.object({ id: z.string(), guild_id: z.optional(z.string()) })
 const Failure = z.object({ message: z.optional(z.string()), retry_after: z.optional(z.number()) })
 export const DiscordSecrets = z.object({ botToken: z.string() })
 
@@ -74,13 +72,8 @@ export const discord = {
     return failed
   },
 
-  async post({ botToken, channelId, text, startThread }: { botToken: string; channelId: string; text: string; startThread?: string }): Promise<Sent> {
-    const parts = split(text)
-    const channel = z.parse(Channel, await write({ method: 'GET', path: `/channels/${channelId}`, botToken }))
-    const first = z.parse(Posted, await write({ method: 'POST', path: `/channels/${channelId}/messages`, botToken, body: { content: parts[0], allowed_mentions: { parse: [] } } }))
-    const threadId = startThread ? z.parse(Channel, await write({ method: 'POST', path: `/channels/${channelId}/messages/${first.id}/threads`, botToken, body: { name: startThread.slice(0, 100) } })).id : undefined
-    for (const part of parts.slice(1)) await write({ method: 'POST', path: `/channels/${threadId ?? channelId}/messages`, botToken, body: { content: part, allowed_mentions: { parse: [] } } })
-    return { url: `https://discord.com/channels/${channel.guild_id ?? '@me'}/${first.channel_id}/${first.id}`, messageId: first.id, ...(threadId && { threadId }) }
+  async post({ botToken, channelId, text }: { botToken: string; channelId: string; text: string }): Promise<void> {
+    for (const part of split(text)) await write({ path: `/channels/${channelId}/messages`, botToken, body: { content: part, allowed_mentions: { parse: [] } } })
   },
 
   env({ botToken, channels }: { botToken: string; channels: string[] }): Record<string, string> {
@@ -97,13 +90,12 @@ async function call({ path, botToken }: { path: string; botToken: string }): Pro
   return { ok: res.ok, status: res.status, body: await res.json().catch(() => undefined) }
 }
 
-async function write({ method, path, botToken, body }: { method: 'GET' | 'POST'; path: string; botToken: string; body?: unknown }): Promise<unknown> {
+async function write({ path, botToken, body }: { path: string; botToken: string; body: unknown }): Promise<void> {
   for (let attempt = 0; ; attempt++) {
-    const res = await fetch(`${config.discordApi}${path}`, { method, headers: { authorization: `Bot ${botToken}`, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(10_000) })
+    const res = await fetch(`${config.discordApi}${path}`, { method: 'POST', headers: { authorization: `Bot ${botToken}`, 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10_000) })
       .catch((err: unknown) => { throw new HttpError(502, `Discord didn't answer (${messageOf(err).replaceAll(botToken, '…')}). Try again.`) })
-    const answer = await res.json().catch(() => undefined)
-    if (res.ok) return answer
-    const failure = z.safeParse(Failure, answer).data
+    if (res.ok) return
+    const failure = z.safeParse(Failure, await res.json().catch(() => undefined)).data
     const wait = (failure?.retry_after ?? Number(res.headers.get('retry-after') ?? 1)) * 1000
     if (res.status === 429 && attempt < RETRIES && wait <= MAX_WAIT_MS) {
       await new Promise((resolve) => setTimeout(resolve, wait))
