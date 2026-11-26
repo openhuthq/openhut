@@ -77,3 +77,22 @@ test('the gateway\'s token is minted as the server app, then cached', async (t) 
   assert.ok(createVerify('RSA-SHA256').update(`${header}.${payload}`).verify(publicKey, signature, 'base64url'))
   assert.equal(JSON.parse(Buffer.from(payload, 'base64url').toString()).iss, 42)
 })
+
+test('a connection limited to some repositories gets a token for only those; installations list their repositories', async (t) => {
+  await settings.setGithubApp(APP)
+  github.forgetTokens()
+  const seen: { path: string; body?: string }[] = []
+  t.mock.method(globalThis, 'fetch', async (url: string, init?: RequestInit) => {
+    const path = new URL(url).pathname
+    seen.push({ path, body: init?.body as string | undefined })
+    if (path === '/app/installations') return Response.json([{ id: 5, account: { login: 'acme', type: 'Organization', avatar_url: 'https://a/acme' } }])
+    if (path === '/installation/repositories') return Response.json({ total_count: 2, repositories: [{ name: 'app' }, { name: 'docs' }] })
+    return Response.json({ token: `ghs_${seen.length}` }, { status: 201 })
+  })
+  await github.connector.tools({ config: { installationId: 5, repositories: ['app'] }, refresh: async () => ({}) }).catch(() => undefined)
+  assert.equal(seen[0].path, '/app/installations/5/access_tokens')
+  assert.deepEqual(JSON.parse(seen[0].body ?? '{}'), { repositories: ['app'] })
+  assert.deepEqual(await github.installations(), [{ installationId: 5, account: { login: 'acme', type: 'Organization', avatarUrl: 'https://a/acme' }, repositories: ['app', 'docs'], total: 2 }])
+  assert.equal(seen.filter((each) => each.path === '/app/installations/5/access_tokens').length, 2)
+  assert.equal(seen.at(-2)?.body, undefined)
+})

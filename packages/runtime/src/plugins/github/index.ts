@@ -5,6 +5,7 @@ import { log } from '../../server/platform/events.ts'
 import { messageOf } from '../../server/platform/http-error.ts'
 import { faceController, faceService } from './faces.ts'
 import { serverAppController } from './server-app.ts'
+import { installWaits } from './waits.ts'
 import { BODY_TOOLS, signed, signingOf, threadOf } from './sign.ts'
 import { createTables } from './tables.ts'
 
@@ -25,7 +26,10 @@ export const github = definePlugin({
     if (!agent) return args
     return { ...args, body: signed({ body: typeof args.body === 'string' ? args.body : '', name: agent.name, face: await faceService.publicUrl({ agentId }) }) }
   },
-  start: () => { void checkTools() },
+  start: () => {
+    void checkTools()
+    installWaits.start()
+  },
 })
 
 function trailerNote(name: string): string {

@@ -16,6 +16,7 @@ import { useGrants } from '@/features/agents/api'
 import { openSignInTab, useAuthorizeConnection, useConnections } from '@/features/connections/api'
 import { connectionBrand, titleOf } from '@/features/connections/catalog'
 import { GroupIcon, GROUPS, PermissionPicker } from '@/features/connections/permissions'
+import { GitHubAskRow } from '@/features/connections/github-access'
 import { Field } from '@/features/connections/sheet'
 import { formValues } from '@/lib/form'
 import { open, useOpen } from '@/lib/router'
@@ -41,6 +42,7 @@ const ConnectRow: AskRow = ({ agent, ask, compact }) => {
   const grants = useGrants({ agentId: agent.id }).data ?? []
   const opened = useOpen() === `connect:${ask.id}`
   if (!wanted) return null
+  if (wanted.app === 'github') return <GitHubAskRow agent={agent} ask={ask} compact={compact} />
   const done = ask.status === 'done'
   const granted = done ? connections.find((each) => grants.some((grant) => grant.connectionId === each.id) && matches({ connection: each, wanted })) : undefined
   const detail = granted ? granted.account.split(' · ')[0] || granted.name : detailOf(wanted)

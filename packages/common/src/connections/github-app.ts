@@ -36,3 +36,18 @@ export type CreateGithubApp = z.infer<typeof CreateGithubApp>
 export const GithubAppLaunch = z.object({ object: z.literal('github_app_launch'), url: z.string() })
 
 export const UpdateGithubApp = z.object({ logo: z.boolean() })
+
+export const GithubInstallation = z.object({
+  object: z.literal('github_installation'),
+  installationId: z.number(),
+  account: z.object({ login: z.string(), type: OwnerType, avatarUrl: z.string() }),
+  repositories: z.array(z.string()),
+  total: z.number(),
+})
+export type GithubInstallation = z.infer<typeof GithubInstallation>
+
+export const CreateGithubConnection = z.object({
+  installationId: z.number(),
+  repositories: z.array(z.string().check(z.regex(/^[A-Za-z0-9._-]{1,100}$/))).check(z.minLength(1), z.maxLength(100)),
+})
+export type CreateGithubConnection = z.infer<typeof CreateGithubConnection>

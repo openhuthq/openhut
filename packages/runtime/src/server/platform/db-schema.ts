@@ -29,6 +29,7 @@ export interface Database {
   record: { key: string; collection: string; id: string; workspace: string; parent: string | null; ver: number; value: string; secret: string | null; personal: boolean; deleted: boolean }
   github_face: { agent_id: string; sha256: string; png: string; url: string | null }
   github_thread: { agent_id: string; thread: string }
+  github_install_wait: { ask_id: string; actor: string; permissions: string; known: string; created_at: Generated<Date> }
   agent_secret: { id: string; agent_id: string; name: string; hosts: string; header: string; value: string; created_at: Generated<Date>; used_at: Timestamp | null }
   telegram_code: { hash: string; channel_id: string; agent_id: string; kind: 'claim' | 'invite'; sealed: string | null; expires_at: Timestamp }
   inbox_source: {

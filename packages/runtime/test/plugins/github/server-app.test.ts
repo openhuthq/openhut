@@ -48,3 +48,19 @@ test('the setup posts the manifest to GitHub, the callback stores the app and op
   await serverAppService.remove({ actor: admin })
   assert.equal(settings.githubApp(), undefined)
 })
+
+test('a member gives access to picked repositories of an installation; repositories the app can\'t reach are refused', async (t) => {
+  await settings.setGithubApp({ id: 7, slug: 'acme-openhut', name: 'acme-openhut', owner: 'acme', ownerType: 'Organization', ownerAvatar: '', pem: (await import('node:crypto')).generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs1', format: 'pem' }).toString(), botId: 99, logo: true })
+  t.mock.method(globalThis, 'fetch', async (input: string) => {
+    const path = new URL(input).pathname
+    if (path === '/app/installations') return Response.json([{ id: 5, account: { login: 'acme', type: 'Organization', avatar_url: 'https://a/acme' } }])
+    if (path === '/app/installations/5') return Response.json({ id: 5, account: { login: 'acme', type: 'Organization', avatar_url: 'https://a/acme' } })
+    if (path === '/installation/repositories') return Response.json({ total_count: 2, repositories: [{ name: 'app' }, { name: 'docs' }] })
+    return Response.json({ token: 'ghs_x' }, { status: 201 })
+  })
+  assert.deepEqual((await serverAppService.installations()).map((each) => each.repositories), [['app', 'docs']])
+  await assert.rejects(serverAppService.connect({ actor: member, installationId: 5, repositories: ['secret'] }), /can't reach acme\/secret/)
+  const made = await serverAppService.connect({ actor: member, installationId: 5, repositories: ['docs', 'app'] })
+  assert.equal(made.account, 'acme · 2 repos · acme-openhut[bot]')
+  await settings.setGithubApp(null)
+})
