@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { ArrowRight01Icon, Search01Icon, Tick02Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import { PROVIDERS, modelKey, providerInfo, type Provider, type ProviderId, type ProviderModel } from '@openhut/common/models/provider.ts'
 import { buttonVariants } from '@/components/ui/button'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuEmpty, DropdownMenuFilter, DropdownMenuInput, DropdownMenuItem, DropdownMenuList, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuEmpty, DropdownMenuFilter, DropdownMenuInput, DropdownMenuItem, DropdownMenuList, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Glyph } from '@/components/glyph'
 import { I } from '@/components/kit'
 import { find, glyphOf, labOf, prices } from '@/features/models/labels'
@@ -10,6 +10,9 @@ import { cn } from '@/lib/utils'
 
 const SEARCH_FROM = 8
 const LABEL = 'px-2 pt-1.5 pb-1 text-[12px] text-mute'
+
+// Menus that open from a form field are exactly as wide as the field.
+export const FIELD_MENU = 'w-(--anchor-width) min-w-(--anchor-width)'
 
 export const SOFT_TRIGGER = cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'min-w-[136px] max-w-full justify-between')
 
@@ -20,7 +23,7 @@ export function ModelPicker({ providers, value, onPick, onSetUp, title, label, n
   value: string | null
   onPick: (key: string | null) => void
   onSetUp?: (id: ProviderId) => void
-  title: string
+  title?: string
   label: string
   none?: PickerNone
   disabled?: boolean
@@ -33,24 +36,29 @@ export function ModelPicker({ providers, value, onPick, onSetUp, title, label, n
     <DropdownMenuTrigger className={className ?? SOFT_TRIGGER} disabled={disabled} aria-label={`${label}: ${find({ providers, key: value }).model?.name ?? value ?? none?.name ?? 'None'}`}>
       {children ?? <ModelValue providers={providers} value={value} none={none} />}
     </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" className="w-[260px]">
-      <div className={LABEL}>{title}</div>
-      {none && <>
-        <Choice icon={none.icon} name={none.name} note={none.note} selected={value === null} onClick={() => onPick(null)} />
-        <DropdownMenuSeparator />
+    <DropdownMenuContent align="end" className={FIELD_MENU}>
+      {title && <div className={LABEL}>{title}</div>}
+      {none && <Choice icon={none.icon} name={none.name} selected={value === null} onClick={() => onPick(null)} />}
+      {connected.map((provider) => provider.models.filter((model) => model.on).length > SEARCH_FROM
+        ? <ProviderMenu key={provider.id} provider={provider} value={value} onPick={onPick} />
+        : <Models key={provider.id} provider={provider} value={value} onPick={onPick} />)}
+      {missing.length > 0 && <>
+        <div className={LABEL}>{onSetUp ? 'Connect' : 'Not set up'}</div>
+        {missing.map((info) => <Choice key={info.id} icon={<Glyph name={info.id} size={14} />} name={info.id === 'compatible' ? 'Other (OpenAI-compatible)' : info.short} disabled={!onSetUp} onClick={() => onSetUp?.(info.id)} />)}
       </>}
-      {connected.map((provider) => <ProviderMenu key={provider.id} provider={provider} value={value} onPick={onPick} />)}
-      {missing.length > 0 && (onSetUp ? <>
-        {connected.length > 0 && <DropdownMenuSeparator />}
-        {missing.filter((info) => info.kind === 'subscription').map((info) => <Choice key={info.id} icon={<Glyph name={info.id} size={14} />} name={`Connect ${info.name}…`} onClick={() => onSetUp(info.id)} />)}
-        {missing.some((info) => info.kind === 'key') && <div className={LABEL}>Add an API key</div>}
-        {missing.filter((info) => info.kind === 'key').map((info) => <Choice key={info.id} icon={<Glyph name={info.id} size={14} />} name={info.id === 'compatible' ? `${info.name}…` : `${info.short} key…`} onClick={() => onSetUp(info.id)} />)}
-      </> : <>
-        <div className={LABEL}>Not set up</div>
-        {missing.map((info) => <Choice key={info.id} icon={<Glyph name={info.id} size={14} />} name={info.short} note={info.kind === 'subscription' ? 'Sign in under Settings › Models' : 'Add a key under Settings › Models'} disabled />)}
-      </>)}
     </DropdownMenuContent>
   </DropdownMenu>
+}
+
+// ponytail: a provider with few models lists them inline; big catalogs (OpenRouter) keep the searchable submenu.
+function Models({ provider, value, onPick }: { provider: Provider; value: string | null; onPick: (key: string) => void }) {
+  return <>
+    <div className={cn(LABEL, 'flex items-center gap-1.5')}><Glyph name={provider.id} size={12} />{providerInfo(provider.id).short}</div>
+    {provider.models.filter((model) => model.on).map((model) => {
+      const key = modelKey({ provider: provider.id, model: model.id })
+      return <Choice key={model.id} name={model.name} selected={key === value} onClick={() => onPick(key)} />
+    })}
+  </>
 }
 
 function ProviderMenu({ provider, value, onPick }: { provider: Provider; value: string | null; onPick: (key: string) => void }) {
@@ -61,9 +69,9 @@ function ProviderMenu({ provider, value, onPick }: { provider: Provider; value: 
   const priced = models.some((model) => prices(model))
   return <DropdownMenuFilter>
     <DropdownMenuSub>
-      <DropdownMenuSubTrigger size="tall">
-        <Tile><Glyph name={provider.id} size={15} /></Tile>
-        <Text name={provider.name} note={picked?.name ?? `${models.length} ${models.length === 1 ? 'model' : 'models'} on`} />
+      <DropdownMenuSubTrigger className="text-[13px]">
+        <Glyph name={provider.id} size={14} />
+        <span className="min-w-0 flex-1 truncate text-ink">{picked ? `${providerInfo(provider.id).short} · ${picked.name}` : providerInfo(provider.id).short}</span>
         {picked && <I icon={Tick02Icon} size={14} className="text-ink" />}
         <I icon={ArrowRight01Icon} size={14} />
       </DropdownMenuSubTrigger>
@@ -108,18 +116,10 @@ export function ModelValue({ providers, value, none, known }: { providers: Provi
   </>
 }
 
-function Choice({ icon, name, note = '', selected = false, disabled = false, onClick }: { icon?: ReactNode; name: string; note?: string; selected?: boolean; disabled?: boolean; onClick?: () => void }) {
-  return <DropdownMenuItem size="tall" disabled={disabled} onClick={onClick}>
-    {icon && <Tile>{icon}</Tile>}
-    <Text name={name} note={note} />
-    {selected && <I icon={Tick02Icon} size={14} className="text-ink" />}
+function Choice({ icon, name, selected = false, disabled = false, onClick }: { icon?: ReactNode; name: string; selected?: boolean; disabled?: boolean; onClick?: () => void }) {
+  return <DropdownMenuItem className="text-[13px]" disabled={disabled} onClick={onClick}>
+    {icon && <span className="grid w-3.5 shrink-0 place-items-center">{icon}</span>}
+    <span className="min-w-0 flex-1 truncate text-ink">{name}</span>
+    <span className="grid w-3.5 shrink-0 place-items-center">{selected && <I icon={Tick02Icon} size={14} className="text-ink" />}</span>
   </DropdownMenuItem>
-}
-
-function Tile({ children }: { children: ReactNode }) {
-  return <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-soft text-ink">{children}</span>
-}
-
-function Text({ name, note }: { name: string; note: string }) {
-  return <span className="grid min-w-0 flex-1 leading-tight"><span className="text-[13px] font-medium text-ink">{name}</span>{note && <span className="truncate text-[11.5px] text-mute" title={note}>{note}</span>}</span>
 }
