@@ -153,13 +153,32 @@
   .msg-t { font-size: 14px; line-height: 1.55; color: var(--ink); overflow-wrap: anywhere }
   .msg-t > :first-child { margin-top: 0 }
   .msg-t > :last-child { margin-bottom: 0 }
-  .msg-t :is(p, ul, ol) { margin: 0 0 8px }
-  .msg-t code { font-family: var(--mono); font-size: 12.5px; background: var(--sidebar); padding: 1px 5px; border-radius: 5px }
-  .msg-t pre { background: var(--night); color: #f4f4f5; border-radius: 8px; padding: 10px 12px; overflow-x: auto; font-size: 12.5px }
-  .msg-t pre code { background: transparent; color: inherit; padding: 0 }
-  .msg-t table { border-collapse: collapse; font-family: var(--mono); font-size: 12px; margin: 6px 0; display: block; overflow-x: auto }
-  .msg-t :is(th, td) { border: 1px solid var(--mid); padding: 3px 9px; text-align: left }
+  .msg-t :is(p, ul, ol, blockquote, table, pre, .code-block) { margin: 0 0 10px }
+  .msg-t :is(ul, ol) { padding-left: 22px }
+  .msg-t li + li, .msg-t li > :is(ul, ol) { margin-top: 3px }
+  .msg-t li > :is(ul, ol) { margin-bottom: 0 }
+  .msg-t li > p { margin: 0 }
+  .msg-t li::marker { color: var(--mute) }
+  .msg-t .contains-task-list { list-style: none; padding-left: 2px }
+  .msg-t .task-list-item input { margin: 0 7px 0 0; vertical-align: -2px; accent-color: var(--ink) }
+  .msg-t :is(h1, h2, h3, h4, h5, h6) { margin: 14px 0 6px; font-weight: 600; line-height: 1.35 }
+  .msg-t :is(h1, h2) { font-size: 16px }
+  .msg-t h3 { font-size: 15px }
+  .msg-t :is(h4, h5, h6) { font-size: 14px }
+  .msg-t a { color: inherit; text-decoration: underline; text-decoration-color: var(--mid); text-underline-offset: 2px }
+  .msg-t a:hover { text-decoration-color: currentColor }
+  .msg-t blockquote { border-left: 2px solid var(--mid); padding-left: 12px; color: var(--body) }
+  .msg-t hr { border: 0; border-top: 1px solid var(--hair); margin: 12px 0 }
+  .msg-t code { font-family: var(--mono); font-size: 12.5px; background: var(--soft); padding: 1px 5px; border-radius: 5px }
+  .msg-t .code-block { background: var(--night); border-radius: 8px; overflow: hidden }
+  .msg-t .code-head { display: flex; align-items: center; justify-content: space-between; height: 32px; padding: 0 6px 0 12px; font-family: var(--mono); font-size: 12px; color: var(--night-muted) }
+  .msg-t pre { background: var(--night); color: #e1e4e8; border-radius: 8px; padding: 10px 12px; overflow-x: auto; font-size: 12.5px; line-height: 1.5 }
+  .msg-t .code-block pre { margin: 0; background: transparent; border-radius: 0; padding: 0 12px 10px }
+  .msg-t pre code { background: transparent; color: inherit; padding: 0; border-radius: 0 }
+  .msg-t table { border-collapse: collapse; font-size: 13px; display: block; max-width: 100%; overflow-x: auto; width: max-content }
+  .msg-t :is(th, td) { border: 1px solid var(--hair); padding: 5px 10px; text-align: left; vertical-align: top }
   .msg-t th { background: var(--sidebar); font-weight: 500 }
+  .msg-t td code { white-space: nowrap }
 }
 
 @keyframes breathe { 50% { transform: scale(1.03, .97) } }
