@@ -23,7 +23,8 @@ export function testModel({ path, body, res }: { path: string; body: unknown; re
   const toolNames = (request.tools ?? []).map((tool) => tool.function?.name ?? tool.name).filter((name) => name !== undefined)
   const callTool = toolNames.find((name) => name.endsWith('call_tool'))
   log.info({ event: 'test_llm.request', messages: messages.length, lastRole: last.role, tools: toolNames.length, callTool })
-  const reply = replyTo({ last, callTool, shell: toolNames.find((name) => name === 'terminal' || name === 'Bash'), schedule: toolNames.find((name) => name.endsWith('schedule_routine')), names: toolNames })
+  const quiet = messages.some((message) => message.role === 'tool') && messages.some((message) => message.role === 'user' && asText(message.content).includes('then go quiet'))
+  const reply = quiet ? {} : replyTo({ last, callTool, shell: toolNames.find((name) => name === 'terminal' || name === 'Bash'), schedule: toolNames.find((name) => name.endsWith('schedule_routine')), names: toolNames })
   const base = { id: `cmpl-${Date.now()}`, created: Math.floor(Date.now() / 1000), model: request.model ?? 'openhut-test' }
   const calls = reply.tools ?? (reply.tool ? [reply.tool] : [])
   const toolCalls = calls.length ? calls.map((tool, index) => ({ id: `call_${Date.now()}_${index}`, type: 'function', function: { name: tool.name, arguments: tool.args } })) : undefined
