@@ -21,5 +21,6 @@ export const base = definePlugin({
       approvals: { mode: 'off' },
       tools: { tool_search: { enabled: 'off' } },
     },
+    restart: null,
   }),
 })

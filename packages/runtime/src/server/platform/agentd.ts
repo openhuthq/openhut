@@ -10,14 +10,14 @@ const TIMEOUT_MS = 180_000
 const MAX_LIVE_LINE = 8 << 20
 const Features = z.object({ whatsapp: z.boolean(), browser: z.boolean() })
 const Failure = z.object({ ok: z.literal(false), error: z.string() })
-const Change = z.enum(['created', 'started', 'restarted', 'stopped', 'none'])
+const Change = z.enum(['created', 'started', 'restarted', 'stopped', 'pending', 'none'])
 type On = { on?: string }
 
 export const agentd = {
   health: ({ on = HERE }: On = {}) => ask({ on, request: { cmd: 'health' }, doing: 'check its health', schema: z.object({ firewall: z.boolean(), imageReady: z.optional(z.boolean()), gvisor: z.optional(z.boolean()), features: z.optional(Features) }) }),
   ps: ({ on = HERE }: On = {}) => ask({ on, request: { cmd: 'ps' }, doing: 'list the agents', schema: z.object({ states: z.record(z.string(), z.string()) }) }),
-  apply: ({ id, net, files, browser, running, force = false, on }: { id: string; net: number; files: AgentFiles; browser: boolean; running: boolean; force?: boolean } & On) =>
-    ask({ on, request: { cmd: 'apply', id, net, files, browser, running, force }, doing: 'set up the agent', schema: z.object({ applied: z.string(), change: Change }) }),
+  apply: ({ id, net, files, browser, running, force = false, restart = true, on }: { id: string; net: number; files: AgentFiles; browser: boolean; running: boolean; force?: boolean; restart?: boolean } & On) =>
+    ask({ on, request: { cmd: 'apply', id, net, files, browser, running, force, restart }, doing: 'set up the agent', schema: z.object({ applied: z.string(), change: Change }) }),
   stop: ({ id, on }: { id: string } & On) => ask({ on, request: { cmd: 'stop', id }, doing: 'stop the agent', schema: z.object({ stopped: z.string() }) }),
   remove: ({ id, trash = false, on }: { id: string; trash?: boolean } & On) => ask({ on, request: { cmd: 'rm', id, trash }, doing: 'delete the agent', schema: z.object({ removed: z.string() }) }),
   skills: ({ id }: { id: string }) => ask({ request: { cmd: 'skills', id }, doing: 'list the skills', schema: z.object({ skills: z.array(z.object({ path: z.string(), head: z.string() })), bundled: z.string() }) }),
@@ -123,5 +123,6 @@ function send({ on, request, body = '', doing }: { on: string; request: Record<s
   })
 }
 
-export type AgentFiles = Record<'config.yaml' | '.env' | 'SOUL.md' | 'auth.json', string>
+export type AgentFiles = Record<'config.yaml' | '.env' | 'SOUL.md' | 'auth.json' | 'restart.key', string>
+export type Change = z.output<typeof Change>
 export type Stream = { send: (line: string) => void; close: () => void }
