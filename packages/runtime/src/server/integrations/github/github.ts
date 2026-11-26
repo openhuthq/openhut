@@ -15,7 +15,6 @@ const TOKEN_FRESH_MS = 50 * 60_000
 const NOT_SET_UP = 'GitHub isn\'t set up on this server yet. An admin sets it up once in Settings › Admin › GitHub.'
 const Config = z.object({ installationId: z.number(), repositories: z.optional(z.array(z.string())) })
 const Owner = z.object({ login: z.string(), type: z.enum(['User', 'Organization']), avatar_url: z.string() })
-const Account = z.object({ login: z.string(), name: z.optional(z.nullable(z.string())), type: z.enum(['User', 'Organization']), avatar_url: z.string() })
 const Installation = z.object({ id: z.number(), account: Owner })
 const MAX_REPOS = 300
 const Repositories = z.object({ total_count: z.number(), repositories: z.array(z.object({ name: z.string() })) })
@@ -32,8 +31,15 @@ export const github = {
 
   app: (): GithubApp | undefined => settings.githubApp(),
 
-  manifest({ owner, ownerType, name, address, state }: { owner: string; ownerType: 'User' | 'Organization'; name: string; address: string; state: string }): { url: string; manifest: string } {
-    const path = ownerType === 'Organization' ? `organizations/${encodeURIComponent(owner)}/` : ''
+  async ownerType(login: string): Promise<'User' | 'Organization'> {
+    const found = await call({ path: `/users/${encodeURIComponent(login)}`, schema: z.object({ type: z.enum(['User', 'Organization']) }) }).catch(() => {
+      throw new HttpError(400, `GitHub has no account named ${login}. Check the spelling.`, { param: 'owner' })
+    })
+    return found.type
+  },
+
+  manifest({ organization, name, address, state }: { organization?: string; name: string; address: string; state: string }): { url: string; manifest: string } {
+    const path = organization ? `organizations/${encodeURIComponent(organization)}/` : ''
     const manifest = { name, url: 'https://openhut.dev', redirect_url: `${address}/api/github-app/callback`, setup_url: `${address}/api/connection-authorizations/callback`, setup_on_update: true, public: false, default_permissions: PERMISSIONS }
     return { url: `https://github.com/${path}settings/apps/new?state=${state}`, manifest: JSON.stringify(manifest) }
   },
@@ -44,12 +50,7 @@ export const github = {
     return { id: app.id, slug: app.slug, name: app.name, owner: app.owner.login, ownerType: app.owner.type, ownerAvatar: app.owner.avatar_url, pem: app.pem, botId: bot.id }
   },
 
-  async accounts(login: string): Promise<{ login: string; name: string; type: 'User' | 'Organization'; avatarUrl: string; appName: string }[]> {
-    const user = await call({ path: `/users/${encodeURIComponent(login)}`, schema: Account })
-    const orgs = user.type === 'User' ? await call({ path: `/users/${encodeURIComponent(login)}/orgs`, schema: z.array(z.object({ login: z.string(), avatar_url: z.string() })) }) : []
-    const found = [user, ...orgs.map((org) => ({ ...org, name: org.login, type: 'Organization' as const }))]
-    return Promise.all(found.map(async (each) => ({ login: each.login, name: each.name || each.login, type: each.type, avatarUrl: each.avatar_url, appName: await freeName(each.login) })))
-  },
+  avatarUrl: (app: GithubApp): string => `https://avatars.githubusercontent.com/in/${app.id}`,
 
   settingsUrl: (app: GithubApp): string => `https://github.com/${app.ownerType === 'Organization' ? `organizations/${app.owner}/` : ''}settings/apps/${app.slug}`,
 
@@ -119,15 +120,6 @@ function configOf(stored: unknown): GithubConfig {
   const parsed = z.safeParse(Config, stored)
   if (!parsed.success || (typeof stored === 'object' && stored !== null && 'appId' in stored)) throw new Error('This GitHub connection was made before GitHub moved to one app per server. Reconnect it.')
   return parsed.data
-}
-
-async function freeName(owner: string): Promise<string> {
-  const names = [`${owner}-openhut`, ...[2, 3, 4, 5].map((n) => `${owner}-openhut-${n}`)].map((name) => name.toLowerCase().slice(0, 34))
-  for (const name of names) {
-    const res = await guardedFetch(`${config.githubApi}/apps/${name}`, { headers: { accept: 'application/vnd.github+json', 'user-agent': 'openhut' } })
-    if (res.status === 404) return name
-  }
-  return names[0]
 }
 
 async function asBot(ctx: ConnectorContext): Promise<ConnectorContext> {

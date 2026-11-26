@@ -18,7 +18,11 @@ test('a sign-in finishes in the browser: an expired one says so there', async ()
   assert.match(local.headers['content-type'] ?? '', /text\/html/)
   assert.match(local.body, /This sign-in expired/)
   const installed = await app.inject({ method: 'GET', url: '/api/connection-authorizations/callback?installation_id=42&setup_action=update' })
-  assert.match(installed.body, /GitHub saved the app&#39;s install/)
+  assert.match(installed.body, /GitHub is installed/)
+  assert.match(installed.body, /window\.close\(\)/)
+  assert.doesNotMatch(local.body, /window\.close\(\)/)
+  const requested = await app.inject({ method: 'GET', url: '/api/connection-authorizations/callback?setup_action=request' })
+  assert.match(requested.body, /GitHub asked the owner/)
 })
 
 test('the launch page escapes what it posts', async () => {

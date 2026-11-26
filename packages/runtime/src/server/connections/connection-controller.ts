@@ -26,7 +26,8 @@ export const connectionAuthorizationController: FastifyPluginAsyncZod = async (a
   app.post('/', AuthorizeRequest, async (req) => connectionAuthorizationService.create({ actor: await who(req), ...req.body }))
 
   app.get('/callback', { schema: { querystring: CallbackQuery } }, async (req, reply) => {
-    if (!req.query.state && req.query.installation_id) return reply.type('text/html; charset=utf-8').send(page('GitHub saved the app\'s install. You can close this tab and go back to OpenHut.'))
+    if (!req.query.state && req.query.setup_action === 'request') return reply.type('text/html; charset=utf-8').send(page('GitHub asked the owner to approve it. OpenHut connects once they do.', { close: true }))
+    if (!req.query.state && req.query.installation_id) return reply.type('text/html; charset=utf-8').send(page('GitHub is installed. You can close this tab.', { close: true }))
     const { kind, error } = await connectionAuthorizationService.finish(req.query)
     const title = kind ? CONNECTION_TITLES[kind] : 'The app'
     return reply.type('text/html; charset=utf-8').send(page(error ? `${error} Go back to OpenHut and try again.` : `${title} is connected. You can close this tab and go back to OpenHut.`))

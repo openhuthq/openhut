@@ -1,14 +1,14 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react'
+import { CheckmarkCircle02Icon, CircleIcon } from '@hugeicons/core-free-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckmarkCircle02Icon } from '@hugeicons/core-free-icons'
-import { GithubAccount, GithubAppInfo, GithubAppLaunch, type CreateGithubApp } from '@openhut/common/connections/github-app.ts'
-import { List } from '@openhut/common/api.ts'
+import { GithubAppInfo, GithubAppLaunch, type CreateGithubApp } from '@openhut/common/connections/github-app.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Glyph } from '@/components/glyph'
-import { Busy, I, PILL, SetupSheet } from '@/components/kit'
+import { ConfirmButton } from '@/components/confirm-button'
+import { I, PILL, SetupSheet } from '@/components/kit'
 import { Field } from '@/features/connections/sheet'
+import { appName, setupStage, slugOf } from '@/features/settings/github-setup'
 import { Row, Rows } from '@/features/settings/kit'
 import { fieldError, formError, request } from '@/lib/api-client'
 import { open } from '@/lib/router'
@@ -16,11 +16,19 @@ import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 const KEY = ['github-app']
-const LOGIN = 'openhut.github.login'
+const OWNER = 'openhut.github.owner'
 const PATH = '/api/github-app'
+const POLL_MS = 1000
+const AVATAR_DELAY_MS = 300
+const CLOSED_EARLY = 'GitHub closed before it finished.'
+export const STEADY = 'mt-[max(24px,calc(50vh-150px))] mb-auto'
+const CLOSED_GRACE_MS = 4000
+const SIZES: Record<number, string> = { 20: 'size-5', 24: 'size-6', 28: 'size-7' }
 
-export function useGithubApp(enabled = true) {
-  return useQuery({ queryKey: KEY, queryFn: () => request({ schema: GithubAppInfo, path: PATH }), enabled })
+export type Sheet = Pick<ComponentProps<typeof SetupSheet>, 'className' | 'icon' | 'title' | 'blurb' | 'safe' | 'error' | 'foot' | 'onSubmit' | 'children'>
+
+export function useGithubApp({ live = false }: { live?: boolean } = {}) {
+  return useQuery({ queryKey: KEY, queryFn: () => request({ schema: GithubAppInfo, path: PATH }), refetchInterval: live ? POLL_MS : false })
 }
 
 function useGithubAppChange<T>(fn: (body: T) => Promise<GithubAppInfo>) {
@@ -37,18 +45,19 @@ export function GitHubRow() {
   if (!info) return null
   const app = info.app
   const asked = info.askedBy.length ? ` · ${info.askedBy.join(', ')} asked for it` : ''
-  return <Row icon={<Glyph name="github" size={20} />} title="GitHub" note={app ? `${app.name} · on ${app.owner}${repos(app.repositories, ' · installed on ')}` : `Not set up · Lets agents open pull requests as your own GitHub App${asked}`}>
+  return <Row icon={<Glyph name="github" size={20} />} title="GitHub" note={app ? `${app.slug}[bot] · on ${app.owner}${repos(app.repositories, ' · ')}` : `Not set up · Agents open pull requests as your team’s bot${asked}`}>
     <Button type="button" variant="ghost" className={PILL} onClick={() => open('github')}>{app ? 'Manage' : 'Set up'}</Button>
   </Row>
 }
 
 export function GitHubDialogs({ opened }: { opened: string | null }) {
   const info = useGithubApp().data
-  if (!info || !opened?.startsWith('github')) return null
-  const close = () => open()
-  if (!info.app) return opened === 'github' ? <SetupGitHubDialog onClose={close} /> : null
-  if (opened === 'github-done') return <DoneStep info={info} onClose={close} />
-  return <ManageGitHubDialog info={info} onClose={close} />
+  if (!info || opened !== 'github') return null
+  return <GitHubDialog onClose={() => open()} />
+}
+
+function GitHubDialog({ onClose }: { onClose: () => void }) {
+  return <SetupSheet modal brand="github" className={STEADY} onClose={onClose} {...useGithubSetup({ onClose }).sheet} />
 }
 
 function repos(count: number | null, before: string): string {
@@ -59,104 +68,155 @@ function repos(count: number | null, before: string): string {
 export function Avatar({ url, name, org, size = 24 }: { url: string; name: string; org: boolean; size?: number }) {
   const [broken, setBroken] = useState(false)
   const shape = org ? 'rounded-[5px]' : 'rounded-full'
-  if (broken || !url) return <span className={cn(size === 20 ? 'size-5' : 'size-6', 'grid shrink-0 place-items-center bg-ink text-[11px] font-semibold text-card', shape)}>{name[0]?.toUpperCase()}</span>
+  if (broken || !url) return <span className={cn(SIZES[size] ?? 'size-6', 'grid shrink-0 place-items-center bg-ink text-[11px] font-semibold text-card', shape)}>{name[0]?.toUpperCase()}</span>
   return <img src={url} alt="" width={size} height={size} onError={() => setBroken(true)} className={cn('shrink-0 object-cover shadow-[0_0_0_1px_var(--hair)]', shape)} />
 }
 
-function BotPreview({ name, children }: { name: string; children: ReactNode }) {
-  return <div className="flex items-center gap-2.5 rounded-lg bg-sidebar px-3 py-2.5">
-    <span className="grid size-9 shrink-0 place-items-center rounded-[6px] bg-card shadow-[0_0_0_1px_var(--hair)]"><Glyph name="openhut" size={24} /></span>
-    <span className="flex min-w-0 flex-col gap-0.5">
-      <span className="flex flex-wrap items-center gap-1 text-[12.5px] text-body">Agents’ pull requests will show as <span className="font-medium text-ink">{name}[bot]</span><BotTag /></span>
-      <span className="text-[12px] text-mute">{children}</span>
-    </span>
-  </div>
-}
-
-const BotTag = () => <span className="rounded-full border border-hair px-1.5 text-[11px]/[16px] text-mute">bot</span>
-
 function remembered(): string {
-  try { return localStorage.getItem(LOGIN) ?? '' } catch { return '' }
+  try { return localStorage.getItem(OWNER) ?? '' } catch { return '' }
 }
 
-function SetupGitHubDialog({ onClose }: { onClose: () => void }) {
-  const [login, setLogin] = useState(remembered)
-  const accounts = useMutation({
-    mutationFn: (who: string) => request({ schema: List(GithubAccount), path: `${PATH}/accounts?login=${encodeURIComponent(who)}` }),
-    onSuccess: (found, who) => {
-      try { localStorage.setItem(LOGIN, who) } catch { /* private window */ }
-      const first = found.data.find((each) => each.type === 'Organization') ?? found.data[0]
-      if (first) pick(first)
-    },
-  })
-  const [owner, setOwner] = useState<GithubAccount>()
-  const [name, setName] = useState('')
+function remember(owner: string): void {
+  try { localStorage.setItem(OWNER, owner) } catch { return }
+}
+
+function useSettled(value: string): string {
+  const [settled, setSettled] = useState(value)
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(value), AVATAR_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [value])
+  return settled
+}
+
+const Skeleton = ({ className }: { className: string }) => <i aria-hidden className={cn('block shrink-0 animate-pulse bg-soft', className)} />
+
+function Status({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return <Rows><Row icon={icon} title={children} /></Rows>
+}
+
+export function useGithubSetup({ onClose, onDone }: { onClose: () => void; onDone?: () => void }): { started: boolean; sheet: Sheet } {
+  const [started, setStarted] = useState(false)
+  const [owner, setOwner] = useState(remembered)
+  const [named, setNamed] = useState<string>()
+  const [blocked, setBlocked] = useState<string>()
+  const [lost, setLost] = useState(false)
+  const tab = useRef<Window | null>(null)
+  const query = useGithubApp({ live: started })
+  const app = query.data?.app
+  const stage = setupStage({ started, app })
+  const login = owner.trim()
+  const avatarOf = useSettled(login)
+  const name = named ?? appName({ owner: login, host: location.hostname })
+  const remove = useGithubAppChange(() => request({ schema: GithubAppInfo, path: PATH, method: 'DELETE' }))
+  const go = (url: string) => {
+    if (tab.current && !tab.current.closed) tab.current.location.href = url
+    else setBlocked(url)
+  }
   const create = useMutation({
     mutationFn: (body: CreateGithubApp) => request({ schema: GithubAppLaunch, path: PATH, method: 'POST', body }),
-    onSuccess: ({ url }) => location.assign(url),
+    onSuccess: ({ url }) => go(url),
+    onError: () => {
+      tab.current?.close()
+      setStarted(false)
+    },
   })
-  const pick = (account: GithubAccount) => { setOwner(account); setName(account.appName) }
-  useEffect(() => { if (login) accounts.mutate(login) }, [])
-  const list = accounts.data?.data ?? []
-  const find = () => { if (login.trim()) accounts.mutate(login.trim()) }
-  return <SetupSheet modal brand="github" title="Set up GitHub" blurb="One GitHub App for this server. Agents open pull requests as it, not as you." onClose={onClose}
-    error={formError(create.error, ['name', 'owner']) ?? formError(accounts.error, ['login'])}
-    safe={owner ? `${owner.type === 'Organization' ? `You need to be an owner of ${owner.login}. ` : ''}GitHub opens next to confirm.` : undefined}
-    onSubmit={(event) => { event.preventDefault(); if (owner) create.mutate({ owner: owner.login, ownerType: owner.type, name: name.trim() }) }}
-    foot={<><Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>{create.isPending || create.isSuccess ? <Busy label="Opening GitHub…" /> : <Button type="submit" variant="primary" disabled={!owner || !name.trim()}>Continue on GitHub</Button>}</>}>
-    <Field label="Your GitHub username or organization" error={fieldError(accounts.error, 'login')}>
-      <span className="flex gap-2"><Input mono value={login} onInput={(event) => setLogin(event.currentTarget.value)} onBlur={find} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); find() } }} placeholder="octocat" autoComplete="off" aria-label="GitHub username" />
-        {accounts.isPending ? <Busy label="Looking…" /> : !list.length && <Button type="button" variant="secondary" onClick={find}>Find</Button>}</span>
-    </Field>
-    {list.length > 0 && <div className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-mute">Create the app on</span>
-      <RadioGroup key={list.map((each) => each.login).join()} name="app-owner" variant="card" onChange={(event) => { const found = list.find((each) => each.login === (event.target as HTMLInputElement).value); if (found) pick(found) }}>
-        {list.map((account) => <RadioGroupItem key={account.login} value={account.login} defaultChecked={account.login === owner?.login} className="grid-cols-[16px_24px_minmax(0,1fr)] items-center [&>input]:row-span-1 [&>input]:mt-0">
-          <Avatar url={account.avatarUrl} name={account.name} org={account.type === 'Organization'} />
-          <span className="flex min-w-0 flex-col"><span className="text-[13px] text-ink">{account.name}</span><span className="text-[12px] text-mute">{account.type === 'User' ? 'Personal account' : 'Organization'}</span></span>
-        </RadioGroupItem>)}
-      </RadioGroup>
-    </div>}
-    {owner && <div className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-mute">App name</span>
-      <Input mono value={name} maxLength={34} onInput={(event) => setName(event.currentTarget.value)} aria-label="App name" />
-      <div className="mt-1.5"><BotPreview name={name.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-')}>Confirm on GitHub and it’s ready</BotPreview></div>
-    </div>}
-  </SetupSheet>
+  const start = () => {
+    tab.current = window.open('', 'openhut-github', 'popup,width=1020,height=780')
+    setLost(false)
+    setBlocked(undefined)
+    setStarted(true)
+    if (app) return go(app.installUrl)
+    remember(login)
+    create.mutate({ ...login && { owner: login }, name: name.trim() })
+  }
+  useEffect(() => {
+    if (stage !== 'done') return
+    tab.current?.close()
+    onDone?.()
+  }, [stage])
+  useEffect(() => {
+    if (!started || stage === 'done') return
+    let closedAt = 0
+    const timer = setInterval(() => {
+      if (!tab.current?.closed) return
+      if (!closedAt) void query.refetch()
+      closedAt ||= Date.now()
+      if (Date.now() - closedAt > CLOSED_GRACE_MS) setLost(true)
+    }, 500)
+    return () => clearInterval(timer)
+  }, [started, stage])
+  const cancel = () => {
+    tab.current?.close()
+    onClose()
+  }
+  const primary = (label: string) => <Button type="button" variant="primary" onClick={start}>{label}</Button>
+  const openGithub = (url: string) => <a href={url} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'primary' })} onClick={() => setBlocked(undefined)}>Open GitHub</a>
+  const following = () => {
+    if (lost) return primary('Try again')
+    if (blocked) return openGithub(blocked)
+    return <Button type="button" variant="secondary" onClick={() => tab.current?.focus()}>Show GitHub</Button>
+  }
+  const pending = <Skeleton className="size-5 rounded-full" />
+  const idle = <I icon={CircleIcon} size={20} className="text-mute-2" />
+  if (stage === 'form') return {
+    started,
+    sheet: {
+      title: 'Set up GitHub',
+      blurb: `Agents open pull requests as ${slugOf(name) || 'your bot'}[bot].`,
+      error: formError(create.error, ['name', 'owner']),
+      safe: 'GitHub opens in a small window.',
+      onSubmit: (event) => {
+        event.preventDefault()
+        start()
+      },
+      foot: <><Button type="button" variant="secondary" onClick={cancel}>Cancel</Button><Button type="submit" variant="primary" disabled={!name.trim() || create.isPending}>Continue on GitHub</Button></>,
+      children: <>
+        <Field label="Owner" error={fieldError(create.error, 'owner')}>
+          <span className="relative flex items-center">
+            <span className="pointer-events-none absolute left-2 flex">{avatarOf ? <Avatar key={avatarOf} url={`https://avatars.githubusercontent.com/${encodeURIComponent(avatarOf)}?s=40`} name={avatarOf} org size={20} /> : <Glyph name="github" size={20} />}</span>
+            <Input mono value={owner} className="pl-9" onInput={(event) => setOwner(event.currentTarget.value)} placeholder="Your account" aria-label="Owner" autoComplete="off" spellCheck={false} autoFocus />
+          </span>
+        </Field>
+        <Field label="Name" error={fieldError(create.error, 'name')}>
+          <Input mono value={name} maxLength={34} onInput={(event) => setNamed(event.currentTarget.value)} aria-label="Name" autoComplete="off" spellCheck={false} />
+        </Field>
+      </>,
+    },
+  }
+  if (!app) return {
+    started,
+    sheet: {
+      icon: <Skeleton className="size-7 rounded-[6px]" />,
+      title: `${slugOf(name)}[bot]`,
+      blurb: `on ${login || 'your account'}`,
+      safe: blocked && !lost ? 'Your browser blocked the window.' : undefined,
+      foot: following(),
+      children: lost ? <Status icon={idle}>{CLOSED_EARLY}</Status> : <Status icon={pending}>Creating app…</Status>,
+    },
+  }
+  const installed = stage === 'done' || (!started && !!app.repositories)
+  const live = started && !installed
+  const line = () => {
+    if (installed) return <Status icon={<I icon={CheckmarkCircle02Icon} size={20} className="text-hue-green" />}><a href={app.installUrl} target="_blank" rel="noreferrer" className="text-ink underline-offset-2 hover:underline">Installed on {repos(app.repositories, '')}</a></Status>
+    if (live && !lost) return <Status icon={pending}>Installing…</Status>
+    if (lost) return <Status icon={idle}>{CLOSED_EARLY}</Status>
+    return <Status icon={idle}>{app.repositories === null ? 'GitHub didn’t answer' : 'Not installed yet'}</Status>
+  }
+  const action = () => {
+    if (live) return following()
+    if (!installed) return primary('Install on GitHub')
+  }
+  return {
+    started,
+    sheet: {
+      icon: <Avatar url={app.avatarUrl} name={app.slug} org size={28} />,
+      title: `${app.slug}[bot]`,
+      blurb: `on ${app.owner}`,
+      safe: live ? (blocked && !lost ? 'Your browser blocked the window.' : undefined) : <ConfirmButton variant="danger" size="sm" question="Remove GitHub?" detail="Agents lose access to GitHub." action="Remove"
+        onConfirm={() => remove.mutateAsync(undefined).then(onClose)}>Remove</ConfirmButton>,
+      foot: <><a href={app.settingsUrl} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center text-[12.5px] text-mute no-underline hover:text-ink hover:underline">Add an avatar on GitHub</a>{action()}</>,
+      children: line(),
+    },
+  }
 }
-
-function AppCard({ name, note }: { name: string; note: string }) {
-  return <div className="flex items-center gap-3.5 rounded-lg bg-sidebar px-3.5 py-3">
-    <span className="grid size-14 shrink-0 place-items-center rounded-[10px] bg-card shadow-[0_0_0_1px_var(--hair)]"><Glyph name="openhut" size={38} /></span>
-    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-      <span className="flex items-center gap-1 text-[13px] text-ink"><span className="font-medium">{name}[bot]</span><BotTag /></span>
-      <span className="text-[12px] text-mute">{note}</span>
-    </span>
-    <I icon={CheckmarkCircle02Icon} size={20} className="text-hue-green" />
-  </div>
-}
-
-function DoneStep({ info, onClose }: { info: GithubAppInfo; onClose: () => void }) {
-  const app = info.app
-  if (!app) return null
-  return <SetupSheet modal brand="github" title="GitHub is set up" blurb={`${app.name} is ready. Agents can open pull requests on ${app.owner}.`} onClose={onClose}
-    foot={<Button type="button" variant="primary" onClick={onClose}>Done</Button>}>
-    <AppCard name={app.slug} note={`Created on ${app.owner}${repos(app.repositories, ' · installed on ')}`} />
-  </SetupSheet>
-}
-
-function ManageGitHubDialog({ info, onClose }: { info: GithubAppInfo; onClose: () => void }) {
-  const app = info.app
-  const remove = useGithubAppChange(() => request({ schema: GithubAppInfo, path: PATH, method: 'DELETE' }))
-  if (!app) return null
-  const link = (href: string, label: string) => <a href={href} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'ghost' }), PILL)}>{label}</a>
-  return <SetupSheet modal brand="github" title="GitHub" blurb="This server’s GitHub App. Agents open pull requests as it." onClose={onClose}
-    safe="Removing it disconnects every GitHub connection on this server."
-    foot={<><Button type="button" variant="danger" disabled={remove.isPending} onClick={() => remove.mutate(undefined, { onSuccess: onClose })}>Remove</Button><Button type="button" variant="primary" onClick={onClose}>Done</Button></>}>
-    <Rows>
-      <Row icon={<Avatar url={app.ownerAvatar} name={app.owner} org={app.ownerType === 'Organization'} size={20} />} title={`${app.name}[bot]`} note={`On ${app.owner}`}>{link(app.settingsUrl, 'Edit')}</Row>
-      <Row icon={<Glyph name="github" size={20} />} title="Installed on" note={app.repositories === null ? 'GitHub didn’t answer' : repos(app.repositories, '')}>{link(app.installUrl, 'Install')}</Row>
-    </Rows>
-  </SetupSheet>
-}
-

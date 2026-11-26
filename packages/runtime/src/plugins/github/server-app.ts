@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import * as z from 'zod/mini'
-import { CreateGithubApp, CreateGithubConnection, ListGithubAccounts, type GithubAccount, type GithubAppInfo, type GithubInstallation } from '@openhut/common/connections/github-app.ts'
+import { CreateGithubApp, CreateGithubConnection, type GithubAppInfo, type GithubInstallation } from '@openhut/common/connections/github-app.ts'
 import type { Connection } from '@openhut/common/connections/connection.ts'
 import { connectionService } from '../../server/connections/connection-service.ts'
 import { installWaits } from './waits.ts'
@@ -30,24 +30,17 @@ export const serverAppService = {
     })
     return {
       object: 'github_app', asked: false, askedBy: [],
-      app: { name: app.name, slug: app.slug, owner: app.owner, ownerType: app.ownerType, ownerAvatar: app.ownerAvatar, settingsUrl: github.settingsUrl(app), installUrl: github.installUrl({ app }), repositories },
+      app: { name: app.name, slug: app.slug, avatarUrl: github.avatarUrl(app), owner: app.owner, ownerType: app.ownerType, ownerAvatar: app.ownerAvatar, settingsUrl: github.settingsUrl(app), installUrl: github.installUrl({ app }), repositories },
     }
   },
 
-  async accounts({ actor, login }: { actor: Caller; login: string }): Promise<GithubAccount[]> {
+  async create({ actor, owner, name }: { actor: Caller } & CreateGithubApp): Promise<{ object: 'github_app_launch'; url: string }> {
     requireAdmin(actor)
-    const found = await github.accounts(login).catch((err: unknown) => {
-      throw new HttpError(400, `GitHub has no account ${login}: ${messageOf(err)}`, { param: 'login' })
-    })
-    return found.map((account) => ({ object: 'github_account', ...account }))
-  },
-
-  create({ actor, owner, ownerType, name }: { actor: Caller } & CreateGithubApp): { object: 'github_app_launch'; url: string } {
-    requireAdmin(actor)
-    if (github.app()) throw new HttpError(409, 'This server already has a GitHub App. Remove it first to make another.')
+    if (github.app()) throw new HttpError(409, 'GitHub is already set up. Remove it first to set it up again.')
+    const organization = owner && await github.ownerType(owner) === 'Organization' ? owner : undefined
     const state = randomBytes(24).toString('base64url')
     for (const [key, each] of launches) if (each.expires < Date.now()) launches.delete(key)
-    launches.set(state, { ...github.manifest({ owner, ownerType, name, address: publicAddress(), state }), expires: Date.now() + LAUNCH_MS })
+    launches.set(state, { ...github.manifest({ organization, name, address: publicAddress(), state }), expires: Date.now() + LAUNCH_MS })
     return { object: 'github_app_launch', url: `${publicAddress()}/api/github-app/launch?state=${state}` }
   },
 
@@ -56,13 +49,14 @@ export const serverAppService = {
     return found && found.expires >= Date.now() ? found : undefined
   },
 
-  async created({ state, code }: { state?: string; code?: string }): Promise<void> {
+  async created({ state, code }: { state?: string; code?: string }): Promise<string> {
     if (!state || !code || !launches.delete(state)) throw new HttpError(400, 'This setup expired or was already used. Start it again in Settings › Admin › GitHub.')
-    if (github.app()) throw new HttpError(409, 'This server already has a GitHub App.')
+    if (github.app()) throw new HttpError(409, 'GitHub is already set up.')
     const app = await github.created(code)
     await settings.setGithubApp(app)
     await settings.setGithubAsks([])
     emit({ name: 'github_app.created', target: { type: 'github_app', id: String(app.id), name: app.name } })
+    return github.installUrl({ app })
   },
 
   async remove({ actor }: { actor: Caller }): Promise<GithubAppInfo> {
@@ -95,8 +89,6 @@ export const serverAppService = {
 export const serverAppController: FastifyPluginAsyncZod = async (app) => {
   app.get('/', async (req) => serverAppService.get({ actor: await who(req) }))
 
-  app.get('/accounts', AccountsRequest, async (req) => listOf({ req, data: await serverAppService.accounts({ actor: await who(req), login: req.query.login }) }))
-
   app.post('/', CreateRequest, async (req) => serverAppService.create({ actor: await who(req), ...req.body }))
 
   app.delete('/', async (req) => serverAppService.remove({ actor: await who(req) }))
@@ -122,15 +114,13 @@ export const serverAppController: FastifyPluginAsyncZod = async (app) => {
 
   app.get('/callback', CallbackRequest, async (req, reply) => {
     try {
-      await serverAppService.created(req.query)
-      return reply.redirect('/settings/admin?open=github-done')
+      return reply.redirect(await serverAppService.created(req.query))
     } catch (err) {
       return reply.type('text/html; charset=utf-8').send(page(`${messageOf(err)} Go back to OpenHut and try again.`, { title: 'GitHub isn\'t set up' }))
     }
   })
 }
 
-const AccountsRequest = { schema: { querystring: ListGithubAccounts } }
 const CreateRequest = { schema: { body: CreateGithubApp } }
 const WaitsRequest = { schema: { querystring: z.object({ askId: z.string().check(z.maxLength(2000)) }) } }
 const ConnectRequest = { schema: { body: CreateGithubConnection } }

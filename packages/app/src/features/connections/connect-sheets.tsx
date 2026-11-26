@@ -10,7 +10,7 @@ import { Field } from '@/features/connections/sheet'
 import { GoogleClientGuide } from '@/features/connections/google-client'
 import { useInstallSettings, useUpdateInstallSettings } from '@/features/settings/admin'
 import { useIsAdmin } from '@/features/people/api'
-import { useAskForGithub, useGithubApp } from '@/features/settings/github-app'
+import { useAskForGithub, useGithubApp, useGithubSetup } from '@/features/settings/github-app'
 import { CopyButton } from '@/components/copy-button'
 import { Busy, PILL, SetupSheet } from '@/components/kit'
 import { fieldError, formError } from '@/lib/api-client'
@@ -144,13 +144,14 @@ function GitHubSheet(props: FlowProps) {
   const admin = useIsAdmin()
   const info = useGithubApp().data
   const askAdmin = useAskForGithub()
+  const setup = useGithubSetup({ onClose: close })
   if (!info) return null
+  if (admin && (!info.app || setup.started)) return <SetupSheet {...sheetOf(item)} onClose={close} {...setup.sheet} />
   if (info.app) return <QuickSheet {...props} />
-  return <SetupSheet {...sheetOf(item)} blurb="This server has no GitHub App yet. An admin sets it up once, then agents open pull requests as it." onClose={close}
+  return <SetupSheet {...sheetOf(item)} blurb="An admin sets GitHub up once for your team." onClose={close}
     foot={<><Button type="button" variant="secondary" onClick={close}>Cancel</Button>
-      {admin ? <Button type="button" variant="primary" onClick={() => navigate('/settings/admin?open=github')}>Set up GitHub</Button>
-        : info.asked ? <span className="inline-flex h-8 items-center gap-1.5 px-1 text-[13px] text-mute"><i className="size-1.5 rounded-full bg-amber" />Asked. Waiting for an admin to set up GitHub</span>
-          : <Button type="button" variant="primary" disabled={askAdmin.isPending} onClick={() => askAdmin.mutate(undefined)}>Ask an admin</Button>}</>} />
+      {info.asked ? <span className="inline-flex h-8 items-center gap-1.5 px-1 text-[13px] text-mute"><i className="size-1.5 rounded-full bg-amber" />Asked. Waiting for an admin to set up GitHub</span>
+        : <Button type="button" variant="primary" disabled={askAdmin.isPending} onClick={() => askAdmin.mutate(undefined)}>Ask an admin</Button>}</>} />
 }
 
 function QuickSheet({ item, close, returned }: FlowProps) {
