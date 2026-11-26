@@ -16,7 +16,7 @@ fakeAgentd()
 signIn({ email: 'wait@example.com' })
 await refresh()
 const actor = { id: 'usr_ghwaitow', email: 'wait@example.com', role: 'owner' as const }
-await settings.setGithubApp({ id: 7, slug: 'acme-openhut', name: 'acme-openhut', owner: 'acme', ownerType: 'Organization', ownerAvatar: '', pem: generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs1', format: 'pem' }).toString(), botId: 99, logo: true })
+await settings.setGithubApp({ id: 7, slug: 'acme-openhut', name: 'acme-openhut', owner: 'acme', ownerType: 'Organization', ownerAvatar: '', pem: generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs1', format: 'pem' }).toString(), botId: 99 })
 installWaits.start()
 
 test('an install request waits for the owner, and the ask is approved once the new installation shows up', async (t) => {

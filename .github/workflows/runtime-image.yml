@@ -81,6 +81,12 @@ jobs:
           docker ps --format '{{.Names}} {{.Image}} {{.Status}}'
           [ "$(docker inspect -f '{{.State.Running}}' openhut-updater)" = true ] || { echo "::error::the updater isn't running"; docker logs openhut-updater; exit 1; }
           [ "$(docker inspect -f '{{.HostConfig.Privileged}}' openhut)" = false ] || { echo "::error::the main container is privileged"; exit 1; }
+      - name: The updater clears a request file it can't write, and keeps running
+        run: |
+          docker run --rm -v openhut-data:/data --entrypoint sh "$(docker inspect -f '{{.Image}}' openhut)" \
+            -c 'printf "not-a-request\n" > /data/update/request && chown openhut /data/update/request && chmod 644 /data/update/request'
+          i=0; until docker logs openhut-updater 2>&1 | grep -q "ignored an update request"; do i=$((i+1)); [ $i -lt 30 ] || { echo "::error::the updater didn't take the request"; docker logs openhut-updater; exit 1; }; sleep 1; done
+          [ "$(docker inspect -f '{{.RestartCount}} {{.State.Running}}' openhut-updater)" = "0 true" ] || { echo "::error::the updater restarted"; docker logs openhut-updater; exit 1; }
       - name: The main install starts its own runtime, and one agent in gVisor on it answers a chat
         run: scripts/image-smoke.sh
       - name: A release whose /health fails is rolled back

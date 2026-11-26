@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import * as z from 'zod/mini'
-import { CreateGithubApp, CreateGithubConnection, ListGithubAccounts, UpdateGithubApp, type GithubAccount, type GithubAppInfo, type GithubInstallation } from '@openhut/common/connections/github-app.ts'
+import { CreateGithubApp, CreateGithubConnection, ListGithubAccounts, type GithubAccount, type GithubAppInfo, type GithubInstallation } from '@openhut/common/connections/github-app.ts'
 import type { Connection } from '@openhut/common/connections/connection.ts'
 import { connectionService } from '../../server/connections/connection-service.ts'
 import { installWaits } from './waits.ts'
@@ -30,7 +30,7 @@ export const serverAppService = {
     })
     return {
       object: 'github_app', asked: false, askedBy: [],
-      app: { name: app.name, slug: app.slug, owner: app.owner, ownerType: app.ownerType, ownerAvatar: app.ownerAvatar, settingsUrl: github.settingsUrl(app), installUrl: github.installUrl({ app }), logo: app.logo, repositories },
+      app: { name: app.name, slug: app.slug, owner: app.owner, ownerType: app.ownerType, ownerAvatar: app.ownerAvatar, settingsUrl: github.settingsUrl(app), installUrl: github.installUrl({ app }), repositories },
     }
   },
 
@@ -63,14 +63,6 @@ export const serverAppService = {
     await settings.setGithubApp(app)
     await settings.setGithubAsks([])
     emit({ name: 'github_app.created', target: { type: 'github_app', id: String(app.id), name: app.name } })
-  },
-
-  async update({ actor, logo }: { actor: Caller; logo: boolean }): Promise<GithubAppInfo> {
-    requireAdmin(actor)
-    const app = github.app()
-    if (!app) throw new HttpError(404, github.NOT_SET_UP)
-    await settings.setGithubApp({ ...app, logo })
-    return serverAppService.get({ actor })
   },
 
   async remove({ actor }: { actor: Caller }): Promise<GithubAppInfo> {
@@ -107,8 +99,6 @@ export const serverAppController: FastifyPluginAsyncZod = async (app) => {
 
   app.post('/', CreateRequest, async (req) => serverAppService.create({ actor: await who(req), ...req.body }))
 
-  app.patch('/', UpdateRequest, async (req) => serverAppService.update({ actor: await who(req), logo: req.body.logo }))
-
   app.delete('/', async (req) => serverAppService.remove({ actor: await who(req) }))
 
   app.get('/installations', async (req) => {
@@ -133,7 +123,7 @@ export const serverAppController: FastifyPluginAsyncZod = async (app) => {
   app.get('/callback', CallbackRequest, async (req, reply) => {
     try {
       await serverAppService.created(req.query)
-      return reply.redirect('/settings/admin?open=github-logo')
+      return reply.redirect('/settings/admin?open=github-done')
     } catch (err) {
       return reply.type('text/html; charset=utf-8').send(page(`${messageOf(err)} Go back to OpenHut and try again.`, { title: 'GitHub isn\'t set up' }))
     }
@@ -144,6 +134,5 @@ const AccountsRequest = { schema: { querystring: ListGithubAccounts } }
 const CreateRequest = { schema: { body: CreateGithubApp } }
 const WaitsRequest = { schema: { querystring: z.object({ askId: z.string().check(z.maxLength(2000)) }) } }
 const ConnectRequest = { schema: { body: CreateGithubConnection } }
-const UpdateRequest = { schema: { body: UpdateGithubApp } }
 const StateRequest = { schema: { querystring: z.object({ state: z.optional(z.string()) }) } }
 const CallbackRequest = { schema: { querystring: z.object({ state: z.optional(z.string()), code: z.optional(z.string()) }) } }
