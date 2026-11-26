@@ -30,6 +30,12 @@ Under **Channels**, **Add** [Slack](/slack), [Telegram](/telegram), [WhatsApp](/
 
 The button next to its name starts and stops it. **Delete** removes it with its chats, memory and skills. Double-click the name to rename it.
 
+## What it did
+
+Above each reply, one quiet line says what the agent did for it, like *Queried Postgres twice and searched the web*, with the time it took when that was over 10 seconds. Click it to see each step; click a step to see what went in and what came back. While it works, the line says what it's doing now.
+
+A step that failed says why, in red, and the line counts it (*1 failed*). If the whole turn failed, the line stays open, the reply says *No reply* and the reason, and **Retry** asks again. Something blocked by a [permission](/permissions) shows a card with the fix.
+
 ## Access
 
 **Access** is who can see and chat with an agent. Pick **Specific people** from your [team](/people); you, as its owner, always have access. Turn on **Whole team** to give everyone access. Admins can always open every agent. Only its owner changes Access.
