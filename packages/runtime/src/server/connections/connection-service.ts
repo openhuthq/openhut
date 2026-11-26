@@ -24,6 +24,7 @@ import { redact } from './redact.ts'
 import { permissions } from '../permissions/permissions.ts'
 import { asks } from '../../core/asks.ts'
 import { routineService } from '../inbox/routines.ts'
+import { plugins } from '../../core/plugins.ts'
 
 const COLUMNS = ['id', 'kind', 'name', 'account', 'sign_in', 'owner_id', 'created_at'] as const
 const MAX_REPLY = 64_000
@@ -193,6 +194,8 @@ export const connectionService = {
     return (journal.get(agentId) ?? []).filter((call) => call.at >= since)
   },
 
+  toolsOf: (connection: { id: string; kind: ConnectionKind }): Promise<ToolSpec[]> => toolsOf(connection),
+
   execute({ connection, tool, args }: { connection: ReachableConnection; tool: string; args: Record<string, unknown> }): Promise<{ text: string; isError: boolean }> {
     return withConnector(connection, (ctx) => CONNECTORS[connection.kind].call({ ...ctx, tool, args }))
   },
@@ -271,7 +274,8 @@ async function run({ agentId, tool: { name, connection, spec }, action, args, re
   }
   running.set(key, inFlight + 1)
   try {
-    const result = await connectionService.execute({ connection, tool: spec.name, args })
+    const sent = await signedArgs({ agentId, kind: connection.kind, tool: spec.name, args })
+    const result = await connectionService.execute({ connection, tool: spec.name, args: sent })
     if (result.text.length > MAX_REPLY) throw new Error(`Result too large for the agent (${Math.round(result.text.length / 1024)} KB, the limit is 64 KB). Ask for less.`)
     await done(result.isError ? 'failed' : 'allowed', redact(result.text))
     return { text: redact(result.text), isError: result.isError }
@@ -281,6 +285,12 @@ async function run({ agentId, tool: { name, connection, spec }, action, args, re
   } finally {
     running.set(key, (running.get(key) ?? 1) - 1)
   }
+}
+
+async function signedArgs({ agentId, kind, tool, args }: { agentId: string; kind: ConnectionKind; tool: string; args: Record<string, unknown> }): Promise<Record<string, unknown>> {
+  let sent = args
+  for (const plugin of plugins()) if (plugin.connectorCall) sent = await plugin.connectorCall({ agentId, kind, tool, args: sent })
+  return sent
 }
 
 async function record({ agentId, connectionId, tool, reason, outcome, ms = 0, approvedBy = null, app, spec, action, args, output, error }: { agentId: string; connectionId: string | null; tool: string; reason: string; outcome: Outcome; ms?: number; approvedBy?: string | null; app?: string; spec?: ToolSpec; action?: Action; args: Record<string, unknown>; output?: string; error?: string }): Promise<void> {

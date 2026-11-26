@@ -1,6 +1,7 @@
 // openhut.dev, www and keys (M2 step 6): what the openhut-cloud Worker served in front of these assets, moved here so that
 // Worker can be deleted. events/ started as a copy of the old Worker's events (that Worker is deleted). The MAIL binding moves too.
 import { ingest, type HubEnv } from './events/hub.ts'
+import { saveFace, type FacesEnv } from './faces.ts'
 
 const HEADERS = {
   'strict-transport-security': 'max-age=31536000; includeSubDomains',
@@ -19,6 +20,7 @@ export default {
   async fetch(request: Request, env: SiteEnv, _ctx: unknown): Promise<Response> {
     const url = new URL(request.url)
     if ((url.pathname === '/api/events' || url.pathname === '/v1/events') && request.method === 'POST') return ingest({ request, env })
+    if (url.pathname === '/api/faces' && request.method === 'POST') return saveFace({ request, env })
     const installer = url.pathname === '/' && !(request.headers.get('accept') ?? '').includes('text/html') && !PREVIEW_BOT.test(request.headers.get('user-agent') ?? '')
     const asset = installer ? undefined : await env.ASSETS.fetch(new Request(url, request))
     const response = asset ? new Response(asset.body, asset) : new Response(null, { status: 302, headers: { location: STABLE_INSTALLER } })
@@ -28,4 +30,4 @@ export default {
   },
 }
 
-export type SiteEnv = HubEnv & { ASSETS: { fetch: (request: Request) => Promise<Response> } }
+export type SiteEnv = HubEnv & FacesEnv & { ASSETS: { fetch: (request: Request) => Promise<Response> } }

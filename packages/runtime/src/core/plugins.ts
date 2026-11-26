@@ -11,6 +11,7 @@ import { inbox } from '../plugins/inbox/index.ts'
 import { post } from '../plugins/post/index.ts'
 import { cards } from '../plugins/cards/index.ts'
 import { subagents } from '../plugins/subagents/index.ts'
+import { github } from '../plugins/github/index.ts'
 import { HttpError } from '../server/platform/http-error.ts'
 import type { Plugin } from './plugin.ts'
 import { asksPlugin } from './asks.ts'
@@ -21,7 +22,7 @@ export const plugins = (): Plugin[] => list ??= ordered()
 
 function ordered(): Plugin[] {
   const before = [base, models, chat, channels, self, connections, keys, browser, onboarding]
-  const after = [inbox, post, cards, subagents]
+  const after = [inbox, post, cards, subagents, github]
   return checked([...before, asksPlugin([...before, ...after]), ...after])
 }
 

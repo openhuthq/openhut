@@ -2,13 +2,13 @@ import { createSign } from 'node:crypto'
 import * as z from 'zod/mini'
 import { guardedFetch } from '../../platform/network.ts'
 import { db } from '../../platform/db.ts'
+import { config } from '../../platform/config.ts'
 import { HttpError } from '../../platform/http-error.ts'
 import { unseal } from '../../platform/secrets.ts'
 import type { Connector, ConnectorContext, ToolSpec } from '../connector.ts'
 import { MCP_SERVERS, mcp } from '../mcp/mcp.ts'
 import { permissions } from '../../permissions/permissions.ts'
 
-const API = 'https://api.github.com'
 const PERMISSIONS = { contents: 'write', pull_requests: 'write', issues: 'write', actions: 'read', checks: 'read', metadata: 'read' }
 const TOKEN_FRESH_MS = 50 * 60_000
 const App = z.object({ appId: z.number(), slug: z.string(), pem: z.string() })
@@ -104,7 +104,7 @@ function appJwt({ appId, pem }: GithubApp): string {
 }
 
 async function call<T>({ path, method = 'GET', bearer, schema }: { path: string; method?: string; bearer?: string; schema: z.ZodMiniType<T> }): Promise<T> {
-  const res = await guardedFetch(`${API}${path}`, { method, headers: { accept: 'application/vnd.github+json', 'user-agent': 'openhut', ...(bearer && { authorization: `Bearer ${bearer}` }) } })
+  const res = await guardedFetch(`${config.githubApi}${path}`, { method, headers: { accept: 'application/vnd.github+json', 'user-agent': 'openhut', ...(bearer && { authorization: `Bearer ${bearer}` }) } })
   if (!res.ok) throw new Error(`GitHub answered ${res.status}: ${(await res.text()).slice(0, 200)}`)
   return z.parse(schema, await res.json())
 }

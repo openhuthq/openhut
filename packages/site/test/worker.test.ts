@@ -38,3 +38,25 @@ test('POST /api/events stores allow-listed events in Analytics Engine and drops 
   assert.equal((await post({ events: [{ name: 'instance_active', properties: { agents: 1 }, at: Date.now() }] })).status, 202)
   assert.equal(points.length, 1)
 })
+
+test('POST /api/faces stores a 64×64 PNG under its sha256 once and refuses anything else', async () => {
+  const stored = new Map<string, ArrayBuffer>()
+  const DL = { head: async (key: string) => stored.get(key) ?? null, put: async (key: string, value: ArrayBuffer) => stored.set(key, value) }
+  let left = 2
+  const FACES_LIMIT = { limit: async () => ({ success: left-- > 0 }) }
+  const post = (body: Uint8Array) => worker.fetch(new Request('https://openhut.dev/api/faces', { method: 'POST', body }), { DL, FACES_LIMIT } as never, {})
+  const png = (size: number) => {
+    const bytes = new Uint8Array(64)
+    bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52])
+    new DataView(bytes.buffer).setUint32(16, size)
+    new DataView(bytes.buffer).setUint32(20, size)
+    return bytes
+  }
+  const { createHash } = await import('node:crypto')
+  const res = await post(png(64))
+  assert.equal(res.status, 201)
+  assert.deepEqual(await res.json(), { url: `https://dl.openhut.dev/a/${createHash('sha256').update(png(64)).digest('hex')}.png` })
+  assert.equal(stored.size, 1)
+  assert.equal((await post(png(512))).status, 400)
+  assert.equal((await post(png(64))).status, 429)
+})

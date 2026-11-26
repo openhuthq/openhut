@@ -26,6 +26,7 @@ import { WebhooksRow } from '@/features/webhooks/webhooks-dialog'
 import { ModelRows } from '@/features/agents/model-rows'
 import { RunsOnRow } from '@/features/agents/move'
 import { AgentStatus } from '@/features/agents/status'
+import { useGitHubFace } from '@/features/agents/github-face'
 import { formValues } from '@/lib/form'
 import { PHONE, useMedia } from '@/lib/media'
 import { navigate } from '@/lib/router'
@@ -36,6 +37,7 @@ const VALUE = ROW_VALUE
 
 export function Panel({ agent, naming, watching, onHide }: { agent: Agent; naming: boolean; watching: boolean; onHide: () => void }) {
   const memory = useMemoryCount(agent)
+  useGitHubFace(agent)
   const skills = skillsNote(useSkills(agent.id).data)
   return <aside className={cn('still flex w-[280px] shrink-0 flex-col gap-4 overflow-auto border-l-[0.5px] phone:w-full phone:flex-1 phone:border-l-0 border-hair px-4 pt-4 pb-4 [scrollbar-gutter:stable]', GLASS)}>
     <div className={'flex items-center gap-3'}>

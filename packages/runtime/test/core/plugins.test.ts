@@ -25,14 +25,15 @@ test('migrate makes the core tables, then each plugin\'s, in list order', async 
   await migrate()
   await migrate()
   const tables = (await sql<{ name: string }>`select table_name as name from information_schema.tables where table_schema = 'public'`.execute(db)).rows.map((row) => row.name)
-  for (const table of ['person', 'agent', 'record', 'channel', 'telegram_code', 'connection', 'connection_grant', 'connection_event', 'tool_permission', 'agent_secret', 'ask', 'inbox_source', 'inbox_item']) assert.ok(tables.includes(table), table)
+  for (const table of ['person', 'agent', 'record', 'channel', 'telegram_code', 'connection', 'connection_grant', 'connection_event', 'tool_permission', 'agent_secret', 'ask', 'inbox_source', 'inbox_item', 'github_face', 'github_thread']) assert.ok(tables.includes(table), table)
   const owners = plugins().filter((plugin) => plugin.migrate).map((plugin) => plugin.name)
-  assert.deepEqual(owners, ['channels', 'connections', 'keys', 'asks', 'inbox'])
+  assert.deepEqual(owners, ['channels', 'connections', 'keys', 'asks', 'inbox', 'github'])
 })
 
 test('the plugins serve their own API routes', () => {
   const served = Object.fromEntries(plugins().filter((plugin) => plugin.routes).map((plugin) => [plugin.name, Object.keys(plugin.routes?.() ?? {})]))
   assert.deepEqual(served.inbox, ['/api/routines', '/api/webhooks', '/api/delivery-targets', '/inbox'])
   assert.deepEqual(served.chat, ['/api/threads'])
+  assert.deepEqual(served.github, ['/api/agent-faces'])
   assert.ok(served.connections.includes('/api/grants'))
 })

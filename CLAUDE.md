@@ -16,7 +16,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   `src/server/` is the API (Fastify, Kysely on PGlite), grouped by domain: `platform/` (config, db, secrets, settings,
   errors, evlog logging, the typed agentd client), `team/`, `agents/` (agents, grants), `channels/`,
   `connections/`, `gateway/` (the agents' MCP gateway and key broker on :8081), `admin/`, and `integrations/<service>/`.
-  What an agent's Hermes gets comes from plugins: `src/plugins/<name>/index.ts` is `definePlugin({ name, hermes, tools, asks, hooks, slackAction, wakes, start, migrate, routes, afterTurn })`,
+  What an agent's Hermes gets comes from plugins: `src/plugins/<name>/index.ts` is `definePlugin({ name, hermes, tools, asks, hooks, slackAction, wakes, start, migrate, routes, afterTurn, connectorCall })`,
   where `hermes()` returns that feature's SOUL.md paragraph, config and env, and `tools` its MCP tools (zod `input` and
   `run(input, { agent, origin })`). `src/core/` holds no feature code: `plugins.ts` is the ordered list (its order is the
   SOUL.md order; two plugins with one tool name fail at boot), `hermes.ts` merges the parts into `config.yaml` (written as
@@ -34,6 +34,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   tool?, answer?, declined? }) }`, and `core/asks.ts` owns the rest (the `ask` table, `/api/asks`, an MCP tool per kind with `tool`,
   the notes the agent gets, the sweep that expires them). Its whole API is `asks.create` (returns the text for the agent) and
   `asks.approve` (owner-checked and idempotent); `run` may run twice after a crash, so keep it repeatable.
+  `connectorCall` may rewrite an app call's arguments just before the connector runs it (`connection-service` `run()`): `plugins/github` signs PR, issue and first-comment bodies with the agent's face there.
   An agent and its control, memory, skills, routines, channels and messages are rows in the local `record` table
   (`platform/records.ts`, secrets sealed with the install secret); `agents/run-set.ts` applies them to the agents this computer
   runs. People sign in with a session cookie (`team/identity.ts`, `team/team-service.ts`): while there is no owner, the first
