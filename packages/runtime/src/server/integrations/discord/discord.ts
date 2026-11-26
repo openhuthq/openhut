@@ -18,6 +18,7 @@ const MESSAGE_CONTENT = (1 << 18) | (1 << 19)
 const MAX_LENGTH = 2000
 const RETRIES = 3
 const MAX_WAIT_MS = 30_000
+const Thread = z.object({ parent_id: z.optional(z.nullable(z.string())) })
 const Failure = z.object({ message: z.optional(z.string()), retry_after: z.optional(z.number()) })
 export const DiscordSecrets = z.object({ botToken: z.string() })
 
@@ -72,8 +73,10 @@ export const discord = {
     return failed
   },
 
-  async post({ botToken, channelId, text }: { botToken: string; channelId: string; text: string }): Promise<void> {
-    for (const part of split(text)) await write({ path: `/channels/${channelId}/messages`, botToken, body: { content: part, allowed_mentions: { parse: [] } } })
+  async post({ botToken, channelId, threadId, text }: { botToken: string; channelId: string; threadId?: string; text: string }): Promise<void> {
+    const thread = threadId ? z.safeParse(Thread, (await call({ path: `/channels/${threadId}`, botToken })).body).data : undefined
+    if (threadId && thread?.parent_id !== channelId) throw new HttpError(400, 'That thread isn\'t in the channel. Post in the channel instead.')
+    for (const part of split(text)) await write({ path: `/channels/${threadId ?? channelId}/messages`, botToken, body: { content: part, allowed_mentions: { parse: [] } } })
   },
 
   env({ botToken, channels }: { botToken: string; channels: string[] }): Record<string, string> {

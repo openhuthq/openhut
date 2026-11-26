@@ -22,7 +22,7 @@ import { telegramCodes, welcome, type Person } from './telegram-codes.ts'
 
 const CHANNEL_KINDS = new Set<ChannelKind>(['slack', 'discord'])
 const SENDERS: Record<string, (input: { botToken: string; place: Place; text: string }) => Promise<void>> = {
-  discord: ({ botToken, place, text }) => discord.post({ botToken, channelId: place.thread_id ?? place.chat_id, text }),
+  discord: ({ botToken, place, text }) => discord.post({ botToken, channelId: place.chat_id, threadId: place.thread_id, text }),
 }
 const LABEL = { slack: 'Slack', whatsapp: 'WhatsApp', telegram: 'Telegram', discord: 'Discord' } as const
 

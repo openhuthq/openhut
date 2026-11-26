@@ -44,6 +44,7 @@ function fakeDiscord(t: TestContext, { limited = 0 } = {}) {
     calls.push({ method, path, body: init?.body ? JSON.parse(String(init.body)) : {} })
     assert.equal(new Headers(init?.headers).get('authorization'), `Bot ${TOKEN}`)
     if (path.startsWith('/users/@me') || path.startsWith('/guilds')) return Response.json(path === '/users/@me/guilds' ? [{ id: GUILD, name: 'Acme' }] : path === `/guilds/${GUILD}/channels` ? [{ id: OPS, name: 'ops', type: 0 }] : path === `/guilds/${GUILD}` ? { roles: [] } : path === '/users/@me' ? { id: '1', username: 'ops' } : { roles: [] })
+    if (method === 'GET') return Response.json({ id: path.split('/')[2], parent_id: path.includes('8888') ? OPS : RANDOM })
     if (left-- > 0) return Response.json({ message: 'You are being rate limited.', retry_after: 0.01 }, { status: 429 })
     return Response.json({ id: String(next++) })
   })
@@ -66,10 +67,11 @@ test('send posts to the channel with the agent\'s bot, splits long text and wait
   assert.deepEqual(posts.slice(1).map((each) => each.body.content), ['a'.repeat(1500), 'b'.repeat(1500)])
 })
 
-test('send posts into an existing thread, and refuses a channel the agent has not connected', async (t) => {
+test('send posts into a thread of a connected channel, and refuses another channel\'s thread or a channel the agent has not connected', async (t) => {
   const calls = fakeDiscord(t)
   await channelService.send({ agentId: 'ag_placeops', place: { ...PLACE, thread_id: '8888888888888888888' }, text: 'done' })
   assert.ok(calls.some((each) => each.method === 'POST' && each.path === '/channels/8888888888888888888/messages'))
+  await assert.rejects(channelService.send({ agentId: 'ag_placeops', place: { ...PLACE, thread_id: '9999999999999999999' }, text: 'hi' }), /isn't in the channel/)
   await assert.rejects(channelService.send({ agentId: 'ag_placeops', place: { ...PLACE, chat_id: RANDOM, chat_name: '#random' }, text: 'hi' }), /Can't post in #random/)
   await assert.rejects(channelService.send({ agentId: 'ag_placeops', place: { platform: 'telegram', chat_id: '123456789', chat_name: 'your Telegram' }, text: 'hi' }), /can't post to telegram yet/)
 })
