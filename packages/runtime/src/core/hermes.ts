@@ -10,7 +10,7 @@ const UI_PLUGIN = 'openhut-ui'
 
 export function hermesFiles(input: Omit<HermesCtx, 'gateway'>): AgentFiles {
   const ctx = { ...input, gateway: config.agentGateway ?? `http://${agentSubnet(input.agent.net)}.1:${config.gatewayPort}` }
-  const parts = plugins.map((plugin) => plugin.hermes?.(ctx) ?? {})
+  const parts = plugins().map((plugin) => plugin.hermes?.(ctx) ?? {})
   const merged = merge([...parts.map((part) => part.config ?? {}), {
     mcp_servers: { openhut: { url: `${ctx.gateway}/api/v1/mcp`, headers: { Authorization: `Agent ${ctx.token}` } } },
     plugins: { enabled: [UI_PLUGIN], entries: { [UI_PLUGIN]: { allow_gateway_injection: true } } },
