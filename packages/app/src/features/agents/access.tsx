@@ -6,10 +6,10 @@ import { I, ROW_VALUE } from '@/components/kit'
 import { usePeople } from '@/features/people/api'
 import { FIELD_MENU } from '@/features/models/model-picker'
 import { cn } from '@/lib/utils'
+import { PersonFace } from '@/components/custom/person-face'
 
 export type Access = { shared: boolean; people: string[] }
 
-const HUES = ['bg-hue-blue', 'bg-hue-violet', 'bg-hue-green', 'bg-hue-amber', 'bg-hue-red']
 const SHOWN = 3
 const ITEM = cn(menuItemVariants(), 'h-8 gap-2 text-[13px]')
 
@@ -40,7 +40,7 @@ export function AccessPicker({ owner, value, onChange, disabled = false, title, 
       <DropdownMenuSeparator />
       {members.map((member) => <Menu.CheckboxItem key={member.email} closeOnClick={false} disabled={value.shared || member.email === owner} checked={value.shared || member.email === owner || value.people.includes(member.email)}
           onCheckedChange={(on) => toggle(member.email, on)} className={ITEM}>
-          <Initials member={member} />
+          <PersonFace name={member.name} email={member.email} size={20} />
           <span className="min-w-0 flex-1 truncate text-ink">{member.name}</span>
           {member.email === owner && <span className="shrink-0 text-mute">Owner</span>}
           <span className="grid w-3.5 shrink-0 place-items-center"><Menu.CheckboxItemIndicator><I icon={Tick02Icon} size={14} className="text-ink" /></Menu.CheckboxItemIndicator></span>
@@ -52,14 +52,7 @@ export function AccessPicker({ owner, value, onChange, disabled = false, title, 
 function Stack({ members }: { members: Member[] }) {
   const more = members.length - SHOWN
   return <span className="flex shrink-0 items-center">
-    {members.slice(0, SHOWN).map((member, index) => <Initials key={member.email} member={member} className={cn('ring-2 ring-soft', index > 0 && '-ml-1')} />)}
+    {members.slice(0, SHOWN).map((member, index) => <PersonFace key={member.email} name={member.name} email={member.email} size={20} className={cn('ring-2 ring-soft', index > 0 && '-ml-1')} />)}
     {more > 0 && <span className="-ml-1 grid h-5 min-w-5 place-items-center rounded-full bg-mid px-1 text-[10px] font-medium text-ink ring-2 ring-soft">+{more}</span>}
   </span>
-}
-
-function Initials({ member, className }: { member: Member; className?: string }) {
-  const words = member.name.split(/[\s@._-]+/).filter(Boolean)
-  const letters = ((words[0]?.[0] ?? '') + (words.length > 1 ? words[1]?.[0] ?? '' : '')).toUpperCase() || '?'
-  const hue = HUES[[...member.email].reduce((sum, char) => sum + char.charCodeAt(0), 0) % HUES.length]
-  return <span title={member.name} className={cn('grid size-5 shrink-0 place-items-center rounded-full text-[9px] font-semibold text-white', hue, className)}>{letters}</span>
 }

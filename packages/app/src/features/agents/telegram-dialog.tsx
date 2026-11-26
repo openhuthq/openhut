@@ -13,6 +13,7 @@ import { copyText } from '@/lib/clipboard'
 import { formValues } from '@/lib/form'
 import { toast, toastError, toastFailed } from '@/lib/toast'
 import { cn } from '@/lib/utils'
+import { PersonFace } from '@/components/custom/person-face'
 
 export function TelegramDialog({ agent, channel, onClose }: { agent: Agent; channel: Channel | undefined; onClose: () => void }) {
   const createChannel = useCreateChannel()
@@ -77,7 +78,7 @@ function People({ channel }: { channel: Channel }) {
 
 function Person({ name, note }: { name: string; note: React.ReactNode }) {
   return <div className="flex items-center gap-2 text-[13px]">
-    <span className="grid size-[22px] place-items-center rounded-full bg-soft text-[11px] font-semibold text-body">{name[0]?.toUpperCase()}</span>
+    <PersonFace name={name} email={name} size={22} />
     <span className="min-w-0 truncate">{name}</span>
     <span className="ml-auto text-[12px] text-mute">{note}</span>
   </div>
