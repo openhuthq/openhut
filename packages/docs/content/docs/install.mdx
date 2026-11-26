@@ -65,3 +65,36 @@ Plan memory for the busiest moment: every running agent can use its full memory 
 - **Disk:** 10 GB for the images and Docker, plus about 1 GB per agent.
 
 Out of room? [Add another computer](/computers) and move agents to it.
+
+## Behind an existing proxy
+
+If the server already runs a reverse proxy on ports 80 and 443, install with `proxy` and the local port it should reach OpenHut on:
+
+```sh
+curl -fsSL https://openhut.dev | sh -s -- proxy 8787
+```
+
+OpenHut then listens only on `127.0.0.1:8787`, over plain HTTP. It leaves ports 80 and 443 alone and gets no certificate: your proxy serves HTTPS. Updates keep this setting. Point your domain's DNS at the server, add a route to your proxy, then open your HTTPS address and create the owner account. **Settings › Admin › Address** shows **HTTPS by your proxy**.
+
+The proxy must send the original `Host` header. Plan memory as in [Hardware](#hardware), on top of what the server's other apps use: on a 4 GB server that already runs other apps, keep to one or two agents.
+
+**nginx**, in a `server` block for your domain with its certificate:
+
+```nginx
+location / { proxy_pass http://127.0.0.1:8787; proxy_set_header Host $host; proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection upgrade; proxy_read_timeout 1h; }
+```
+
+**Caddy**, which gets the certificate itself:
+
+```text
+openhut.example.com { reverse_proxy 127.0.0.1:8787 }
+```
+
+**kamal-proxy** runs in a container, so it can't reach the server's `127.0.0.1`. Add the Docker network it uses (Kamal's is `kamal`), and OpenHut joins it as `openhut`:
+
+```sh
+curl -fsSL https://openhut.dev | sh -s -- proxy 8787 kamal
+docker exec kamal-proxy kamal-proxy deploy openhut --target openhut:8787 --host openhut.example.com --tls --health-check-path /health
+```
+
+Updates and rollbacks keep the container name `openhut` and the network, so the route keeps working.

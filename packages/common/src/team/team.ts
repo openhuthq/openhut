@@ -66,7 +66,7 @@ export type FinishPasswordReset = z.infer<typeof FinishPasswordReset>
 
 export const InstallSettings = z.object({
   object: z.literal('install_settings'),
-  address: z.object({ url: z.nullable(z.string()), certificateUntil: z.nullable(Timestamp) }),
+  address: z.object({ url: z.nullable(z.string()), certificateUntil: z.nullable(Timestamp), proxy: z.boolean() }),
   google: z.object({ set: z.boolean(), signIn: z.boolean(), clientId: z.nullable(z.string()), signInRedirectUri: z.string(), connectionsRedirectUri: z.string() }),
   smtp: z.object({ set: z.boolean(), host: z.nullable(z.string()), port: z.nullable(z.number()), user: z.nullable(z.string()), from: z.nullable(z.string()) }),
   usageData: z.boolean(),

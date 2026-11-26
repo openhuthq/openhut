@@ -48,9 +48,10 @@ export function AdminSettings() {
   const data = settings.data
   if (!data) return <ErrorNote message={settings.error?.message} />
   const until = data.address.certificateUntil
+  const https = until ? `Certificate until ${longDate.format(new Date(until))}` : 'No certificate yet'
   const edit = (step: string, label: string) => <Button type="button" variant="secondary" className={PILL} onClick={() => open(step)}>{label}</Button>
   return <Rows>
-    <Row icon={<I icon={Globe02Icon} size={20} className="text-hue-slate" />} title="Address" note={data.address.url ? `${data.address.url} · ${until ? `Certificate until ${longDate.format(new Date(until))}` : 'No certificate yet'}` : 'Not set'}>{edit('address', 'Edit')}</Row>
+    <Row icon={<I icon={Globe02Icon} size={20} className="text-hue-slate" />} title="Address" note={data.address.url ? `${data.address.url} · ${data.address.proxy ? 'HTTPS by your proxy' : https}` : 'Not set'}>{edit('address', 'Edit')}</Row>
     <Row icon={<Glyph name="google_sign_in" size={20} />} title="Sign in with Google" note={data.google.signIn ? 'On' : 'Off'}>{edit('google-sign-in', data.google.signIn ? 'Edit' : 'Set up')}</Row>
     <Row icon={<I icon={Mail01Icon} size={20} className="text-hue-blue" />} title="Email" note={data.smtp.set ? `${data.smtp.host}:${data.smtp.port} · from ${data.smtp.from}` : 'Not set up'}>{edit('email', data.smtp.set ? 'Edit' : 'Set up')}</Row>
     <Row icon={<I icon={Analytics01Icon} size={20} className="text-hue-green" />} title="Share usage data" note={data.usageData ? 'On · version and agent count, once a day' : 'Off'}>
@@ -66,7 +67,7 @@ function AddressSheet({ settings }: { settings: InstallSettings }) {
   const update = useUpdateInstallSettings()
   const [address, setAddress] = useState(settings.address.url ?? '')
   const close = () => open()
-  return <SetupSheet modal brand="openhut" title="Address" blurb="Point its DNS at this server first. OpenHut gets the certificate itself." safe="Everyone signs in again at the new address." onClose={close}
+  return <SetupSheet modal brand="openhut" title="Address" blurb={settings.address.proxy ? 'Your proxy serves this address over HTTPS.' : 'Point its DNS at this server first. OpenHut gets the certificate itself.'} safe="Everyone signs in again at the new address." onClose={close}
     error={formError(update.error, ['address'])}
     onSubmit={(event) => {
       event.preventDefault()
