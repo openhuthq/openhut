@@ -35,14 +35,6 @@ export function AgentGrants({ connection, agents }: { connection: Connection; ag
   })}</>
 }
 
-export function Faces({ connection, agents }: { connection: Connection; agents: OpenHutAgent[] }) {
-  const grants = useGrants({ connectionId: connection.id })
-  const users = agents.filter((agent) => grants.data?.some((grant) => grant.agentId === agent.id))
-  if (!grants.data) return null
-  if (!users.length) return <span className="text-xs text-mute-2">No agents</span>
-  return <span className="flex -space-x-1.5" title={users.map((agent) => agent.name).join(', ')}>{users.map((agent) => <span key={agent.id} className="rounded-md bg-card shadow-[0_0_0_2px_var(--card)]"><Face agent={agent} size={24} /></span>)}</span>
-}
-
 export function ConnectionSheet({ connectionId, connected }: { connectionId: string; connected: boolean }) {
   const connections = useConnections()
   const agents = useAgents()

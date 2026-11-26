@@ -48,6 +48,10 @@ An agent can post in its own channels without anyone messaging it first, like a 
 
 Under **Allowed to**, **Run code** lets the agent run code in its own container. **Browser** gives it a real web browser; **Open** shows what it has open, live, and lets you take over to log in. A web page can carry text written to mislead an agent, so turn Browser on only for agents that need it.
 
+## Sub-agents
+
+For a big job, an agent can hand parts to sub-agents that work at the same time, then answer with what they found. The chat waits until they finish. Each sub-agent costs model tokens like a chat of its own.
+
 ## Changes it asks for
 
 An agent can ask to change its own settings. The request shows in the chat with **Approve**, **Edit** and **Don't approve**.
