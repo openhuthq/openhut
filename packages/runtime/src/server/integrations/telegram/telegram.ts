@@ -48,7 +48,6 @@ export const telegram = {
   config({ gateway }: { gateway: string }): Record<string, unknown> {
     return {
       telegram: { require_mention: true, unauthorized_dm_behavior: 'decline', gateway_restart_notification: false },
-      unauthorized_dm_decline_message: 'I can\'t chat with you yet. If you were just invited, try again in a minute.',
       platforms: { telegram: { extra: { base_url: `${gateway}/u/telegram/bot`, base_file_url: `${gateway}/u/telegram/file/bot` } } },
     }
   },

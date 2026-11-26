@@ -86,7 +86,7 @@ export const channels = definePlugin({
       const userId = event?.source?.user_id
       if (event?.source?.platform !== 'telegram' || !userId) return undefined
       const code = INVITE.exec(event.text.trim())?.[1]
-      if (!code) return await channelService.telegramStranger({ agentId: agent.id, userId }) ? { action: 'skip', reason: 'openhut stranger' } : undefined
+      if (!code) return await channelService.telegramMember({ agentId: agent.id, userId }) ? { action: 'allow', reason: 'openhut member' } : { action: 'skip', reason: 'openhut stranger' }
       const chatId = Number(event.source?.chat_id)
       if (TELEGRAM_USER.test(userId) && Number.isSafeInteger(chatId)) {
         await channelService.telegramJoin({ agentId: agent.id, code, person: { userId, name: event.source?.user_name?.slice(0, 100) || 'there', chatId } }).catch(() => undefined)
