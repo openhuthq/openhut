@@ -20,6 +20,11 @@ const OUTCOMES = {
   failed: { icon: AlertCircleIcon, hue: 'text-hue-amber', word: 'Failed' },
 }
 
+function sentenceOf({ outcome, tool }: { outcome: ConnectionEvent['outcome']; tool: string }) {
+  if (outcome === 'allowed') return toolLabel(tool)
+  return `${outcome === 'asked' ? 'Asked to' : 'Tried to'} ${toolLabel(tool, 'now')}`
+}
+
 function outcomeOf(event: ConnectionEvent) {
   if (!event.approvedBy) return OUTCOMES[event.outcome]
   if (event.outcome === 'denied') return { ...OUTCOMES.denied, word: `${event.approvedBy} said no` }
@@ -48,7 +53,7 @@ export function ActivityDialog({ agent, onClose }: { agent: Agent; onClose: () =
           const tool = connection ? event.tool.replace(`${connection.kind}_`, '') : event.tool
           return <div key={event.id} className="flex min-h-11 min-w-0 items-center gap-3">
             <span className="grid shrink-0" title={outcome.word}><I icon={outcome.icon} size={17} className={outcome.hue} /></span>
-            <span className="min-w-0 flex-1 truncate text-[13.5px] text-ink" title={`${event.tool}: ${event.reason}`}>{event.outcome === 'denied' && !event.approvedBy ? `Tried to ${toolLabel(tool, 'now')}` : toolLabel(tool)}</span>
+            <span className="min-w-0 flex-1 truncate text-[13.5px] text-ink" title={`${event.tool}: ${event.reason}`}>{sentenceOf({ outcome: event.outcome, tool })}</span>
             {connection && <span className="flex shrink-0 items-center gap-1.5 text-[12px] text-mute"><Glyph name={connectionBrand(connection)} size={13} />{connection.name}</span>}
             <span className="w-14 shrink-0 text-right text-[12px] text-mute">{ago(event.at)} ago</span>
           </div>
