@@ -1,13 +1,14 @@
 import { useState } from 'react'
-import { LinkSquare02Icon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { LinkSquare02Icon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
-import type { Channel, Conversation } from '@openhut/common/channels/channel.ts'
+import type { Channel } from '@openhut/common/channels/channel.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { ErrorNote } from '@/components/error-note'
 import { Busy, HINT, I, PILL, SetupSheet, Step } from '@/components/kit'
+import { ChannelPicker } from '@/features/agents/channel-picker'
 import { useConversations, useCreateChannel, useUpdateChannel } from '@/features/agents/api'
 import { fieldError, formError } from '@/lib/api-client'
 import { formValues } from '@/lib/form'
@@ -54,21 +55,11 @@ export function DiscordDialog({ agent, channel, onClose }: { agent: Agent; chann
       </Step>
     </form>
     <Step n={3} title="Pick its channels" state={joined ? 'now' : 'next'}>
-      {joined && <div className="flex flex-col gap-2">{servers.map((server) => <Picker key={server} server={server} items={(conversations.data ?? []).filter((each) => (each.group ?? '') === server)} chosen={chosen} onPick={setPicked} />)}</div>}
+      {joined && <ChannelPicker label="Discord channels" conversations={conversations.data ?? []} loading={conversations.isPending} value={chosen} onChange={setPicked}
+        onOpenChange={(open) => { if (open) void conversations.refetch() }}
+        note={(each) => servers.length > 1 && <span className="text-xs text-mute">{each.group}</span>}
+        blocked={(each) => !each.joined ? `Add ${channel?.account ?? 'its bot'} in the channel’s settings › Permissions.` : undefined} />}
+      {joined && <p className={HINT}>Private channels need {channel?.account ?? 'its bot'} added in Discord first.</p>}
     </Step>
   </SetupSheet>
-}
-
-function Picker({ server, items, chosen, onPick }: { server: string; items: Conversation[]; chosen: string[]; onPick: (next: string[]) => void }) {
-  return <div className="overflow-hidden rounded-lg border border-hair">
-    {server && <div className="bg-soft px-3 py-1.5 text-[11.5px] font-medium text-mute">{server} · text channels</div>}
-    {items.map((each) => {
-      const on = chosen.includes(each.id)
-      return <Button key={each.id} type="button" variant="bare" role="checkbox" aria-checked={on} className="flex w-full items-center gap-2 border-t border-hair px-3 py-1.5 text-[13px] first:border-t-0 hover:bg-soft"
-        onClick={() => onPick(on ? chosen.filter((id) => id !== each.id) : [...chosen, each.id])}>
-        <span className={cn('grid size-3.5 shrink-0 place-items-center rounded-[4px] border-[1.5px]', on ? 'border-ink bg-ink text-white' : 'border-mute-2')}>{on && <I icon={Tick02Icon} size={10} />}</span>
-        <span className="text-mute-2">#</span>{each.name}
-      </Button>
-    })}
-  </div>
 }
