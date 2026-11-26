@@ -7,6 +7,7 @@ export function stepsOf(events: ToolProgress[]): Step[] {
   const steps: Step[] = []
   const byId = new Map<string, Step>()
   for (const event of events) {
+    if (hidden(event.tool ?? event.name ?? event.label ?? 'tool')) continue
     const id = typeof event.toolCallId === 'string' ? event.toolCallId : undefined
     const known = id ? byId.get(id) : undefined
     if (known) {
@@ -28,6 +29,7 @@ export function stepsOf(events: ToolProgress[]): Step[] {
 export function attachCalls({ steps, calls }: { steps: Step[]; calls: ChatCall[] }): ChatCall[] {
   const left: ChatCall[] = []
   for (const call of calls) {
+    if (hidden(call.tool)) continue
     const step = steps.find((candidate) => !candidate.call && candidate.title === call.tool)
     if (step) step.call = call
     else left.push(call)
@@ -43,6 +45,12 @@ export function kindOf(tool: string): StepKind {
   if (/file|patch|read|write/.test(tool)) return 'file'
   if (/memory|skill|todo|session/.test(tool)) return 'memory'
   return 'other'
+}
+
+const HIDDEN = new Set(['get_self', 'list_tools', 'describe_tool'])
+
+function hidden(tool: string) {
+  return HIDDEN.has(shortName(tool))
 }
 
 const ARGUMENT_LABELS = new Set(['ask_to_connect'])
