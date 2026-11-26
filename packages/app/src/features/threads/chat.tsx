@@ -27,8 +27,8 @@ import { agentState } from '@/components/status-badge'
 import { troubleOf } from '@/features/agents/status'
 import { useAgents, useUpdateAgent } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
-import { deleteUpload, saveFile, threadPath, uploadFile, useClearChat, useHomeFiles, useThread, useThumb, useTouchThread, type ThreadWithMessages } from '@/features/threads/api'
-import { Notified, placeName, startedIn, type SourcedThread } from '@/features/threads/places'
+import { deleteUpload, saveFile, threadPath, uploadFile, useClearChat, useHomeFiles, useResumeMirror, useThread, useThumb, useTouchThread, type ThreadWithMessages } from '@/features/threads/api'
+import { Notified, placeName, sourceOf, startedIn, type Place, type SourcedThread } from '@/features/threads/places'
 import { PlaceIcon } from '@/features/routines/target-picker'
 import { WebhookSetup, WebhookSetupCard } from '@/features/webhooks/setup-card'
 import { homePathsIn, linkHomeFiles, RASTER } from '@/features/threads/files'
@@ -84,7 +84,7 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
   return <ChatFiles value={files}><CardReply value={(text) => { if (!busy) send(text) }}><ChatFrame agent={agent} thread={thread} tools={<>{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={<Composer agent={agent} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void chat.stop()} />}>
     {shown.length ? <>
       <Day iso={thread.updatedAt} />
-      {shown.map((message) => <Message key={message.id} agent={agent} message={message} live={busy && message === last} onRetry={!busy && message === last ? () => void chat.regenerate() : undefined} />)}
+      {shown.map((message) => <Message key={message.id} agent={agent} message={message} mirrors={thread.mirrorPaused ? [] : thread.mirrors ?? []} live={busy && message === last} onRetry={!busy && message === last ? () => void chat.regenerate() : undefined} />)}
     </> : <ChatEmpty agent={agent} />}
     {chat.status === 'submitted' && last?.role === 'user' && <Message agent={agent} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
     <PendingAsks agent={agent} shown={new Set(chat.messages.flatMap(changesOf))} />
@@ -190,7 +190,9 @@ function ChatFrame({ agent, thread, composer, tools, onTitle, onFiles, children 
 
 function ThreadSource({ thread }: { thread: SourcedThread }) {
   const origin = thread.origin
-  const mirrors = thread.mirrors ?? []
+  const resume = useResumeMirror(thread)
+  const paused = !!thread.mirrorPaused && !!thread.mirrors?.length
+  const mirrors = (thread.mirrors ?? []).filter((mirror) => paused || !(origin?.platform === mirror.platform && placeName(mirror) === sourceOf(thread).label))
   if (!origin?.url && !mirrors.length) return null
   const started = origin?.url && <a href={origin.url} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-1 text-mute no-underline hover:text-ink">
     <span className="truncate">Started in {startedIn(thread)}</span><I icon={ArrowUpRight01Icon} size={12} />
@@ -198,7 +200,9 @@ function ThreadSource({ thread }: { thread: SourcedThread }) {
   return <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-mute phone:hidden">
     {started}
     {started && mirrors.length > 0 && <span aria-hidden="true">·</span>}
-    {mirrors.length > 0 && <span className="truncate">Also posting to {mirrors.map(placeName).join(', ')}</span>}
+    {mirrors.length > 0 && !paused && <span className="truncate">Also posting to {mirrors.map(placeName).join(', ')}</span>}
+    {paused && <span className="truncate">Paused posting to {mirrors.map(placeName).join(', ')}</span>}
+    {paused && <><span aria-hidden="true">·</span><Button type="button" variant="link" className="h-auto p-0 text-[12.5px] font-normal text-ink" disabled={resume.isPending} onClick={() => resume.mutate(undefined, { onError: toastError })}>Resume</Button></>}
   </span>
 }
 
@@ -288,8 +292,8 @@ function useOffline(agent: Agent) {
   return home && !home.online
 }
 
-function Message({ agent, message, live, onRetry }: { agent: Agent; message: AgentMessage; live: boolean; onRetry?: () => void }) {
-  return message.role === 'user' ? <UserMessage message={message} /> : <AgentReply agent={agent} message={message} live={live} onRetry={onRetry} />
+function Message({ agent, message, mirrors = [], live, onRetry }: { agent: Agent; message: AgentMessage; mirrors?: Place[]; live: boolean; onRetry?: () => void }) {
+  return message.role === 'user' ? <UserMessage message={message} mirrors={mirrors} /> : <AgentReply agent={agent} message={message} live={live} onRetry={onRetry} />
 }
 
 function AgentReply({ agent, message, live, onRetry }: { agent: Agent; message: AgentMessage; live: boolean; onRetry?: () => void }) {
@@ -321,7 +325,7 @@ function AgentReply({ agent, message, live, onRetry }: { agent: Agent; message: 
 
 const Authored = z.object({ author: z.string() })
 
-function UserMessage({ message }: { message: AgentMessage }) {
+function UserMessage({ message, mirrors }: { message: AgentMessage; mirrors: Place[] }) {
   const text = textOf(message)
   const files = message.parts.flatMap((part) => part.type === 'file' ? [part] : [])
   const author = z.safeParse(Authored, message.metadata).data?.author
@@ -336,6 +340,7 @@ function UserMessage({ message }: { message: AgentMessage }) {
   return <div className="flex flex-col items-end gap-1.5">
     {files.length > 0 && <div className="flex max-w-[78%] flex-wrap justify-end gap-1.5">{files.map((file) => <SentFile key={file.url} name={file.filename ?? nameOf(file.url)} path={file.url} mediaType={file.mediaType} />)}</div>}
     {text && <CopyMenu text={text}><div className="max-w-[78%] rounded-[12px_12px_4px_12px] bg-soft px-3.5 py-2 text-[14px]/[1.5] [overflow-wrap:anywhere] whitespace-pre-wrap text-ink pointer-coarse:select-none">{text}</div></CopyMenu>}
+    {mirrors.length > 0 && <span className="inline-flex items-center gap-1.5 text-[12px] text-mute"><PlaceIcon platform={mirrors[0]?.platform ?? 'app'} size={12} />Sent to {mirrors.map(placeName).join(', ')}</span>}
   </div>
 }
 

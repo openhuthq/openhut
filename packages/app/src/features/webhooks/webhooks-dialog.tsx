@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { ArrowRight01Icon, Cancel01Icon, Delete02Icon, RefreshIcon, WebhookIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
+import type { Webhook } from '@openhut/common/webhooks/webhook.ts'
 import { Button } from '@/components/ui/button'
 import { DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -11,8 +12,7 @@ import { ErrorNote } from '@/components/error-note'
 import { DialogCard, I, Loading, ROW, ROW_VALUE, TINY_ICON } from '@/components/kit'
 import { agentPath } from '@/app/routes'
 import { Details, Quiet } from '@/features/agents/request-card'
-import { NOTIFY_ICON, PlacePicker } from '@/features/agents/notify'
-import { useCreateWebhook, type Webhook, useDeleteWebhook, useRotateWebhook, useUpdateWebhook, useWebhooks } from '@/features/webhooks/api'
+import { useCreateWebhook, useDeleteWebhook, useRotateWebhook, useWebhooks } from '@/features/webhooks/api'
 import { ago } from '@/lib/format'
 import { formValues } from '@/lib/form'
 import { toastError } from '@/lib/toast'
@@ -55,7 +55,6 @@ export function WebhooksDialog({ agent, onClose }: { agent: Agent; onClose: () =
 }
 
 function WebhookItem({ agent, webhook }: { agent: Agent; webhook: Webhook }) {
-  const update = useUpdateWebhook(agent.id)
   const rotate = useRotateWebhook(agent.id)
   const remove = useDeleteWebhook(agent.id)
   const { confirming, setConfirming, box } = useConfirming()
@@ -70,7 +69,7 @@ function WebhookItem({ agent, webhook }: { agent: Agent; webhook: Webhook }) {
       <CopyButton text={webhook.secret} label="Copy" variant="ghost" />
       <Button type="button" variant="ghost" size="sm" disabled={rotate.isPending} onClick={() => rotate.mutate(webhook.id, { onError: toastError })}><I icon={RefreshIcon} size={13} className="text-hue-amber" />New secret</Button>
     </Field>
-    <Field label="Posts in"><PlacePicker agentId={agent.id} value={webhook.postsIn ?? null} none="Use the agent's notify rules" noneIcon={NOTIFY_ICON} label="Posts in" className="w-[260px]" disabled={update.isPending} onPick={(postsIn) => update.mutate({ id: webhook.id, postsIn }, { onError: toastError })} /></Field>
+    <p className="m-0 text-[12.5px] text-mute">{agent.name} decides where to tell you · <a href={agentPath({ agentId: agent.id, dialog: 'notify' })} className="text-ink no-underline hover:underline">Notify me ›</a></p>
     {webhook.lastPayload !== null && <Details label="Last call"><pre className="m-0 max-h-56 overflow-auto font-mono text-[11.5px]/[1.5] whitespace-pre-wrap text-ink">{pretty(webhook.lastPayload)}</pre></Details>}
     {confirming && <div className="flex items-center gap-2 text-[13px]">
       <span>Calls to this address stop reaching {agent.name}.</span>
@@ -80,7 +79,7 @@ function WebhookItem({ agent, webhook }: { agent: Agent; webhook: Webhook }) {
   </section>
 }
 
-export function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return <div className="flex min-h-8 min-w-0 items-center gap-2 text-[13px]"><span className="w-16 shrink-0 text-mute">{label}</span>{children}</div>
 }
 

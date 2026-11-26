@@ -31,5 +31,6 @@ test('a deleted or missing agent sends you home, where the first agent opens', (
 test('a thread from another channel has its own path, and the agent\'s own chat stays on the agent\'s', () => {
   assert.equal(threadRoute({ agentId: 'ag_1', threadId: 'ag_1' }), '/agents/ag_1')
   assert.deepEqual(routeOf(threadRoute({ agentId: 'ag_1', threadId: 'th 2' })), { page: 'agent', agentId: 'ag_1', dialog: undefined, detail: undefined, threadId: 'th 2' })
+  assert.deepEqual(routeOf('/agents/ag_1/threads'), { page: 'agent', agentId: 'ag_1', dialog: 'threads', detail: undefined })
   assert.deepEqual(routeOf('/agents/ag_1/notify'), { page: 'agent', agentId: 'ag_1', dialog: 'notify', detail: undefined })
 })

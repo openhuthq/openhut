@@ -43,6 +43,14 @@ export function useClearChat({ agentId, threadId }: { agentId: string; threadId:
   })
 }
 
+export function useResumeMirror(thread: SourcedThread) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => request({ schema: SourcedThread, of: thread.agentId, path: `${threadPath(thread.id)}/mirror`, method: 'POST', body: { paused: false } }),
+    onSuccess: () => client.invalidateQueries({ queryKey: THREADS_KEY }),
+  })
+}
+
 export function threadPath(threadId: string) {
   return `/api/threads/${encodeURIComponent(threadId)}`
 }

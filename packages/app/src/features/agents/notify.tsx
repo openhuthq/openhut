@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowRight01Icon, Notification01Icon, SparklesIcon, Tick02Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import { List } from '@openhut/common/api.ts'
@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils'
 const PLACE_LIST = List(Place)
 const notifyKey = (agentId: string) => ['notify', agentId]
 
-export function usePlaces(agentId: string) {
+function usePlaces(agentId: string) {
   return useQuery({
     queryKey: ['places', agentId],
     queryFn: () => request({ schema: PLACE_LIST, of: agentId, path: `/api/agents/${encodeURIComponent(agentId)}/places` }).then((page) => page.data),
@@ -45,31 +45,29 @@ function useSaveNotify(agentId: string) {
   })
 }
 
-export function PlacePicker({ agentId, value, none, noneIcon = <PlaceIcon platform="app" />, label, disabled, className, onPick }: { agentId: string; value: Place | null; none: string; noneIcon?: ReactNode; label: string; disabled?: boolean; className?: string; onPick: (place: Place | null) => void }) {
+function PlacePicker({ agentId, value, none, label, className, onPick }: { agentId: string; value: Place | null; none: string; label: string; className?: string; onPick: (place: Place | null) => void }) {
   const places = usePlaces(agentId).data ?? []
   const options = value && !places.some((place) => samePlace(place, value)) ? [value, ...places] : places
   return <DropdownMenu>
-    <DropdownMenuTrigger className={cn(SOFT_TRIGGER, 'gap-2', className)} disabled={disabled} aria-label={`${label}: ${value ? placeName(value) : none}`}>
-      {value ? <PlaceIcon platform={value.platform} /> : noneIcon}
+    <DropdownMenuTrigger className={cn(SOFT_TRIGGER, 'gap-2', className)} aria-label={`${label}: ${value ? placeName(value) : none}`}>
+      <PlaceIcon platform={value?.platform ?? 'app'} />
       <span className="min-w-0 flex-1 truncate text-left">{value ? placeName(value) : none}</span>
       <I icon={UnfoldMoreIcon} size={12} className="text-mute" />
     </DropdownMenuTrigger>
     <DropdownMenuContent className={FIELD_MENU}>
-      <PlaceOption name={none} icon={noneIcon} picked={!value} onClick={() => value && onPick(null)} />
-      {options.map((place) => <PlaceOption key={placeKey(place)} name={placeName(place)} icon={<PlaceIcon platform={place.platform} />} picked={samePlace(place, value)} onClick={() => !samePlace(place, value) && onPick(place)} />)}
+      <PlaceOption name={none} platform="app" picked={!value} onClick={() => value && onPick(null)} />
+      {options.map((place) => <PlaceOption key={placeKey(place)} name={placeName(place)} platform={place.platform} picked={samePlace(place, value)} onClick={() => !samePlace(place, value) && onPick(place)} />)}
     </DropdownMenuContent>
   </DropdownMenu>
 }
 
-function PlaceOption({ name, icon, picked, onClick }: { name: string; icon: ReactNode; picked: boolean; onClick: () => void }) {
+function PlaceOption({ name, platform, picked, onClick }: { name: string; platform: string; picked: boolean; onClick: () => void }) {
   return <DropdownMenuItem className="text-[13px]" onClick={onClick}>
-    {icon}
+    <PlaceIcon platform={platform} />
     <span className="min-w-0 flex-1 truncate text-ink">{name}</span>
     <span className="grid w-3.5 shrink-0 place-items-center">{picked && <I icon={Tick02Icon} size={14} className="text-ink" />}</span>
   </DropdownMenuItem>
 }
-
-export const NOTIFY_ICON = <I icon={Notification01Icon} size={14} className="text-hue-amber" />
 
 export function NotifyRow({ agent }: { agent: Agent }) {
   const notify = useNotify(agent.id, agent.canEdit)

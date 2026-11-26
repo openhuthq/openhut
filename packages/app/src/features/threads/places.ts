@@ -7,7 +7,7 @@ export type Place = z.infer<typeof Place>
 export const Origin = z.object({ platform: z.enum(['app', 'discord', 'webhook', 'routine']), label: z.string(), url: z.optional(z.string()) })
 export type Origin = z.infer<typeof Origin>
 
-export const SourcedThread = z.extend(Thread, { origin: z.optional(Origin), mirrors: z.optional(z.array(Place)) })
+export const SourcedThread = z.extend(Thread, { origin: z.optional(Origin), mirrors: z.optional(z.array(Place)), waiting: z.optional(z.boolean()), mirrorPaused: z.optional(z.boolean()) })
 export type SourcedThread = z.infer<typeof SourcedThread>
 
 export const NotifySettings = z.object({ default: z.nullable(Place), rules: z.string() })
@@ -39,4 +39,11 @@ export function sourceOf(thread: SourcedThread): { platform: Origin['platform'];
 export function startedIn(thread: SourcedThread): string {
   const source = sourceOf(thread)
   return source.platform === 'discord' ? `Discord ${source.label}` : source.label
+}
+
+export const SIDEBAR_THREADS = 3
+
+export function firstThreads(threads: SourcedThread[]): SourcedThread[] {
+  const waiting = threads.filter((thread) => thread.waiting)
+  return [...waiting, ...threads.filter((thread) => !thread.waiting).slice(0, Math.max(0, SIDEBAR_THREADS - waiting.length))]
 }

@@ -14,7 +14,7 @@ import { Hut } from '@/components/hut'
 import { GLASS, HOVER, I, ICON_BUTTON, PICKED, SURFACE } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { agentPath, threadRoute } from '@/app/routes'
-import { sourceOf, type SourcedThread } from '@/features/threads/places'
+import { firstThreads, sourceOf, type SourcedThread } from '@/features/threads/places'
 import { useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
 import { Face, lookOf } from '@/features/agents/face'
 import { SWATCHES } from '@/lib/face'
@@ -120,20 +120,19 @@ function AgentRow({ agent, threads, active, threadId, phone }: { agent: OpenHutA
   const [choice, setChoice] = useState<boolean | undefined>(() => readExpanded()[agent.id])
   const working = children.filter((child) => child.status === 'working').length
   useTick(working > 0)
-  const sessions = threads.some((thread) => thread.id !== agent.id) ? threads : []
+  const listed = threads.some((thread) => thread.id !== agent.id) ? threads : []
+  const sessions = firstThreads(listed)
+  const waiting = threads.filter((each) => each.waiting).length
+  const subagents = children.filter((child) => !child.gone).length
   const thread = threads[0]
-  const shown = children.filter((child) => !child.gone).length + sessions.length
+  const shown = subagents + sessions.length
   const open = (phone || (choice ?? active)) && shown > 0
   const idle = agent.online ? troubleOf(agent) ?? (agent.summary || 'Say hello') : 'Offline'
-  const line = working ? `Working on ${working} ${working === 1 ? 'task' : 'tasks'}` : idle
+  const line = lineOf({ working, waiting, idle })
   const [more, setMore] = useState(false)
   const accent = SWATCHES[lookOf(agent).body].shade
-  const rows = [
-    ...children.map((child) => <Session key={child.id} gone={child.gone} icon={<I icon={GitBranchIcon} size={12} />} title={child.title} detail="Sub-agent" status={child.status} time={ago(child.startedAt)} accent={accent} />),
-    ...sessions.map((each) => <ThreadRow key={each.id} agentId={agent.id} thread={each} active={(threadId ?? (active ? agent.id : undefined)) === each.id} />),
-  ]
-  const visible = [...children.map((child) => !child.gone), ...sessions.map(() => true)]
-  const cut = visible.findIndex((_, index) => visible.slice(0, index + 1).filter(Boolean).length > FIRST)
+  const rows = children.map((child) => <Session key={child.id} gone={child.gone} icon={<I icon={GitBranchIcon} size={12} />} title={child.title} detail="Sub-agent" status={child.status} time={ago(child.startedAt)} accent={accent} />)
+  const cut = children.findIndex((_, index) => children.slice(0, index + 1).filter((child) => !child.gone).length > FIRST)
   const toggle = () => {
     setChoice(!open)
     try {
@@ -160,25 +159,34 @@ function AgentRow({ agent, threads, active, threadId, phone }: { agent: OpenHutA
     </Button>}
     {open && <div className="flex flex-col gap-0.5 pt-1.5 pb-2 pl-[32px] phone:pl-[48px]">
       {more ? rows : rows.slice(0, cut === -1 ? rows.length : cut)}
-      {shown > FIRST && <Button type="button" variant="bare" onClick={() => setMore(!more)} className={cn('flex h-8 w-full items-center justify-start rounded-md px-2 text-[12.5px] font-normal text-mute', HOVER)}>
-        {more ? 'Show less' : `Show ${shown - FIRST} more`}
+      {subagents > FIRST && <Button type="button" variant="bare" onClick={() => setMore(!more)} className={cn('flex h-8 w-full items-center justify-start rounded-md px-2 text-[12.5px] font-normal text-mute', HOVER)}>
+        {more ? 'Show less' : `Show ${subagents - FIRST} more`}
       </Button>}
+      {sessions.map((each) => <ThreadRow key={each.id} agentId={agent.id} thread={each} accent={accent} active={(threadId ?? (active ? agent.id : undefined)) === each.id} />)}
+      {listed.length > sessions.length && <a href={agentPath({ agentId: agent.id, dialog: 'threads' })} className={cn('flex h-8 w-full items-center rounded-md px-2 text-[12.5px] text-mute no-underline', HOVER)}>Show all ({listed.length})</a>}
     </div>}
   </div>
 }
 
 type Progress = 'idle' | 'queued' | 'working' | 'review' | 'done' | 'failed'
 
+function lineOf({ working, waiting, idle }: { working: number; waiting: number; idle: string }) {
+  if (working) return `Working on ${working} ${working === 1 ? 'task' : 'tasks'}`
+  if (waiting) return `${waiting} waiting`
+  return idle
+}
+
 const SOURCE_ICON = { app: BubbleChatIcon, webhook: WebhookIcon, routine: Clock01Icon }
 
-function ThreadRow({ agentId, thread, active }: { agentId: string; thread: SourcedThread; active: boolean }) {
+export function ThreadRow({ agentId, thread, active, accent }: { agentId: string; thread: SourcedThread; active: boolean; accent: string }) {
   const source = sourceOf(thread)
-  return <a href={threadRoute({ agentId, threadId: thread.id })} aria-current={active ? 'page' : undefined} title={source.word} className={cn('grid shrink-0 grid-cols-[14px_1fr] items-start gap-x-2 rounded-lg px-2 py-1.5 text-inherit no-underline', HOVER, active && PICKED)}>
+  return <a href={threadRoute({ agentId, threadId: thread.id })} aria-current={active ? 'page' : undefined} title={source.word} className={cn('grid shrink-0 grid-cols-[14px_1fr_auto] items-start gap-x-2 rounded-lg px-2 py-1.5 text-inherit no-underline', HOVER, active && PICKED)}>
     <span className="grid h-[18px] place-items-center text-mute">{source.platform === 'discord' ? <Glyph name="discord" size={13} /> : <I icon={SOURCE_ICON[source.platform]} size={13} />}</span>
     <span className="grid min-w-0">
-      <span className="truncate text-[13px]/[18px] font-medium text-ink">{thread.title}</span>
-      <span className="truncate text-[11.5px]/[16px] text-mute-2 tabular-nums">{source.label} · {ago(thread.updatedAt)}</span>
+      <span className="truncate text-[13px]/[18px] font-medium text-ink">{thread.id === agentId ? 'Chat' : thread.title}</span>
+      <span className="flex min-w-0 text-[11.5px]/[16px] text-mute-2 tabular-nums"><span className="min-w-0 truncate">{source.label}</span><span className="shrink-0 whitespace-pre"> · {ago(thread.updatedAt)}</span></span>
     </span>
+    {thread.waiting && <span className="flex h-[18px] items-center gap-1 text-[11.5px] text-ink"><Mark status="review" accent={accent} />Waiting on you</span>}
   </a>
 }
 

@@ -8,7 +8,6 @@ import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
 import { Loading } from '@/components/kit'
 import { CardReply } from '@/features/threads/card'
-import { Field } from '@/features/webhooks/webhooks-dialog'
 import { request } from '@/lib/api-client'
 
 export const WebhookSetup = z.object({
@@ -37,14 +36,22 @@ export function WebhookSetupCard({ agentId, card }: { agentId: string; card: Web
     <ErrorNote message={values.error?.message} />
     {!values.data && !values.error && <Loading />}
     {values.data && <div className="flex flex-col gap-1">
-      <Field label="Address"><code className="min-w-0 flex-1 truncate font-mono text-[12px] text-ink" title={values.data.address}>{values.data.address}</code><CopyButton text={values.data.address} label="Copy" variant="ghost" /></Field>
-      <Field label="Secret"><code className="min-w-0 flex-1 truncate font-mono text-[12px] text-ink">{`${values.data.secret.slice(0, 6)}••••••••${values.data.secret.slice(-4)}`}</code><CopyButton text={values.data.secret} label="Copy secret" variant="ghost" /></Field>
+      <Value label="Address" shown={values.data.address} copy={values.data.address} action="Copy" />
+      <Value label="Secret" shown={`${values.data.secret.slice(0, 6)}••••••••${values.data.secret.slice(-4)}`} copy={values.data.secret} action="Copy secret" />
     </div>}
     {card.steps.length > 0 && <ol className="m-0 flex list-decimal flex-col gap-1 pl-5 text-[13.5px]/[1.5] text-ink marker:text-mute">{card.steps.map((step, index) => <li key={index}>{step}</li>)}</ol>}
     <div className="flex flex-wrap gap-2">
       {card.openUrl && <a href={card.openUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'secondary', size: 'sm' })}>Open {brandWord(card.openUrl)}<span className="text-[11px] text-mute">↗</span></a>}
       <Button type="button" variant="primary" size="sm" disabled={!values.data} onClick={() => reply(`Done: ${card.title}`)}>Done</Button>
     </div>
+  </div>
+}
+
+function Value({ label, shown, copy, action }: { label: string; shown: string; copy: string; action: string }) {
+  return <div className="flex min-h-8 min-w-0 items-center gap-2 text-[13px] phone:flex-wrap phone:gap-y-1 phone:py-1">
+    <span className="w-16 shrink-0 text-mute">{label}</span>
+    <code className="min-w-0 flex-1 truncate font-mono text-[12px] text-ink phone:basis-full phone:whitespace-normal phone:[overflow-wrap:anywhere]">{shown}</code>
+    <CopyButton text={copy} label={action} variant="ghost" className="phone:-ml-2.5" />
   </div>
 }
 
