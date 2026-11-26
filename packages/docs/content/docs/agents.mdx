@@ -52,6 +52,8 @@ Under **Allowed to**, **Run code** lets the agent run code in its own container.
 
 For a big job, an agent can hand parts to sub-agents that work at the same time, then answer with what they found. The chat waits until they finish. Each sub-agent costs model tokens like a chat of its own.
 
+While they work, the sidebar lists them under the agent, one row each, with what it was asked to do. A row turns green when its sub-agent finishes and goes a moment later; a failed one stays. Collapsed, the agent shows how many are still working.
+
 ## Changes it asks for
 
 An agent can ask to change its own settings. The request shows in the chat with **Approve**, **Edit** and **Don't approve**.

@@ -3,6 +3,7 @@ import dataclasses
 import enum
 import json
 import os
+import queue
 import re
 import threading
 import time
@@ -18,8 +19,11 @@ ORIGIN_FIELDS = ("platform", "chat_id", "chat_type", "chat_name", "thread_id", "
 LOCAL_TOOLSET = "openhut-local"
 WAKE = re.compile(r"\[OpenHut (\w+:\w+)\]")
 POLL_SECONDS = 15
+ANSWERED = ("pre_", "transform_")
+NOTIFY_SECONDS = 5
 STRANGER = {"action": "skip", "reason": "openhut stranger"}
 injected = set()
+notices = queue.Queue()
 allowing = threading.Lock()
 
 
@@ -33,6 +37,7 @@ def register(ctx):
         ctx.register_hook(name, dispatch if name == "pre_gateway_dispatch" else forward(name))
     for prefix in ctx.get_config("slack_actions", []) or []:
         ctx.register_slack_action_handler(re.compile("^" + re.escape(prefix)), lambda ack, body, action: clicked(ctx, ack, body, action))
+    threading.Thread(target=notify, name="openhut-notices", daemon=True).start()
     if os.environ.get("OPENHUT_GATEWAY"):
         threading.Thread(target=poll, args=(ctx,), name="openhut-wakes", daemon=True).start()
 
@@ -64,10 +69,23 @@ def local(name):
 def forward(name):
     def hook(**kwargs):
         try:
-            return gateway("/hooks/" + name, {"args": plain(kwargs), "origin": origin()}).get("result")
+            body = {"args": plain(kwargs), "origin": origin()}
+            if not name.startswith(ANSWERED):
+                notices.put(("/hooks/" + name, body))
+                return None
+            return gateway("/hooks/" + name, body).get("result")
         except Exception:
             return None
     return hook
+
+
+def notify():
+    while True:
+        path, body = notices.get()
+        try:
+            gateway(path, body, timeout=NOTIFY_SECONDS)
+        except Exception:
+            pass
 
 
 def dispatch(**kwargs):
@@ -136,12 +154,12 @@ def said(user_message="", assistant_response="", **_):
         pass
 
 
-def gateway(path, body=None):
+def gateway(path, body=None, timeout=15):
     request = urllib.request.Request(
         os.environ["OPENHUT_GATEWAY"] + path,
         data=None if body is None else json.dumps(body).encode(),
         headers={"authorization": "Agent " + os.environ["OPENHUT_AGENT_TOKEN"], "content-type": "application/json"},
         method="GET" if body is None else "POST",
     )
-    with urllib.request.urlopen(request, timeout=15) as response:
+    with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.load(response)

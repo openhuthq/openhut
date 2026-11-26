@@ -71,8 +71,18 @@ stranger = {"action": "skip", "reason": "openhut stranger"}
 assert hooks["pre_gateway_dispatch"](event=event("hello", "999000111"), gateway=Runner()) == stranger, "a stranger the gateway has no answer for gets nothing"
 assert hooks["pre_gateway_dispatch"](event=event("hello", "555000111"), gateway=Runner()) == {"action": "allow", "reason": "openhut member"}
 assert os.environ["TELEGRAM_ALLOWED_USERS"] == "123456789,555000111", "a member who just joined goes on Hermes's list before Hermes restarts"
+before = len(calls)
 assert hooks["subagent_stop"](parent_session_id="s1", child_status="completed", tool_call_history=[{"tool": "terminal"}], duration_ms=12) is None
-assert calls[-1][1]["args"] == {"parent_session_id": "s1", "child_status": "completed", "tool_call_history": [{"tool": "terminal"}], "duration_ms": 12}, calls[-1]
+assert len(calls) == before and m.notices.qsize() == 1, "an observer hook returns at once and is sent from the notices thread"
+class Drained(Exception): pass
+queued = m.notices
+m.notices = type("Q", (), {"get": lambda s: queued.get_nowait() if queued.qsize() else (_ for _ in ()).throw(Drained())})()
+try:
+    m.notify()
+except Drained:
+    pass
+assert calls[-1] == ("/hooks/subagent_stop", {"args": {"parent_session_id": "s1", "child_status": "completed", "tool_call_history": [{"tool": "terminal"}], "duration_ms": 12}, "origin": {"platform": "slack", "chat_id": "C1"}}), calls[-1]
+m.notices = queued
 async def ack(): pass
 asyncio.run(actions[0][1](ack, {"channel": {"id": "C9"}}, {"action_id": "card:approve", "value": "Approve"}))
 assert injected == [("Approve", {"platform": "slack", "chat_id": "C9"})], injected

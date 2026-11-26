@@ -1,12 +1,16 @@
-import { createContext, useState, type ReactElement } from 'react'
+import { createContext, useEffect, useState, type ReactElement } from 'react'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
-import { CancelCircleIcon, CheckmarkCircle02Icon, CircleIcon, DashedLineCircleIcon, PauseCircleIcon, ArrowDown01Icon, ArrowRight01Icon, Clock01Icon, Delete02Icon, GitBranchIcon, Logout01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SidebarLeftIcon, StopIcon } from '@hugeicons/core-free-icons'
+import { CancelCircleIcon, CheckmarkCircle02Icon, CircleIcon, DashedLineCircleIcon, PauseCircleIcon, ArrowDown01Icon, ArrowRight01Icon, Delete02Icon, GitBranchIcon, Logout01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SidebarLeftIcon, StopIcon } from '@hugeicons/core-free-icons'
 import type { OpenHutAgent } from '@/lib/openhut'
+import { useQuery } from '@tanstack/react-query'
+import { List } from '@openhut/common/api.ts'
+import { Subagent } from '@openhut/common/agents/subagent.ts'
 import type { Thread } from '@openhut/common/threads/thread.ts'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, LongPressMenu } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/components/confirm-button'
 import { Glyph } from '@/components/glyph'
+import { request } from '@/lib/api-client'
 import { Hut } from '@/components/hut'
 import { GLASS, HOVER, I, ICON_BUTTON, PICKED, SURFACE } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
@@ -15,7 +19,6 @@ import { useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
 import { Face, lookOf } from '@/features/agents/face'
 import { SWATCHES } from '@/lib/face'
 import { toneOf, troubleOf, wordOf } from '@/features/agents/status'
-import { useDemoThreads, useSubagents } from '@/features/agents/subagents-demo'
 import { useSignOut } from '@/features/auth/api'
 import { useOwner } from '@/features/people/api'
 import { useConnections } from '@/features/connections/api'
@@ -92,24 +95,38 @@ function readExpanded(): Record<string, boolean> {
 
 const FIRST = 5
 
+const SUBAGENT_LIST = List(Subagent)
+const FADE_MS = 1500
+
+function useSubagents(agentId: string | undefined): (Subagent & { gone: boolean })[] {
+  const { data } = useQuery({
+    queryKey: ['subagents', agentId],
+    queryFn: async () => (await request({ schema: SUBAGENT_LIST, of: agentId, path: `/api/agents/${agentId}/subagents` })).data,
+    enabled: agentId !== undefined,
+    refetchInterval: (query) => query.state.data?.some((item) => item.status === 'working') ? 2_000 : 5_000,
+  })
+  const [faded, setFaded] = useState<Set<string>>(new Set())
+  const done = (data ?? []).filter((item) => item.status === 'done' && !faded.has(item.id)).map((item) => item.id).join(' ')
+  useEffect(() => {
+    if (!done) return
+    const timer = window.setTimeout(() => setFaded((now) => new Set([...now, ...done.split(' ')])), FADE_MS)
+    return () => clearTimeout(timer)
+  }, [done])
+  return (data ?? []).map((item) => ({ ...item, gone: faded.has(item.id) }))
+}
+
 function AgentRow({ agent, thread, active, phone }: { agent: OpenHutAgent; thread: Thread | undefined; active: boolean; phone: boolean }) {
-  const batch = useSubagents(agent.wanted === 'running' ? agent.id : undefined)
-  const threads = useDemoThreads().filter((each) => agent.wanted === 'running' && each.status !== 'done')
+  const children = useSubagents(agent.wanted === 'running' && agent.online ? agent.id : undefined)
   const [choice, setChoice] = useState<boolean | undefined>(() => readExpanded()[agent.id])
-  const children = batch?.children ?? []
-  const working = children.filter((child) => child.status === 'working').length + threads.filter((each) => each.status === 'working').length
-  const shown = threads.length + children.filter((child) => !child.gone).length
+  const working = children.filter((child) => child.status === 'working').length
+  const shown = children.filter((child) => !child.gone).length
   const open = (choice ?? active) && shown > 0
   const idle = agent.online ? troubleOf(agent) ?? (agent.summary || 'Say hello') : 'Offline'
-  const line = batch?.children.some((child) => child.status === 'working') ? `Working: ${batch.goal}` : idle
+  const line = working ? `Working on ${working} ${working === 1 ? 'task' : 'tasks'}` : idle
   const [more, setMore] = useState(false)
   const accent = SWATCHES[lookOf(agent).body].shade
-  const rows = [
-    ...threads.map((each) => <Session key={each.id} href={agentPath({ agentId: agent.id })} title={each.title} status={each.status} time={each.time} accent={accent}
-      icon={each.kind === 'slack' ? <Glyph name="slack" size={12} /> : <I icon={Clock01Icon} size={12} />}
-      detail={each.kind === 'slack' ? `Slack · ${each.channel}` : 'Routine'} />),
-    ...children.filter((child) => !child.gone).map((child) => <Session key={child.id} gone={child.gone} icon={<I icon={GitBranchIcon} size={12} />} title={child.title} detail={`Sub-agent · ${batch?.goal}`} status={child.status} time="now" accent={accent} />),
-  ]
+  const rows = children.map((child) => <Session key={child.id} gone={child.gone} icon={<I icon={GitBranchIcon} size={12} />} title={child.title} detail="Sub-agent" status={child.status} time={ago(child.startedAt)} accent={accent} />)
+  const cut = children.findIndex((_, index) => children.slice(0, index + 1).filter((child) => !child.gone).length > FIRST)
   const toggle = () => {
     setChoice(!open)
     try {
@@ -135,9 +152,9 @@ function AgentRow({ agent, thread, active, phone }: { agent: OpenHutAgent; threa
       <I icon={open ? ArrowDown01Icon : ArrowRight01Icon} size={14} />
     </Button>}
     {open && <div className="flex flex-col gap-0.5 pt-1.5 pb-2 pl-[32px] phone:pl-[48px]">
-      {rows.slice(0, more ? rows.length : FIRST)}
-      {rows.length > FIRST && <Button type="button" variant="bare" onClick={() => setMore(!more)} className={cn('flex h-8 w-full items-center justify-start rounded-md px-2 text-[12.5px] font-normal text-mute', HOVER)}>
-        {more ? 'Show less' : `Show ${rows.length - FIRST} more`}
+      {more ? rows : rows.slice(0, cut === -1 ? rows.length : cut)}
+      {shown > FIRST && <Button type="button" variant="bare" onClick={() => setMore(!more)} className={cn('flex h-8 w-full items-center justify-start rounded-md px-2 text-[12.5px] font-normal text-mute', HOVER)}>
+        {more ? 'Show less' : `Show ${shown - FIRST} more`}
       </Button>}
     </div>}
   </div>
@@ -147,15 +164,14 @@ type Progress = 'idle' | 'queued' | 'working' | 'review' | 'done' | 'failed'
 
 const SESSION = 'grid h-8 shrink-0 grid-cols-[14px_1fr_auto] items-center gap-2 overflow-hidden rounded-lg px-2 text-inherit no-underline transition-[height,opacity] duration-500 ease-out'
 
-function Session({ href, picked = false, gone = false, icon, title, detail, status, time, accent }: {
-  href?: string; picked?: boolean; gone?: boolean; icon: ReactElement; title: string; detail: string; status: Progress; time: string; accent: string
+function Session({ gone, icon, title, detail, status, time, accent }: {
+  gone: boolean; icon: ReactElement; title: string; detail: string; status: Progress; time: string; accent: string
 }) {
   const body = <>
     <span className="grid place-items-center"><Mark status={status} accent={accent} /></span>
     <span className="min-w-0 truncate text-[13px] font-medium text-ink">{title}</span>
     <span className="flex items-center gap-1.5 text-[11.5px] text-mute-2 tabular-nums"><span className="grid place-items-center">{icon}</span>{time}</span>
   </>
-  if (href) return <a href={href} title={detail} aria-current={picked ? 'page' : undefined} className={cn(SESSION, HOVER, picked && PICKED)}>{body}</a>
   return <div title={detail} className={cn(SESSION, HOVER, gone && 'h-0 opacity-0')}>{body}</div>
 }
 
