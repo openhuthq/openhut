@@ -22,11 +22,11 @@ import { providerController } from './models/provider-controller.ts'
 import { gatewayServer } from './gateway/gateway-server.ts'
 import { threadController } from './threads/thread-controller.ts'
 import { threadService } from './threads/thread-service.ts'
-import { routineController } from './routines/routine-controller.ts'
 import { changeRequestController } from './agents/change-request-controller.ts'
 import { changeRequestService } from './agents/change-request-service.ts'
 import { secretController } from './agents/secret-controller.ts'
-import { routineService } from './routines/routine-service.ts'
+import { deliveryTargetController, inboxReceiver, routineController, webhookController } from './inbox/inbox-controller.ts'
+import { inboxService } from './inbox/inbox-service.ts'
 import { addressController, googleSignInController, inviteController, meController, ownerResetController, passwordResetController, peopleController, installSettingsController, sessionController, setupController } from './team/team-controller.ts'
 import { installSettingsService } from './team/install-settings-service.ts'
 import { runSet } from './agents/run-set.ts'
@@ -68,6 +68,9 @@ await app.register(threadController, { prefix: '/api/threads' })
 await app.register(routineController, { prefix: '/api/routines' })
 await app.register(changeRequestController, { prefix: '/api/change-requests' })
 await app.register(secretController, { prefix: '/api/agent-secrets' })
+await app.register(webhookController, { prefix: '/api/webhooks' })
+await app.register(deliveryTargetController, { prefix: '/api/delivery-targets' })
+await app.register(inboxReceiver, { prefix: '/inbox' })
 await app.register(channelController, { prefix: '/api/channels' })
 await app.register(connectionController, { prefix: '/api/connections' })
 await app.register(connectionEventController, { prefix: '/api/connection-events' })
@@ -99,9 +102,10 @@ await gatewayServer.start().catch(async (err: unknown) => {
 })
 await runSet.start()
 await agentService.boot()
-routineService.runDashboardWith((input) => threadService.runRoutine(input))
+inboxService.runDashboardWith((input) => threadService.runRoutine(input))
 changeRequestService.runDashboardWith((input) => threadService.runRoutine(input))
+void inboxService.resume().catch((err: unknown) => log.warn({ event: 'inbox.resume_failed', error: messageOf(err) }))
 void changeRequestService.resume().catch((err: unknown) => log.warn({ event: 'change_request.resume_failed', error: messageOf(err) }))
-routineService.start()
+inboxService.start()
 installSettingsService.startUsageData()
 void channelService.resumeTelegramClaims().catch((err: unknown) => log.warn({ event: 'telegram.claim_resume_failed', error: messageOf(err) }))

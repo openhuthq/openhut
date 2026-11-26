@@ -1,0 +1,49 @@
+---
+title: Webhooks
+description: Give an agent an address other services call when something happens, like a DigitalOcean alert. Each call reaches the agent as a message.
+icon: ops
+---
+
+A **webhook** is an address on your OpenHut that another service calls when something happens: an alert fires, a deploy finishes, a form is sent. Each call reaches the agent as a message in the chat you pick, with the raw payload, and the agent does what its instructions say about it.
+
+## Add one
+
+Ask the agent:
+
+```txt
+Watch our DigitalOcean Postgres and tell #db-alerts when an alert fires.
+```
+
+It asks for a webhook, and a card shows up in the chat. **Approve** creates it; the calls go to the chat the agent asked in. The agent learns the address, never the secret.
+
+Or add one yourself: **More › Webhooks** on the agent's panel, type what calls it and **Add webhook**.
+
+Each webhook shows:
+
+- **Address**: paste it into the service that calls it.
+- **Secret**: the service signs each call with it, or sends it as a token. **New secret** replaces it; calls signed with the old one stop working.
+- **Posts in**: the OpenHut app or any chat on the agent's channels.
+
+Delete a webhook with the trash icon. Calls to its address stop at once.
+
+## DigitalOcean alerts
+
+In DigitalOcean, open **Monitoring › Alerts** (Insights), add a webhook notification channel, paste the **Address**, turn on **Sign webhook payload** and paste the **Secret**. Then pick that channel on the alert rules for your database. DigitalOcean signs every call with `X-DigitalOcean-Signature`, and OpenHut checks it.
+
+## Other services
+
+OpenHut accepts any of these on each call:
+
+- DigitalOcean's signature: `X-DigitalOcean-Signature: t=<time>,v1=<HMAC-SHA256 of "<time>.<body>">`, at most 5 minutes old.
+- A GitHub-style signature: `X-Hub-Signature-256: sha256=<HMAC-SHA256 of the body>`.
+- The secret itself as a token: `Authorization: Bearer <secret>` or `X-Webhook-Secret: <secret>`.
+
+Calls without one get `401`.
+
+## Limits
+
+- A call's body can be up to 256 KB; bigger ones get `413`.
+- The same body twice within 10 minutes counts once, so a service that retries doesn't wake the agent twice.
+- Up to 120 calls in 15 minutes per webhook; more get `429`.
+- The payload is data, not instructions: the agent reads it and follows its own instructions, not what the payload says.
+- Keep the agent running. A call that comes while it's stopped reaches it once it starts; for the OpenHut app, only if that's within about 10 minutes.

@@ -65,12 +65,15 @@ export async function migrate(): Promise<void> {
     agent_id text not null references agent(id) on delete cascade, connection_id text not null references connection(id) on delete cascade, tool text not null,
     state text not null check (state in ('allow', 'ask', 'deny')), changed_by text not null, changed_at timestamptz not null default now(),
     primary key (agent_id, connection_id, tool))`.execute(db)
-  await sql`create table if not exists routine (
-    id text primary key, agent_id text not null references agent(id) on delete cascade, name text not null, plan text not null,
-    at timestamptz, cron text, until timestamptz, origin text not null, next_run_at timestamptz, created_at timestamptz not null default now(),
+  await sql`create table if not exists inbox_source (
+    id text primary key, agent_id text not null references agent(id) on delete cascade, kind text not null check (kind in ('schedule', 'webhook')), name text not null,
+    origin text not null, created_at timestamptz not null default now(), plan text not null default '', at timestamptz, cron text, until timestamptz, next_run_at timestamptz,
     run_id text, run_status text check (run_status in ('open', 'told', 'quiet', 'failed')), run_picked_at timestamptz, run_at timestamptz, run_text text,
-    failures integer not null default 0)`.execute(db)
-  await sql`create index if not exists routine_due on routine (next_run_at) where next_run_at is not null`.execute(db)
+    failures integer not null default 0, secret text, last_at timestamptz)`.execute(db)
+  await sql`create index if not exists inbox_source_due on inbox_source (next_run_at) where next_run_at is not null`.execute(db)
+  await sql`create table if not exists inbox_item (
+    id text primary key, source_id text not null references inbox_source(id) on delete cascade, agent_id text not null, digest text not null, text text not null,
+    told boolean not null default false, created_at timestamptz not null default now(), unique (source_id, digest))`.execute(db)
   await sql`create table if not exists record (
     key text primary key, collection text not null, id text not null, workspace text not null, parent text, ver integer not null,
     value text not null, secret text, personal boolean not null default false, deleted boolean not null default false)`.execute(db)

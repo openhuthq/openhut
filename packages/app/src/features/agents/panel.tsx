@@ -22,6 +22,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { RoutinesRow } from '@/features/routines/routines-dialog'
 import { ActivityRow } from '@/features/agents/activity-dialog'
 import { KeysRow } from '@/features/agents/secrets'
+import { WebhooksRow } from '@/features/webhooks/webhooks-dialog'
 import { ModelRows } from '@/features/agents/model-rows'
 import { RunsOnRow } from '@/features/agents/move'
 import { AgentStatus } from '@/features/agents/status'
@@ -63,6 +64,7 @@ export function Panel({ agent, naming, watching, onHide }: { agent: Agent; namin
           <Counted agent={agent} dialog="skills" icon={BookOpen01Icon} hue="text-hue-blue" title="Skills" value={skills} />
         </>}
         <RoutinesRow agent={agent} />
+        <WebhooksRow agent={agent} />
         <ActivityRow agent={agent} />
         <KeysRow agent={agent} />
       </CollapsibleContent>

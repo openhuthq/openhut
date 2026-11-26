@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { seal } from '../../../src/server/platform/secrets.ts'
 import { settings } from '../../../src/server/platform/settings.ts'
-import { routineService } from '../../../src/server/routines/routine-service.ts'
+import { routineService } from '../../../src/server/inbox/routines.ts'
+import { inboxService } from '../../../src/server/inbox/inbox-service.ts'
 import { recordsService, type Held } from '../../../src/server/platform/records.ts'
 import { runSet } from '../../../src/server/agents/run-set.ts'
 import { fakeAgentd, HOME, refresh, signIn } from '../agents/signed-in.ts'
@@ -30,9 +31,9 @@ const whatsapp = { platform: 'whatsapp', chat_id: '15550001111@s.whatsapp.net', 
 const slack = { platform: 'slack', chat_id: 'C0FINANCE1', chat_type: 'group', chat_name: 'finance', thread_id: '1732.1' }
 const minutes = (n: number) => new Date(Date.now() + n * 60_000)
 const idOf = (reply: string) => /Scheduled (rt_[a-z0-9]+)/.exec(reply)?.[1] ?? ''
-const rowOf = (id: string) => db.selectFrom('routine').selectAll().where('id', '=', id).executeTakeFirst()
+const rowOf = (id: string) => db.selectFrom('inbox_source').selectAll().where('id', '=', id).executeTakeFirst()
 const runs: { agentId: string; text: string }[] = []
-routineService.runDashboardWith(async (input) => {
+inboxService.runDashboardWith(async (input) => {
   runs.push(input)
   return 'Acme paid #4471.'
 })
@@ -56,7 +57,7 @@ test('a Discord routine reports in the channel or thread it was set up in, never
   await assert.rejects(routineService.schedule({ agentId: 'ag_rtnother', input: { name: 'x', plan: 'y', at: minutes(5).toISOString(), origin: { ...discord, chat_type: 'dm', chat_name: 'mo' } } }), /Can't post in mo any more/)
   const reply = await routineService.schedule({ agentId: 'ag_rtnother', input: { name: 'Watch postgres-eu', plan: 'Check slow queries.', cron: '0 * * * *', origin: discord } })
   assert.match(reply, /Reports go to Acme \/ #on-call\.$/)
-  await db.deleteFrom('routine').where('agent_id', '=', 'ag_rtnother').execute()
+  await db.deleteFrom('inbox_source').where('agent_id', '=', 'ag_rtnother').execute()
 })
 
 test('a dashboard routine runs in its thread, says what it found, and a once routine then goes away', async () => {
@@ -65,7 +66,7 @@ test('a dashboard routine runs in its thread, says what it found, and a once rou
   const id = idOf(reply)
   const [listed] = await routineService.list({ actor: owner, agentId: 'ag_rtnfirst' })
   assert.deepEqual({ name: listed.name, place: listed.place, platform: listed.platform, stopped: listed.stopped, last: listed.last }, { name: 'Check Acme paid', place: 'the OpenHut app', platform: 'api_server', stopped: null, last: null })
-  await routineService.tick({ now: minutes(2) })
+  await inboxService.tick({ now: minutes(2) })
   await new Promise((resolve) => setTimeout(resolve, 50))
   assert.equal(runs.length, 1)
   assert.match(runs[0].text, /^\[Routine rt_[a-z0-9]+ · run ru_[a-z0-9]+\] Time for "Check Acme paid"\. Your plan: Look at Stripe\./)
@@ -79,19 +80,19 @@ test('a chat routine waits for the plugin, which marks it picked and reports wha
   const routine = (await routineService.list({ actor: owner, agentId: 'ag_rtnfirst' })).find((each) => each.id === id)
   assert.equal(routine?.place, 'your WhatsApp')
   assert.equal(routine?.until && Math.round((new Date(routine.until).getTime() - Date.now()) / 86_400_000), 90)
-  await db.updateTable('routine').set({ next_run_at: minutes(-1) }).where('id', '=', id).execute()
-  await routineService.tick()
-  const [due] = await routineService.due({ agentId: 'ag_rtnfirst' })
-  assert.equal(due.routineId, id)
+  await db.updateTable('inbox_source').set({ next_run_at: minutes(-1) }).where('id', '=', id).execute()
+  await inboxService.tick()
+  const [due] = await inboxService.due({ agentId: 'ag_rtnfirst' })
+  assert.match(due.text, new RegExp(`^\\[Routine ${id} `))
   assert.deepEqual(due.origin, whatsapp)
-  assert.deepEqual(await routineService.due({ agentId: 'ag_rtnother' }), [])
-  await assert.rejects(routineService.report({ agentId: 'ag_rtnfirst', runId: due.runId, said: 'early' }), { status: 404 })
-  await assert.rejects(routineService.picked({ agentId: 'ag_rtnother', runId: due.runId }), { status: 404 })
-  await routineService.picked({ agentId: 'ag_rtnfirst', runId: due.runId })
-  assert.deepEqual(await routineService.due({ agentId: 'ag_rtnfirst' }), [])
+  assert.deepEqual(await inboxService.due({ agentId: 'ag_rtnother' }), [])
+  await assert.rejects(inboxService.report({ agentId: 'ag_rtnfirst', runId: due.runId, said: 'early' }), { status: 404 })
+  await assert.rejects(inboxService.picked({ agentId: 'ag_rtnother', id: due.runId }), { status: 404 })
+  await inboxService.picked({ agentId: 'ag_rtnfirst', id: due.runId })
+  assert.deepEqual(await inboxService.due({ agentId: 'ag_rtnfirst' }), [])
   await assert.rejects(routineService.schedule({ agentId: 'ag_rtnfirst', input: { name: 'Copy me', plan: 'again', at: minutes(30).toISOString(), origin: slack } }), /can't set up another routine/)
-  await routineService.report({ agentId: 'ag_rtnfirst', runId: due.runId, said: 'Acme asked for a PO number.' })
-  await assert.rejects(routineService.report({ agentId: 'ag_rtnfirst', runId: due.runId, said: 'twice' }), { status: 404 })
+  await inboxService.report({ agentId: 'ag_rtnfirst', runId: due.runId, said: 'Acme asked for a PO number.' })
+  await assert.rejects(inboxService.report({ agentId: 'ag_rtnfirst', runId: due.runId, said: 'twice' }), { status: 404 })
   const after = (await routineService.list({ actor: owner, agentId: 'ag_rtnfirst' })).find((each) => each.id === id)
   assert.deepEqual({ status: after?.last?.status, text: after?.last?.text }, { status: 'told', text: 'Acme asked for a PO number.' })
   assert.ok(after?.nextRunAt && new Date(after.nextRunAt) > new Date())
@@ -102,15 +103,15 @@ test('a chat routine waits for the plugin, which marks it picked and reports wha
 test('a quiet run says nothing, and a stopped agent\'s routine waits until it runs again', async () => {
   const id = idOf(await routineService.schedule({ agentId: 'ag_rtnfirst', input: { name: 'Watch #finance', plan: 'Check.', cron: '0 9 * * *', origin: slack } }))
   await db.updateTable('agent').set({ wanted: 'stopped' }).where('id', '=', 'ag_rtnfirst').execute()
-  await db.updateTable('routine').set({ next_run_at: minutes(-1) }).where('id', '=', id).execute()
-  await routineService.tick()
+  await db.updateTable('inbox_source').set({ next_run_at: minutes(-1) }).where('id', '=', id).execute()
+  await inboxService.tick()
   assert.equal((await rowOf(id))?.run_status, null)
   await db.updateTable('agent').set({ wanted: 'running' }).where('id', '=', 'ag_rtnfirst').execute()
-  await routineService.tick()
-  const [due] = await routineService.due({ agentId: 'ag_rtnfirst' })
+  await inboxService.tick()
+  const [due] = await inboxService.due({ agentId: 'ag_rtnfirst' })
   assert.equal(due.origin.chat_name, 'finance')
-  await routineService.picked({ agentId: 'ag_rtnfirst', runId: due.runId })
-  await routineService.report({ agentId: 'ag_rtnfirst', runId: due.runId, said: '[SILENT]' })
+  await inboxService.picked({ agentId: 'ag_rtnfirst', id: due.runId })
+  await inboxService.report({ agentId: 'ag_rtnfirst', runId: due.runId, said: '[SILENT]' })
   const row = await rowOf(id)
   assert.deepEqual({ status: row?.run_status, text: row?.run_text }, { status: 'quiet', text: null })
   await routineService.cancel({ agentId: 'ag_rtnfirst', id, reason: 'done' })
@@ -119,10 +120,10 @@ test('a quiet run says nothing, and a stopped agent\'s routine waits until it ru
 test('runs nobody picks up fail, and three in a row stop the routine where the owner sees it', async () => {
   const id = idOf(await routineService.schedule({ agentId: 'ag_rtnfirst', input: { name: 'Watch the build', plan: 'Check CI.', cron: '0 * * * *', origin: slack } }))
   for (const round of [1, 2, 3]) {
-    await db.updateTable('routine').set({ next_run_at: minutes(-1) }).where('id', '=', id).execute()
-    await routineService.tick()
-    await db.updateTable('routine').set({ run_at: minutes(-6) }).where('id', '=', id).execute()
-    await routineService.tick()
+    await db.updateTable('inbox_source').set({ next_run_at: minutes(-1) }).where('id', '=', id).execute()
+    await inboxService.tick()
+    await db.updateTable('inbox_source').set({ run_at: minutes(-6) }).where('id', '=', id).execute()
+    await inboxService.tick()
     assert.equal((await rowOf(id))?.failures, round)
   }
   const [stopped] = (await routineService.list({ actor: owner, agentId: 'ag_rtnfirst' })).filter((each) => each.id === id)
@@ -133,11 +134,11 @@ test('runs nobody picks up fail, and three in a row stop the routine where the o
 test('a chat the agent left fails the run, and until passing ends a routine', async () => {
   const id = idOf(await routineService.schedule({ agentId: 'ag_rtnfirst', input: { name: 'Post in #finance', plan: 'Post.', cron: '0 8 * * *', until: minutes(60 * 24 * 3).toISOString(), origin: slack } }))
   await db.updateTable('channel').set({ allowed: '' }).where('id', '=', 'ch_rtnslack').execute()
-  await db.updateTable('routine').set({ next_run_at: minutes(-1) }).where('id', '=', id).execute()
-  await routineService.tick()
+  await db.updateTable('inbox_source').set({ next_run_at: minutes(-1) }).where('id', '=', id).execute()
+  await inboxService.tick()
   const row = await rowOf(id)
   assert.deepEqual({ status: row?.run_status, text: row?.run_text }, { status: 'failed', text: 'Can\'t post in #finance any more.' })
-  await routineService.tick({ now: minutes(60 * 24 * 4) })
+  await inboxService.tick({ now: minutes(60 * 24 * 4) })
   assert.equal(await rowOf(id), undefined)
   await db.updateTable('channel').set({ allowed: 'C0FINANCE1' }).where('id', '=', 'ch_rtnslack').execute()
 })
@@ -166,9 +167,9 @@ test('changing the time zone moves the next run of repeating routines', async ()
 
 test('two ticks at once fire a due routine once', async () => {
   const id = idOf(await routineService.schedule({ agentId: 'ag_rtnfirst', input: { name: 'Nudge #finance', plan: 'Nudge.', cron: '0 7 * * *', origin: slack } }))
-  await db.updateTable('routine').set({ next_run_at: minutes(-1) }).where('id', '=', id).execute()
-  await Promise.all([routineService.tick(), routineService.tick()])
-  const runs = await routineService.due({ agentId: 'ag_rtnfirst' })
-  assert.equal(runs.filter((run) => run.routineId === id).length, 1)
+  await db.updateTable('inbox_source').set({ next_run_at: minutes(-1) }).where('id', '=', id).execute()
+  await Promise.all([inboxService.tick(), inboxService.tick()])
+  const runs = await inboxService.due({ agentId: 'ag_rtnfirst' })
+  assert.equal(runs.filter((run) => run.text.includes(id)).length, 1)
   await routineService.cancel({ agentId: 'ag_rtnfirst', id, reason: 'done' })
 })

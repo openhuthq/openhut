@@ -19,6 +19,7 @@ import { RoutinesDialog } from '@/features/routines/routines-dialog'
 import { ToolPermissionsDialog } from '@/features/agents/tool-permissions'
 import { ActivityDialog } from '@/features/agents/activity-dialog'
 import { KeysDialog } from '@/features/agents/secrets'
+import { WebhooksDialog } from '@/features/webhooks/webhooks-dialog'
 import { Chat } from '@/features/threads/chat'
 import { RequestError } from '@/lib/api-client'
 import { AGENTS_KEY } from '@/lib/query-keys'
@@ -69,6 +70,7 @@ function Dialogs({ agent, dialog, detail }: { agent: Agent; dialog: AgentDialog 
     case 'apps': return detail ? <ToolPermissionsDialog agent={agent} connectionId={detail} onClose={close} /> : null
     case 'activity': return <ActivityDialog agent={agent} onClose={close} />
     case 'keys': return <KeysDialog agent={agent} onClose={close} />
+    case 'webhooks': return <WebhooksDialog agent={agent} onClose={close} />
     case 'browser': return agent.browser && agent.canEdit ? <BrowserDialog agent={agent} onClose={close} /> : null
     default: return null
   }

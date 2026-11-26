@@ -5,6 +5,7 @@ import type { ChangeAction, ChangeRequest } from '@openhut/common/agents/change-
 import { CreateChannel } from '@openhut/common/channels/channel.ts'
 import { ProposedConnection } from '@openhut/common/connections/connection.ts'
 import { AddSecret, SecretValue } from '@openhut/common/agents/secret.ts'
+import { WebhookName } from '@openhut/common/webhooks/webhook.ts'
 import { db } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { emit, log } from '../platform/events.ts'
@@ -14,11 +15,12 @@ import { describeIssues } from '../platform/http-error.ts'
 import type { Caller } from '../team/identity.ts'
 import { activity } from '../gateway/activity.ts'
 import { channelService } from '../channels/channel-service.ts'
-import { Origin, routineService } from '../routines/routine-service.ts'
+import { Origin, routineService } from '../inbox/routines.ts'
 import { agentService } from './agent-service.ts'
 import { connectionService } from '../connections/connection-service.ts'
 import { permissions } from '../permissions/permissions.ts'
 import { secretService } from './secret-service.ts'
+import { inboxService, urlOf } from '../inbox/inbox-service.ts'
 
 const DASHBOARD = 'api_server'
 const QUIET_MS = 10_000
@@ -31,6 +33,7 @@ const ChannelChange = z.object({ id: z.string().check(z.maxLength(40)), open: z.
 const ChannelId = z.object({ id: z.string().check(z.maxLength(40)) })
 const ConnectionId = z.object({ connectionId: z.string().check(z.maxLength(40)) })
 const ToolCall = z.object({ connectionId: z.string().check(z.maxLength(40)), tool: z.string().check(z.maxLength(200)), name: z.string().check(z.maxLength(200)), arguments: z.record(z.string(), z.unknown()), always: z.optional(z.boolean()) })
+const WebhookChange = z.object({ name: WebhookName })
 const ASK_EXPIRES_MS = 30 * 60_000
 
 type Row = Selectable<Database['change_request']>
@@ -71,7 +74,7 @@ export const changeRequestService = {
     const final = edits ? checkedInput({ action: action(row), input: edits, agentId: row.agent_id }) : JSON.parse(row.input) as Record<string, unknown>
     agentService.holdReapply(row.agent_id)
     try {
-      await apply({ actor, row, input: final, token })
+      Object.assign(final, await apply({ actor, row, input: final, token }))
     } catch (err) {
       await agentService.releaseReapply(row.agent_id)
       throw err
@@ -138,6 +141,7 @@ function parsedInput({ action, input, agentId }: { action: ChangeAction; input: 
     case 'call_tool': return z.safeParse(ToolCall, input)
     case 'propose_connection': return z.safeParse(ProposedConnection, input)
     case 'add_secret': return z.safeParse(AddSecret, input)
+    case 'add_webhook': return z.safeParse(WebhookChange, input)
   }
 }
 
@@ -162,10 +166,11 @@ async function summaryOf({ action, input, agentId }: { action: ChangeAction; inp
     }
     case 'propose_connection': return `Connect ${String(input.name)}`
     case 'add_secret': return `Save a key, ${String(input.name)}, sent only to ${(input.hosts as string[]).join(', ')}`
+    case 'add_webhook': return `Add a webhook named ${String(input.name)}`
   }
 }
 
-async function apply({ actor, row, input, token }: { actor: Caller; row: Row; input: unknown; token?: string }): Promise<void> {
+async function apply({ actor, row, input, token }: { actor: Caller; row: Row; input: unknown; token?: string }): Promise<Record<string, unknown> | void> {
   const agentId = row.agent_id
   const fields = input as Record<string, unknown>
   switch (action(row)) {
@@ -184,6 +189,7 @@ async function apply({ actor, row, input, token }: { actor: Caller; row: Row; in
     case 'call_tool': throw new HttpError(500, 'A tool call is approved through approveCall.')
     case 'add_secret': return secretService.save({ agentId, input: z.parse(AddSecret, input), value: secretValue(token) })
     case 'propose_connection': return connectProposed({ actor, agentId, proposal: z.parse(ProposedConnection, input), token })
+    case 'add_webhook': return { webhookId: (await inboxService.createSource({ actor, agentId, name: z.parse(WebhookChange, input).name, origin: originOf(row) })).id }
   }
 }
 
@@ -220,6 +226,7 @@ function alreadyDone(status: number) {
 function afterApproval({ row, input }: { row: Row; input: unknown }): string {
   const fields = input as Record<string, unknown>
   if (action(row) === 'add_secret') return ` You restart to pick it up right after this reply. You never see the key: call https://${(fields.hosts as string[])[0]}/… as $OPENHUT_GATEWAY/x/${(fields.hosts as string[])[0]}/… with the header "Authorization: Agent $OPENHUT_AGENT_TOKEN", and OpenHut adds it.`
+  if (action(row) === 'add_webhook') return ` Its address is ${urlOf(String(fields.webhookId))}. Calls to it come to this chat. Your owner has the secret and puts both into the sender (DigitalOcean: a webhook notification channel signed with that secret).`
   if (action(row) === 'add_channel' && fields.kind === 'whatsapp') return ' WhatsApp links once your owner scans the QR code on your page in OpenHut.'
   if (action(row) !== 'update_self' || fields.instructions !== undefined) return ' You restart to pick it up right after this reply.'
   return ''

@@ -6,17 +6,18 @@ import { DialogTitle } from '@/components/ui/dialog'
 import { useConfirming } from '@/components/confirm-button'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorNote } from '@/components/error-note'
-import { Glyph } from '@/components/glyph'
 import { DialogCard, I, Loading, ROW, ROW_VALUE, SPLIT_DIALOG } from '@/components/kit'
 import { agentPath } from '@/app/routes'
 import { Face } from '@/features/agents/face'
-import { useRoutines, useStopRoutine } from '@/features/routines/api'
+import { useRoutines, useStopRoutine, useUpdateRoutine } from '@/features/routines/api'
+import { PlaceIcon, TargetPicker } from '@/features/routines/target-picker'
+import { Switch } from '@/components/ui/switch'
 import { dateOf, dayOf, nextOf, onceOf, scheduleOf, timeOf } from '@/features/routines/when'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
-const GLYPHS = ['slack', 'whatsapp', 'telegram', 'discord'] as const
+const DAY_MS = 86_400_000
 
 export function RoutinesRow({ agent }: { agent: Agent }) {
   const routines = useRoutines(agent.id).data
@@ -71,10 +72,11 @@ function Detail({ agent, routine, now }: { agent: Agent; routine: Routine; now: 
         <h2 className="m-0 text-[18px]/[1.3] font-semibold text-balance">{routine.name}</h2>
         <p className="m-0 flex flex-wrap items-center gap-x-1.5 text-[13px] text-body">
           <span>{routine.stopped ?? whenOf(routine)}</span><span className="text-mute-2">·</span>
-          <span className="inline-flex items-center gap-1">{GLYPHS.find((each) => each === routine.platform) && <Glyph name={routine.platform as typeof GLYPHS[number]} size={13} />}{routine.place}</span>
+          <span className="inline-flex items-center gap-1"><PlaceIcon platform={routine.platform} size={13} />{routine.place}</span>
           {routine.until && !routine.stopped && <><span className="text-mute-2">·</span><span>until {dateOf(new Date(routine.until))}</span></>}
         </p>
       </div>
+      {agent.canEdit && !routine.stopped && <Settings agent={agent} routine={routine} />}
       <div className="flex gap-3">
         <Face agent={agent} size={28} className="mt-0.5 shrink-0" />
         <p className="m-0 max-w-[60ch] text-[14px]/[1.6] whitespace-pre-wrap text-ink">{routine.plan}</p>
@@ -126,4 +128,17 @@ function saidOf(last: NonNullable<Routine['last']>): string {
 
 function Empty({ agent }: { agent: Agent }) {
   return <EmptyState className="flex-1 justify-center" line={`No routines yet. ${agent.name} adds one when something needs a follow-up.`} />
+}
+
+function Settings({ agent, routine }: { agent: Agent; routine: Routine }) {
+  const update = useUpdateRoutine(agent.id)
+  return <div className="flex flex-col gap-2">
+    <div className="flex min-h-8 items-center gap-3 text-[13px]"><span className="w-24 shrink-0 text-mute">Posts in</span>
+      <TargetPicker agentId={agent.id} value={routine.target} place={routine.place} platform={routine.platform} disabled={update.isPending} onPick={(target) => update.mutate({ id: routine.id, target: target.id }, { onError: toastError })} />
+    </div>
+    {routine.cron && <label className="flex min-h-8 items-center gap-3 text-[13px]"><span className="w-24 shrink-0 text-mute">No end date</span>
+      <Switch checked={routine.until === null} aria-label="No end date" disabled={update.isPending}
+        onCheckedChange={(on) => update.mutate({ id: routine.id, until: on ? null : new Date(Date.now() + 90 * DAY_MS).toISOString() }, { onError: toastError })} />
+    </label>}
+  </div>
 }
