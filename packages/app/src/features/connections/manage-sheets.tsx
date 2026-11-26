@@ -117,7 +117,7 @@ function Activity({ connection, agents }: { connection: Connection; agents: Open
       return <ItemGroup className="rounded-lg">{calls.map((call) => <Item key={call.id} size="sm">
         <Face agent={agents.find((agent) => agent.id === call.agentId) ?? { id: call.agentId, instructions: '' }} size={22} />
         <ItemContent stacked><ItemTitle className="text-[12.5px]"><span className="truncate">{call.reason}</span></ItemTitle><ItemDescription className="text-xs">{call.agentName} · {call.tool}</ItemDescription></ItemContent>
-        {call.outcome !== 'allowed' && <StatusBadge status={call.outcome} />}
+        {(call.outcome === 'denied' || call.outcome === 'failed') && <StatusBadge status={call.outcome} />}
         <span className="font-mono text-xs text-mute">{ago(call.at)}</span>
       </Item>)}</ItemGroup>
     }}</Loaded>

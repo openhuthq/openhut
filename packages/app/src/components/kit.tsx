@@ -54,7 +54,7 @@ export function MenuCard({ title, align = 'start', children }: { title: string; 
 
 export function Choice({ icon, name, note, selected = false, disabled, onClick }: { icon: ReactNode; name: string; note?: string; selected?: boolean; disabled?: boolean; onClick?: () => void }) {
   return <DropdownMenuItem disabled={disabled} onClick={onClick} className={cn('h-auto gap-2.5 rounded-lg px-2 py-1.5 data-highlighted:bg-tint [&_svg]:text-ink', selected && 'bg-tint')}>
-    <span className="grid size-7 place-items-center rounded-lg bg-soft text-ink">{icon}</span>
+    <span className="grid size-5 shrink-0 place-items-center text-ink">{icon}</span>
     <span className="grid flex-1 leading-tight"><span className="text-[13px] font-medium">{name}</span>{note && <span className="text-[11.5px] text-mute">{note}</span>}</span>
     {selected && <I icon={Tick02Icon} size={14} />}
   </DropdownMenuItem>

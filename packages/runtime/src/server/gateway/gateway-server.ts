@@ -83,10 +83,10 @@ function agentMcp(agent: GatewayAgent): McpServer {
     return text(JSON.stringify(names.map((name) => ({ name, schema: byName.get(name)?.schema ?? null, description: byName.get(name)?.description ?? 'Not available to this agent' }))))
   })
   server.registerTool('call_tool', {
-    description: 'Run a tool from list_tools.',
-    inputSchema: { reason, name: z.string().max(100), arguments: z.record(z.string(), z.unknown()).default({}), connectionId: z.string().max(100).optional() },
-  }, async ({ reason: why, name, arguments: args, connectionId }) => {
-    const result = await connectionService.call({ agent, name, args, connectionId, reason: why })
+    description: 'Run a tool from list_tools. Some tools wait for your owner\'s OK: then the call returns at once, and the result comes back to you as a message.',
+    inputSchema: z.object({ reason, name: z.string().max(100), arguments: z.record(z.string(), z.unknown()).default({}), connectionId: z.string().max(100).optional() }).passthrough(),
+  }, async ({ reason: why, name, arguments: args, connectionId, origin }) => {
+    const result = await connectionService.call({ agent, name, args, connectionId, reason: why, origin })
     return text(result.text, result.isError)
   })
   server.registerTool('ask_to_connect', {

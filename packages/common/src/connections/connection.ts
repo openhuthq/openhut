@@ -38,10 +38,37 @@ export const ConnectionTool = z.object({
 })
 export type ConnectionTool = z.infer<typeof ConnectionTool>
 
+export const Permission = z.enum(['allow', 'ask', 'deny'])
+export type Permission = z.infer<typeof Permission>
+
+export const ToolGroup = z.enum(['read', 'create', 'update', 'delete', 'other'])
+export type ToolGroup = z.infer<typeof ToolGroup>
+
+export const AgentTool = z.object({
+  object: z.literal('agent_tool'),
+  agentId: z.string(),
+  connectionId: z.string(),
+  name: z.string(),
+  description: z.string(),
+  group: ToolGroup,
+  permission: Permission,
+  isDefault: z.boolean(),
+})
+export type AgentTool = z.infer<typeof AgentTool>
+
+export const ListAgentTools = z.object({ agentId: z.string().check(z.maxLength(40)), connectionId: z.string().check(z.maxLength(40)) })
+export type ListAgentTools = z.infer<typeof ListAgentTools>
+
+export const UpdateAgentTools = z.extend(ListAgentTools, {
+  tools: z.array(z.string().check(z.maxLength(200))).check(z.minLength(1), z.maxLength(500)),
+  permission: Permission,
+})
+export type UpdateAgentTools = z.infer<typeof UpdateAgentTools>
+
 export const ListConnectionTools = z.object({ connectionId: z.string().check(z.maxLength(40)) })
 export type ListConnectionTools = z.infer<typeof ListConnectionTools>
 
-const Outcome = z.enum(['allowed', 'denied', 'failed'])
+export const CallOutcome = z.enum(['allowed', 'asked', 'denied', 'failed'])
 const EventCursor = z.string().check(z.regex(/^\d{1,18}$/, 'Pass the id of an event from the list as the cursor.'))
 
 export const ConnectionEvent = z.object({
@@ -53,7 +80,8 @@ export const ConnectionEvent = z.object({
   agentName: z.string(),
   tool: z.string(),
   reason: z.string(),
-  outcome: Outcome,
+  outcome: CallOutcome,
+  approvedBy: z.nullable(z.string()),
   ms: z.number(),
 })
 export type ConnectionEvent = z.infer<typeof ConnectionEvent>

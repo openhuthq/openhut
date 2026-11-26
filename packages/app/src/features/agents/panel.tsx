@@ -17,7 +17,9 @@ import { CanUse } from '@/features/agents/agent-connections'
 import { BrowserPreview } from '@/features/agents/browser'
 import { ChannelRows } from '@/features/agents/channels'
 import { Face } from '@/features/agents/face'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { RoutinesRow } from '@/features/routines/routines-dialog'
+import { ActivityRow } from '@/features/agents/activity-dialog'
 import { ModelRows } from '@/features/agents/model-rows'
 import { RunsOnRow } from '@/features/agents/move'
 import { AgentStatus } from '@/features/agents/status'
@@ -48,14 +50,20 @@ export function Panel({ agent, naming, watching, onHide }: { agent: Agent; namin
       <ModelRows agent={agent} />
       <RunsOnRow agent={agent} />
       <SharedRow agent={agent} />
-      {agent.runsHere && <>
-        <Counted agent={agent} dialog="memory" icon={AiBrain01Icon} title="Memory" value={memory} />
-        <Counted agent={agent} dialog="skills" icon={BookOpen01Icon} title="Skills" value={skills} />
-      </>}
-      <RoutinesRow agent={agent} />
     </div>
     <ChannelRows agent={agent} />
     <CanUse agent={agent} />
+    <Collapsible className="-mx-2.5 flex flex-col gap-px">
+      <CollapsibleTrigger className={cn(ROW, 'group/more cursor-pointer text-mute')}><I icon={MoreHorizontalIcon} size={15} className="text-mute" />More<span className={cn(VALUE, 'text-mute')}><I icon={ArrowRight01Icon} size={12} className="[transition:transform_.15s] group-data-panel-open/more:rotate-90" /></span></CollapsibleTrigger>
+      <CollapsibleContent className="flex flex-col gap-px">
+        {agent.runsHere && <>
+          <Counted agent={agent} dialog="memory" icon={AiBrain01Icon} hue="text-hue-violet" title="Memory" value={memory} />
+          <Counted agent={agent} dialog="skills" icon={BookOpen01Icon} hue="text-hue-blue" title="Skills" value={skills} />
+        </>}
+        <RoutinesRow agent={agent} />
+        <ActivityRow agent={agent} />
+      </CollapsibleContent>
+    </Collapsible>
     <AgentActions agent={agent} watching={watching} />
   </aside>
 }
@@ -150,8 +158,8 @@ function skillsNote(skills: { builtIn: boolean }[] | undefined): string | undefi
   return [learned && `${learned} learned`, builtIn && `${builtIn} built in`].filter(Boolean).join(' · ') || '0'
 }
 
-function Counted({ agent, dialog, icon, title, value }: { agent: Agent; dialog: AgentDialog; icon: IconSvgElement; title: string; value: string | number | undefined }) {
-  return <a className={ROW} href={agentPath({ agentId: agent.id, dialog })}><I icon={icon} size={15} className="text-mute" />{title}<span className={VALUE}>{value ?? ''}<I icon={ArrowRight01Icon} size={12} className="text-mute" /></span></a>
+function Counted({ agent, dialog, icon, hue, title, value }: { agent: Agent; dialog: AgentDialog; icon: IconSvgElement; hue: string; title: string; value: string | number | undefined }) {
+  return <a className={ROW} href={agentPath({ agentId: agent.id, dialog })}><I icon={icon} size={15} className={hue} />{title}<span className={VALUE}>{value ?? ''}<I icon={ArrowRight01Icon} size={12} className="text-mute" /></span></a>
 }
 
 const NAME = 'm-0 min-w-0 text-[18px]/[1.3] font-semibold'

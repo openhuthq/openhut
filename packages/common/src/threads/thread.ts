@@ -33,7 +33,7 @@ export type SendChat = z.infer<typeof SendChat>
 export const ChatCall = z.object({
   tool: z.string(),
   connectionName: z.nullable(z.string()),
-  outcome: z.enum(['allowed', 'denied', 'failed']),
+  outcome: z.enum(['allowed', 'asked', 'denied', 'failed']),
   reason: z.string(),
   ms: z.number(),
 })

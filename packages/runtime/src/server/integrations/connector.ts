@@ -3,7 +3,8 @@ import { describeIssues } from '../platform/http-error.ts'
 
 export function nativeConnector<C>({ config, tools }: { config: z.ZodMiniType<C>; tools: Record<string, NativeTool<C>> }): Connector {
   return {
-    tools: async () => Object.entries(tools).map(([name, tool]) => ({ name, description: tool.description, schema: z.toJSONSchema(tool.input) })),
+    // ponytail: every native tool today is Postgres' read-only kind; take annotations per tool when a native one writes.
+    tools: async () => Object.entries(tools).map(([name, tool]) => ({ name, description: tool.description, schema: z.toJSONSchema(tool.input), annotations: { readOnlyHint: true } })),
     call: async ({ config: stored, tool, args }) => {
       const spec = Object.hasOwn(tools, tool) ? tools[tool] : undefined
       if (!spec) return { text: `No tool named ${tool}. Use ${Object.keys(tools).join(', ')}.`, isError: true }
@@ -28,6 +29,7 @@ export type Connector = {
   call: (ctx: ConnectorContext & { tool: string; args: Record<string, unknown> }) => Promise<ToolResult>
 }
 export type ConnectorContext = { config: unknown; refresh: (renew: (latest: Record<string, unknown>) => Promise<Record<string, unknown>>) => Promise<Record<string, unknown>> }
-export type ToolSpec = { name: string; description: string; schema: Record<string, unknown> }
+export type ToolSpec = { name: string; description: string; schema: Record<string, unknown>; annotations?: ToolAnnotations; meta?: Record<string, unknown> }
+export type ToolAnnotations = { title?: string; readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean }
 export type ToolResult = { text: string; isError: boolean }
 type NativeTool<C> = { description: string; input: z.ZodMiniObject; run: (call: { config: C; args: unknown }) => Promise<unknown> }

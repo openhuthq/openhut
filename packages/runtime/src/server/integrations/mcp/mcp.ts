@@ -118,7 +118,7 @@ async function listTools(client: Client): Promise<ToolSpec[]> {
   let cursor: string | undefined
   for (let page = 0; page < MAX_PAGES; page++) {
     const listed = await client.listTools(cursor ? { cursor } : undefined)
-    tools.push(...listed.tools.map((tool) => ({ name: tool.name, description: tool.description ?? '', schema: tool.inputSchema })))
+    tools.push(...listed.tools.map((tool) => ({ name: tool.name, description: tool.description ?? '', schema: tool.inputSchema, annotations: tool.annotations, meta: tool._meta })))
     cursor = listed.nextCursor
     if (!cursor) break
   }

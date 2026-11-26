@@ -28,12 +28,14 @@ export interface Database {
   }
   connection_event: {
     id: Generated<string>; at: Timestamp; agent_id: string; connection_id: string | null; tool: string; reason: string
-    outcome: 'allowed' | 'denied' | 'failed'; ms: number
+    outcome: 'allowed' | 'asked' | 'denied' | 'failed'; ms: number; approved_by: Generated<string | null>
   }
+  tool_permission: { agent_id: string; connection_id: string; tool: string; state: 'allow' | 'ask' | 'deny'; changed_by: string; changed_at: Generated<Date> }
   record: { key: string; collection: string; id: string; workspace: string; parent: string | null; ver: number; value: string; secret: string | null; personal: boolean; deleted: boolean }
   telegram_code: { hash: string; channel_id: string; agent_id: string; kind: 'claim' | 'invite'; sealed: string | null; expires_at: Timestamp }
   change_request: {
     id: string; agent_id: string; action: string; input: string; summary: string; why: string; origin: string
-    status: Generated<'pending' | 'approved' | 'denied'>; note: string | null; told: Generated<boolean>; created_at: Generated<Date>; decided_at: Timestamp | null
+    status: Generated<'pending' | 'approved' | 'denied' | 'expired'>; note: string | null; told: Generated<boolean>; created_at: Generated<Date>; decided_at: Timestamp | null
+    expires_at: Timestamp | null; result: Generated<string | null>
   }
 }
