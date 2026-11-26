@@ -57,12 +57,12 @@ export const discord = {
     return failed
   },
 
-  env({ botToken, channels }: { botToken: string; channels: string[] }): string[] {
-    if (!channels.length) return []
-    return [`DISCORD_BOT_TOKEN=${botToken}`, `DISCORD_ALLOWED_CHANNELS=${channels.join(',')}`, `DISCORD_HOME_CHANNEL=${channels[0]}`]
+  env({ botToken, channels }: { botToken: string; channels: string[] }): Record<string, string> {
+    if (!channels.length) return {}
+    return { DISCORD_BOT_TOKEN: botToken, DISCORD_ALLOWED_CHANNELS: channels.join(','), DISCORD_HOME_CHANNEL: channels[0] }
   },
 
-  yaml: 'discord:\n  require_mention: true\n  unauthorized_dm_behavior: ignore\n  gateway_restart_notification: false',
+  config: { discord: { require_mention: true, unauthorized_dm_behavior: 'ignore', gateway_restart_notification: false } },
 }
 
 async function call({ path, botToken }: { path: string; botToken: string }): Promise<{ ok: boolean; status: number; body: unknown }> {

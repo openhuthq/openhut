@@ -40,15 +40,15 @@ export const telegram = {
     return `https://t.me/${account.replace(/^@/, '')}?start=${code}`
   },
 
-    env({ botToken, audience }: { botToken: string; audience: Audience }): string[] {
-    const who = audience.open ? 'TELEGRAM_ALLOW_ALL_USERS=true' : `TELEGRAM_ALLOWED_USERS=${[audience.ownerAddress, ...audience.allowed].join(',')}`
-    return [`TELEGRAM_BOT_TOKEN=${botToken}`, who, `TELEGRAM_HOME_CHANNEL=${audience.ownerAddress}`]
+  env({ botToken, audience }: { botToken: string; audience: Audience }): Record<string, string> {
+    const who: Record<string, string> = audience.open ? { TELEGRAM_ALLOW_ALL_USERS: 'true' } : { TELEGRAM_ALLOWED_USERS: [audience.ownerAddress, ...audience.allowed].join(',') }
+    return { TELEGRAM_BOT_TOKEN: botToken, ...who, TELEGRAM_HOME_CHANNEL: audience.ownerAddress }
   },
 
-  yaml({ gateway }: { gateway: string }): string {
-    return [
-      'telegram:\n  require_mention: true\n  unauthorized_dm_behavior: ignore\n  gateway_restart_notification: false',
-      `platforms:\n  telegram:\n    extra:\n      base_url: ${gateway}/u/telegram/bot\n      base_file_url: ${gateway}/u/telegram/file/bot`,
-    ].join('\n')
+  config({ gateway }: { gateway: string }): Record<string, unknown> {
+    return {
+      telegram: { require_mention: true, unauthorized_dm_behavior: 'ignore', gateway_restart_notification: false },
+      platforms: { telegram: { extra: { base_url: `${gateway}/u/telegram/bot`, base_file_url: `${gateway}/u/telegram/file/bot` } } },
+    }
   },
 }

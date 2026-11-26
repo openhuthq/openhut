@@ -19,7 +19,8 @@ import { audienceOf } from '../channels/audience.ts'
 import { DiscordSecrets } from '../integrations/discord/discord.ts'
 import { resolveSlots } from '../models/model-slots.ts'
 import { providerService } from '../models/provider-service.ts'
-import { renderFiles, type RenderedChannel } from './hermes-files.ts'
+import { hermesFiles } from '../../core/hermes.ts'
+import type { RenderedChannel } from '../../plugins/channels/index.ts'
 import { recordsService, type Held } from '../platform/records.ts'
 import { HERE, HOME } from '../team/home.ts'
 import { runSet } from './run-set.ts'
@@ -420,8 +421,8 @@ async function tellAgent(id: string): Promise<void> {
 async function filesOf(row: AgentRow): Promise<AgentFiles> {
   const channels = await db.selectFrom('channel').selectAll().where('agent_id', '=', row.id).orderBy('kind').execute()
   const slots = resolveSlots({ model: row.model, catalog: providerService.catalog })
-  return renderFiles({
-    agent: { ...row, slots }, ownerName: row.owner ?? 'its owner', token: agentToken({ id: row.id, epoch: row.token_epoch }), channelKey: unseal(row.channel_key),
+  return hermesFiles({
+    agent: { ...row, slots }, token: agentToken({ id: row.id, epoch: row.token_epoch }), channelKey: unseal(row.channel_key),
     channels: channels.filter((channel) => channel.kind !== 'telegram' || channel.status === 'connected').map(renderedChannel), connections: await connectionService.reachable({ agent: row }),
     secrets: (await db.selectFrom('agent_secret').select(['name', 'hosts']).where('agent_id', '=', row.id).orderBy('name').execute()).map(({ name, hosts }) => ({ name, hosts: JSON.parse(hosts) as string[] })),
   })

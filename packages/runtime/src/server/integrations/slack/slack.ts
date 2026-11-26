@@ -74,12 +74,12 @@ export const slack = {
     return sent.ok
   },
 
-  env({ token, gateway, channels }: { token: string; gateway: string; channels: string[] }): string[] {
-    if (!channels.length) return []
-    return [`SLACK_BOT_TOKEN=${STAND_IN.bot}${token}`, `SLACK_APP_TOKEN=${STAND_IN.app}${token}`, `OPENHUT_SLACK_API=${gateway}/u/slack/api/`, `OPENHUT_SLACK_FILES=${gateway}/u/slackfiles`, 'SLACK_ALLOW_ALL_USERS=true', `SLACK_ALLOWED_CHANNELS=${channels.join(',')}`, `SLACK_HOME_CHANNEL=${channels[0]}`]
+  env({ token, gateway, channels }: { token: string; gateway: string; channels: string[] }): Record<string, string> {
+    if (!channels.length) return {}
+    return { SLACK_BOT_TOKEN: `${STAND_IN.bot}${token}`, SLACK_APP_TOKEN: `${STAND_IN.app}${token}`, OPENHUT_SLACK_API: `${gateway}/u/slack/api/`, OPENHUT_SLACK_FILES: `${gateway}/u/slackfiles`, SLACK_ALLOW_ALL_USERS: 'true', SLACK_ALLOWED_CHANNELS: channels.join(','), SLACK_HOME_CHANNEL: channels[0] }
   },
 
-  yaml: 'slack:\n  require_mention: true\n  unauthorized_dm_behavior: ignore\n  gateway_restart_notification: false\n',
+  config: { slack: { require_mention: true, unauthorized_dm_behavior: 'ignore', gateway_restart_notification: false } },
 }
 
 async function listConversations({ botToken, types }: { botToken: string; types: string }): Promise<unknown[]> {
