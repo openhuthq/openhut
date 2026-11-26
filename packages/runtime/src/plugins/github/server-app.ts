@@ -1,7 +1,9 @@
 import { randomBytes } from 'node:crypto'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import * as z from 'zod/mini'
-import { CreateGithubApp, ListGithubAccounts, UpdateGithubApp, type GithubAccount, type GithubAppInfo } from '@openhut/common/connections/github-app.ts'
+import { CreateGithubApp, CreateGithubConnection, ListGithubAccounts, UpdateGithubApp, type GithubAccount, type GithubAppInfo, type GithubInstallation } from '@openhut/common/connections/github-app.ts'
+import type { Connection } from '@openhut/common/connections/connection.ts'
+import { connectionService } from '../../server/connections/connection-service.ts'
 import { github } from '../../server/integrations/github/github.ts'
 import { publicAddress } from '../../server/platform/address.ts'
 import { db } from '../../server/platform/db.ts'
@@ -78,6 +80,19 @@ export const serverAppService = {
     return serverAppService.get({ actor })
   },
 
+  async installations(): Promise<GithubInstallation[]> {
+    return (await github.installations()).map((each) => ({ object: 'github_installation', ...each }))
+  },
+
+  async connect({ actor, installationId, repositories }: { actor: Caller } & CreateGithubConnection): Promise<Connection> {
+    const found = (await github.installations()).find((each) => each.installationId === installationId)
+    if (!found) throw new HttpError(404, 'The GitHub App isn\'t installed there any more. Install it again.', { param: 'installationId' })
+    const unknown = repositories.find((name) => !found.repositories.includes(name))
+    if (unknown) throw new HttpError(400, `The GitHub App can't reach ${found.account.login}/${unknown}. Add it to the install on GitHub first.`, { param: 'repositories' })
+    const { config, account } = await github.installed(installationId, [...repositories].sort())
+    return connectionService.save({ actor, kind: 'github', name: github.app()?.name ?? 'GitHub', config, account, signIn: false })
+  },
+
   async ask({ actor }: { actor: Caller }): Promise<GithubAppInfo> {
     if (!github.app() && !settings.githubAsks().includes(actor.id)) await settings.setGithubAsks([...settings.githubAsks(), actor.id])
     return serverAppService.get({ actor })
@@ -94,6 +109,13 @@ export const serverAppController: FastifyPluginAsyncZod = async (app) => {
   app.patch('/', UpdateRequest, async (req) => serverAppService.update({ actor: await who(req), logo: req.body.logo }))
 
   app.delete('/', async (req) => serverAppService.remove({ actor: await who(req) }))
+
+  app.get('/installations', async (req) => {
+    await who(req)
+    return listOf({ req, data: await serverAppService.installations() })
+  })
+
+  app.post('/connections', ConnectRequest, async (req) => serverAppService.connect({ actor: await who(req), ...req.body }))
 
   app.post('/requests', async (req) => serverAppService.ask({ actor: await who(req) }))
 
@@ -114,6 +136,7 @@ export const serverAppController: FastifyPluginAsyncZod = async (app) => {
 
 const AccountsRequest = { schema: { querystring: ListGithubAccounts } }
 const CreateRequest = { schema: { body: CreateGithubApp } }
+const ConnectRequest = { schema: { body: CreateGithubConnection } }
 const UpdateRequest = { schema: { body: UpdateGithubApp } }
 const StateRequest = { schema: { querystring: z.object({ state: z.optional(z.string()) }) } }
 const CallbackRequest = { schema: { querystring: z.object({ state: z.optional(z.string()), code: z.optional(z.string()) }) } }
