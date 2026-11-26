@@ -260,7 +260,7 @@ export const threadService = {
     const work = turnWork({ agent, started })
     const asked = together({ messages: said.map((each) => each.message), shared: agent.shared || peopleOf(agent.people).length > 0 })
     let answered = false
-    const live = liveThreads.turn({ thread: chat.id, turnId: answerId, answering: answering(said) })
+    const live = liveThreads.turn({ thread: chat.id, agentId: agent.id, turnId: answerId, answering: answering(said) })
     const answer = async (writer: { write: (chunk: UIMessageChunk) => void }, retry: boolean) => {
       const message = await seeded({ said, session, message: asked })
       for await (const chunk of answerStream({ agent, session, message, signal: abort.signal, work, retry, live })) {
@@ -320,7 +320,7 @@ export const threadService = {
       const message = asked ? await seeded({ said, session, message: asked }) : { id, role: 'user' as const, parts: [{ type: 'text', text }] }
       const started = Date.now()
       const work = turnWork({ agent, started })
-      const turn = liveThreads.turn({ thread: chat.id, turnId: id, answering: answering(said) })
+      const turn = liveThreads.turn({ thread: chat.id, agentId, turnId: id, answering: answering(said) })
       live = turn
       const chunks = async function* (): AsyncGenerator<UIMessageChunk> {
         yield* answerStream({ agent, session, message, signal: AbortSignal.timeout(TURN_MS), work, live: turn })
