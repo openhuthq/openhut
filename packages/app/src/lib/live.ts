@@ -2,7 +2,8 @@ import type { QueryClient, QueryFilters } from '@tanstack/react-query'
 import * as z from 'zod/mini'
 import { LIVE_BEAT_MS, LiveEvent } from '@openhut/common/live.ts'
 import { openChannel, type Channel } from '@/lib/live-socket'
-import { liveThreads, LiveSnapshot, ThreadEvent } from '@/lib/thread-live'
+import { liveThreads, LiveSnapshot, ThreadEvent, type LiveAgentBoard } from '@/lib/thread-live'
+import type { OpenHutAgent } from '@/lib/openhut'
 import { request } from '@/lib/api-client'
 import { AGENTS_KEY, COMPUTERS_KEY, CONNECTIONS_KEY, GRANTS_KEY, PROVIDERS_KEY, THREADS_KEY } from '@/lib/query-keys'
 
@@ -58,6 +59,7 @@ export function followEvents(client: QueryClient): void {
         follow.heardAt = Date.now()
         const message = parsed(line)
         const live = z.safeParse(ThreadEvent, message).data
+        if (live?.type === 'agents') syncAgents({ client, agents: live.agents })
         if (live) return liveThreads.receive(live)
         const event = z.safeParse(LiveEvent, message).data
         if (!event) return
@@ -101,6 +103,20 @@ export function followEvents(client: QueryClient): void {
   open()
   setInterval(check, CHECK_MS)
   document.addEventListener('visibilitychange', wake)
+}
+
+function syncAgents({ client, agents }: { client: QueryClient; agents: LiveAgentBoard[] }): void {
+  const changed = agents.filter((live) => {
+    const agent = client.getQueryData<OpenHutAgent[]>(AGENTS_KEY)?.find((each) => each.id === live.id)
+    return agent && (agent.status !== live.status || agent.health !== live.health)
+  })
+  if (!changed.length) return
+  const byId = new Map(changed.map((live) => [live.id, live]))
+  client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (list) => list?.map((each) => {
+    const live = byId.get(each.id)
+    return live ? { ...each, status: live.status, health: live.health } : each
+  }))
+  for (const live of changed) void client.invalidateQueries({ queryKey: [...AGENTS_KEY, live.id], exact: true })
 }
 
 function parsed(line: string): unknown {

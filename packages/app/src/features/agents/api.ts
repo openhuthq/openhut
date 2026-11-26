@@ -47,7 +47,6 @@ export function useAgent(agentId: string) {
       client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (list) => list?.map((each) => each.id === agent.id ? { ...each, status: agent.status, health: agent.health, healthDetail: agent.healthDetail, wanted: agent.wanted } : each))
       return agent
     },
-    refetchInterval: (query) => settling(query.state.data) ? 3_000 : false,
   })
 }
 
@@ -261,10 +260,6 @@ function conversationsKey(channelId: string) {
 
 function channelsKey(agentId: string) {
   return ['channels', agentId]
-}
-
-function settling(agent: Agent | undefined) {
-  return !!agent && ((agent.wanted === 'running') !== (agent.status === 'running') || agent.health === 'starting')
 }
 
 function writeGrant(client: QueryClient, grant: Grant, change: (grants: Grant[]) => Grant[]) {
