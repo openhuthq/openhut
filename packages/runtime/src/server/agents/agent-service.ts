@@ -13,7 +13,7 @@ import { log, emit } from '../platform/events.ts'
 import { liveService } from '../platform/live-service.ts'
 import { deleted } from '../platform/responses.ts'
 import { connectionService } from '../connections/connection-service.ts'
-import { peopleOf, type Caller } from '../team/identity.ts'
+import { isAdmin, peopleOf, type Caller } from '../team/identity.ts'
 import { audienceOf } from '../channels/audience.ts'
 import { DiscordSecrets } from '../integrations/discord/discord.ts'
 import { resolveSlots } from '../models/model-slots.ts'
@@ -38,18 +38,18 @@ const moving = new Set<string>()
 export const agentService = {
   async list({ actor }: { actor: Caller }): Promise<Agent[]> {
     const [all, states] = await Promise.all([everything(), containerStates()])
-    return Promise.all(all.filter((facts) => canUse(accessOf(facts), actor.email)).map((facts) => agentOf({ facts, actor, states })))
+    return Promise.all(all.filter((facts) => mayUse({ access: accessOf(facts), actor })).map((facts) => agentOf({ facts, actor, states })))
   },
 
   async get({ actor, id }: { actor: Caller; id: string }): Promise<Agent> {
     const [facts, states] = await Promise.all([agentService.find({ id }), containerStates()])
-    if (!canUse(accessOf(facts), actor.email)) throw new HttpError(404, 'That agent doesn\'t exist. It may have been deleted.')
+    if (!mayUse({ access: accessOf(facts), actor })) throw new HttpError(404, 'That agent doesn\'t exist. It may have been deleted.')
     return agentOf({ facts, actor, states })
   },
 
   async visibleIds({ actor }: { actor: Caller }): Promise<Set<string>> {
     const rows = await db.selectFrom('agent').select(['id', 'owner', 'shared', 'people']).execute()
-    return new Set(rows.filter((row) => canUse({ owner: row.owner ?? actor.email, shared: row.shared, people: peopleOf(row.people), sidebars: [] }, actor.email)).map((row) => row.id))
+    return new Set(rows.filter((row) => mayUse({ access: rowAccess({ row, actor }), actor })).map((row) => row.id))
   },
 
   async requireVisible({ actor, id }: { actor: Caller; id: string }): Promise<void> {
@@ -68,7 +68,7 @@ export const agentService = {
   async requireEditable({ actor, id }: { actor: Caller; id: string }): Promise<AgentRow> {
     const row = await db.selectFrom('agent').selectAll().where('id', '=', id).executeTakeFirst()
     if (!row) throw new HttpError(404, 'That agent doesn\'t run on this computer.')
-    if (!row.shared && (row.owner ?? actor.email) !== actor.email) throw new HttpError(403, `Only ${row.name}'s owner can change it.`)
+    if (!mayUse({ access: rowAccess({ row, actor }), actor })) throw new HttpError(403, `Ask ${row.owner ?? 'its owner'} to give you access to ${row.name}.`)
     return row
   },
 
@@ -326,6 +326,14 @@ export async function copyHome({ id, from, to }: { id: string; from: string; to:
   source.pipe(target)
   const reply = await said.catch((err: unknown) => { throw new Error(`Its memory and files couldn’t be copied: ${messageOf(err)}`) })
   if (reply !== 'ok') throw new Error(`Its memory and files couldn’t be saved there: ${reply.slice(0, 300) || 'no answer'}.`)
+}
+
+function mayUse({ access, actor }: { access: Access; actor: Caller }): boolean {
+  return isAdmin(actor) || canUse(access, actor.email)
+}
+
+function rowAccess({ row, actor }: { row: Pick<AgentRow, 'owner' | 'shared' | 'people'>; actor: Caller }): Access {
+  return { owner: row.owner ?? actor.email, shared: row.shared, people: peopleOf(row.people), sidebars: [] }
 }
 
 function accessOf(facts: Pick<AgentFacts, 'personal' | 'owner' | 'control'>): Access {
