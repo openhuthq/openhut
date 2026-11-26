@@ -7,6 +7,7 @@ import { forward } from '../relay/forward.ts'
 import { HERE } from '../team/home.ts'
 
 const TIMEOUT_MS = 180_000
+const STATES_MS = 3_000
 const LINK_WAIT_MS = 60_000
 const MAX_LIVE_LINE = 8 << 20
 const Features = z.object({ whatsapp: z.boolean(), browser: z.boolean() })
@@ -75,8 +76,17 @@ export async function features({ on = HERE }: On = {}): Promise<z.output<typeof 
   return (await agentd.health({ on }).catch(() => undefined))?.features ?? { whatsapp: false, browser: false }
 }
 
-export async function containerStates(): Promise<Record<string, string> | undefined> {
-  return everywhere((on) => agentd.ps({ on }).then((reply) => reply.states))
+let states: { at: number; found: Promise<Record<string, string> | undefined> } | undefined
+
+export function containerStates(): Promise<Record<string, string> | undefined> {
+  if (states && Date.now() - states.at < STATES_MS) return states.found
+  const found = everywhere((on) => agentd.ps({ on }).then((reply) => reply.states))
+  states = { at: Date.now(), found }
+  return found
+}
+
+export function forgetStates(): void {
+  states = undefined
 }
 
 async function everywhere<T>(each: (on: string) => Promise<Record<string, T>>): Promise<Record<string, T> | undefined> {

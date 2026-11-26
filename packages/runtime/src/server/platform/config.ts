@@ -59,6 +59,7 @@ export const config = {
   path: env.get('PATH').default('/usr/bin:/bin').asString(), // the PATH Claude sign-in runs with
   started: Math.floor(Date.now() / 1000),
   startWaitMs: 180_000, // how long a chat message waits for its agent to start or restart before it fails; tests shorten it
+  durableInline: env.get('OPENHUT_DURABLE_INLINE').default('false').asBool(), // tests only: a durable task runs inside send(), once
   quietMs: 10_000, // how long an agent's gateway stays quiet before a restart for new access; tests shorten it
 }
 delete process.env.OPENHUT_SECRET

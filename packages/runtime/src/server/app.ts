@@ -16,6 +16,7 @@ import { agentService } from './agents/agent-service.ts'
 import { gatewayServer } from './gateway/gateway-server.ts'
 import { addressController, googleSignInController, inviteController, meController, ownerResetController, passwordResetController, peopleController, installSettingsController, sessionController, setupController } from './team/team-controller.ts'
 import { installSettingsService } from './team/install-settings-service.ts'
+import { startDurable } from '../core/durable.ts'
 import { runSet } from './agents/run-set.ts'
 import { computerController } from './computers/computer-controller.ts'
 import { computerService } from './computers/computer-service.ts'
@@ -75,6 +76,7 @@ await gatewayServer.start().catch(async (err: unknown) => {
   await agentService.stopAll()
   process.exit(1)
 })
+await startDurable()
 await runSet.start()
 await agentService.boot()
 for (const plugin of plugins()) plugin.start?.()

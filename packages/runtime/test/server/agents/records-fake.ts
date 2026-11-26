@@ -18,9 +18,9 @@ export function useFakeRecords({ by = 'this-device' }: { by?: string } = {}) {
     seen.set(key, row.ver)
     return row
   }
-  const store = (row: Held): Held => {
+  const store = async (row: Held): Promise<Held> => {
     rows.set(keyOf({ collection: row.collection, id: row.id }), row)
-    changed({ collection: row.collection, id: row.id, ver: row.ver, workspace: row.workspace })
+    await changed({ collection: row.collection, id: row.id, ver: row.ver, workspace: row.workspace })
     return row
   }
 
@@ -36,7 +36,7 @@ export function useFakeRecords({ by = 'this-device' }: { by?: string } = {}) {
       const current = rows.get(key)
       if (!current || current.ver === (seen.get(key) ?? 0)) {
         const { collection, id, workspace, parent, personal } = input
-        return see(store({ collection, id, workspace, parent, ver: (current?.ver ?? 0) + 1, by, value: deleted ? null : patch.value, secret: deleted ? undefined : patch.secret, personal, deleted: deleted || undefined }))
+        return see(await store({ collection, id, workspace, parent, ver: (current?.ver ?? 0) + 1, by, value: deleted ? null : patch.value, secret: deleted ? undefined : patch.secret, personal, deleted: deleted || undefined }))
       }
       see(current)
       if (!input.reapply) throw new HttpError(409, 'Someone changed this a moment ago. Try again.')
@@ -82,7 +82,7 @@ export function useFakeRecords({ by = 'this-device' }: { by?: string } = {}) {
       for (const input of outbox.splice(0)) await put({ ...input, queue: false, reapply: (current) => current.deleted ? null : { value: input.value, secret: input.secret } })
     },
 
-    write(row: Omit<Held, 'ver' | 'by'> & { by?: string }): Held {
+    write(row: Omit<Held, 'ver' | 'by'> & { by?: string }): Promise<Held> {
       return store({ by: 'other-device', ...row, ver: (rows.get(keyOf({ collection: row.collection, id: row.id }))?.ver ?? 0) + 1 })
     },
   }

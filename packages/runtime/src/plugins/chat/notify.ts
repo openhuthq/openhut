@@ -3,6 +3,7 @@ import * as z from 'zod'
 import type { Place } from '@openhut/common/channels/channel.ts'
 import { AgentNotify } from '@openhut/common/threads/thread.ts'
 import { defineTool } from '../../core/plugin.ts'
+import { apply } from '../../server/agents/apply.ts'
 import { agentService } from '../../server/agents/agent-service.ts'
 import { channelService } from '../../server/channels/channel-service.ts'
 import { db } from '../../server/platform/db.ts'
@@ -66,7 +67,7 @@ export const notifyController: FastifyPluginAsyncZod = async (app) => {
     }
     const value: AgentNotify = { default: place, rules: req.body.rules.trim() }
     await db.updateTable('agent').set({ notify: JSON.stringify(value) }).where('id', '=', req.params.id).execute()
-    await agentService.reapply({ id: req.params.id })
+    await apply.request(req.params.id)
     emit({ name: 'agent.notify_updated', actor, target: { type: 'agent', id: req.params.id } })
     return value
   })

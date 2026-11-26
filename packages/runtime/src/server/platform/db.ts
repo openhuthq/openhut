@@ -9,7 +9,8 @@ const ID = /^[a-z]+_[a-z0-9]{8}$/
 
 mkdirSync(config.dataDir, { recursive: true, mode: 0o700 })
 
-export const db = new Kysely<Database>({ dialect: new PGliteDialect({ pglite: await PGlite.create(`${config.dataDir}/pglite`) }) })
+export const pglite = await PGlite.create(`${config.dataDir}/pglite`)
+export const db = new Kysely<Database>({ dialect: new PGliteDialect({ pglite }) })
 
 await sql`create table if not exists install_setting (name text primary key, value text not null)`.execute(db)
 
