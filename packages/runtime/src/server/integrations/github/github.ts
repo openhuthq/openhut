@@ -13,16 +13,18 @@ import { permissions } from '../../permissions/permissions.ts'
 const PERMISSIONS = { contents: 'write', pull_requests: 'write', issues: 'write', actions: 'read', checks: 'read', metadata: 'read' }
 const TOKEN_FRESH_MS = 50 * 60_000
 const NOT_SET_UP = 'GitHub isn\'t set up on this server yet. An admin sets it up once in Settings › Admin › GitHub.'
-const Config = z.object({ installationId: z.number() })
+const Config = z.object({ installationId: z.number(), repositories: z.optional(z.array(z.string())) })
 const Owner = z.object({ login: z.string(), type: z.enum(['User', 'Organization']), avatar_url: z.string() })
 const Account = z.object({ login: z.string(), name: z.optional(z.nullable(z.string())), type: z.enum(['User', 'Organization']), avatar_url: z.string() })
-const Installation = z.object({ id: z.number(), account: z.object({ login: z.string() }) })
+const Installation = z.object({ id: z.number(), account: Owner })
+const MAX_REPOS = 300
+const Repositories = z.object({ total_count: z.number(), repositories: z.array(z.object({ name: z.string() })) })
 const GIT: ToolSpec = {
   name: 'git_credentials',
   description: 'Get the shell commands that let git clone, pull and push in your terminal as the bot. Run them once, then use plain https://github.com URLs: git goes through OpenHut, which adds the key.',
   schema: { type: 'object', properties: {} },
 }
-const tokens = new Map<number, { at: number; token: string }>()
+const tokens = new Map<string, { at: number; token: string }>()
 const remote = mcp.connector({ url: MCP_SERVERS.github, redirectUrl: () => '' })
 
 export const github = {
@@ -53,17 +55,36 @@ export const github = {
 
   installUrl: ({ app, state }: { app: GithubApp; state?: string }): string => `https://github.com/apps/${app.slug}/installations/new${state ? `?state=${state}` : ''}`,
 
-  async installed(installationId: number): Promise<{ config: GithubConfig; account: string }> {
+  async installed(installationId: number, repositories?: string[]): Promise<{ config: GithubConfig; account: string }> {
     const app = serverApp()
     const installation = await call({ path: `/app/installations/${installationId}`, bearer: appJwt(app), schema: Installation })
-    return { config: { installationId }, account: `${installation.account.login} · ${app.slug}[bot]` }
+    const scope = repositories ? ` · ${repositories.length === 1 ? repositories[0] : `${repositories.length} repos`}` : ''
+    return { config: { installationId, ...repositories && { repositories } }, account: `${installation.account.login}${scope} · ${app.slug}[bot]` }
   },
 
   async repositories(): Promise<number> {
-    const app = serverApp()
-    const installations = await call({ path: '/app/installations', bearer: appJwt(app), schema: z.array(Installation) })
-    const counts = await Promise.all(installations.map(async ({ id }) => (await call({ path: '/installation/repositories?per_page=1', bearer: await fresh({ installationId: id }), schema: z.object({ total_count: z.number() }) })).total_count))
-    return counts.reduce((sum, count) => sum + count, 0)
+    return (await github.installations()).reduce((sum, each) => sum + each.total, 0)
+  },
+
+  async installations(): Promise<GithubInstallation[]> {
+    const installations = await call({ path: '/app/installations', bearer: appJwt(serverApp()), schema: z.array(Installation) })
+    return Promise.all(installations.map(async ({ id, account }) => {
+      const token = await fresh({ installationId: id })
+      const names: string[] = []
+      let total = 0
+      for (let page = 1; names.length < MAX_REPOS; page++) {
+        const found = await call({ path: `/installation/repositories?per_page=100&page=${page}`, bearer: token, schema: Repositories })
+        total = found.total_count
+        names.push(...found.repositories.map((repo) => repo.name))
+        if (found.repositories.length < 100) break
+      }
+      return { installationId: id, account: { login: account.login, type: account.type, avatarUrl: account.avatar_url }, repositories: names, total }
+    }))
+  },
+
+  async installationRequests(): Promise<{ account: string; requester: string }[]> {
+    const requests = await call({ path: '/app/installation-requests', bearer: appJwt(serverApp()), schema: z.array(z.object({ account: z.object({ login: z.string() }), requester: z.object({ login: z.string() }) })) })
+    return requests.map((each) => ({ account: each.account.login, requester: each.requester.login }))
   },
 
   connector: {
@@ -114,13 +135,12 @@ async function asBot(ctx: ConnectorContext): Promise<ConnectorContext> {
 }
 
 async function fresh(config: GithubConfig): Promise<string> {
-  const cached = tokens.get(config.installationId)
-  return cached && Date.now() - cached.at < TOKEN_FRESH_MS ? cached.token : mint(config)
-}
-
-async function mint(config: GithubConfig): Promise<string> {
-  const { token } = await call({ path: `/app/installations/${config.installationId}/access_tokens`, method: 'POST', bearer: appJwt(serverApp()), schema: z.object({ token: z.string() }) })
-  tokens.set(config.installationId, { at: Date.now(), token })
+  const key = `${config.installationId}:${config.repositories?.join(',') ?? '*'}`
+  const cached = tokens.get(key)
+  if (cached && Date.now() - cached.at < TOKEN_FRESH_MS) return cached.token
+  const body = config.repositories ? JSON.stringify({ repositories: config.repositories }) : undefined
+  const { token } = await call({ path: `/app/installations/${config.installationId}/access_tokens`, method: 'POST', bearer: appJwt(serverApp()), body, schema: z.object({ token: z.string() }) })
+  tokens.set(key, { at: Date.now(), token })
   return token
 }
 
@@ -144,10 +164,11 @@ function appJwt({ id, pem }: GithubApp): string {
   return `${body}.${createSign('RSA-SHA256').update(body).sign(pem, 'base64url')}`
 }
 
-async function call<T>({ path, method = 'GET', bearer, schema }: { path: string; method?: string; bearer?: string; schema: z.ZodMiniType<T> }): Promise<T> {
-  const res = await guardedFetch(`${config.githubApi}${path}`, { method, headers: { accept: 'application/vnd.github+json', 'user-agent': 'openhut', ...(bearer && { authorization: `Bearer ${bearer}` }) } })
+async function call<T>({ path, method = 'GET', bearer, body, schema }: { path: string; method?: string; bearer?: string; body?: string; schema: z.ZodMiniType<T> }): Promise<T> {
+  const res = await guardedFetch(`${config.githubApi}${path}`, { method, body, headers: { accept: 'application/vnd.github+json', 'user-agent': 'openhut', ...(bearer && { authorization: `Bearer ${bearer}` }), ...(body && { 'content-type': 'application/json' }) } })
   if (!res.ok) throw new Error(`GitHub answered ${res.status}: ${(await res.text()).slice(0, 200)}`)
   return z.parse(schema, await res.json())
 }
 
 type GithubConfig = z.infer<typeof Config>
+export type GithubInstallation = { installationId: number; account: { login: string; type: 'User' | 'Organization'; avatarUrl: string }; repositories: string[]; total: number }
