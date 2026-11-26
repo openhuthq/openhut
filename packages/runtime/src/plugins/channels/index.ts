@@ -10,7 +10,6 @@ import { telegram } from '../../server/integrations/telegram/telegram.ts'
 import { discord } from '../../server/integrations/discord/discord.ts'
 import { whatsapp } from '../../server/integrations/whatsapp/whatsapp.ts'
 import { channelService } from '../../server/channels/channel-service.ts'
-import { agentService } from '../../server/agents/agent-service.ts'
 import { channelController } from '../../server/channels/channel-controller.ts'
 import { log } from '../../server/platform/events.ts'
 import { describeIssues, HttpError, messageOf } from '../../server/platform/http-error.ts'
@@ -38,7 +37,11 @@ export const channels = definePlugin({
   start: () => void channelService.resumeTelegramClaims().catch((err: unknown) => log.warn({ event: 'telegram.claim_resume_failed', error: messageOf(err) })),
   hermes: ({ agent, channels: list, gateway, token }) => {
     const parts = list.map((channel) => partOf({ channel, gateway, token, net: agent.net }))
-    return { config: Object.assign({}, ...parts.map((part) => part.config)), env: Object.assign({}, ...parts.map((part) => part.env)) }
+    return {
+      config: Object.assign({}, ...parts.map((part) => part.config)),
+      env: Object.assign({}, ...parts.map((part) => part.env)),
+      restart: list.map((channel) => channel.kind === 'telegram' ? channel.kind : channel),
+    }
   },
   asks: {
     add_channel: defineAsk({
@@ -56,7 +59,7 @@ export const channels = definePlugin({
         return `Add ${LABEL[input.kind]}${input.open ? ', open to anyone' : ''}`
       },
       run: async ({ actor, ask: { agentId, input } }) => {
-        await agentService.quietly({ id: agentId, change: () => channelService.create({ actor, ...newChannel({ agentId, input }) }).catch(alreadyDone(409)) })
+        await channelService.create({ actor, ...newChannel({ agentId, input }) }).catch(alreadyDone(409))
         return input.kind === 'whatsapp' ? 'WhatsApp links once your owner scans the QR code on your page in OpenHut.' : 'You have already restarted with it.'
       },
     }),
@@ -67,8 +70,8 @@ export const channels = definePlugin({
       title: async ({ agentId, input }) => `Change who can message it on ${LABEL[(await ownChannel({ agentId, id: input.id })).kind]}`,
       run: async ({ actor, ask: { agentId, input: { id, ...patch } } }) => {
         await ownChannel({ agentId, id })
-        await agentService.quietly({ id: agentId, change: () => channelService.update({ actor, id, patch }) })
-        return 'You have already restarted with it.'
+        await channelService.update({ actor, id, patch })
+        return 'It\'s already in effect.'
       },
     }),
     remove_channel: defineAsk({
@@ -76,7 +79,7 @@ export const channels = definePlugin({
       tool: 'Ask to remove one of your channels.',
       title: async ({ agentId, input }) => `Remove ${LABEL[(await ownChannel({ agentId, id: input.id })).kind]}`,
       run: async ({ actor, ask: { agentId, input: { id } } }) => {
-        await ownChannel({ agentId, id }).then(() => agentService.quietly({ id: agentId, change: () => channelService.delete({ actor, id }) })).catch(alreadyDone(404))
+        await ownChannel({ agentId, id }).then(() => channelService.delete({ actor, id })).catch(alreadyDone(404))
         return 'You have already restarted with it.'
       },
     }),

@@ -1,5 +1,5 @@
 import type { Duplex } from 'node:stream'
-import { agents, FILES, type AgentFiles } from './agents.ts'
+import { agents, FILES, RESTART_KEY, type AgentFiles } from './agents.ts'
 import { browser, MAX_FPS } from './browser.ts'
 import { fenceLines, proveFence, type FenceReport } from './fence.ts'
 import { firewall } from './firewall.ts'
@@ -47,7 +47,7 @@ export const commands = {
     },
   },
   apply: {
-    parse: (v: Fields) => ({ id: agentId(v.id), net: netOf(v.net), files: filesOf(v.files), browser: v.browser === true, running: v.running === true, force: v.force === true }),
+    parse: (v: Fields) => ({ id: agentId(v.id), net: netOf(v.net), files: filesOf(v.files), browser: v.browser === true, running: v.running === true, force: v.force === true, restart: v.restart !== false }),
     run: agents.apply,
   },
   stop: {
@@ -132,6 +132,7 @@ function filesOf(value: unknown): AgentFiles {
     if (typeof body !== 'string' || body.length > MAX_FILE) throw new Error(`missing or oversized ${name}`)
     files[name] = body
   }
+  if (typeof value[RESTART_KEY] === 'string') files[RESTART_KEY] = value[RESTART_KEY].slice(0, 200)
   return files as AgentFiles
 }
 

@@ -254,37 +254,48 @@ test('an answer waits at most 30 seconds for the chat\'s other asks, then goes a
   assert.match(wake.text, /Your owner answered your ask:\n- Not approved: Add a webhook named Slow one\..*\nStill waiting for: Add a webhook named Slow two\./s)
 })
 
-test('a wake waits for the restart its answer needs, and the restart waits for the agent to go quiet', async () => {
+test('new instructions apply at once, with no restart and no held wake, even while the agent is busy', async () => {
   const id = idIn(await asks.create({ agentId: 'ag_chgagent', kind: 'update_self', input: { instructions: '# Quiet\nNew.' }, why: 'x', origin: app }))
   activity.started('ag_chgagent')
   const applies = agentd.applies.length
   const before = told.length
   await asks.approve({ actor: owner, id })
+  assert.equal(agentService.restartPending('ag_chgagent'), false)
+  assert.ok(agentd.applies.slice(applies).every((each) => each.change === 'none'))
+  await settled()
+  activity.ended('ag_chgagent')
+  assert.equal(told.length, before + 1)
+  assert.match(told.at(-1)?.text ?? '', /Approved and done: Change its instructions\. Your new instructions are already in effect\./)
+})
+
+test('a change that needs a restart is written at once and restarts only once the agent is quiet, holding wakes until then', async () => {
+  const id = idIn(await asks.create({ agentId: 'ag_chgagent', kind: 'update_channel', input: { id: 'ch_chgwhats', allowed: ['15550003333'] }, why: 'x', origin: app }))
+  activity.started('ag_chgagent')
+  const applies = agentd.applies.length
+  await asks.approve({ actor: owner, id })
+  assert.ok(agentd.applies.slice(applies).some((each) => each.change === 'pending'))
   await new Promise((resolve) => setTimeout(resolve, 1500))
   assert.equal(agentService.restartPending('ag_chgagent'), true)
   await agentService.sync({ computer: HERE })
-  assert.equal(agentd.applies.length, applies, 'no restart while a call is open')
+  assert.ok(!agentd.applies.slice(applies).some((each) => each.change === 'restarted'), 'no restart while a call is open')
   assert.deepEqual(await wakes.due({ agentId: 'ag_chgagent' }), [], 'no wake before the restart')
   const ended = Date.now()
   activity.ended('ag_chgagent')
   await settled()
-  const restart = agentd.applies.slice(applies).find((each) => each.id === 'ag_chgagent')
+  const restart = agentd.applies.slice(applies).find((each) => each.change === 'restarted')
   assert.ok(restart && restart.at >= ended + config.quietMs, 'restarted once quiet')
-  assert.equal(told.length, before + 1)
-  assert.match(told.at(-1)?.text ?? '', /Approved and done: Change its instructions\. You have already restarted with it\./)
+  assert.match(told.at(-1)?.text ?? '', /Approved and done: Change who can message it on WhatsApp/)
 })
 
-test('a grant made in the app waits for the agent to go quiet before it restarts it', async () => {
+test('a grant made in the app reaches the agent at once without a restart, even while it is busy', async () => {
   const connection = { id: 'cn_quietdb1' }
   await db.insertInto('connection').values({ id: connection.id, kind: 'postgres', name: 'Quiet DB', owner_id: 'usr_chgowner', config: seal('{}') }).execute()
   activity.started('ag_chgagent')
   const applies = agentd.applies.length
   await agentService.createGrant({ actor: owner, agentId: 'ag_chgagent', connectionId: connection.id })
-  await new Promise((resolve) => setTimeout(resolve, 1500))
-  assert.equal(agentd.applies.length, applies)
   activity.ended('ag_chgagent')
-  await settled()
-  assert.ok(agentd.applies.length > applies)
+  assert.ok(agentd.applies.length > applies && agentd.applies.slice(applies).every((each) => each.change === 'none'))
+  assert.equal(agentService.restartPending('ag_chgagent'), false)
 })
 
 test('asking for the same thing twice while it is open gives back the first ask', async () => {

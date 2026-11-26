@@ -49,7 +49,8 @@ async function seed(): Promise<void> {
 export function fakeAgentd({ path = process.env.AGENTD_SOCK }: { path?: string } = {}) {
   const files = new Map<string, string>()
   const applied = new Map<string, boolean>()
-  const applies: { id: string; at: number }[] = []
+  const applies: { id: string; at: number; change: string }[] = []
+  const keys = new Map<string, string>()
   const failing = new Set<string>()
   const features = { whatsapp: false, browser: false }
   const image = { ready: true }
@@ -63,13 +64,17 @@ export function fakeAgentd({ path = process.env.AGENTD_SOCK }: { path?: string }
       if (lines.length < 2) return
       const key = `${req.id}/${req.path}`
       if (req.cmd === 'write') files.set(key, Buffer.from(lines[1] ?? '', 'base64').toString('utf8'))
+      const restartKey = req.files?.['restart.key']
+      const moved = keys.has(req.id) && keys.get(req.id) !== restartKey
+      const change = !moved ? 'none' : req.restart === false ? 'pending' : 'restarted'
       if (req.cmd === 'apply' && !failing.has(req.id)) applied.set(req.id, req.running)
-      if (req.cmd === 'apply') applies.push({ id: req.id, at: Date.now() })
+      if (req.cmd === 'apply' && change !== 'pending') keys.set(req.id, restartKey)
+      if (req.cmd === 'apply') applies.push({ id: req.id, at: Date.now(), change })
       if (req.cmd === 'rm') applied.delete(req.id)
       if (req.cmd === 'stop' && applied.has(req.id)) applied.set(req.id, false)
       const states = Object.fromEntries([...applied].map(([id, running]) => [id, running ? 'running' : 'exited']))
       const replies: Record<string, unknown> = {
-        ps: { states }, health: { firewall: true, imageReady: image.ready, features }, apply: { applied: req.id, change: 'none' }, rm: { removed: req.id }, stop: { stopped: req.id }, write: { path: req.path },
+        ps: { states }, health: { firewall: true, imageReady: image.ready, features }, apply: { applied: req.id, change }, rm: { removed: req.id }, stop: { stopped: req.id }, write: { path: req.path },
         read: { body: files.has(key) ? Buffer.from(files.get(key) ?? '').toString('base64') : null }, skills: { skills: [], bundled: '' }, delete: { removed: req.paths ?? [] },
       }
       if (req.cmd === 'apply' && failing.has(req.id)) return sock.end(JSON.stringify({ ok: false, error: 'Pool overlaps with other one on this address space' }))

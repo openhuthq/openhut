@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, utimesSync } from 'node:fs'
 import { browser, POLICY_FILE, policyOf } from './browser.ts'
 import { firewall } from './firewall.ts'
 import { join } from 'node:path'
@@ -8,6 +8,7 @@ import type { Mount, SandboxSpec, SandboxState } from './sandbox/sandbox.ts'
 import { whatsapp } from './whatsapp.ts'
 
 export const FILES = ['config.yaml', '.env', 'SOUL.md', 'auth.json'] as const
+export const RESTART_KEY = 'restart.key'
 const PLUGINS = `${ASSETS}/vendor/hermes-plugins`
 const MOUNTS = createHash('sha256').update(`${PLUGINS}\n${CLAUDE}`).digest('hex').slice(0, 16)
 const SPEC = '4'
@@ -33,11 +34,13 @@ const AGENT_ENV = {
 }
 
 export const agents = {
-  async apply({ id, net, files, browser: on, running, force }: Desired): Promise<{ applied: string; change: Change }> {
+  async apply({ id, net, files, browser: on, running, force, restart }: Desired): Promise<{ applied: string; change: Change }> {
     const soulChanged = writeConf(id, files)
     if (soulChanged) await refreshPrompts({ id, net, browser: on })
     const made = await sandboxOf(id)
-    if (!made || outdated({ made, browser: on })) {
+    const recreate = !made || outdated({ made, browser: on })
+    if (!restart && !force && running && made?.running && (recreate || stale(made))) return { applied: id, change: 'pending' }
+    if (recreate) {
       await firewall.require()
       if (on) await browser.prepare()
       makeHome(id)
@@ -137,7 +140,7 @@ function outdated({ made, browser: on }: { made: SandboxState; browser: boolean 
 
 function stale(made: SandboxState) {
   const started = made.startedAt ? Date.parse(made.startedAt.replace(/(\.\d{3})\d+/, '$1')) : 0
-  return Math.max(...[...FILES, CLAUDE_SETTINGS_FILE].map((name) => Math.floor(statSync(`${conf(made.id)}/${name}`).mtimeMs))) > started
+  return Math.max(...[RESTART_KEY, CLAUDE_SETTINGS_FILE].map((name) => Math.floor(statSync(`${conf(made.id)}/${name}`).mtimeMs))) > started
 }
 
 function specOf({ id, net, browser: on }: { id: string; net: number; browser: boolean }): SandboxSpec {
@@ -170,10 +173,19 @@ function writeConf(id: string, files: AgentFiles) {
   const dir = conf(id)
   mkdirSync(dir, { recursive: true })
   own({ path: dir, uid: 0, gid: AGENT_UID, mode: 0o750 })
+  const had = envKeys(`${dir}/.env`)
   const changed = FILES.filter((name) => writeIfChanged(`${dir}/${name}`, files[name]))
+  const key = `${dir}/${RESTART_KEY}`
+  writeIfChanged(key, files[RESTART_KEY] ?? `${createHash('sha256').update(FILES.map((name) => files[name]).join('\0')).digest('hex')}\n`)
+  const kept = envKeys(`${dir}/.env`)
+  if ([...had].some((name) => !kept.has(name))) utimesSync(key, new Date(), new Date())
   writeIfChanged(`${dir}/${CLAUDE_SETTINGS_FILE}`, CLAUDE_SETTINGS)
   writeIfChanged(`${dir}/${POLICY_FILE}`, policyOf(id))
   return changed.includes('SOUL.md')
+}
+
+function envKeys(path: string): Set<string> {
+  return new Set(existsSync(path) ? readFileSync(path, 'utf8').split('\n').map((line) => line.split('=')[0]).filter(Boolean) : [])
 }
 
 async function refreshPrompts({ id, net, browser: on }: { id: string; net: number; browser: boolean }) {
@@ -190,6 +202,6 @@ function makeHome(id: string) {
   }
 }
 
-export type AgentFiles = Record<(typeof FILES)[number], string>
-export type Change = 'created' | 'started' | 'restarted' | 'stopped' | 'none'
-type Desired = { id: string; net: number; files: AgentFiles; browser: boolean; running: boolean; force: boolean }
+export type AgentFiles = Record<(typeof FILES)[number], string> & { [RESTART_KEY]?: string }
+export type Change = 'created' | 'started' | 'restarted' | 'stopped' | 'pending' | 'none'
+type Desired = { id: string; net: number; files: AgentFiles; browser: boolean; running: boolean; force: boolean; restart: boolean }

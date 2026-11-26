@@ -16,6 +16,7 @@ export const models = definePlugin({
       config: { ...modelConfig({ gateway, token, slot: agent.slots.primary }), ...setup.config },
       env: config.modelMode === 'test' ? {} : setup.env,
       auth: config.modelMode === 'claude' ? setup.auth : undefined,
+      restart: agent.slots.primary.provider,
     }
   },
 })

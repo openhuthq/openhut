@@ -87,6 +87,22 @@ test('apply brings the sandbox to what was asked: created, started, left alone, 
   assert.equal((await apply({ running: false, browser: true })).change, 'stopped')
 })
 
+test('a running agent takes new files live; only a new restart key or a key gone from .env restarts it, and only when asked to', async () => {
+  const id = 'ag_livekey1'
+  const apply = (files: object, more: object = {}) => call({ cmd: 'apply', id, net: 5, browser: false, running: true, restart: false, files: { ...FILES, 'restart.key': 'k1', ...files }, ...more })
+  assert.equal((await apply({})).change, 'created')
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  assert.equal((await apply({ 'SOUL.md': 'new soul', 'config.yaml': 'new model', '.env': 'b\nOPENHUT_SECRET_X=x' })).change, 'none')
+  assert.equal(readFileSync(join(data, 'agent-conf', id, 'SOUL.md'), 'utf8'), 'new soul')
+  assert.equal((await apply({ 'restart.key': 'k2' })).change, 'pending')
+  assert.equal((await apply({ 'restart.key': 'k2' })).change, 'pending', 'still due until it restarts')
+  assert.equal((await apply({ 'restart.key': 'k2' }, { restart: true })).change, 'restarted')
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  assert.equal((await apply({ 'restart.key': 'k2', '.env': 'b\nOPENHUT_SECRET_X=x' })).change, 'none')
+  assert.equal((await apply({ 'restart.key': 'k2', '.env': 'b' })).change, 'pending', 'Hermes never drops a removed .env key')
+  assert.equal((await apply({ 'restart.key': 'k2' }, { browser: true })).change, 'pending', 'the browser toggle waits too')
+})
+
 test('WhatsApp pairing streams the bridge\'s lines, and the agent restarts when it ends', { timeout: 10_000 }, async () => {
   const id = 'ag_pairing1'
   assert.equal((await call({ cmd: 'apply', id, net: 3, files: FILES, browser: false, running: true })).ok, true)
