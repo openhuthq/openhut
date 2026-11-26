@@ -19,3 +19,8 @@ test('a wait for the main\'s own runtime gives up after its time, and other comp
   assert.equal(await forward.ready({ on: HERE, ms: 20 }), false)
   assert.equal(await forward.ready({ on: 'cm_elsewhere', ms: 10_000 }), true)
 })
+
+test('a call to the main\'s own runtime while it has no link fails as offline, without reaching for a local socket', () => {
+  forward.unlink({ computer: HERE })
+  assert.throws(() => forward.open({ on: HERE, request: { to: 'agentd' } }), { status: 503, message: /offline/ })
+})

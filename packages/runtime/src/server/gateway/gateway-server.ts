@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
+import * as z from 'zod/mini'
 import { config } from '../platform/config.ts'
 import { errorBody, HttpError, messageOf } from '../platform/http-error.ts'
 import { log } from '../platform/events.ts'
@@ -20,6 +21,7 @@ const PER_AGENT = 8
 // Background polls (Telegram's long poll, the plugin's wakes poll every 15 s) aren't the agent at work, so they don't count toward its request limit.
 const LONG_POLL = /^(\/u\/telegram\/bot[^/]+\/getUpdates|\/wakes)$/
 const MAX_BODY = 1 << 20
+const Turn = z.object({ turn: z.string().check(z.minLength(1), z.maxLength(200)), state: z.enum(['start', 'end']) })
 const LIMITS = { requestTimeout: 600_000, headersTimeout: 10_000, connectionsCheckingInterval: 2_000 }
 
 export const gatewayServer = {
@@ -62,6 +64,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   if (path === '/wakes' && req.method === 'GET') return json(res, 200, { object: 'list', url: path, hasMore: false, data: (await wakes.due({ agentId: agent.id })).filter((wake) => wake.origin.platform !== APP_PLATFORM) })
   const wake = /^\/wakes\/(\w+:\w+)$/.exec(path)
   if (wake && req.method === 'POST') return json(res, 200, await wakes.report({ agentId: agent.id, id: wake[1], body: await readBody(req) }))
+  if (path === '/turns' && req.method === 'POST') return json(res, 200, turned({ agentId: agent.id, body: await readBody(req) }))
   const local = /^\/tools\/(\w+)$/.exec(path)
   if (local && req.method === 'POST') return json(res, 200, await runLocal({ agent, name: local[1], body: await readBody(req) }))
   if (path === '/slack-actions' && req.method === 'POST') return json(res, 200, await runSlackAction({ agent, body: await readBody(req) }))
@@ -69,6 +72,13 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   if (hook && req.method === 'POST') return json(res, 200, await runHook({ agent, hook: hook[1], body: await readBody(req) }))
   if (path.startsWith('/test-llm/') && config.modelMode === 'test') return testModel({ path, body: await readBody(req), res })
   json(res, 404, errorBody({ status: 404, message: `No route ${path}.` }))
+}
+
+function turned({ agentId, body }: { agentId: string; body: unknown }): { ok: true } {
+  const found = Turn.safeParse(body)
+  if (!found.success) throw new HttpError(400, 'Send a turn id and whether it started or ended.')
+  activity.turn({ agentId, turn: found.data.turn, state: found.data.state })
+  return { ok: true }
 }
 
 async function readBody(req: IncomingMessage): Promise<unknown> {

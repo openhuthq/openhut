@@ -80,7 +80,7 @@ export const forward = {
     const link = links.get(on)
     if (link) return link.mux.open(request)
     if (on !== HERE) throw new HttpError(503, OFFLINE)
-    if (request.to === 'agentd') return localAgentd()
+    if (request.to === 'agentd' && !config.hereTokenSha256) return localAgentd()
     throw new HttpError(503, OFFLINE)
   },
 

@@ -32,6 +32,7 @@ def register(ctx):
     for tool in ctx.get_config("tools", []) or []:
         ctx.register_tool(name=tool["name"], toolset=LOCAL_TOOLSET, schema=tool, handler=local(tool["name"]))
     ctx.register_hook("pre_tool_call", stamp)
+    ctx.register_hook("pre_llm_call", turn("start"))
     ctx.register_hook("post_llm_call", said)
     for name in ctx.get_config("hooks", []) or []:
         ctx.register_hook(name, dispatch if name == "pre_gateway_dispatch" else forward(name))
@@ -144,7 +145,15 @@ def poll(ctx):
         time.sleep(POLL_SECONDS)
 
 
-def said(user_message="", assistant_response="", **_):
+def turn(state):
+    def hook(turn_id="", **_):
+        if turn_id and os.environ.get("OPENHUT_GATEWAY"):
+            notices.put(("/turns", {"turn": str(turn_id), "state": state}))
+    return hook
+
+
+def said(user_message="", assistant_response="", turn_id="", **_):
+    turn("end")(turn_id=turn_id)
     match = WAKE.search(str(user_message or ""))
     if not match or match.group(1) not in injected:
         return
