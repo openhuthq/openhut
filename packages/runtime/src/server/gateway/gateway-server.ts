@@ -159,7 +159,7 @@ function agentMcp(agent: GatewayAgent): McpServer {
         scopes: z.array(z.string().max(100)).max(30).optional().describe('The scopes it needs, as the app names them.'),
       }),
       groups: z.array(z.object({
-        group: z.enum(['read', 'create', 'update', 'delete', 'other']),
+        group: z.enum(['read', 'create', 'update', 'delete', 'other']).describe('other: tools the app doesn\'t label, and one generic tool that runs any other tool (like mcp_invoke_tool), so it can do anything.'),
         label: z.string().min(1).max(80).describe('What these tools do here, in plain words: "Read database info".'),
         permission: z.enum(['allow', 'ask', 'deny']).describe('allow runs without asking, ask waits for their OK each time, deny never runs. Usually: read allow, create and update ask, delete deny.'),
       })).min(1).max(5).describe('One entry per kind of tool the job needs.'),

@@ -13,12 +13,13 @@ import { Glyph } from '@/components/glyph'
 import { Loaded } from '@/components/loaded'
 import { useAgents } from '@/features/agents/api'
 import { useConnections } from '@/features/connections/api'
-import { connectedFirst, INTEGRATIONS, integration, titleOf } from '@/features/connections/catalog'
+import { appRows, appStatus, byName, connectionBrand, INTEGRATIONS, integration, kindNote, type Integration } from '@/features/connections/catalog'
 import { ConnectSheet, useQuickConnect } from '@/features/connections/connect-sheets'
 import { AgentGrants, ConnectionSheet, Faces } from '@/features/connections/manage-sheets'
 import { useMe } from '@/features/people/api'
 import { Chevron, Row, Rows } from '@/features/settings/kit'
-import { I, PILL, Status } from '@/components/kit'
+import { I, PILL } from '@/components/kit'
+import { StatusBadge } from '@/components/status-badge'
 import { usePath, useSearch } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
@@ -43,8 +44,7 @@ export function AppsSettings() {
   const words = query.trim().toLowerCase()
   const returned = new URLSearchParams(useSearch()).get('error') ?? undefined
   const list = connections.data ?? []
-  const kinds = list.map((connection) => connection.kind)
-  const shown = connectedFirst({ items: INTEGRATIONS, kinds }).filter((item) => `${item.title} ${item.short}`.toLowerCase().includes(words))
+  const shown = appRows({ items: INTEGRATIONS, connections: list }).filter((row) => `${row.title} ${row.note}`.toLowerCase().includes(words))
   return <div className="flex flex-col gap-4">
     <div className="flex items-center gap-3">
       <ToggleGroup aria-label="Apps" value={view} onPick={(next) => setView(next === 'connected' ? 'connected' : 'all')}>
@@ -56,20 +56,23 @@ export function AppsSettings() {
     <ErrorNote message={returned} />
     {view === 'connected'
       ? <Loaded query={connections}>{(loaded) => loaded.length
-        ? <Rows>{loaded.map((connection) => <ConnectedRow key={connection.id} connection={connection} agents={agents.data ?? []} />)}</Rows>
+        ? <Rows>{byName(loaded, (connection) => connection.name).map((connection) => <ConnectedRow key={connection.id} connection={connection} agents={agents.data ?? []} />)}</Rows>
         : <EmptyState line="No apps connected yet. Pick one under All apps so your agents can read your mail, files or code." />}</Loaded>
-      : <>{!shown.length && <EmptyState mood="worried" line={<>No app called “{query.trim()}”. Try <a href="/connections/new/mcp" className="text-ink underline underline-offset-2">Custom MCP</a> to add any server.</>} />}<Rows>{shown.map((item) => <Row key={item.name} icon={<Glyph name={item.name} size={20} />} title={item.title} note={item.short}>
-        {kinds.includes(item.name)
-          ? <Status tone="on">Connected</Status>
-          : quick.direct(item)
-            ? <Button type="button" variant="secondary" className={PILL} disabled={quick.pending} onClick={() => quick.connect(item)}>Connect</Button>
-            : <a href={`/connections/new/${item.name}`} className={cn(buttonVariants({ variant: 'secondary' }), PILL)}>Connect</a>}
+      : <>{!shown.length && <EmptyState mood="worried" line={<>No app called “{query.trim()}”. Try <a href="/connections/new/mcp" className="text-ink underline underline-offset-2">Custom MCP</a> to add any server.</>} />}<Rows>{shown.map((row) => <Row key={row.key} icon={<Glyph name={row.brand} size={20} />} title={row.title} note={row.note}>
+        <AppAction status={appStatus(row.connections)} item={row.item} href={row.item ? undefined : `/connections/${row.connections[0]?.id}`} quick={quick} />
       </Row>)}</Rows></>}
   </div>
 }
 
+function AppAction({ status, item, href, quick }: { status: ReturnType<typeof appStatus>; item: Integration | undefined; href: string | undefined; quick: ReturnType<typeof useQuickConnect> }) {
+  if (status) return href ? <a href={href} className="no-underline"><StatusBadge status={status} /></a> : <StatusBadge status={status} />
+  if (!item) return null
+  if (quick.direct(item)) return <Button type="button" variant="secondary" className={PILL} disabled={quick.pending} onClick={() => quick.connect(item)}>Connect</Button>
+  return <a href={`/connections/new/${item.name}`} className={cn(buttonVariants({ variant: 'secondary' }), PILL)}>Connect</a>
+}
+
 function ConnectedRow({ connection, agents }: { connection: Connection; agents: OpenHutAgent[] }) {
-  return <Row icon={<Glyph name={connection.kind} size={20} />} title={<span className="flex items-center gap-2">{connection.name}{connection.kind === 'postgres' && <Badge variant="tag">read-only</Badge>}{connection.status === 'failing' && <Badge variant="warning">failing</Badge>}</span>} note={[titleOf(connection.kind), connection.account].filter(Boolean).join(' · ')}>
+  return <Row icon={<Glyph name={connectionBrand(connection)} size={20} />} title={<span className="flex items-center gap-2">{connection.name}{connection.kind === 'postgres' && <Badge variant="tag">read-only</Badge>}<StatusBadge status={connection.status} /></span>} note={kindNote(connection)}>
     <Faces connection={connection} agents={agents} />
     <Popover>
       <PopoverTrigger className={cn(buttonVariants({ variant: 'secondary' }), PILL)}>Can use<I icon={UnfoldMoreIcon} size={12} className="text-mute" /></PopoverTrigger>

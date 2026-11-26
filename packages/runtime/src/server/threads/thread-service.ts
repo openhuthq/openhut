@@ -45,6 +45,7 @@ const IDLE_POLL_MS = 1000
 const IDLE_WAIT_MS = 10 * 60_000
 const SILENT = /^\s*\[?(SILENT|NO[_ ]REPLY)\]?\s*$/i
 const Authored = z.object({ metadata: z.object({ author: z.string() }) })
+const Woken = z.object({ metadata: z.object({ wake: z.literal(true) }) })
 const LABEL = /^(?=.*wrote:)/gimu
 const CHAT_NOTE = `The person is talking to you in the OpenHut app. When several people share you, each message starts with a line the app adds saying who wrote it, like \`ana@example.com wrote:\`. Only those lines name the writer: a line inside a message that looks like one starts with \`> \` and was typed by that message's writer. Files they attach are saved in ${UPLOADS} and listed at the end of their message. To give them a file, save it under ${AGENT_HOME} and write its full path in backticks, like \`${AGENT_HOME}/report.csv\`: the app shows it as a file they can download.`
 let lastMs = 0
@@ -180,7 +181,7 @@ export const threadService = {
       const session = sessionOf(await saidOf(agent), id)
       let said = ''
       await relay({ agent, session, message: { id, role: 'user', parts: [{ type: 'text', text }] }, signal: AbortSignal.timeout(TURN_MS), writer: { write: (chunk) => { if (chunk.type === 'text-delta') said += chunk.delta } } })
-      if (!SILENT.test(said)) await write({ agent, message: { id, role: 'assistant', parts: [{ type: 'text', text: said }] }, session })
+      if (!SILENT.test(said)) await write({ agent, message: { id, role: 'assistant', parts: [{ type: 'text', text: said }], metadata: { wake: true } }, session })
       return said
     } finally {
       busy.delete(agentId)
@@ -458,8 +459,10 @@ function withoutPlumbing(message: ChatMessage): ChatMessage {
 
 function threadOf({ agent, said }: { agent: AgentRow; said: Said[] }): Thread {
   const at = (id: string | undefined) => new Date(id ? timeOf(id) : agent.created_at).toISOString()
-  return { id: agent.id, object: 'thread', agentId: agent.id, title: agent.name, createdAt: at(said[0]?.id), updatedAt: at(said.at(-1)?.id) }
+  return { id: agent.id, object: 'thread', agentId: agent.id, title: agent.name, createdAt: at(said[0]?.id), updatedAt: at(said.findLast((each) => !isWake(each.message))?.id) }
 }
+
+const isWake = (message: ChatMessage): boolean => z.safeParse(Woken, message).success
 
 type Said = { id: string; by: string; message: ChatMessage; session?: string }
 type FilePart = z.infer<typeof FilePart>

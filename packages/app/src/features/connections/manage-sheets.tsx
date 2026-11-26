@@ -12,7 +12,7 @@ import { useAgents, useCreateGrant, useDeleteGrant, useGrants } from '@/features
 import { Face } from '@/features/agents/face'
 import { useAuthorizeConnection, useBackToAsker, useConnectionEvents, useConnections, useConnectionTools, useDeleteConnection } from '@/features/connections/api'
 import { asked } from '@/features/connections/asked'
-import { integration, titleOf } from '@/features/connections/catalog'
+import { connectionBrand, integration, kindNote } from '@/features/connections/catalog'
 import { Section, SetupSheet } from '@/components/kit'
 import { Success } from '@/features/connections/sheet'
 import { AgentCheck } from '@/features/settings/kit'
@@ -62,7 +62,7 @@ function AccessSheet({ connection, agents }: { connection: Connection; agents: O
   const toAsker = useBackToAsker()
   const back = () => askedBy && picked.includes(askedBy.id) ? toAsker({ agentId: askedBy.id, name: connection.name }) : close()
   const done = () => Promise.all(picked.map((agentId) => createGrant.mutateAsync({ agentId, connectionId: connection.id }))).then(back, toastError)
-  return <SetupSheet brand={connection.kind} title={`Who can use ${connection.name}`} blurb={item?.short ?? ''} onClose={close}
+  return <SetupSheet brand={connectionBrand(connection)} title={`Who can use ${connection.name}`} blurb={item?.short ?? ''} onClose={close}
     foot={<Button variant="primary" disabled={createGrant.isPending} onClick={() => void done()}>Done</Button>}>
     <Success>{successLine(connection)}</Success>
     <div className="flex animate-grow flex-col gap-3">
@@ -80,11 +80,17 @@ function successLine(connection: Connection) {
   return `${connection.name} is connected.`
 }
 
+function statusNote(connection: Connection) {
+  const worked = connection.lastSuccessAt && `Last worked ${ago(connection.lastSuccessAt)} ago`
+  if (connection.status === 'failing') return worked ? `Failed last time. ${worked}` : 'Every call so far failed'
+  return worked || 'Not used yet'
+}
+
 function ManageSheet({ connection, agents }: { connection: Connection; agents: OpenHutAgent[] }) {
   const remove = useDeleteConnection(connection)
   const authorize = useAuthorizeConnection()
   const returned = new URLSearchParams(location.search).get('error') ?? undefined
-  return <SetupSheet brand={connection.kind} title={connection.name} blurb={[titleOf(connection.kind), connection.account].filter(Boolean).join(' · ')} error={returned} onClose={close}
+  return <SetupSheet brand={connectionBrand(connection)} title={connection.name} blurb={kindNote(connection)} error={returned} onClose={close}
     safe={`Added ${shortDate.format(new Date(connection.createdAt))}`}
     foot={<>
       <ConfirmButton variant="danger" disabled={!connection.canDelete} question={`Delete ${connection.name}?`} detail="Every agent stops being able to use it." action="Delete" onConfirm={() => remove.mutate(undefined, { onError: toastError })}>Delete</ConfirmButton>
@@ -92,7 +98,7 @@ function ManageSheet({ connection, agents }: { connection: Connection; agents: O
       <Button variant="primary" onClick={close}>Done</Button>
     </>}>
     <ItemGroup className="rounded-lg">
-      <Item size="sm"><ItemContent stacked><ItemTitle>Status</ItemTitle><ItemDescription className="text-xs">{connection.lastSuccessAt ? `Last worked ${ago(connection.lastSuccessAt)} ago` : 'Not used yet'}</ItemDescription></ItemContent><StatusBadge status={connection.status} /></Item>
+      <Item size="sm"><ItemContent stacked><ItemTitle>Status</ItemTitle><ItemDescription className="text-xs">{statusNote(connection)}</ItemDescription></ItemContent><StatusBadge status={connection.status} /></Item>
     </ItemGroup>
     <Section title="Who can use it"><div className="flex flex-col gap-0.5 rounded-lg border border-hair bg-card p-1"><AgentGrants connection={connection} agents={agents} /></div></Section>
     <Tools connection={connection} />

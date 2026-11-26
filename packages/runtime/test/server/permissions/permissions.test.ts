@@ -17,6 +17,11 @@ test('defaults come from the tool labels, and risky tools never default to Alway
     ['DigitalOcean read, high risk', { annotations: { readOnlyHint: true }, meta: { [DO]: { operation: 'read', risk: 'high' } } }, 'read', 'deny'],
     ['DigitalOcean delete', { annotations: { destructiveHint: true }, meta: { [DO]: { operation: 'delete', risk: 'high' } } }, 'delete', 'deny'],
     ['top-level operation', { meta: { operation: 'delete' } }, 'delete', 'deny'],
+    ['catch-all invoke tool', { name: 'mcp_invoke_tool', annotations: { readOnlyHint: false, destructiveHint: true } }, 'other', 'ask'],
+    ['catch-all call tool, unlabeled', { name: 'call-tool' }, 'other', 'ask'],
+    ['catch-all marked read-only', { name: 'invoke_tool', annotations: { readOnlyHint: true } }, 'read', 'allow'],
+    ['named like one but labeled delete', { name: 'run_tool', meta: { operation: 'delete' } }, 'delete', 'deny'],
+    ['a tool that only looks tools up', { name: 'mcp_find_tools', annotations: { readOnlyHint: true } }, 'read', 'allow'],
   ]
   for (const [label, extra, group, permission] of table) {
     assert.equal(permissions.groupOf(spec(extra)), group, label)

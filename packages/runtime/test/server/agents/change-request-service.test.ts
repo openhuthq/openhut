@@ -166,6 +166,30 @@ test('a proposed connection the owner approves with a token becomes a granted co
   mock.restoreAll()
 })
 
+const DO_REMOTE_TOOLS = [
+  { name: 'mcp_find_tools', description: 'Find DigitalOcean tools', schema: {}, annotations: { readOnlyHint: true } },
+  { name: 'mcp_retrieve_schema', description: 'Read a tool schema', schema: {}, annotations: { readOnlyHint: true } },
+  { name: 'mcp_invoke_tool', description: 'Invoke a DigitalOcean tool', schema: {}, annotations: { readOnlyHint: false, destructiveHint: true } },
+]
+
+test('DigitalOcean\'s one invoke-anything tool asks first instead of landing under Delete: Never, and an approved setting for it is stored as approved', async () => {
+  mock.method(mcp, 'probe', async () => DO_REMOTE_TOOLS.length)
+  mock.method(connectionService, 'specs', async () => DO_REMOTE_TOOLS)
+  const approveWith = async ({ name, groups }: { name: string; groups: typeof DIGITALOCEAN.groups }) => {
+    const id = idIn(textOf(await client.callTool({ name: 'propose_connection', arguments: { ...DIGITALOCEAN, name, origin: app } })))
+    await changeRequestService.approve({ actor: owner, id, input: { ...DIGITALOCEAN, name, groups }, token: 'dop_v1_token' })
+    const connection = await db.selectFrom('connection').select('id').where('name', '=', name).executeTakeFirstOrThrow()
+    const states = await permissions.list({ agentId: 'ag_chgagent', connectionId: connection.id, tools: DO_REMOTE_TOOLS })
+    return Object.fromEntries(states.map((each) => [each.name, [each.group, each.permission]]))
+  }
+  assert.deepEqual(await approveWith({ name: 'DigitalOcean A', groups: DIGITALOCEAN.groups }), {
+    mcp_find_tools: ['read', 'allow'], mcp_retrieve_schema: ['read', 'allow'], mcp_invoke_tool: ['other', 'ask'],
+  })
+  const picked = [...DIGITALOCEAN.groups, { group: 'other', label: 'Run any DigitalOcean tool', permission: 'allow' }]
+  assert.deepEqual((await approveWith({ name: 'DigitalOcean B', groups: picked })).mcp_invoke_tool, ['other', 'allow'])
+  mock.restoreAll()
+})
+
 test('a bad token leaves no connection behind, and choosing to set it up themselves tells the agent to give steps', async () => {
   mock.method(mcp, 'probe', async () => { throw new Error('401 Unauthorized') })
   const id = idIn(textOf(await client.callTool({ name: 'propose_connection', arguments: { ...DIGITALOCEAN, name: 'Fly', url: 'https://mcp.fly.example/mcp', origin: app } })))
@@ -177,6 +201,13 @@ test('a bad token leaves no connection behind, and choosing to set it up themsel
   const twice = await client.callTool({ name: 'propose_connection', arguments: { ...DIGITALOCEAN, groups: [DIGITALOCEAN.groups[0], DIGITALOCEAN.groups[0]], origin: app } })
   assert.equal(twice.isError, true)
   mock.restoreAll()
+})
+
+test('requests list newest first, and ones made at the same moment keep one order', async () => {
+  await db.updateTable('change_request').set({ created_at: new Date('2026-11-26T10:00:00Z') }).where('agent_id', '=', 'ag_chgagent').execute()
+  const ids = (await changeRequestService.list({ actor: owner, agentId: 'ag_chgagent' })).map((each) => each.id)
+  assert.ok(ids.length > 1)
+  assert.deepEqual(ids, [...ids].sort().reverse())
 })
 
 test.after(() => { void client.close(); server.close() })

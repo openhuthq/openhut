@@ -13,7 +13,7 @@ On the agent, click an app under **Can use**. **What it may do** groups the acti
 - **Look things up:** reads that change nothing.
 - **Add new things**, **Change things:** writes.
 - **Delete or overwrite:** can't be undone.
-- **Other actions:** the app doesn't say what they do.
+- **Other actions:** the app doesn't say what they do, or one action runs any of the app's tools (like DigitalOcean's *Invoke a DigitalOcean tool*).
 
 Set a whole group with its menu, or open **N actions** to set one. **Reset to defaults** clears your choices.
 
@@ -25,9 +25,10 @@ OpenHut reads the labels the app puts on each action:
 |---|---|
 | Read-only | Always allow |
 | A write, or no label | Ask first |
+| One action that runs any other action | Ask first |
 | Destructive, a delete, or high risk | Never |
 
-Nothing destructive or high risk starts as Always allow. Postgres runs read-only, so its actions start as Always allow.
+Nothing destructive or high risk starts as Always allow. When you approve an app an agent proposed, each kind of action gets the setting you approved; kinds the card didn't list keep these defaults. Postgres runs read-only, so its actions start as Always allow.
 
 ## When it asks
 

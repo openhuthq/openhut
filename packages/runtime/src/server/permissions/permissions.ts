@@ -5,19 +5,23 @@ import type { ToolSpec } from '../integrations/connector.ts'
 import type { Caller } from '../team/identity.ts'
 
 const OPERATIONS = new Set<string>(['read', 'create', 'update', 'delete'])
+const CATCH_ALL = /(^|_)(invoke|call|execute|run)_(a_|any_)?tool$/
 
 export const permissions = {
   groupOf(spec: ToolSpec): ToolGroup {
     const operation = labelOf({ spec, key: 'operation' })
     if (operation && OPERATIONS.has(operation)) return operation as ToolGroup
     if (spec.annotations?.readOnlyHint) return 'read'
+    if (isCatchAll(spec)) return 'other'
     if (spec.annotations?.destructiveHint) return 'delete'
     return spec.annotations ? 'update' : 'other'
   },
 
   defaultOf(spec: ToolSpec): Permission {
     const group = permissions.groupOf(spec)
-    if (group === 'delete' || spec.annotations?.destructiveHint === true || labelOf({ spec, key: 'risk' }) === 'high') return 'deny'
+    if (labelOf({ spec, key: 'risk' }) === 'high') return 'deny'
+    if (isCatchAll(spec)) return 'ask'
+    if (group === 'delete' || spec.annotations?.destructiveHint === true) return 'deny'
     return group === 'read' ? 'allow' : 'ask'
   },
 
@@ -46,6 +50,10 @@ export const permissions = {
     await db.deleteFrom('tool_permission').where('agent_id', '=', agentId).where('connection_id', '=', connectionId).execute()
     emit({ name: 'tool_permission.reset', actor, target: { type: 'agent', id: agentId, connectionId } })
   },
+}
+
+function isCatchAll(spec: ToolSpec): boolean {
+  return !spec.annotations?.readOnlyHint && !labelOf({ spec, key: 'operation' }) && CATCH_ALL.test(spec.name.toLowerCase().replaceAll('-', '_'))
 }
 
 function labelOf({ spec, key }: { spec: ToolSpec; key: 'operation' | 'risk' }): string | undefined {

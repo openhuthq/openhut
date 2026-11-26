@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { chipMarks, connectedFirst, INTEGRATIONS, SHELVES, uniqueName } from '../../../src/features/connections/catalog.ts'
+import type { Connection } from '@openhut/common/connections/connection.ts'
+import { appRows, appStatus, byName, chipMarks, connectionBrand, INTEGRATIONS, kindNote, SHELVES, uniqueName } from '../../../src/features/connections/catalog.ts'
 
 test('a new connection takes the service name, numbered when that name is taken', () => {
   assert.equal(uniqueName({ title: 'Linear', taken: [] }), 'Linear')
@@ -16,10 +17,37 @@ test('every app in Connect apps has a one-line noun description with no full sto
   }
 })
 
-test('connected apps sort to the top of Apps, the rest keep their order', () => {
-  const names = connectedFirst({ items: INTEGRATIONS, kinds: ['gmail', 'github'] }).map(({ name }) => name)
-  assert.deepEqual(names.slice(0, 2), INTEGRATIONS.map(({ name }) => name).filter((name) => name === 'gmail' || name === 'github'))
-  assert.equal(names.length, INTEGRATIONS.length)
+const connection = (extra: Partial<Connection>): Connection => ({ id: 'cn_x', object: 'connection', kind: 'postgres', name: 'Postgres', account: '', signIn: false, ownerId: 'p', ownerName: 'p', canDelete: true, agents: 1, status: 'connected', lastSuccessAt: null, createdAt: '2026-11-26T10:00:00.000Z', ...extra })
+const DO = connection({ id: 'cn_do', kind: 'mcp', name: 'DigitalOcean', account: 'mcp.digitalocean.com · 3 tools' })
+
+test('All apps stays alphabetical whatever is connected, and a remote MCP shows under its own name and logo', () => {
+  const before = appRows({ items: INTEGRATIONS, connections: [] }).map((row) => row.title)
+  const rows = appRows({ items: INTEGRATIONS, connections: [connection({ kind: 'github', name: 'GitHub' }), DO] })
+  assert.deepEqual(before, byName(before, (title) => title))
+  assert.deepEqual(rows.map((row) => row.title).filter((title) => title !== 'DigitalOcean'), before)
+  const digitalocean = rows.find((row) => row.title === 'DigitalOcean')
+  assert.deepEqual([digitalocean?.brand, digitalocean?.note], ['digitalocean', 'mcp.digitalocean.com · 3 tools'])
+  assert.deepEqual(rows.find((row) => row.key === 'mcp')?.connections, [])
+  assert.equal(rows.find((row) => row.key === 'github')?.connections.length, 1)
+})
+
+test('a proposed app keeps its logo by name even on an unknown host, and only plain MCP servers say Custom MCP', () => {
+  assert.equal(connectionBrand(connection({ kind: 'mcp', name: 'DigitalOcean', account: 'api.example.com · 3 tools' })), 'digitalocean')
+  assert.equal(connectionBrand(connection({ kind: 'mcp', name: 'Mine', account: 'mcp.example.com · 2 tools' })), 'mcp')
+  assert.equal(kindNote(DO), 'mcp.digitalocean.com · 3 tools')
+  assert.equal(kindNote(connection({ kind: 'mcp', name: 'Mine', account: 'mcp.example.com' })), 'Custom MCP · mcp.example.com')
+})
+
+test('an app has one status everywhere: failing wins, then connected, then not used yet', () => {
+  assert.equal(appStatus([]), undefined)
+  assert.equal(appStatus([{ status: 'failing' }]), 'failing')
+  assert.equal(appStatus([{ status: 'connected' }, { status: 'failing' }]), 'failing')
+  assert.equal(appStatus([{ status: 'no_calls' }, { status: 'connected' }]), 'connected')
+  assert.equal(appStatus([{ status: 'no_calls' }]), 'no_calls')
+})
+
+test('names sort without caring about case', () => {
+  assert.deepEqual(byName(['postgres', 'Linear', 'DigitalOcean'], (name) => name), ['DigitalOcean', 'Linear', 'postgres'])
 })
 
 test('the sidebar chip shows only connected apps: none with nothing connected, at most 3 then +N', () => {
