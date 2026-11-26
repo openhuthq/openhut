@@ -173,14 +173,15 @@ test('with the browser switched on, the agent is told how to use agent-browser a
   assert.match(browsing.soul, /a person is using your browser/)
 })
 
-test('Telegram for listed people: the agent token stands in for the bot token, the gateway is the Bot API, numeric IDs with the owner, strangers ignored', () => {
+test('Telegram for listed people: the agent token stands in for the bot token, the gateway is the Bot API, numeric IDs with the owner, strangers reach pre_gateway_dispatch so an invite can land', () => {
   const { config: yaml, env } = render([{ kind: 'telegram', audience: { ownerAddress: '111222333', open: false, allowed: ['444555666'] } }])
   assert.equal(env.TELEGRAM_BOT_TOKEN, 'ag_chantest.token')
   assert.deepEqual(yaml.platforms, { telegram: { extra: { base_url: 'http://10.200.3.1:8081/u/telegram/bot', base_file_url: 'http://10.200.3.1:8081/u/telegram/file/bot' } } })
   assert.equal(env.TELEGRAM_ALLOWED_USERS, '111222333,444555666')
   assert.equal(env.TELEGRAM_HOME_CHANNEL, '111222333')
   assert.equal(env.TELEGRAM_ALLOW_ALL_USERS, undefined)
-  assert.deepEqual(yaml.telegram, { require_mention: true, unauthorized_dm_behavior: 'ignore', gateway_restart_notification: false })
+  assert.deepEqual(yaml.telegram, { require_mention: true, unauthorized_dm_behavior: 'decline', gateway_restart_notification: false })
+  assert.match(String(yaml.unauthorized_dm_decline_message), /just invited/)
 })
 
 test('Telegram open to anyone: everyone allowed', () => {
