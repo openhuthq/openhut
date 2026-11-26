@@ -118,7 +118,7 @@ export const serverAppController: FastifyPluginAsyncZod = async (app) => {
 
   app.get('/waits', WaitsRequest, async (req) => {
     await who(req)
-    return { object: 'list', url: req.url, hasMore: false, data: await installWaits.waiting({ askIds: req.query.askId.split(',').slice(0, 50) }) }
+    return listOf({ req, data: await installWaits.waiting({ askIds: req.query.askId.split(',').slice(0, 50) }) })
   })
 
   app.post('/connections', ConnectRequest, async (req) => serverAppService.connect({ actor: await who(req), ...req.body }))
