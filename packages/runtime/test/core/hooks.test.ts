@@ -21,7 +21,7 @@ test('the manifest lists every local tool with its JSON schema, and which hooks 
   assert.equal(tools[0].parameters.type, 'object')
   assert.deepEqual(tools[0].parameters.required, ['channel', 'message'])
   assert.equal('$schema' in tools[0].parameters, false)
-  assert.deepEqual(hooks, ['pre_gateway_dispatch', 'transform_llm_output'])
+  assert.deepEqual(hooks, ['pre_gateway_dispatch', 'transform_llm_output', 'subagent_start', 'subagent_stop'])
   assert.deepEqual(slack_actions, ['card:'])
 })
 
@@ -44,7 +44,6 @@ test('a Slack card button comes back as the person\'s reply in that thread; othe
 test('hooks no plugin handles and unknown tools are 404, and a request that does not fit is 400', async () => {
   assert.equal((await call('/hooks/nope', {})).status, 404)
   assert.equal((await call('/tools/nope', { args: {} })).status, 404)
-  assert.equal((await call('/hooks/subagent_start', { args: {} })).status, 404, 'no plugin handles it yet')
   assert.equal((await call('/hooks/transform_llm_output', { args: 'nope' })).status, 400)
   assert.equal((await call('/slack-actions', { body: {} })).status, 400)
 })

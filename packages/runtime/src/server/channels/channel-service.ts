@@ -97,6 +97,13 @@ export const channelService = {
     return { object: 'telegram_join', joined: !known }
   },
 
+  async telegramStranger({ agentId, userId }: { agentId: string; userId: string }): Promise<boolean> {
+    const row = await db.selectFrom('channel').select(['owner_address', 'open', 'allowed']).where('agent_id', '=', agentId).where('kind', '=', 'telegram').executeTakeFirst()
+    if (!row) return false
+    const audience = audienceOf(row)
+    return !audience.open && audience.ownerAddress !== userId && !audience.allowed.includes(userId)
+  },
+
   async update({ actor, id, patch }: { actor: Caller; id: string; patch: UpdateChannel }): Promise<Channel> {
     const held = await recordOf(id)
     const current = ChannelRecord.parse(held.value)

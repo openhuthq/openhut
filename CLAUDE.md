@@ -23,14 +23,14 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   JSON), `.env`, `SOUL.md` and `auth.json`, and `mcp.ts` serves every plugin's tools on the gateway's MCP server. A tool
   with `local: true` runs inside Hermes instead, `hooks` maps Hermes hook names to handlers, and `slackAction` takes Slack
   buttons by prefix: the one Hermes plugin, `vendor/hermes-plugins/openhut`, registers what `core/hooks.ts`'s manifest
-  lists and calls the gateway's `/tools/<name>`, `/hooks/<hook>` and `/slack-actions` for each. `wakes` are turns the
+  lists and calls the gateway's `/tools/<name>`, `/hooks/<hook>` and `/slack-actions` for each (hooks whose answer Hermes ignores, everything but `pre_*` and `transform_*`, are sent from a background thread, so a slow gateway never holds the agent). `wakes` are turns the
   runtime wants the agent to take (routine runs and webhook calls from inbox, answered change requests from asks):
   `core/wakes.ts` lists every plugin's due wakes as `[OpenHut <plugin>:<id>] <text>`; the Hermes plugin polls `/wakes`
   for chat ones, the chat plugin runs the app's itself (`nudge(agentId)` runs them at once), and `start()` runs at boot.
   A plugin also owns its tables (`migrate`, run by `platform/db.ts` after the core tables, in list order), its API
   (`routes: () => ({ '/api/<prefix>': controller })`, registered by `app.ts`; two plugins with one prefix fail at boot)
-  and a part under the app chat's reply (`afterTurn`, like asks' `data-changes`). `connectorCall` may rewrite an app call's arguments
-  just before the connector runs it (`connection-service` `run()`): `plugins/github` signs PR, issue and first-comment bodies with the agent's face there.
+  and a part under the app chat's reply (`afterTurn`, like asks' `data-changes`). The subagents plugin keeps each agent's running sub-agents in memory from the `subagent_start`/`subagent_stop` hooks and serves them at `/api/agents/:id/subagents` for the sidebar.
+  `connectorCall` may rewrite an app call's arguments just before the connector runs it (`connection-service` `run()`): `plugins/github` signs PR, issue and first-comment bodies with the agent's face there.
   An agent and its control, memory, skills, routines, channels and messages are rows in the local `record` table
   (`platform/records.ts`, secrets sealed with the install secret); `agents/run-set.ts` applies them to the agents this computer
   runs. People sign in with a session cookie (`team/identity.ts`, `team/team-service.ts`): while there is no owner, the first
