@@ -4,6 +4,7 @@ import { UpdateAgentFields } from '@openhut/common/agents/agent.ts'
 import type { ChangeAction, ChangeRequest } from '@openhut/common/agents/change-request.ts'
 import { CreateChannel } from '@openhut/common/channels/channel.ts'
 import { ProposedConnection } from '@openhut/common/connections/connection.ts'
+import { AddSecret, SecretValue } from '@openhut/common/agents/secret.ts'
 import { db } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { emit, log } from '../platform/events.ts'
@@ -17,6 +18,7 @@ import { Origin, routineService } from '../routines/routine-service.ts'
 import { agentService } from './agent-service.ts'
 import { connectionService } from '../connections/connection-service.ts'
 import { permissions } from '../permissions/permissions.ts'
+import { secretService } from './secret-service.ts'
 
 const DASHBOARD = 'api_server'
 const QUIET_MS = 10_000
@@ -64,7 +66,9 @@ export const changeRequestService = {
   async approve({ actor, id, input, always, token }: { actor: Caller; id: string; input?: Record<string, unknown>; always?: boolean; token?: string }): Promise<ChangeRequest> {
     const row = await pendingRow({ actor, id })
     if (action(row) === 'call_tool') return requestOf(await approveCall({ actor, row, always: always === true }))
-    const final = input ? checkedInput({ action: action(row), input, agentId: row.agent_id }) : JSON.parse(row.input) as Record<string, unknown>
+    if (action(row) === 'add_secret') secretValue(token)
+    const edits = action(row) === 'add_secret' ? undefined : input
+    const final = edits ? checkedInput({ action: action(row), input: edits, agentId: row.agent_id }) : JSON.parse(row.input) as Record<string, unknown>
     agentService.holdReapply(row.agent_id)
     try {
       await apply({ actor, row, input: final, token })
@@ -72,7 +76,7 @@ export const changeRequestService = {
       await agentService.releaseReapply(row.agent_id)
       throw err
     }
-    const summary = input ? await summaryOf({ action: action(row), input: final, agentId: row.agent_id }) : row.summary
+    const summary = edits ? await summaryOf({ action: action(row), input: final, agentId: row.agent_id }) : row.summary
     const decided = await decide({ id, status: 'approved', input: final, summary, note: null })
     deliver(decided)
     void activity.quiet({ agentId: row.agent_id, ms: QUIET_MS }).then(() => agentService.releaseReapply(row.agent_id))
@@ -133,6 +137,7 @@ function parsedInput({ action, input, agentId }: { action: ChangeAction; input: 
     case 'request_connection': return z.safeParse(ConnectionId, input)
     case 'call_tool': return z.safeParse(ToolCall, input)
     case 'propose_connection': return z.safeParse(ProposedConnection, input)
+    case 'add_secret': return z.safeParse(AddSecret, input)
   }
 }
 
@@ -156,6 +161,7 @@ async function summaryOf({ action, input, agentId }: { action: ChangeAction; inp
       return `Run ${String(input.tool)} on ${connection.name}`
     }
     case 'propose_connection': return `Connect ${String(input.name)}`
+    case 'add_secret': return `Save a key, ${String(input.name)}, sent only to ${(input.hosts as string[]).join(', ')}`
   }
 }
 
@@ -176,6 +182,7 @@ async function apply({ actor, row, input, token }: { actor: Caller; row: Row; in
     }
     case 'request_connection': return void await agentService.createGrant({ actor, agentId, connectionId: z.parse(ConnectionId, input).connectionId })
     case 'call_tool': throw new HttpError(500, 'A tool call is approved through approveCall.')
+    case 'add_secret': return secretService.save({ agentId, input: z.parse(AddSecret, input), value: secretValue(token) })
     case 'propose_connection': return connectProposed({ actor, agentId, proposal: z.parse(ProposedConnection, input), token })
   }
 }
@@ -198,6 +205,12 @@ async function connectProposed({ actor, agentId, proposal, token }: { actor: Cal
   }
 }
 
+function secretValue(token: string | undefined): string {
+  const parsed = z.safeParse(SecretValue, token)
+  if (!parsed.success) throw new HttpError(400, 'Paste the key, on one line, to save it.', { param: 'token' })
+  return parsed.data
+}
+
 function alreadyDone(status: number) {
   return (err: unknown) => {
     if (!(err instanceof HttpError) || err.status !== status) throw err
@@ -206,6 +219,7 @@ function alreadyDone(status: number) {
 
 function afterApproval({ row, input }: { row: Row; input: unknown }): string {
   const fields = input as Record<string, unknown>
+  if (action(row) === 'add_secret') return ` You restart to pick it up right after this reply. You never see the key: call https://${(fields.hosts as string[])[0]}/… as $OPENHUT_GATEWAY/x/${(fields.hosts as string[])[0]}/… with the header "Authorization: Agent $OPENHUT_AGENT_TOKEN", and OpenHut adds it.`
   if (action(row) === 'add_channel' && fields.kind === 'whatsapp') return ' WhatsApp links once your owner scans the QR code on your page in OpenHut.'
   if (action(row) !== 'update_self' || fields.instructions !== undefined) return ' You restart to pick it up right after this reply.'
   return ''

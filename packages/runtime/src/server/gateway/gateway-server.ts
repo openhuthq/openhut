@@ -60,6 +60,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     activity.started(agent.id)
     res.on('close', () => activity.ended(agent.id))
   }
+  const keyed = /^\/x\/([^/]+)(\/.*)?$/.exec(path)
+  if (keyed) return brokerService.withSecrets({ agent, host: keyed[1].toLowerCase(), path: (keyed[2] ?? '/') + url.search, req, res })
   const brokered = /^\/u\/([a-z]+)(\/.*)$/.exec(path)
   const upstream = brokered && upstreams.get(brokered[1])
   if (brokered && upstream) return brokerService.forward({ agent, upstream, path: brokered[2] + url.search, req, res })
@@ -160,6 +162,15 @@ function agentMcp(agent: GatewayAgent): McpServer {
         label: z.string().min(1).max(80).describe('What these tools do here, in plain words: "Read database info".'),
         permission: z.enum(['allow', 'ask', 'deny']).describe('allow runs without asking, ask waits for their OK each time, deny never runs. Usually: read allow, create and update ask, delete deny.'),
       })).min(1).max(5).describe('One entry per kind of tool the job needs.'),
+    },
+  })
+  ask({
+    name: 'add_secret', action: 'add_secret',
+    description: 'Ask your owner for an API key or token you need, like a Stripe key. They paste it in OpenHut; you never see it. Once saved, call the service through $OPENHUT_GATEWAY/x/<host>/<path> and OpenHut adds the key, only for the hosts you list. Never ask anyone to paste a key into a chat.',
+    shape: {
+      name: z.string().regex(/^[A-Z][A-Z0-9_]{1,39}$/).describe('Capitals, digits and _, like STRIPE_KEY. Your terminal gets $OPENHUT_SECRET_<name>, a stand-in, never the key.'),
+      hosts: z.array(z.string().max(253)).min(1).max(10).describe('The API hosts the key may go to, like api.stripe.com. No https://, no path.'),
+      header: z.string().max(200).optional().describe('How the service wants it, with {value} for the key. Default: Authorization: Bearer {value}. Stripe: Authorization: Bearer {value}; others: X-Api-Key: {value}.'),
     },
   })
   ask({ name: 'request_connection', action: 'request_connection', description: 'Ask for a connection that already exists in OpenHut (get_self lists them). For an app nobody connected yet, use ask_to_connect.', shape: { connectionId: z.string().max(40) } })

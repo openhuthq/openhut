@@ -21,6 +21,7 @@ import { Face } from '@/features/agents/face'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { RoutinesRow } from '@/features/routines/routines-dialog'
 import { ActivityRow } from '@/features/agents/activity-dialog'
+import { KeysRow } from '@/features/agents/secrets'
 import { ModelRows } from '@/features/agents/model-rows'
 import { RunsOnRow } from '@/features/agents/move'
 import { AgentStatus } from '@/features/agents/status'
@@ -63,6 +64,7 @@ export function Panel({ agent, naming, watching, onHide }: { agent: Agent; namin
         </>}
         <RoutinesRow agent={agent} />
         <ActivityRow agent={agent} />
+        <KeysRow agent={agent} />
       </CollapsibleContent>
     </Collapsible>
     <AgentActions agent={agent} watching={watching} />

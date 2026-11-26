@@ -1,7 +1,7 @@
 import * as z from 'zod/mini'
 import { Timestamp } from '../api.ts'
 
-export const ChangeAction = z.enum(['update_self', 'add_channel', 'update_channel', 'remove_channel', 'request_connection', 'call_tool', 'propose_connection'])
+export const ChangeAction = z.enum(['update_self', 'add_channel', 'update_channel', 'remove_channel', 'request_connection', 'call_tool', 'propose_connection', 'add_secret'])
 export type ChangeAction = z.infer<typeof ChangeAction>
 
 export const ChangeRequest = z.object({

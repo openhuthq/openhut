@@ -417,6 +417,7 @@ async function filesOf(row: AgentRow): Promise<AgentFiles> {
   return renderFiles({
     agent: { ...row, slots }, ownerName: row.owner ?? 'its owner', token: agentToken({ id: row.id, epoch: row.token_epoch }), channelKey: unseal(row.channel_key),
     channels: channels.filter((channel) => channel.kind !== 'telegram' || channel.status === 'connected').map(renderedChannel), connections: await connectionService.reachable({ agent: row }),
+    secrets: (await db.selectFrom('agent_secret').select(['name', 'hosts']).where('agent_id', '=', row.id).orderBy('name').execute()).map(({ name, hosts }) => ({ name, hosts: JSON.parse(hosts) as string[] })),
   })
 }
 

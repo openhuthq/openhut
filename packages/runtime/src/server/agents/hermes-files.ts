@@ -1,6 +1,7 @@
 import type { Audience, ChannelKind } from '@openhut/common/channels/channel.ts'
 import { ASK_PROMPT, INTERVIEW_PROMPT, isStarter } from '@openhut/common/asks/ask.ts'
 import { CARD_PROMPT } from '@openhut/common/cards/card.ts'
+import { secretPlaceholder } from '@openhut/common/agents/secret.ts'
 import type { AgentFiles } from '../platform/agentd.ts'
 import { config } from '../platform/config.ts'
 import { agentSubnet } from '../platform/network.ts'
@@ -31,13 +32,14 @@ If a command says a person is using your browser (or is "denied by policy"), lea
 Never reach the browser another way while a person is using it: no second agent-browser, no CDP, no scripts.
 `
 
-export function renderFiles({ agent, ownerName, token, channelKey, channels, connections }: {
+export function renderFiles({ agent, ownerName, token, channelKey, channels, connections, secrets = [] }: {
   agent: { id: string; name: string; instructions: string; slots: Slots; net: number; code_execution: boolean; web_browser: boolean }
   ownerName: string
   token: string
   channelKey: string
   channels: RenderedChannel[]
   connections: { name: string; kind: string }[]
+  secrets?: { name: string; hosts: string[] }[]
 }): AgentFiles {
   const gateway = config.agentGateway ?? `http://${agentSubnet(agent.net)}.1:${config.gatewayPort}`
   const disabled = ['browser', 'delegation', 'cronjob', 'connections', ...(agent.code_execution ? [] : ['code_execution'])]
@@ -57,9 +59,12 @@ export function renderFiles({ agent, ownerName, token, channelKey, channels, con
     `API_SERVER_KEY=${channelKey}`, ...(config.agentHostNet ? ['API_SERVER_HOST=127.0.0.1', `API_SERVER_PORT=${AGENT_API_PORT_BASE + agent.net}`] : ['API_SERVER_HOST=0.0.0.0', 'API_SERVER_PORT=8642']), `OPENHUT_GATEWAY=${gateway}`, `OPENHUT_AGENT_TOKEN=${token}`,
     ...(config.modelMode === 'test' ? [] : setups.flatMap((setup) => setup.env)),
     ...channels.flatMap((channel) => envOf({ channel, token, gateway })),
+    ...secrets.map(({ name }) => `OPENHUT_SECRET_${name}=${secretPlaceholder(name)}`),
   ].join('\n') + '\n'
   const auth = config.modelMode === 'claude' ? setups.find((setup) => setup.auth)?.auth ?? EMPTY_AUTH : EMPTY_AUTH
-  return { 'config.yaml': yaml, '.env': env, 'SOUL.md': `${agent.instructions}\n${connectedApps(connections)}${agent.web_browser ? BROWSER_NOTE : ''}${isStarter(agent) ? INTERVIEW_PROMPT : ''}${ASK_PROMPT}${CARD_PROMPT}`, 'auth.json': `${JSON.stringify(auth)}\n` }
+  return { 'config.yaml': yaml, '.env': env, 'SOUL.md': `${agent.instructions}
+${connectedApps(connections)}${keysNote(secrets)}${agent.web_browser ? BROWSER_NOTE : ''}${isStarter(agent) ? INTERVIEW_PROMPT : ''}${ASK_PROMPT}${CARD_PROMPT}`, 'auth.json': `${JSON.stringify(auth)}
+` }
 }
 
 function pluginsYaml(setups: Setup[]): string {
@@ -74,6 +79,17 @@ function connectedApps(connections: { name: string; kind: string }[]): string {
     return plain.toLowerCase() === kind ? plain : `${plain} (${kind})`
   })
   return `\n## Connected apps\n\nThe openhut tools reach: ${apps.join(', ')}. Call list_tools to see what each one does, and use it before doing the same work by hand.\n`
+}
+
+function keysNote(secrets: { name: string; hosts: string[] }[]): string {
+  if (!secrets.length) return ''
+  const [first] = secrets
+  return `
+## Keys
+
+Your owner saved these keys for you: ${secrets.map(({ name, hosts }) => `${name} (only sent to ${hosts.join(', ')})`).join('; ')}. You never see them.
+To call https://${first.hosts[0]}/some/path, call $OPENHUT_GATEWAY/x/${first.hosts[0]}/some/path with the header "Authorization: Agent $OPENHUT_AGENT_TOKEN": OpenHut adds the key on its way out. Where a service wants the key somewhere else (another header, the URL), write $OPENHUT_SECRET_<NAME>, a stand-in OpenHut swaps for the key. The gateway refuses a stand-in sent to any other host. Need another key? Ask with add_secret.
+`
 }
 
 function modelYaml({ gateway, token, slots, setups }: { gateway: string; token: string; slots: Slots; setups: string[] }): string {
