@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 import * as z from 'zod/mini'
+import type { AgentLive, LivePerson } from '@openhut/common/live.ts'
+
+export type { AgentLive, LivePerson }
 
 const Person = z.object({ id: z.string(), name: z.string(), email: z.string(), state: z.enum(['viewing', 'typing']) })
-const AgentLive = z.object({ state: z.enum(['idle', 'thinking', 'working', 'replying']), step: z.optional(z.string()), turnId: z.optional(z.string()), answering: z.optional(z.array(z.string())) })
+const AgentState = z.object({ state: z.enum(['idle', 'thinking', 'working', 'replying']), step: z.optional(z.string()), turnId: z.optional(z.string()), answering: z.optional(z.array(z.string())) })
 export const ThreadEvent = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('presence'), thread: z.string(), people: z.array(Person), agent: AgentLive }),
+  z.object({ type: z.literal('presence'), thread: z.string(), people: z.array(Person), agent: AgentState }),
   z.object({ type: z.literal('delta'), thread: z.string(), turnId: z.string(), seq: z.number(), text: z.string() }),
   z.object({ type: z.literal('turn'), thread: z.string(), turnId: z.string(), state: z.enum(['started', 'done']) }),
 ])
-export const LiveSnapshot = z.object({ turnId: z.nullable(z.string()), seq: z.number(), text: z.string(), agent: AgentLive })
+export const LiveSnapshot = z.object({ turnId: z.nullable(z.string()), seq: z.number(), text: z.string(), agent: AgentState })
 export type ThreadEvent = z.infer<typeof ThreadEvent>
 export type LiveSnapshot = z.infer<typeof LiveSnapshot>
-export type LivePerson = z.infer<typeof Person>
-export type AgentLive = z.infer<typeof AgentLive>
 
 type Stream = { turnId: string; seq: number; text: string; early: Map<number, string> }
 export type ThreadLive = { people: LivePerson[]; agent: AgentLive; stream?: Stream }

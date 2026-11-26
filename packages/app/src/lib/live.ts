@@ -16,7 +16,6 @@ const FILTERS: Record<string, QueryFilters[]> = {
   memory: [{ queryKey: ['memory'] }],
   routine: [{ queryKey: ['routines'] }],
   ask: [{ queryKey: ['asks'] }],
-  subagent: [{ queryKey: ['subagents'] }],
   provider: [{ queryKey: PROVIDERS_KEY }],
   admin: [{ queryKey: COMPUTERS_KEY }],
 }

@@ -104,6 +104,7 @@ function useSubagents(agentId: string | undefined): (Subagent & { gone: boolean 
     queryKey: ['subagents', agentId],
     queryFn: async () => (await request({ schema: SUBAGENT_LIST, of: agentId, path: `/api/agents/${agentId}/subagents` })).data,
     enabled: agentId !== undefined,
+    refetchInterval: (query) => query.state.data?.some((item) => item.status === 'working') ? 2_000 : 5_000,
   })
   const [faded, setFaded] = useState<Set<string>>(new Set())
   const done = (data ?? []).filter((item) => item.status === 'done' && !faded.has(item.id)).map((item) => item.id).join(' ')
