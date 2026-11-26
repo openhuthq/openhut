@@ -398,7 +398,7 @@ test('a card in a wake reply is saved as a card, like a live reply, never as raw
 
 test('a webhook turn runs in a thread of its own, listed with where it came from, and its reply is posted where the webhook posts', async () => {
   await db.insertInto('agent').values({ id: 'ag_chathook', name: 'Hooker', owner_id: 'usr_chatownr', instructions: '# Hooker', model: 'sonnet', net: 28, channel_key: seal('k'.repeat(48)), wanted: 'running', workspace: WS }).execute()
-  const posted = mock.method(channelService, 'send', async () => undefined)
+  const posted = mock.method(channelService, 'send', async () => ({ url: '', messageId: '' }))
   const place = { platform: 'discord', chat_id: '111', chat_name: '#alerts' }
   const id = await threadService.open({ agentId: 'ag_chathook', title: 'DO alerts', origin: { platform: 'webhook', label: 'DO alerts' }, mirrors: [place] })
   assert.equal(await threadService.runRoutine({ agentId: 'ag_chathook', threadId: id, text: 'Webhook called: cpu 99%' }), 'Let me check.214 orders.')
@@ -417,7 +417,7 @@ test('a webhook turn runs in a thread of its own, listed with where it came from
 
 test('a Discord conversation is kept in one web thread per channel thread, and a reply written on the web is posted back to Discord', async () => {
   await db.insertInto('agent').values({ id: 'ag_chatdisc', name: 'Disco', owner_id: 'usr_chatownr', instructions: '# Disco', model: 'sonnet', net: 29, channel_key: seal('k'.repeat(48)), wanted: 'running', workspace: WS }).execute()
-  const posted = mock.method(channelService, 'send', async () => undefined)
+  const posted = mock.method(channelService, 'send', async () => ({ url: '', messageId: '' }))
   const place = { platform: 'discord', chat_id: '222', thread_id: '333', chat_name: 'db-help' }
   const first = await threadService.recordTurn({ agentId: 'ag_chatdisc', origin: place, user: 'is the db up?', author: 'ana', reply: 'Yes.' })
   const second = await threadService.recordTurn({ agentId: 'ag_chatdisc', origin: place, user: 'thanks', author: 'ana', reply: 'NO_REPLY' })
@@ -433,7 +433,7 @@ test('a Discord conversation is kept in one web thread per channel thread, and a
   await say(first.id, 'third')
   const thread = async () => (await app.inject({ method: 'GET', url: `/api/threads/${first.id}`, headers: as() })).json() as { mirrorPaused: boolean }
   assert.equal((await thread()).mirrorPaused, true)
-  assert.deepEqual(posted.mock.calls.map((call) => call.arguments[0]?.text.split('\n')[0]), ['owner@example.com wrote in OpenHut:', 'Let me check.214 orders.', `Continuing in OpenHut ↗ http://127.0.0.1:${config.port}/agents/ag_chatdisc/chats/${first.id}`])
+  assert.deepEqual(posted.mock.calls.map((call) => call.arguments[0]?.text.split('\n')[0]), ['owner@example.com wrote in OpenHut:', 'Let me check.214 orders.', `Continuing in OpenHut ↗ http://127.0.0.1:${config.port}/agents/ag_chatdisc/threads/${first.id}`])
   await say(first.id, 'fourth')
   assert.equal(posted.mock.callCount(), 3, 'nothing more is posted while paused')
   await threadService.recordTurn({ agentId: 'ag_chatdisc', origin: place, user: 'back in discord', author: 'ana', reply: 'Hi.' })
@@ -450,8 +450,29 @@ test('a thread waits on someone while it shows a webhook setup card for a webhoo
   fake.write({ collection: 'message', id: 'msg_000000005a', parent: 'ag_chatwait', workspace: WS, value: { message: { id: 'msg_000000005a', role: 'assistant', parts: [{ type: 'data-webhook-setup', data: { webhookId: 'wh_chatwait', title: 'Set it up', steps: ['a'] } }] } } })
   const waiting = async () => ((await app.inject({ method: 'GET', url: '/api/threads', headers: as() })).json().data as { id: string; waiting: boolean }[]).find((thread) => thread.id === 'ag_chatwait')?.waiting
   assert.equal(await waiting(), true)
+  await say('ag_chatwait', 'Done: Set it up')
+  assert.equal(await waiting(), false, 'pressing Done clears it')
+  fake.write({ collection: 'message', id: 'msg_000000009a', parent: 'ag_chatwait', workspace: WS, value: { message: { id: 'msg_000000009a', role: 'assistant', parts: [{ type: 'data-webhook-setup', data: { webhookId: 'wh_chatwait', title: 'Again', steps: ['a'] } }] } } })
+  assert.equal(await waiting(), true)
   await db.updateTable('inbox_source').set({ last_at: new Date() }).where('id', '=', 'wh_chatwait').execute()
-  assert.equal(await waiting(), false)
+  assert.equal(await waiting(), false, 'a call after the card clears it too')
+})
+
+test('a webhook whose channel is Discord posts its answer there and starts a thread; the web thread is read-only and points to it', async () => {
+  await db.insertInto('agent').values({ id: 'ag_chathome', name: 'Homer', owner_id: 'usr_chatownr', instructions: '# Homer', model: 'sonnet', net: 31, channel_key: seal('k'.repeat(48)), wanted: 'running', workspace: WS }).execute()
+  const posted = mock.method(channelService, 'send', async () => ({ url: 'https://discord.com/channels/1/777', messageId: '9', threadId: '777' }))
+  const place = { platform: 'discord', chat_id: '666', chat_name: '#agents-humans' }
+  const id = await threadService.open({ agentId: 'ag_chathome', title: 'DO alerts', origin: { platform: 'webhook', label: 'DO alerts' }, mirrors: [] })
+  const said = await threadService.runRoutine({ agentId: 'ag_chathome', threadId: id, text: 'cpu 99%' })
+  await threadService.startChannelThread({ id, place, text: said, title: 'DO alerts' })
+  assert.deepEqual(posted.mock.calls.map((call) => call.arguments[0]), [{ agentId: 'ag_chathome', place, text: 'Let me check.214 orders.', startThread: 'DO alerts' }])
+  const thread = (await app.inject({ method: 'GET', url: `/api/threads/${id}`, headers: as() })).json() as { readOnly: boolean; continueUrl: string; mirrors: unknown[] }
+  assert.deepEqual([thread.readOnly, thread.continueUrl, thread.mirrors], [true, 'https://discord.com/channels/1/777', [{ ...place, thread_id: '777' }]])
+  const refused = await say(id, 'more?')
+  assert.deepEqual([refused.statusCode, refused.json().error.message], [409, 'Continue this in #agents-humans.'])
+  await threadService.recordTurn({ agentId: 'ag_chathome', origin: { ...place, thread_id: '777' }, user: 'on it', author: 'ana', reply: 'Thanks.' })
+  assert.equal((await messagesOf(id)).length, 4, 'replies in that Discord thread land in the same web thread')
+  posted.mock.restore()
 })
 
 test('on a just-booted computer (a woken Cloud computer) a message waits for its agent to come up, then gets the reply', async (t) => {

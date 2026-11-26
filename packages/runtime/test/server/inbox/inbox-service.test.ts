@@ -1,4 +1,4 @@
-import { test } from 'node:test'
+import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHmac } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
@@ -11,6 +11,7 @@ import { asks } from '../../../src/core/asks.ts'
 import { inboxReceiver } from '../../../src/server/inbox/inbox-controller.ts'
 import { inboxService } from '../../../src/server/inbox/inbox-service.ts'
 import { routineService } from '../../../src/server/inbox/routines.ts'
+import { channelService } from '../../../src/server/channels/channel-service.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { answerErrors } from '../../../src/server/platform/http-error.ts'
 import { agentToken, seal } from '../../../src/server/platform/secrets.ts'
@@ -183,4 +184,15 @@ test('a member who can chat with a whole-team agent can\'t touch its webhooks or
   ]) await assert.rejects(attempt, { status: 403 })
   assert.equal((await db.selectFrom('inbox_source').select('id').where('name', 'in', ['Mine', 'Sneaky', 'Renamed']).execute()).length, 0)
   assert.equal((await asks.approve({ actor: owner, id: 'chg_hookmmbr' })).status, 'done')
+})
+
+test('a webhook\'s channel is the app unless set to a place the agent posts in', async () => {
+  const humans = { platform: 'discord', chat_id: '777', chat_name: '#agents-humans' }
+  const places = mock.method(channelService, 'places', async () => [humans])
+  const hook = await inboxService.createSource({ actor: owner, agentId: 'ag_hookpuls', name: 'Home' })
+  assert.equal(hook.channel, 'app')
+  assert.deepEqual((await inboxService.updateWebhook({ actor: owner, id: hook.id, channel: humans })).channel, humans)
+  await assert.rejects(inboxService.updateWebhook({ actor: owner, id: hook.id, channel: { ...humans, chat_id: '1' } }), /Pick a channel from the list/)
+  assert.equal((await inboxService.updateWebhook({ actor: owner, id: hook.id, channel: 'app' })).channel, 'app')
+  places.mock.restore()
 })

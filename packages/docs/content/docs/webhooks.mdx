@@ -4,7 +4,7 @@ description: Give an agent an address other services call when something happens
 icon: ops
 ---
 
-A **webhook** is an address on your OpenHut that another service calls when something happens: an alert fires, a deploy finishes, a form is sent. Each call starts a new chat in the OpenHut app with the raw payload, and the agent does what its instructions say about it. If you pick where it posts, the agent's reply is posted there too.
+A **webhook** is an address on your OpenHut that another service calls when something happens: an alert fires, a deploy finishes, a form is sent. Each call starts a new chat with the raw payload, and the agent does what its instructions say about it.
 
 ## Add one
 
@@ -22,7 +22,7 @@ Each webhook shows:
 
 - **Address**: paste it into the service that calls it.
 - **Secret**: the service signs each call with it, or sends it as a token. **New secret** replaces it; calls signed with the old one stop working.
-- **Posts in**: optional. A chat on the agent's channels where its reply is posted too. Leave it empty and the agent tells people where its notify settings say.
+- **Channel**: where each call runs. **OpenHut app**, the default: a new chat in the app that you can reply in. A Discord channel: the agent posts its answer there and starts a thread for people to reply in, and the chat in the app is read only. To also tell other channels, like incidents to #on-call, set the agent's **Notify** rules.
 
 Delete a webhook with the trash icon. Calls to its address stop at once.
 

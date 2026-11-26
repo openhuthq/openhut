@@ -272,15 +272,17 @@ export const threadService = {
     await pipeUIMessageStreamToResponse({ response: reply.raw, stream })
   },
 
-  async runRoutine({ agentId, threadId = agentId, text, author }: { agentId: string; threadId?: string; text: string; author?: string }): Promise<string> {
+  async runRoutine({ agentId, threadId = agentId, text }: { agentId: string; threadId?: string; text: string }): Promise<string> {
     await idle(agentId)
     busy.add(agentId)
     try {
       const chat = await chatOf(threadId)
       if (chat.agent.id !== agentId) throw new HttpError(404, MISSING)
       const agent = chat.agent
-      const asked: ChatMessage | undefined = chat.row ? { id: nextId(), role: 'user', parts: [{ type: 'text', text }], metadata: { author: author ?? chat.row.title } } : undefined
-      if (asked) await write({ chat, message: asked })
+      const last = (await saidOf(chat)).at(-1)?.message
+      const retried = last?.role === 'user' && textOf(last) === text ? last : undefined
+      const asked: ChatMessage | undefined = chat.row ? retried ?? { id: nextId(), role: 'user', parts: [{ type: 'text', text }], metadata: { author: chat.row.title } } : undefined
+      if (asked && !retried) await write({ chat, message: asked })
       const said = await saidOf(chat)
       const id = nextId()
       const session = sessionOf(said, asked ? undefined : id)

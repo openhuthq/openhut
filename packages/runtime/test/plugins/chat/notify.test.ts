@@ -19,7 +19,7 @@ await refresh()
 const alerts = { platform: 'discord', chat_id: '111', chat_name: '#alerts' }
 const ops = { platform: 'discord', chat_id: '222', chat_name: '#ops' }
 mock.method(channelService, 'places', async () => [alerts, ops])
-const posted = mock.method(channelService, 'send', async () => undefined)
+const posted = mock.method(channelService, 'send', async () => ({ url: '', messageId: '' }))
 mock.method(agentService, 'reapply', async () => undefined)
 const app = Fastify()
 answerErrors(app)
