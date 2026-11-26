@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Cancel01Icon, PlusSignIcon, SquareLock02Icon, UnfoldMoreIcon, UserMultipleIcon } from '@hugeicons/core-free-icons'
+import { Cancel01Icon, PlusSignIcon, SquareLock02Icon, Tick02Icon, UnfoldMoreIcon, UserMultipleIcon } from '@hugeicons/core-free-icons'
+import type { IconSvgElement } from '@hugeicons/react'
 import type { ProviderId } from '@openhut/common/models/provider.ts'
 import { Button } from '@/components/ui/button'
 import { useIsAdmin, useMe } from '@/features/people/api'
@@ -7,18 +8,17 @@ import { PersonFace } from '@/components/custom/person-face'
 import { DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { ErrorNote } from '@/components/error-note'
-import { Choice, DialogCard, I, MenuCard } from '@/components/kit'
+import { DialogCard, I } from '@/components/kit'
 import { useAgents, useCreateAgent } from '@/features/agents/api'
 import { useStartSeatSignIn } from '@/features/settings/api'
 import { ModelsStep, SeatSignIn, stepOf } from '@/features/settings/models'
 import { firstModel, runsOnChoices } from '@/features/agents/form'
-import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { DEVICE_HUE, DEVICE_ICONS } from '@/components/custom/device'
-import { nameOf, useComputers } from '@/features/computers/api'
-import { noteOf } from '@/features/settings/computers'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DEVICE_ICONS } from '@/components/custom/device'
+import { useComputers } from '@/features/computers/api'
 import { HERE, type Computer } from '@/lib/openhut'
 import { useComputerProviders } from '@/features/models/api'
-import { ModelPicker, SOFT_TRIGGER } from '@/features/models/model-picker'
+import { FIELD_MENU, ModelPicker, SOFT_TRIGGER } from '@/features/models/model-picker'
 import { FacePicker } from '@/features/agents/face-picker'
 import { formValues } from '@/lib/form'
 import { TOUCH, useMedia } from '@/lib/media'
@@ -94,7 +94,7 @@ function AgentForm({ steps = true }: { steps?: boolean }) {
     <Input name="name" required maxLength={40} defaultValue={name} placeholder={name} aria-label="Name" autoFocus={!touch} autoComplete="off" spellCheck={false} enterKeyHint="go"
       className="h-auto w-full rounded-none border-0 bg-transparent p-0 text-center text-[22px]/[1.3] font-semibold shadow-none focus-visible:ring-0 text-ink outline-none placeholder:text-mute-2" />
     <div className="flex w-full flex-col divide-y divide-hair border-y border-hair text-left">
-      <Row title="Model"><ModelPicker providers={providers} value={model} onPick={setPicked} onSetUp={admin ? setUp : undefined} label="Model" title="It thinks with" className={PICKER} /></Row>
+      <Row title="Model"><ModelPicker providers={providers} value={model} onPick={setPicked} onSetUp={admin ? setUp : undefined} label="Model" className={PICKER} /></Row>
       <Row title="Runs on"><ComputerPicker computers={computers} value={runsOn} onPick={setRunsOn} admin={admin} /></Row>
       <Row title="Access"><AccessPicker shared={shared} onPick={setShared} /></Row>
       <Row title="Owner"><span className={cn(PICKER, 'pointer-events-none')}>{me && <PersonFace name={me.name} email={me.email} size={16} />}<span className="min-w-0 flex-1 truncate text-left">{me?.name ?? ''}</span></span></Row>
@@ -104,23 +104,20 @@ function AgentForm({ steps = true }: { steps?: boolean }) {
   </form>
 }
 
-function serverName(computer: Computer): string {
-  return computer.here ? 'This server' : computer.name
-}
-
 function ComputerPicker({ computers, value, onPick, admin }: { computers: Computer[]; value: string; onPick: (id: string) => void; admin: boolean }) {
-  const name = value === HERE ? 'This server' : nameOf({ computers, id: value })
+  const name = computers.find((computer) => computer.id === value)?.name ?? 'This server'
   return <DropdownMenu>
     <DropdownMenuTrigger className={PICKER} aria-label={`Runs on: ${name}`}>
       <I icon={DEVICE_ICONS.server} size={14} className="shrink-0 text-mute" />
       <span className="min-w-0 flex-1 truncate text-left">{name}</span>
       <I icon={UnfoldMoreIcon} size={12} className="text-mute" />
     </DropdownMenuTrigger>
-    <MenuCard title="It runs on">
-      {computers.map((computer) => <Choice key={computer.id} icon={<I icon={DEVICE_ICONS.server} size={15} className={DEVICE_HUE} />} name={serverName(computer)} note={noteOf(computer)} selected={computer.id === value} onClick={() => onPick(computer.id)} />)}
-      {admin && <><DropdownMenuSeparator />
-        <DropdownMenuItem className="h-8 gap-2 text-[13px]" onClick={() => navigate('/settings/computers?open=add-computer')}><I icon={PlusSignIcon} size={14} className="text-pass" />Add a computer…</DropdownMenuItem></>}
-    </MenuCard>
+    <DropdownMenuContent className={FIELD_MENU}>
+      {computers.map((computer) => <Pick key={computer.id} icon={DEVICE_ICONS.server} name={computer.name} selected={computer.id === value} onClick={() => onPick(computer.id)}>
+        <i title={computer.online ? 'Online' : 'Offline'} className={cn('size-1.5 shrink-0 rounded-full', computer.online ? 'bg-pass' : 'bg-mute-2')} />
+      </Pick>)}
+      {admin && <Pick icon={PlusSignIcon} name="Add a computer" onClick={() => navigate('/settings/computers?open=add-computer')} />}
+    </DropdownMenuContent>
   </DropdownMenu>
 }
 
@@ -132,11 +129,21 @@ function AccessPicker({ shared, onPick }: { shared: boolean; onPick: (shared: bo
       <span className="min-w-0 flex-1 truncate text-left">{name}</span>
       <I icon={UnfoldMoreIcon} size={12} className="text-mute" />
     </DropdownMenuTrigger>
-    <MenuCard title="Who can use it">
-      <Choice icon={<I icon={SquareLock02Icon} size={15} />} name="Only you" note="Only you see and chat with it." selected={!shared} onClick={() => onPick(false)} />
-      <Choice icon={<I icon={UserMultipleIcon} size={15} />} name="Shared with team" note="Everyone on the team can chat with it." selected={shared} onClick={() => onPick(true)} />
-    </MenuCard>
+    <DropdownMenuContent className={FIELD_MENU}>
+      <Pick icon={SquareLock02Icon} name="Only you" selected={!shared} onClick={() => onPick(false)} />
+      <Pick icon={UserMultipleIcon} name="Shared with team" selected={shared} onClick={() => onPick(true)} />
+    </DropdownMenuContent>
   </DropdownMenu>
+}
+
+// One line per item: small icon, name, optional extra (status dot), check when selected.
+function Pick({ icon, name, selected = false, onClick, children }: { icon: IconSvgElement; name: string; selected?: boolean; onClick: () => void; children?: ReactNode }) {
+  return <DropdownMenuItem className="text-[13px]" onClick={onClick}>
+    <I icon={icon} size={14} />
+    <span className="min-w-0 truncate text-ink">{name}</span>
+    {children}
+    <span className="ml-auto grid w-3.5 shrink-0 place-items-center">{selected && <I icon={Tick02Icon} size={14} className="text-ink" />}</span>
+  </DropdownMenuItem>
 }
 
 function Row({ title, children }: { title: string; children: ReactNode }) {

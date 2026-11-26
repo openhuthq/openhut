@@ -76,7 +76,15 @@ async function follow(image: string): Promise<void> {
 async function hello(image: string): Promise<Record<string, unknown>> {
   const health = await ask({ cmd: 'health' }).catch(() => undefined)
   const features = health?.features as { whatsapp: boolean; browser: boolean } | undefined
-  return { type: 'hello', name: config.name, version: config.build, gvisor: typeof health?.gvisor === 'boolean' ? health.gvisor : null, features: features ?? { whatsapp: false, browser: false }, updateError: updateError(image) }
+  return { type: 'hello', name: await hostName(), version: config.build, gvisor: typeof health?.gvisor === 'boolean' ? health.gvisor : null, features: features ?? { whatsapp: false, browser: false }, updateError: updateError(image) }
+}
+
+// The host's own name, from its Docker daemon: this container's hostname is set by the installer, and the
+// main install's runtime is started from inside another container. Falls back to OPENHUT_NAME.
+let host: Promise<string> | undefined
+function hostName(): Promise<string> {
+  host ??= run('docker', ['-H', config.hostDocker, 'info', '-f', '{{.Name}}']).then(({ stdout }) => stdout.trim() || config.name, () => config.name)
+  return host
 }
 
 function ask(request: Record<string, unknown>): Promise<Record<string, unknown>> {

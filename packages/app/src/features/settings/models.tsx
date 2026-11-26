@@ -139,14 +139,14 @@ function ConnectKey({ provider, onConnected }: { provider: Provider; onConnected
 function CodexSignInStep({ onSignedIn }: { onSignedIn: () => void }) {
   const cancel = () => leave('codex')
   const { signIn, error, restart } = useCodexSignIn(onSignedIn)
-  return <SetupSheet brand="codex" title="Sign in with ChatGPT" blurb="Open the page below, sign in to ChatGPT and enter this code." safe="Needs ChatGPT Plus or Pro." error={error?.message} onClose={cancel}
-    foot={<><Button type="button" variant="secondary" onClick={cancel}>Cancel</Button>{error && <Button type="button" variant="primary" onClick={restart}>Start again</Button>}</>}>
+  return <SetupSheet brand="codex" title="ChatGPT" blurb="Sign in with your ChatGPT plan. One for this whole install." error={error?.message} onClose={cancel}
+    foot={<><Button type="button" variant="ghost" onClick={cancel}>Cancel</Button>{error && <Button type="button" variant="primary" onClick={restart}>Start again</Button>}</>}>
     <div className="flex items-center gap-3 rounded-lg bg-sidebar py-3 pr-3 pl-4">
       <span className="flex-1 font-mono text-[22px] tracking-[.08em]" aria-label="Sign-in code">{signIn?.userCode ?? '····-····'}</span>
       {signIn && <CopyButton text={signIn.userCode} label="Copy" variant="ghost" className={PILL} />}
     </div>
-    {signIn && <a href={signIn.url} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'secondary' }), 'self-start')}>Open {new URL(signIn.url).host}<I icon={ArrowUpRight01Icon} size={14} /></a>}
-    {!error && <span className="inline-flex items-center gap-2 text-[13px] text-mute"><Spinner className="mt-0" />{signIn ? 'Waiting for you to approve it…' : 'Getting a code…'}</span>}
+    {signIn && <a href={signIn.url} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'primary' }), 'h-10 justify-center')}>Sign in with ChatGPT</a>}
+    {!error && <span className="inline-flex items-center gap-2 text-[13px] text-mute"><Spinner className="mt-0" />{signIn ? 'Enter the code above, then come back.' : 'Getting a code…'}</span>}
   </SetupSheet>
 }
 
@@ -247,9 +247,9 @@ export function SeatSignIn({ start: prepared, onClose = () => open(), onDone = (
   const start = prepared ?? own
   const complete = useCompleteSeatSignIn()
   const started = useRef(false)
-  const shown = useRef(false)
   const code = useRef<HTMLInputElement>(null)
   const [picked, setPicked] = useState(false)
+  const [opened, setOpened] = useState(false)
   const { mutate, isIdle, isError } = start
   useEffect(() => {
     if (started.current || !(isIdle || isError)) return
@@ -257,11 +257,6 @@ export function SeatSignIn({ start: prepared, onClose = () => open(), onDone = (
     mutate()
   }, [mutate, isIdle, isError])
   const signIn = start.data
-  useEffect(() => {
-    if (!signIn?.url || shown.current) return
-    shown.current = true
-    window.open(signIn.url, '_blank')
-  }, [signIn?.url])
   useEffect(() => {
     const pick = () => void navigator.clipboard.readText().then((text) => {
       const found = text.trim()
@@ -283,16 +278,18 @@ export function SeatSignIn({ start: prepared, onClose = () => open(), onDone = (
   const download = admin.data?.seat.download
   return <DialogCard className="w-[520px]" onClose={onClose}>
     <form className="contents" onSubmit={(event) => signIn && complete.mutate({ id: signIn.id, code: formValues(event)('code') }, { onSuccess: onDone })}>
-      <div className="flex items-center gap-2.5"><span className="grid size-9 place-items-center rounded-lg bg-[#D97757]/12"><Glyph name="claude" size={20} /></span><CardTitle>Sign in with Claude</CardTitle></div>
-      {start.error
-        ? <FieldError>{start.error.message}</FieldError>
-        : <p className="m-0 text-[13px]/[18px] text-body">{signIn?.url
-          ? <>claude.ai opened in your browser. Press <b>Authorize</b>, then <b>Copy code</b>. We’ll pick it up when you come back. <a href={signIn.url} target="_blank" rel="noreferrer">Open claude.ai again</a></>
-          : <span className="inline-flex items-center gap-2"><Spinner className="mt-0" />{download ? `Getting Claude Code ready · ${download.total ? Math.floor((download.done / download.total) * 100) : 0}%` : 'Starting the Claude sign-in. This takes about 10 seconds.'}</span>}</p>}
-      <Input ref={code} mono name="code" required minLength={10} autoComplete="off" spellCheck={false} aria-label="Code from claude.ai" placeholder="Paste the code from claude.ai" disabled={!signIn} autoFocus onInput={() => setPicked(false)} />
-      {picked && <p className="m-0 -mt-1 text-[12px] text-mute">Pasted your code from claude.ai.</p>}
-      {complete.error && <FieldError>{complete.error.message}</FieldError>}
-      <div className="flex justify-end gap-2"><Button type="button" variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" variant="primary" disabled={!signIn || complete.isPending}>{complete.isPending ? 'Signing in…' : 'Sign in'}</Button></div>
+      <div className="flex items-center gap-2.5"><span className="grid size-9 place-items-center rounded-lg bg-[#D97757]/12"><Glyph name="claude" size={20} /></span><CardTitle>Claude</CardTitle></div>
+      <p className="m-0 text-[13px]/[18px] text-body">{opened ? <>Press <b>Authorize</b> on claude.ai, then paste the code here.</> : 'Sign in with your Claude plan. One for this whole install.'}</p>
+      {start.error && <FieldError>{start.error.message}</FieldError>}
+      {!opened && !start.error && (signIn?.url
+        ? <a href={signIn.url} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: 'primary' }), 'h-10 justify-center')} onClick={() => setOpened(true)}>Sign in with Claude</a>
+        : <span className="inline-flex items-center gap-2 text-[13px] text-mute"><Spinner className="mt-0" />{download ? `Getting Claude Code ready · ${download.total ? Math.floor((download.done / download.total) * 100) : 0}%` : 'Getting ready…'}</span>)}
+      {opened && <>
+        <Input ref={code} mono name="code" required minLength={10} autoComplete="off" spellCheck={false} aria-label="Code from claude.ai" placeholder="Paste the code from claude.ai" autoFocus onInput={() => setPicked(false)} />
+        {picked && <p className="m-0 -mt-1 text-[12px] text-mute">Pasted your code from claude.ai.</p>}
+        {complete.error && <FieldError>{complete.error.message}</FieldError>}
+        <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" variant="primary" disabled={complete.isPending}>{complete.isPending ? 'Connecting…' : 'Connect'}</Button></div>
+      </>}
     </form>
   </DialogCard>
 }

@@ -4,8 +4,9 @@ import { firstModel, inUse, runsOnChoices } from '../../../src/features/agents/f
 
 const provider = (id: string, connected: boolean, models: string[]) => ({ id, connected, models: models.map((model) => ({ id: model, on: true })) }) as never
 
-test('the form picks Claude Sonnet first, then the first model on, and nothing when no provider is set up', () => {
-  assert.equal(firstModel([provider('claude', true, ['opus', 'sonnet']), provider('openai', true, ['gpt'])]), 'claude:sonnet')
+test('the form picks Claude Opus first, then the first model on, and nothing when no provider is set up', () => {
+  assert.equal(firstModel([provider('claude', true, ['opus', 'sonnet']), provider('openai', true, ['gpt'])]), 'claude:opus')
+  assert.equal(firstModel([provider('claude', true, ['sonnet', 'haiku'])]), 'claude:sonnet')
   assert.equal(firstModel([provider('claude', false, ['sonnet']), provider('openai', true, ['gpt'])]), 'openai:gpt')
   assert.equal(firstModel([provider('claude', false, ['sonnet'])]), null)
 })
