@@ -15,6 +15,7 @@ import { imageTypeOf, safeFileName, shownCall, threadService } from '../../../sr
 import { HERE } from '../../../src/server/team/home.ts'
 import { agentService } from '../../../src/server/agents/agent-service.ts'
 import { connectionService } from '../../../src/server/connections/connection-service.ts'
+import { changeRequestService } from '../../../src/server/agents/change-request-service.ts'
 import { useFakeRecords } from '../agents/records-fake.ts'
 import type { SendChat } from '@openhut/common/threads/thread.ts'
 
@@ -50,6 +51,10 @@ const hermes = createServer((req, res) => {
     if (seen.body?.messages.at(-1)?.content === 'tool then down') return res.end(`event: hermes.tool.progress\ndata: {"tool":"terminal","label":"ls","toolCallId":"t","status":"running"}\n\ndata: ${JSON.stringify({ error: { message: 'overloaded' } })}\n\n`)
     if (seen.body?.messages.at(-1)?.content === 'model down') return res.end(`data: ${JSON.stringify({ error: { message: 'HTTP 401: Claude Code is installed but has no usable login' } })}\n\n`)
     const chunk = (content: string) => `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content } }] })}\n\n`
+    if (seen.body?.messages.at(-1)?.content === 'rename yourself') {
+      await changeRequestService.ask({ agentId: 'ag_chatcard', action: 'update_self', input: { name: 'Card Bot' }, why: 'Asked to.', origin: { platform: 'api_server', chat_id: seen.session } })
+      return res.end(`${chunk('Asked your owner.')}data: [DONE]\n\n`)
+    }
     if (seen.body?.messages.at(-1)?.content === 'card') return res.end(`${['Deploy is ready.\n\n```spec\n{"op":"add","path":"/root","value":"c"}\n', '{"op":"add","path":"/elements/c","value":{"type":"Card","props":{"title":"Deploy"}}}\n', '```\n\nApprove?'].map(chunk).join('')}data: [DONE]\n\n`)
     const tool = (data: Record<string, string>) => `event: hermes.tool.progress\ndata: ${JSON.stringify(data)}\n\n`
     res.write(`: keepalive\n\n${chunk('Let me ')}${chunk('check.')}${tool({ tool: 'mcp__openhut__get_self', toolCallId: 'a', status: 'running' })}${tool({ tool: 'web_search', label: 'orders table', toolCallId: 'b', status: 'running' })}${tool({ tool: 'web_search', toolCallId: 'b', status: 'completed' })}`)
@@ -110,6 +115,16 @@ test('a turn streams the agent\'s reply in order, with one work part that stores
     input: '{\n  "sql": "select count(*) from orders"\n}', error: 'connect ETIMEDOUT 10.0.0.5:5432', ms: 0, status: 'failed',
   })
   assert.equal(work[0].data.error, undefined)
+})
+
+test('after the turn, each plugin\'s afterTurn adds its part: the change the agent asked for in this chat', async () => {
+  const res = await say('ag_chatcard', 'rename yourself')
+  const parts = res.body.split('\n\n').filter((line) => line.startsWith('data: {')).map((line) => JSON.parse(line.slice(6)))
+  const asked = await db.selectFrom('change_request').select('id').where('agent_id', '=', 'ag_chatcard').execute()
+  assert.equal(asked.length, 1)
+  assert.deepEqual(parts.slice(-2), [{ type: 'data-changes', data: [asked[0].id] }, { type: 'finish' }])
+  const plain = await say('ag_chatcard', 'card')
+  assert.ok(!plain.body.includes('data-changes'), 'a turn that asked for nothing adds no part')
 })
 
 test('a card in the reply streams as spec parts and is saved as one card beside the text', async () => {

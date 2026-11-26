@@ -16,7 +16,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   `src/server/` is the API (Fastify, Kysely on PGlite), grouped by domain: `platform/` (config, db, secrets, settings,
   errors, evlog logging, the typed agentd client), `team/`, `agents/` (agents, grants), `channels/`,
   `connections/`, `gateway/` (the agents' MCP gateway and key broker on :8081), `admin/`, and `integrations/<service>/`.
-  What an agent's Hermes gets comes from plugins: `src/plugins/<name>/index.ts` is `definePlugin({ name, hermes, tools, hooks, slackAction, wakes, start })`,
+  What an agent's Hermes gets comes from plugins: `src/plugins/<name>/index.ts` is `definePlugin({ name, hermes, tools, hooks, slackAction, wakes, start, migrate, routes, afterTurn })`,
   where `hermes()` returns that feature's SOUL.md paragraph, config and env, and `tools` its MCP tools (zod `input` and
   `run(input, { agent, origin })`). `src/core/` holds no feature code: `plugins.ts` is the ordered list (its order is the
   SOUL.md order; two plugins with one tool name fail at boot), `hermes.ts` merges the parts into `config.yaml` (written as
@@ -27,6 +27,9 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   runtime wants the agent to take (routine runs and webhook calls from inbox, answered change requests from asks):
   `core/wakes.ts` lists every plugin's due wakes as `[OpenHut <plugin>:<id>] <text>`; the Hermes plugin polls `/wakes`
   for chat ones, the chat plugin runs the app's itself (`nudge(agentId)` runs them at once), and `start()` runs at boot.
+  A plugin also owns its tables (`migrate`, run by `platform/db.ts` after the core tables, in list order), its API
+  (`routes: () => ({ '/api/<prefix>': controller })`, registered by `app.ts`; two plugins with one prefix fail at boot)
+  and a part under the app chat's reply (`afterTurn`, like asks' `data-changes`).
   An agent and its control, memory, skills, routines, channels and messages are rows in the local `record` table
   (`platform/records.ts`, secrets sealed with the install secret); `agents/run-set.ts` applies them to the agents this computer
   runs. People sign in with a session cookie (`team/identity.ts`, `team/team-service.ts`): while there is no owner, the first
@@ -74,7 +77,7 @@ smoke-tests main's newest green commit, tags both images `stable` and publishes 
   `{ id, object, deleted: true }`, `{ error: { type, message, param? } }`.
 - A module is `<name>-service.ts` (a deep `xService = {}`, the only layer that touches the database or agentd) and
   `<name>-controller.ts` (one-line handlers, request schemas at the end as `const FooRequest = { schema }`).
-  `app.ts` only registers controllers. `platform/config.ts` is the only file that reads env vars (agentd has `agentd/config.ts`).
+  `app.ts` only registers controllers (the core ones, then each plugin's `routes`). `platform/config.ts` is the only file that reads env vars (agentd has `agentd/config.ts`).
 - Outside services live in `integrations/<service>/`; core reaches them by kind.
 - The dashboard reads server data with `useQuery`/`useMutation` and writes responses back with `setQueryData`; forms
   are uncontrolled; which dialog is open lives in the URL.
