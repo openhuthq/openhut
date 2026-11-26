@@ -2,7 +2,9 @@ import { ApiError, List } from '@openhut/common/api.ts'
 import { Computer as ComputerSchema } from '@openhut/common/computers/computer.ts'
 import { Agent, Grant } from '@openhut/common/agents/agent.ts'
 import { Me } from '@openhut/common/team/team.ts'
+import { toast as sonner } from 'sonner'
 import type { Computer, Features } from '@/lib/computers'
+import { isStale, noteBuild, STALE_MESSAGE } from '@/lib/build'
 
 export type { Computer, Features }
 export type Where = { computer?: string; of?: string }
@@ -27,9 +29,9 @@ export class RequestError extends Error {
 export async function request<T>({ schema, path, method = 'GET', body }: Where & { schema: Schema<T>; path: string; method?: string; body?: unknown }): Promise<T> {
   const response = await openhut.fetch({ path, init: { method, ...payloadOf(body) } })
   const payload: unknown = await response.json().catch(() => null)
-  if (!response.ok) throw failure({ status: response.status, payload })
+  if (!response.ok) throw isStale() ? new RequestError({ message: STALE_MESSAGE, status: response.status }) : failure({ status: response.status, payload })
   const parsed = schema.safeParse(payload)
-  if (!parsed.success) throw new RequestError({ message: 'OpenHut got an answer it doesn\'t understand. Update OpenHut and try again.', status: response.status })
+  if (!parsed.success) throw new RequestError({ message: isStale() ? STALE_MESSAGE : 'OpenHut got an answer it doesn\'t understand. Update OpenHut and try again.', status: response.status })
   return parsed.data
 }
 
@@ -40,7 +42,11 @@ export async function requestBlob({ path }: Where & { path: string }): Promise<B
 }
 
 export const openhut = {
-  fetch: ({ path, init }: { path: string; init?: RequestInit }): Promise<Response> => fetch(path, init),
+  fetch: async ({ path, init }: { path: string; init?: RequestInit }): Promise<Response> => {
+    const response = await fetch(path, init)
+    if (noteBuild(response.headers.get('x-openhut-build'))) sonner('OpenHut updated', { description: 'Reload to get the new version.', id: 'openhut-updated', duration: Infinity, dismissible: false, action: { label: 'Reload', onClick: () => location.reload() } })
+    return response
+  },
   agents: {
     list: async (): Promise<OpenHutAgent[]> => (await request({ schema: AGENT_LIST, path: '/api/agents' })).data.map(here),
   },
@@ -52,6 +58,12 @@ export const openhut = {
   },
   account: {
     me: (): Promise<Me> => request({ schema: Me, path: '/api/me' }),
+  },
+  github: {
+    publicOrgs: async ({ login, signal }: { login: string; signal: AbortSignal }): Promise<unknown> => {
+      const response = await fetch(`https://api.github.com/users/${encodeURIComponent(login)}/orgs`, { signal })
+      return response.ok ? response.json() : []
+    },
   },
 }
 

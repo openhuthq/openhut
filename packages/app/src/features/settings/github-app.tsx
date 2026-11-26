@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react'
 import { CheckmarkCircle02Icon, CircleIcon } from '@hugeicons/core-free-icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { GithubAppInfo, GithubAppLaunch, type CreateGithubApp } from '@openhut/common/connections/github-app.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,15 +8,18 @@ import { Glyph } from '@/components/glyph'
 import { ConfirmButton } from '@/components/confirm-button'
 import { I, PILL, SetupSheet } from '@/components/kit'
 import { Field } from '@/features/connections/sheet'
-import { appName, setupStage, slugOf } from '@/features/settings/github-setup'
+import { appName, avatarUrl, ownerSuggestions, rememberOwner, setupStage, slugOf, type Owner } from '@/features/settings/github-setup'
+import { Autocomplete, AutocompleteInput, AutocompleteItem, ComboboxContent, ComboboxList } from '@/components/ui/combobox'
 import { Row, Rows } from '@/features/settings/kit'
 import { fieldError, formError, request } from '@/lib/api-client'
+import { openhut } from '@/lib/openhut'
 import { open } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 const KEY = ['github-app']
-const OWNER = 'openhut.github.owner'
+const OWNERS = 'openhut.github.owners'
+const LOGIN = /^[a-z\d][a-z\d-]{0,38}$/i
 const PATH = '/api/github-app'
 const POLL_MS = 1000
 const AVATAR_DELAY_MS = 300
@@ -72,12 +75,51 @@ export function Avatar({ url, name, org, size = 24 }: { url: string; name: strin
   return <img src={url} alt="" width={size} height={size} onError={() => setBroken(true)} className={cn('shrink-0 object-cover shadow-[0_0_0_1px_var(--hair)]', shape)} />
 }
 
-function remembered(): string {
-  try { return localStorage.getItem(OWNER) ?? '' } catch { return '' }
+function remembered(): string[] {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(OWNERS) ?? '[]')
+    return Array.isArray(saved) ? saved.filter((each): each is string => typeof each === 'string') : []
+  } catch {
+    return []
+  }
 }
 
 function remember(owner: string): void {
-  try { localStorage.setItem(OWNER, owner) } catch { return }
+  try { localStorage.setItem(OWNERS, JSON.stringify(rememberOwner({ owners: remembered(), owner }))) } catch { return }
+}
+
+function usePublicOrgs(logins: string[]): Owner[] {
+  return useQueries({
+    queries: logins.filter((login) => LOGIN.test(login)).map((login) => ({
+      queryKey: ['github-public-orgs', login.toLowerCase()],
+      staleTime: Infinity,
+      retry: false,
+      queryFn: async ({ signal }: { signal: AbortSignal }): Promise<Owner[]> => {
+        const orgs = await openhut.github.publicOrgs({ login, signal })
+        return Array.isArray(orgs) ? orgs.flatMap((org: { login?: unknown; avatar_url?: unknown }) => typeof org.login === 'string' ? [{ login: org.login, avatarUrl: typeof org.avatar_url === 'string' ? org.avatar_url : avatarUrl(org.login), org: true }] : []) : []
+      },
+    })),
+    combine: (results) => results.flatMap((result) => result.data ?? []),
+  })
+}
+
+function OwnerField({ owner, onChange, error }: { owner: string; onChange: (owner: string) => void; error?: string }) {
+  const [saved] = useState(remembered)
+  const login = useSettled(owner.trim())
+  const known = saved.length ? saved : [login].filter(Boolean)
+  const items = ownerSuggestions({ remembered: known, orgs: usePublicOrgs(known) })
+  return <Field label="Owner" error={error}>
+    <Autocomplete items={items} value={owner} onValueChange={(value) => onChange(value)} itemToStringValue={(item: Owner) => item.login} openOnInputClick>
+      <span className="relative flex items-center">
+        <span className="pointer-events-none absolute left-2 flex">{login ? <Avatar key={login} url={avatarUrl(login)} name={login} org size={20} /> : <Glyph name="github" size={20} />}</span>
+        <AutocompleteInput render={<Input mono className="pl-9" />} placeholder="Your account or organization" aria-label="Owner" autoComplete="off" spellCheck={false} autoFocus />
+      </span>
+      <ComboboxContent>
+        <ComboboxList>{(item: Owner) => <AutocompleteItem key={item.login} value={item}><Avatar url={item.avatarUrl} name={item.login} org={item.org} size={20} /><span className="truncate font-mono">{item.login}</span></AutocompleteItem>}</ComboboxList>
+        <p className="-mx-1 mt-1 -mb-1 border-t border-hair px-3 py-2 text-xs text-mute">Private organization? Type its name. <a href="https://github.com/settings/organizations" target="_blank" rel="noreferrer" className="text-ink underline-offset-2 hover:underline">Your organizations ↗</a></p>
+      </ComboboxContent>
+    </Autocomplete>
+  </Field>
 }
 
 function useSettled(value: string): string {
@@ -97,7 +139,7 @@ function Status({ icon, children }: { icon: ReactNode; children: ReactNode }) {
 
 export function useGithubSetup({ onClose, onDone }: { onClose: () => void; onDone?: () => void }): { started: boolean; sheet: Sheet } {
   const [started, setStarted] = useState(false)
-  const [owner, setOwner] = useState(remembered)
+  const [owner, setOwner] = useState(() => remembered()[0] ?? '')
   const [named, setNamed] = useState<string>()
   const [blocked, setBlocked] = useState<string>()
   const [lost, setLost] = useState(false)
@@ -106,7 +148,6 @@ export function useGithubSetup({ onClose, onDone }: { onClose: () => void; onDon
   const app = query.data?.app
   const stage = setupStage({ started, app })
   const login = owner.trim()
-  const avatarOf = useSettled(login)
   const name = named ?? appName({ owner: login, host: location.hostname })
   const remove = useGithubAppChange(() => request({ schema: GithubAppInfo, path: PATH, method: 'DELETE' }))
   const go = (url: string) => {
@@ -172,12 +213,7 @@ export function useGithubSetup({ onClose, onDone }: { onClose: () => void; onDon
       },
       foot: <><Button type="button" variant="secondary" onClick={cancel}>Cancel</Button><Button type="submit" variant="primary" disabled={!name.trim() || create.isPending}>Continue on GitHub</Button></>,
       children: <>
-        <Field label="Owner" error={fieldError(create.error, 'owner')}>
-          <span className="relative flex items-center">
-            <span className="pointer-events-none absolute left-2 flex">{avatarOf ? <Avatar key={avatarOf} url={`https://avatars.githubusercontent.com/${encodeURIComponent(avatarOf)}?s=40`} name={avatarOf} org size={20} /> : <Glyph name="github" size={20} />}</span>
-            <Input mono value={owner} className="pl-9" onInput={(event) => setOwner(event.currentTarget.value)} placeholder="Your account" aria-label="Owner" autoComplete="off" spellCheck={false} autoFocus />
-          </span>
-        </Field>
+        <OwnerField owner={owner} onChange={setOwner} error={fieldError(create.error, 'owner')} />
         <Field label="Name" error={fieldError(create.error, 'name')}>
           <Input mono value={name} maxLength={34} onInput={(event) => setNamed(event.currentTarget.value)} aria-label="Name" autoComplete="off" spellCheck={false} />
         </Field>
