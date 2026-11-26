@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@openhut/common/api.ts'
-import { Connection, ConnectionAuthorization, ConnectionEvent, ConnectionTool, type CreateConnection, type CreateConnectionAuthorization } from '@openhut/common/connections/connection.ts'
+import { AgentTool, Connection, ConnectionAuthorization, ConnectionEvent, ConnectionTool, type UpdateAgentTools, type CreateConnection, type CreateConnectionAuthorization } from '@openhut/common/connections/connection.ts'
 import { request } from '@/lib/api-client'
 import { AGENTS_KEY, CONNECTIONS_KEY, GRANTS_KEY } from '@/lib/query-keys'
 import { asked } from '@/features/connections/asked'
@@ -10,6 +10,7 @@ import { navigate } from '@/lib/router'
 const CONNECTION_LIST = List(Connection)
 const EVENT_LIST = List(ConnectionEvent)
 const TOOL_LIST = List(ConnectionTool)
+const AGENT_TOOL_LIST = List(AgentTool)
 const DELETED_CONNECTION = Deleted('connection')
 const EVENTS_PER_PAGE = '25'
 
@@ -95,4 +96,33 @@ export function useBackToAsker() {
     await client.invalidateQueries({ queryKey: AGENTS_KEY })
     navigate(`/agents/${encodeURIComponent(agentId)}`)
   }
+}
+
+const agentToolsKey = ({ agentId, connectionId }: { agentId: string; connectionId: string }) => ['agent-tools', agentId, connectionId]
+
+export function useAgentTools(filter: { agentId: string; connectionId: string }) {
+  return useQuery({ queryKey: agentToolsKey(filter), queryFn: () => request({ schema: AGENT_TOOL_LIST, of: filter.agentId, path: `/api/agent-tools?${new URLSearchParams(filter)}` }).then((page) => page.data) })
+}
+
+export function useSetToolPermission() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (body: UpdateAgentTools) => request({ schema: AGENT_TOOL_LIST, of: body.agentId, path: '/api/agent-tools', method: 'PATCH', body }).then((page) => page.data),
+    onSuccess: (tools, body) => client.setQueryData<AgentTool[]>(agentToolsKey(body), tools),
+  })
+}
+
+export function useResetToolPermissions(filter: { agentId: string; connectionId: string }) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => request({ schema: AGENT_TOOL_LIST, of: filter.agentId, path: `/api/agent-tools?${new URLSearchParams(filter)}`, method: 'DELETE' }).then((page) => page.data),
+    onSuccess: (tools) => client.setQueryData(agentToolsKey(filter), tools),
+  })
+}
+
+export function useAgentEvents(agentId: string) {
+  return useQuery({
+    queryKey: ['agent-events', agentId],
+    queryFn: () => request({ schema: EVENT_LIST, of: agentId, path: `/api/connection-events?${new URLSearchParams({ agentId, limit: EVENTS_PER_PAGE })}` }).then((page) => page.data),
+  })
 }

@@ -53,6 +53,8 @@ let inTick = false
 let dashboardRunner: (input: { agentId: string; text: string }) => Promise<string> = async () => { throw new Error('No dashboard runner.') }
 
 export const routineService = {
+  inRun: (agentId: string): Promise<boolean> => openRun(agentId),
+
   async schedule({ agentId, input }: { agentId: string; input: ScheduleInput }): Promise<string> {
     const name = input.name.trim().slice(0, ROUTINE_NAME_MAX)
     const plan = input.plan.trim().slice(0, ROUTINE_PLAN_MAX)

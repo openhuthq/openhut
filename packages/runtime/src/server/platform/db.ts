@@ -58,9 +58,13 @@ export async function migrate(): Promise<void> {
     created_at timestamptz not null default now(), unique (connection_id, agent_id))`.execute(db)
   await sql`create table if not exists connection_event (
     id bigserial primary key, at timestamptz not null default now(), agent_id text not null, connection_id text, tool text not null,
-    reason text not null, outcome text not null check (outcome in ('allowed', 'denied', 'failed')), ms integer not null)`.execute(db)
+    reason text not null, outcome text not null check (outcome in ('allowed', 'asked', 'denied', 'failed')), ms integer not null, approved_by text)`.execute(db)
   await sql`create index if not exists connection_event_by_connection on connection_event (connection_id, id desc)`.execute(db)
   await sql`create index if not exists connection_event_by_agent on connection_event (agent_id, id desc)`.execute(db)
+  await sql`create table if not exists tool_permission (
+    agent_id text not null references agent(id) on delete cascade, connection_id text not null references connection(id) on delete cascade, tool text not null,
+    state text not null check (state in ('allow', 'ask', 'deny')), changed_by text not null, changed_at timestamptz not null default now(),
+    primary key (agent_id, connection_id, tool))`.execute(db)
   await sql`create table if not exists routine (
     id text primary key, agent_id text not null references agent(id) on delete cascade, name text not null, plan text not null,
     at timestamptz, cron text, until timestamptz, origin text not null, next_run_at timestamptz, created_at timestamptz not null default now(),
@@ -73,8 +77,8 @@ export async function migrate(): Promise<void> {
   await sql`create index if not exists record_by_parent on record (collection, workspace, parent)`.execute(db)
   await sql`create table if not exists change_request (
     id text primary key, agent_id text not null references agent(id) on delete cascade, action text not null, input text not null, summary text not null,
-    why text not null, origin text not null, status text not null default 'pending' check (status in ('pending', 'approved', 'denied')), note text,
-    told boolean not null default false, created_at timestamptz not null default now(), decided_at timestamptz)`.execute(db)
+    why text not null, origin text not null, status text not null default 'pending' check (status in ('pending', 'approved', 'denied', 'expired')), note text,
+    told boolean not null default false, created_at timestamptz not null default now(), decided_at timestamptz, expires_at timestamptz, result text)`.execute(db)
   await sql`create index if not exists change_request_by_agent on change_request (agent_id, created_at desc)`.execute(db)
   await sql`create table if not exists telegram_code (
     hash text primary key, channel_id text not null, agent_id text not null, kind text not null check (kind in ('claim', 'invite')),

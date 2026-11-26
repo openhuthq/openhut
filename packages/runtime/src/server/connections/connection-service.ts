@@ -20,6 +20,9 @@ import { PROVIDERS } from '@openhut/common/models/provider.ts'
 import { providers } from '../models/providers/index.ts'
 import { settings } from '../platform/settings.ts'
 import { connectionRecords, type Secret } from './connection-records.ts'
+import { redact } from './redact.ts'
+import { permissions } from '../permissions/permissions.ts'
+import { changeRequestService } from '../agents/change-request-service.ts'
 
 const COLUMNS = ['id', 'kind', 'name', 'account', 'sign_in', 'owner_id', 'created_at'] as const
 const MAX_REPLY = 64_000
@@ -134,39 +137,73 @@ export const connectionService = {
     return lists.flat()
   },
 
-  async call({ agent, name, args, connectionId, reason }: { agent: { id: string; owner_id: string }; name: string; args: Record<string, unknown>; connectionId?: string; reason: string }): Promise<{ text: string; isError: boolean }> {
-    const started = Date.now()
-    const recordCall = (outcome: 'allowed' | 'denied' | 'failed', id: string | null) =>
-      db.insertInto('connection_event').values({ agent_id: agent.id, connection_id: id, tool: name, reason: reason.slice(0, 500), outcome, ms: Date.now() - started }).execute()
+  async specs({ actor, connectionId }: { actor: Caller; connectionId: string }): Promise<ToolSpec[]> {
+    const connection = await connectionService.get({ actor, id: connectionId })
+    return toolsOf({ id: connection.id, kind: connection.kind }).catch((err: unknown) => {
+      throw new HttpError(502, `${connection.name} didn't list its tools: ${messageOf(err)}`)
+    })
+  },
+
+  async call({ agent, name, args, connectionId, reason, origin }: { agent: { id: string; owner_id: string }; name: string; args: Record<string, unknown>; connectionId?: string; reason: string; origin?: unknown }): Promise<{ text: string; isError: boolean }> {
     const matches = (await connectionService.tools({ agent })).filter((tool) => tool.name === name && (!connectionId || tool.connection.id === connectionId))
     if (!matches.length) {
-      await recordCall('denied', connectionId ?? null)
+      await record({ agentId: agent.id, connectionId: connectionId ?? null, tool: name, reason, outcome: 'denied' })
       return { text: `Denied: no connection grants ${name} to this agent.`, isError: true }
     }
     if (matches.length > 1) {
-      await recordCall('failed', null)
+      await record({ agentId: agent.id, connectionId: null, tool: name, reason, outcome: 'failed' })
       return { text: `More than one connection has ${name}; pass connectionId (${matches.map((m) => m.connection.id).join(', ')}).`, isError: true }
     }
     const [{ connection, spec }] = matches
-    const key = `${agent.id}:${connection.id}`
-    const inFlight = running.get(key) ?? 0
-    if (inFlight >= PER_AGENT_CONNECTION) {
-      await recordCall('failed', connection.id)
-      return { text: `Busy: ${inFlight} calls to this connection are already running for this agent. Wait for them to finish.`, isError: true }
+    const state = await permissions.decide({ agentId: agent.id, connectionId: connection.id, spec })
+    if (state === 'deny') {
+      await record({ agentId: agent.id, connectionId: connection.id, tool: name, reason, outcome: 'denied' })
+      return { text: `Not allowed: your owner set ${name} on ${connection.name} to Never. Don't try it again; tell the person if it matters.`, isError: true }
     }
-    running.set(key, inFlight + 1)
-    try {
-      const result = await withConnector(connection, (ctx) => CONNECTORS[connection.kind].call({ ...ctx, tool: spec.name, args }))
-      if (result.text.length > MAX_REPLY) throw new Error(`Result too large for the agent (${Math.round(result.text.length / 1024)} KB, the limit is 64 KB). Ask for less.`)
-      await recordCall(result.isError ? 'failed' : 'allowed', connection.id)
-      return { text: result.text, isError: result.isError }
-    } catch (err) {
-      await recordCall('failed', connection.id)
-      return { text: `Failed: ${messageOf(err)}`.slice(0, 2000), isError: true }
-    } finally {
-      running.set(key, (running.get(key) ?? 1) - 1)
+    if (state === 'ask') {
+      const asked = await changeRequestService.ask({ agentId: agent.id, action: 'call_tool', input: { connectionId: connection.id, tool: spec.name, name, arguments: args }, why: reason, origin })
+      await record({ agentId: agent.id, connectionId: connection.id, tool: name, reason, outcome: 'asked' })
+      return { text: asked, isError: false }
     }
+    return run({ agentId: agent.id, tool: { name, connection, spec }, args, reason, approvedBy: null })
   },
+
+  async callApproved({ actor, agentId, connectionId, tool, args, reason }: { actor: Caller; agentId: string; connectionId: string; tool: string; args: Record<string, unknown>; reason: string }): Promise<{ text: string; isError: boolean }> {
+    const granted = (await connectionService.tools({ agent: { id: agentId, owner_id: '' } })).find((each) => each.connection.id === connectionId && each.spec.name === tool)
+    if (!granted) return { text: `Not run: ${tool} isn't on a connection this agent can use any more.`, isError: true }
+    return run({ agentId, tool: granted, args, reason, approvedBy: actor.id })
+  },
+
+  execute({ connection, tool, args }: { connection: ReachableConnection; tool: string; args: Record<string, unknown> }): Promise<{ text: string; isError: boolean }> {
+    return withConnector(connection, (ctx) => CONNECTORS[connection.kind].call({ ...ctx, tool, args }))
+  },
+}
+
+async function run({ agentId, tool: { name, connection, spec }, args, reason, approvedBy }: { agentId: string; tool: AgentTool; args: Record<string, unknown>; reason: string; approvedBy: string | null }): Promise<{ text: string; isError: boolean }> {
+  const started = Date.now()
+  const done = (outcome: 'allowed' | 'failed') => record({ agentId, connectionId: connection.id, tool: name, reason, outcome, ms: Date.now() - started, approvedBy })
+  const key = `${agentId}:${connection.id}`
+  const inFlight = running.get(key) ?? 0
+  if (inFlight >= PER_AGENT_CONNECTION) {
+    await done('failed')
+    return { text: `Busy: ${inFlight} calls to this connection are already running for this agent. Wait for them to finish.`, isError: true }
+  }
+  running.set(key, inFlight + 1)
+  try {
+    const result = await connectionService.execute({ connection, tool: spec.name, args })
+    if (result.text.length > MAX_REPLY) throw new Error(`Result too large for the agent (${Math.round(result.text.length / 1024)} KB, the limit is 64 KB). Ask for less.`)
+    await done(result.isError ? 'failed' : 'allowed')
+    return { text: redact(result.text), isError: result.isError }
+  } catch (err) {
+    await done('failed')
+    return { text: redact(`Failed: ${messageOf(err)}`).slice(0, 2000), isError: true }
+  } finally {
+    running.set(key, (running.get(key) ?? 1) - 1)
+  }
+}
+
+async function record({ agentId, connectionId, tool, reason, outcome, ms = 0, approvedBy = null }: { agentId: string; connectionId: string | null; tool: string; reason: string; outcome: 'allowed' | 'asked' | 'denied' | 'failed'; ms?: number; approvedBy?: string | null }): Promise<void> {
+  await db.insertInto('connection_event').values({ agent_id: agentId, connection_id: connectionId, tool, reason: reason.slice(0, 500), outcome, ms, approved_by: approvedBy }).execute()
 }
 
 async function keyedConfig({ kind, dsn, deployKey, url, header }: Omit<CreateConnection, 'name'>): Promise<{ config: Secret; account: string }> {

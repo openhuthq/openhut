@@ -36,6 +36,10 @@ import { Face } from '@/features/agents/face'
 import { deleteUpload, saveFile, threadPath, uploadFile, useAgentThread, useClearChat, useHomeFiles, useThumb, useTouchThread } from '@/features/threads/api'
 import { homePathsIn, linkHomeFiles, RASTER } from '@/features/threads/files'
 import { ConfirmIcon } from '@/components/confirm-button'
+import { Glyph } from '@/components/glyph'
+import { useConnections } from '@/features/connections/api'
+import { connectionBrand } from '@/features/connections/catalog'
+import { toolLabel, toolSentence } from '@/lib/tool-label'
 import { attachCalls, kindOf, stepsOf, type Step } from '@/features/threads/steps'
 import { CardReply, MessageCard } from '@/features/threads/card'
 import { ChangeCards, PendingElsewhere } from '@/features/agents/change-requests'
@@ -396,23 +400,24 @@ function Steps({ steps, live }: { steps: Step[]; live: boolean }) {
   const running = live ? steps.filter((step) => !step.done).at(-1) : undefined
   const blocked = steps.filter(failed).length
   const connection = steps.find((step) => step.call?.connectionName)?.call?.connectionName
-  const summary = steps.length === 1 ? <span className="font-mono text-[11.5px] text-ink">{steps[0].title}</span> : `${steps.length} tools`
+  const brand = useConnections().data?.find((each) => each.name === connection)
+  const summary = steps.length === 1 ? <span className="text-ink">{toolSentence(steps[0].title)}</span> : <>Used {steps.length} tools</>
   return <Collapsible className="text-[12.5px] text-mute">
     <CollapsibleTrigger className="group/steps -ml-1 flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-2 rounded-lg border-0 bg-transparent py-[3px] pr-2 pl-1 text-left text-inherit hover:bg-tint">
-      <span className="flex shrink-0 gap-[3px]">{steps.slice(-6).map((step) => <StepTile key={step.key} step={step} running={step === running} />)}</span>
+      {brand && !running ? <Glyph name={connectionBrand(brand)} size={15} /> : <span className="flex shrink-0 gap-[3px]">{steps.slice(-6).map((step) => <StepTile key={step.key} step={step} running={step === running} />)}</span>}
       {running
-        ? <span className="animate-[shimmer_1.4s_linear_infinite] bg-[linear-gradient(90deg,var(--mute)_30%,var(--ink)_50%,var(--mute)_70%)] bg-size-[200%_100%] bg-clip-text whitespace-nowrap text-transparent motion-reduce:animate-none motion-reduce:bg-none motion-reduce:text-mute">Running <span className="font-mono text-[11.5px]">{running.title}</span>…</span>
-        : <span className="truncate">Used {summary}{connection && <> on <span className="text-ink">{connection}</span></>}</span>}
+        ? <span className="animate-[shimmer_1.4s_linear_infinite] bg-[linear-gradient(90deg,var(--mute)_30%,var(--ink)_50%,var(--mute)_70%)] bg-size-[200%_100%] bg-clip-text whitespace-nowrap text-transparent motion-reduce:animate-none motion-reduce:bg-none motion-reduce:text-mute">{toolLabel(running.title)}…</span>
+        : <span className="truncate">{brand && steps.length > 1 ? <><span className="text-ink">Checked {connection}</span> · {steps.length} steps</> : <>{summary}{connection && <> on <span className="text-ink">{connection}</span></>}</>}</span>}
       {blocked > 0 && <Badge variant="destructive">{blocked} blocked</Badge>}
       <span className="text-mute-2 [transition:transform_.15s] group-data-panel-open/steps:rotate-90">›</span>
     </CollapsibleTrigger>
     <CollapsibleContent><ul className="mt-1.5 mr-0 mb-0.5 ml-3.5 flex list-none flex-col gap-2 border-l-[1.5px] border-hair py-0.5 pr-0 pl-3.5">{steps.map((step) => <li className="flex min-w-0 flex-col gap-1.5" key={step.key}>
       <div className="flex min-w-0 items-center gap-2">
         <StepTile step={step} running={step === running} />
-        <span className="font-mono text-xs text-ink">{step.title}</span>
+        <span className="text-[12.5px] text-ink">{toolLabel(step.title)}</span><span className="font-mono text-[11px] text-mute-2">{step.title}</span>
         {step.count > 1 && <span className="font-mono text-xs text-mute">×{step.count}</span>}
         {step.call?.connectionName && <span className="truncate text-mute">{step.call.connectionName}</span>}
-        {step.call && <Badge variant={failed(step) ? 'destructive' : 'success'} title={step.call.reason}>{OUTCOME[step.call.outcome]}</Badge>}
+        {step.call && <span className="inline-flex items-center gap-1.5 text-[12px] text-mute" title={step.call.reason}><i className={cn('size-1.5 rounded-full', DOT[step.call.outcome])} />{OUTCOME[step.call.outcome]}</span>}
         {step.call && <span className="ml-auto font-mono text-xs text-mute">{step.call.ms} ms</span>}
       </div>
       {step.call && failed(step) && <p className="m-0 text-[12.5px] text-body">{step.call.reason}</p>}
@@ -421,7 +426,8 @@ function Steps({ steps, live }: { steps: Step[]; live: boolean }) {
   </Collapsible>
 }
 
-const OUTCOME = { allowed: 'Allowed', denied: 'Blocked', failed: 'Failed' }
+const OUTCOME = { allowed: 'Allowed', asked: 'Waiting for your OK', denied: 'Blocked', failed: 'Failed' }
+const DOT = { allowed: 'bg-hue-green', asked: 'bg-hue-amber', denied: 'bg-hue-red', failed: 'bg-hue-red' }
 const TILE = {
   code: '[--k:#8a6ae0]',
   web: '[--k:oklch(54%_.12_233)]',
@@ -436,11 +442,11 @@ const TILE = {
 function StepTile({ step, running }: { step: Step; running: boolean }) {
   const kind = kindOf(step.call ? 'call_tool' : step.tool)
   const bad = failed(step)
-  return <span className={cn('grid size-[22px] shrink-0 animate-[tilein_.26s_cubic-bezier(.22,1,.36,1)] place-items-center rounded-md bg-[color-mix(in_oklch,var(--k)_12%,transparent)] text-(--k) shadow-[inset_0_0_0_1px_color-mix(in_oklch,var(--k)_22%,transparent)]', TILE[bad ? 'bad' : kind], running && 'animate-[tilepulse_1.2s_ease-in-out_infinite]')} title={step.title}>{STEP_ICONS[bad ? 'blocked' : kind]}</span>
+  return <span className={cn('grid size-[18px] shrink-0 animate-[tilein_.26s_cubic-bezier(.22,1,.36,1)] place-items-center text-(--k)', TILE[bad ? 'bad' : kind], running && 'animate-[tilepulse_1.2s_ease-in-out_infinite]')} title={toolLabel(step.title)}>{STEP_ICONS[bad ? 'blocked' : kind]}</span>
 }
 
 function failed(step: Step) {
-  return step.call !== undefined && step.call.outcome !== 'allowed'
+  return step.call?.outcome === 'denied' || step.call?.outcome === 'failed'
 }
 
 export function ChatLink({ href, children }: { href?: string; children?: ReactNode }) {

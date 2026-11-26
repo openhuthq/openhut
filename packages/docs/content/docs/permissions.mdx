@@ -1,0 +1,48 @@
+---
+title: Permissions
+description: Choose what an agent may do in each app on its own, what it asks you first, and what it never does.
+icon: hut
+---
+
+Every app an agent can use has a list of actions. Each one is **Always allow**, **Ask first** or **Never**, per agent.
+
+## Change them
+
+On the agent, click an app under **Can use**. **What it may do** groups the actions:
+
+- **Look things up:** reads that change nothing.
+- **Add new things**, **Change things:** writes.
+- **Delete or overwrite:** can't be undone.
+- **Other actions:** the app doesn't say what they do.
+
+Set a whole group with its menu, or open **N actions** to set one. **Reset to defaults** clears your choices.
+
+## Defaults
+
+OpenHut reads the labels the app puts on each action:
+
+| The app labels it | Default |
+|---|---|
+| Read-only | Always allow |
+| A write, or no label | Ask first |
+| Destructive, a delete, or high risk | Never |
+
+Nothing destructive or high risk starts as Always allow. Postgres runs read-only, so its actions start as Always allow.
+
+## When it asks
+
+An action set to **Ask first** doesn't run. The agent says it waits for your OK, and a card appears in its chat:
+
+- **Allow once** runs it now, on your main install, and sends the result back to the agent.
+- **Always allow** does the same and sets the action to Always allow.
+- **Don't allow** tells the agent no; nothing runs.
+
+A request from a scheduled routine expires after 30 minutes if nobody answers, and the agent carries on without it.
+
+## Activity
+
+**More › Activity** on the agent lists what it did in its apps: what ran, what waited for an OK, who said yes or no, and what was blocked.
+
+## Hidden secrets
+
+Before a result reaches the agent, OpenHut replaces passwords, private keys, tokens, secrets, connection strings and the password in a URL like `postgres://user:password@host` with `[hidden]`.

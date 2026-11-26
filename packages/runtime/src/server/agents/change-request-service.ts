@@ -12,8 +12,10 @@ import { describeIssues } from '../platform/http-error.ts'
 import type { Caller } from '../team/identity.ts'
 import { activity } from '../gateway/activity.ts'
 import { channelService } from '../channels/channel-service.ts'
-import { Origin } from '../routines/routine-service.ts'
+import { Origin, routineService } from '../routines/routine-service.ts'
 import { agentService } from './agent-service.ts'
+import { connectionService } from '../connections/connection-service.ts'
+import { permissions } from '../permissions/permissions.ts'
 
 const DASHBOARD = 'api_server'
 const QUIET_MS = 10_000
@@ -25,6 +27,9 @@ const SelfChange = z.object({ name: UpdateAgentFields.name, instructions: Update
 const ChannelChange = z.object({ id: z.string().check(z.maxLength(40)), open: z.optional(z.boolean()), allowed: z.optional(z.array(z.string().check(z.maxLength(20))).check(z.maxLength(50))) })
 const ChannelId = z.object({ id: z.string().check(z.maxLength(40)) })
 const ConnectionId = z.object({ connectionId: z.string().check(z.maxLength(40)) })
+const ToolCall = z.object({ connectionId: z.string().check(z.maxLength(40)), tool: z.string().check(z.maxLength(200)), name: z.string().check(z.maxLength(200)), arguments: z.record(z.string(), z.unknown()), always: z.optional(z.boolean()) })
+const ASK_EXPIRES_MS = 30 * 60_000
+const approving = new Set<string>()
 
 type Row = Selectable<Database['change_request']>
 type Runner = (input: { agentId: string; text: string }) => Promise<string>
@@ -36,14 +41,17 @@ export const changeRequestService = {
     if (!from.success) throw new HttpError(400, 'You can only ask for a change from a chat you\'re in.')
     const checked = checkedInput({ action, input, agentId })
     const summary = await summaryOf({ action, input: checked, agentId })
-    const row = await db.insertInto('change_request').values({ id: newId('chg'), agent_id: agentId, action, input: JSON.stringify(checked), summary, why, origin: JSON.stringify(from.data) })
+    const expires = action === 'call_tool' && await routineService.inRun(agentId) ? new Date(Date.now() + ASK_EXPIRES_MS) : null
+    const row = await db.insertInto('change_request').values({ id: newId('chg'), agent_id: agentId, action, input: JSON.stringify(checked), summary, why, origin: JSON.stringify(from.data), expires_at: expires })
       .returningAll().executeTakeFirstOrThrow()
     emit({ name: 'change_request.created', target: { type: 'change_request', id: row.id, agentId, action } })
+    if (action === 'call_tool') return `Waiting for your owner's OK (${row.id}): ${summary}. It hasn't run yet.${expires ? ' If nobody answers in 30 minutes it expires; carry on without it.' : ''} Tell the person in one line that it waits for their OK in OpenHut, then stop. The result comes back to you as a message.`
     return `Asked for approval (${row.id}): ${summary}. Nothing has changed yet. Tell the person in one line that it waits for your owner's approval in OpenHut, then stop. The answer comes back to you as a message.`
   },
 
   async list({ actor, agentId }: { actor: Caller; agentId: string }): Promise<ChangeRequest[]> {
     await agentService.get({ actor, id: agentId })
+    await expire()
     const rows = await db.selectFrom('change_request').selectAll().where('agent_id', '=', agentId).orderBy('created_at', 'desc').limit(50).execute()
     return rows.map(requestOf)
   },
@@ -53,8 +61,9 @@ export const changeRequestService = {
     return rows.filter(inApp).map((row) => row.id)
   },
 
-  async approve({ actor, id, input }: { actor: Caller; id: string; input?: Record<string, unknown> }): Promise<ChangeRequest> {
+  async approve({ actor, id, input, always }: { actor: Caller; id: string; input?: Record<string, unknown>; always?: boolean }): Promise<ChangeRequest> {
     const row = await pendingRow({ actor, id })
+    if (action(row) === 'call_tool') return requestOf(await approveCall({ actor, row, always: always === true }))
     const final = input ? checkedInput({ action: action(row), input, agentId: row.agent_id }) : JSON.parse(row.input) as Record<string, unknown>
     agentService.holdReapply(row.agent_id)
     try {
@@ -75,12 +84,17 @@ export const changeRequestService = {
   async deny({ actor, id, note }: { actor: Caller; id: string; note?: string }): Promise<ChangeRequest> {
     const row = await pendingRow({ actor, id })
     const decided = await decide({ id, status: 'denied', input: JSON.parse(row.input), summary: row.summary, note: note?.trim() || null })
+    if (action(row) === 'call_tool') {
+      const call = z.parse(ToolCall, JSON.parse(row.input))
+      await db.insertInto('connection_event').values({ agent_id: row.agent_id, connection_id: call.connectionId, tool: call.name, reason: row.why.slice(0, 500), outcome: 'denied', ms: 0, approved_by: actor.id }).execute()
+    }
     deliver(decided)
     emit({ name: 'change_request.denied', actor, target: { type: 'change_request', id, agentId: row.agent_id, action: row.action } })
     return requestOf(decided)
   },
 
   async due({ agentId }: { agentId: string }): Promise<{ runId: string; text: string; origin: Origin }[]> {
+    await expire()
     const rows = await db.selectFrom('change_request').selectAll().where('agent_id', '=', agentId).where('status', '<>', 'pending').where('told', '=', false).execute()
     return rows.filter((row) => !inApp(row)).map((row) => ({ runId: row.id, text: decisionText(row), origin: originOf(row) }))
   },
@@ -117,6 +131,7 @@ function parsedInput({ action, input, agentId }: { action: ChangeAction; input: 
     case 'update_channel': return z.safeParse(ChannelChange, input)
     case 'remove_channel': return z.safeParse(ChannelId, input)
     case 'request_connection': return z.safeParse(ConnectionId, input)
+    case 'call_tool': return z.safeParse(ToolCall, input)
   }
 }
 
@@ -134,6 +149,10 @@ async function summaryOf({ action, input, agentId }: { action: ChangeAction; inp
       const connection = await db.selectFrom('connection').select(['name', 'kind']).where('id', '=', String(input.connectionId)).executeTakeFirst()
       if (!connection) throw new HttpError(404, `There's no connection ${String(input.connectionId)}. Call get_self to see the ones you can ask for.`)
       return `Use ${connection.name}`
+    }
+    case 'call_tool': {
+      const connection = await db.selectFrom('connection').select('name').where('id', '=', String(input.connectionId)).executeTakeFirstOrThrow()
+      return `Run ${String(input.tool)} on ${connection.name}`
     }
   }
 }
@@ -154,6 +173,7 @@ async function apply({ actor, row, input }: { actor: Caller; row: Row; input: un
       return void await ownChannel({ agentId, id }).then(() => channelService.delete({ actor, id })).catch(alreadyDone(404))
     }
     case 'request_connection': return void await agentService.createGrant({ actor, agentId, connectionId: z.parse(ConnectionId, input).connectionId })
+    case 'call_tool': throw new HttpError(500, 'A tool call is approved through approveCall.')
   }
 }
 
@@ -176,7 +196,29 @@ async function ownChannel({ agentId, id }: { agentId: string; id: string }): Pro
   return channel
 }
 
+async function approveCall({ actor, row, always }: { actor: Caller; row: Row; always: boolean }): Promise<Row> {
+  if (approving.has(row.id)) throw new HttpError(409, 'That request is already being approved.')
+  approving.add(row.id)
+  try {
+    const call = z.parse(ToolCall, JSON.parse(row.input))
+    if (always) await permissions.set({ actor, agentId: row.agent_id, connectionId: call.connectionId, tools: [call.tool], state: 'allow' })
+    const result = await connectionService.callApproved({ actor, agentId: row.agent_id, connectionId: call.connectionId, tool: call.tool, args: call.arguments, reason: row.why })
+    const decided = await decide({ id: row.id, status: 'approved', input: { ...call, always }, summary: row.summary, note: null, result: result.text })
+    deliver(decided)
+    emit({ name: 'change_request.approved', actor, target: { type: 'change_request', id: row.id, agentId: row.agent_id, action: row.action } })
+    return decided
+  } finally {
+    approving.delete(row.id)
+  }
+}
+
+async function expire(): Promise<void> {
+  const rows = await db.updateTable('change_request').set({ status: 'expired', decided_at: new Date() }).where('status', '=', 'pending').where('expires_at', '<', new Date()).returningAll().execute()
+  for (const row of rows) deliver(row)
+}
+
 async function pendingRow({ actor, id }: { actor: Caller; id: string }): Promise<Row> {
+  await expire()
   const row = await db.selectFrom('change_request').selectAll().where('id', '=', id).executeTakeFirst()
   if (!row) throw new HttpError(404, 'That request doesn\'t exist.')
   await agentService.requireEditable({ actor, id: row.agent_id })
@@ -184,8 +226,8 @@ async function pendingRow({ actor, id }: { actor: Caller; id: string }): Promise
   return row
 }
 
-async function decide({ id, status, input, summary, note }: { id: string; status: 'approved' | 'denied'; input: unknown; summary: string; note: string | null }): Promise<Row> {
-  return db.updateTable('change_request').set({ status, input: JSON.stringify(input), summary, note, decided_at: new Date() }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
+async function decide({ id, status, input, summary, note, result = null }: { id: string; status: 'approved' | 'denied'; input: unknown; summary: string; note: string | null; result?: string | null }): Promise<Row> {
+  return db.updateTable('change_request').set({ status, input: JSON.stringify(input), summary, note, result, decided_at: new Date() }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
 }
 
 function deliver(row: Row, attempt = 0): void {
@@ -201,6 +243,11 @@ function deliver(row: Row, attempt = 0): void {
 }
 
 function decisionText(row: Row): string {
+  if (row.status === 'expired') return `[OpenHut ${row.id}] Nobody answered in time: ${row.summary} didn't run. Carry on without it, and say in your report that it needs your owner's OK.`
+  if (action(row) === 'call_tool' && row.status === 'approved') {
+    const always = (JSON.parse(row.input) as { always?: boolean }).always ? ' From now on it runs without asking.' : ''
+    return `[OpenHut ${row.id}] Your owner allowed it: ${row.summary}.${always} The result:\n\n${row.result ?? 'Lost in a restart. Call the tool again.'}\n\nCarry on with what you were doing.`
+  }
   if (row.status === 'denied') return `[OpenHut ${row.id}] Not approved: ${row.summary}.${row.note ? ` They said: "${row.note}"` : ''} Nothing changed. Tell the chat in one line, and don't ask again unless they bring it up.`
   return `[OpenHut ${row.id}] Approved and done: ${row.summary}.${afterApproval({ row, input: JSON.parse(row.input) })} Tell the chat in one line, with the final values if they differ from what you asked for.`
 }

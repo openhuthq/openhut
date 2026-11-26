@@ -1,4 +1,5 @@
-import type { ConnectionKind } from '@openhut/common/connections/connection.ts'
+import type { Connection, ConnectionKind } from '@openhut/common/connections/connection.ts'
+import type { BrandName } from '@/components/brand-icons'
 
 export type CatalogName = ConnectionKind
 export type Integration = { name: CatalogName; title: string; blurb: string; gets: string[]; safe: string[]; short: string; safeLine: string; warn?: string; eta: string }
@@ -102,4 +103,12 @@ export function connectedFirst({ items, kinds }: { items: Integration[]; kinds: 
 export function chipMarks<T extends string>(kinds: T[]): { shown: T[]; more: number } {
   const unique = [...new Set(kinds)]
   return { shown: unique.slice(0, 3), more: Math.max(0, unique.length - 3) }
+}
+
+const BRANDED_HOSTS: BrandName[] = ['digitalocean', 'cloudflare']
+
+export function connectionBrand(connection: Pick<Connection, 'kind' | 'account'>): BrandName {
+  if (connection.kind !== 'mcp') return connection.kind
+  const host = connection.account.split(' · ')[0] ?? ''
+  return BRANDED_HOSTS.find((brand) => host === `${brand}.com` || host.endsWith(`.${brand}.com`)) ?? 'mcp'
 }

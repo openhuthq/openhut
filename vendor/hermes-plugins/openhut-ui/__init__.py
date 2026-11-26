@@ -15,7 +15,7 @@ RUN = re.compile(r"\[Routine rt_[a-z0-9]+ · run (ru_[a-z0-9]+)\]")
 INVITE = re.compile(r"^/start(?:@\w+)?\s+([\w-]{16,64})$")
 POLL_SECONDS = 15
 ORIGIN_FIELDS = ("platform", "chat_id", "chat_type", "chat_name", "thread_id", "user_id", "user_name")
-STAMPED = ("schedule_routine", "update_self", "add_channel", "update_channel", "remove_channel", "request_connection")
+STAMPED = ("schedule_routine", "update_self", "add_channel", "update_channel", "remove_channel", "request_connection", "call_tool")
 injected = set()
 
 

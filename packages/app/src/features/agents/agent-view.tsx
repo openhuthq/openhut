@@ -16,6 +16,8 @@ import { NewAgentDialog } from '@/features/agents/new-agent'
 import { DoesDialog, Panel } from '@/features/agents/panel'
 import { SkillsDialog } from '@/features/agents/skills-dialog'
 import { RoutinesDialog } from '@/features/routines/routines-dialog'
+import { ToolPermissionsDialog } from '@/features/agents/tool-permissions'
+import { ActivityDialog } from '@/features/agents/activity-dialog'
 import { Chat } from '@/features/threads/chat'
 import { RequestError } from '@/lib/api-client'
 import { AGENTS_KEY } from '@/lib/query-keys'
@@ -63,6 +65,8 @@ function Dialogs({ agent, dialog, detail }: { agent: Agent; dialog: AgentDialog 
     case 'whatsapp':
     case 'telegram':
     case 'discord': return <ChannelDialog agent={agent} kind={dialog} onClose={close} />
+    case 'apps': return detail ? <ToolPermissionsDialog agent={agent} connectionId={detail} onClose={close} /> : null
+    case 'activity': return <ActivityDialog agent={agent} onClose={close} />
     case 'browser': return agent.browser && agent.canEdit ? <BrowserDialog agent={agent} onClose={close} /> : null
     default: return null
   }
