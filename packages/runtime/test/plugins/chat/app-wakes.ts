@@ -5,10 +5,10 @@ import { agentService } from '../../../src/server/agents/agent-service.ts'
 import { db } from '../../../src/server/platform/db.ts'
 
 export function appWakes({ reply = async () => '' }: { reply?: (input: { agentId: string; text: string }) => Promise<string> } = {}) {
-  const told: { agentId: string; threadId?: string; text: string }[] = []
+  const told: { agentId: string; threadId?: string; text: string; metadata?: Record<string, unknown> }[] = []
   const pending: Promise<void>[] = []
-  threadService.runRoutine = async ({ agentId, threadId, text }) => {
-    told.push({ agentId, threadId, text })
+  threadService.runRoutine = async ({ agentId, threadId, text, metadata }) => {
+    told.push({ agentId, threadId, text, metadata })
     return reply({ agentId, text })
   }
   wakes.onNudge((agentId) => { pending.push(deliver(agentId)) })

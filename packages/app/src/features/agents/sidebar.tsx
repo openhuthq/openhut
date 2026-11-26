@@ -29,6 +29,7 @@ import { PHONE, useMedia } from '@/lib/media'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
+import { useLiveLine } from '@/features/threads/live'
 
 const ROUND = 'float phone:size-10 phone:rounded-full phone:bg-card phone:text-ink'
 
@@ -163,11 +164,12 @@ const SOURCE_ICON = { app: BubbleChatIcon, webhook: WebhookIcon, routine: Clock0
 
 export function ThreadRow({ agentId, thread, active, accent }: { agentId: string; thread: SourcedThread; active: boolean; accent: string }) {
   const source = sourceOf(thread)
+  const live = useLiveLine(thread.id)
   return <a href={threadRoute({ agentId, threadId: thread.id })} aria-current={active ? 'page' : undefined} title={source.word} className={cn('grid shrink-0 grid-cols-[14px_1fr_auto] items-start gap-x-2 rounded-lg px-2 py-1.5 text-inherit no-underline', HOVER, active && PICKED)}>
     <span className="grid h-[18px] place-items-center text-mute">{source.platform === 'discord' ? <Glyph name="discord" size={13} /> : <I icon={SOURCE_ICON[source.platform]} size={13} />}</span>
     <span className="grid min-w-0">
       <span className="truncate text-[13px]/[18px] font-medium text-ink">{thread.title}</span>
-      <span className="flex min-w-0 text-[11.5px]/[16px] text-mute-2 tabular-nums"><span className="min-w-0 truncate">{source.label}</span><span className="shrink-0 whitespace-pre"> · {ago(thread.updatedAt)}</span></span>
+      <span className="flex min-w-0 text-[11.5px]/[16px] text-mute-2 tabular-nums">{live ?? <span className="min-w-0 truncate">{source.label}</span>}<span className="shrink-0 whitespace-pre"> · {ago(thread.updatedAt)}</span></span>
     </span>
     {thread.waiting && <span className="flex h-[18px] items-center gap-1 text-[11.5px] text-ink"><Mark status="review" accent={accent} />Waiting on you</span>}
   </a>

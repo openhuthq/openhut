@@ -128,3 +128,18 @@ test('codes live in the database, so a restarted runtime shows the same Start li
 })
 
 test.after(() => { telegram.close() })
+
+test('a linking Discord channel read by id still carries its invite link', async (t) => {
+  const real = globalThis.fetch
+  t.mock.method(globalThis, 'fetch', async (url: string | URL, init?: RequestInit) => {
+    const path = new URL(String(url)).pathname.replace('/api/v10', '')
+    if (path === '/users/@me') return Response.json({ id: '1', username: 'rover' })
+    if (path === '/applications/@me') return Response.json({ id: '1', flags: 1 << 18 })
+    return real(url, init)
+  })
+  const botToken = `${Buffer.from('123456789012345678').toString('base64')}.GhTq2x.${'x'.repeat(27)}`
+  const made = await channelService.create({ actor, kind: 'discord', agentId: 'ag_tgclaim2', botToken, allowed: [] })
+  assert.equal(made.status, 'linking')
+  assert.ok(made.link)
+  assert.equal((await channelService.get({ actor, id: made.id })).link, made.link)
+})

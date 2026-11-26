@@ -43,11 +43,13 @@ export async function deliver(agentId: string): Promise<void> {
 }
 
 async function run({ agentId, wake }: { agentId: string; wake: Wake }): Promise<void> {
-  const threadId = wake.id.startsWith('inbox:') ? await inboxService.threadFor({ agentId, id: wake.id.slice('inbox:'.length) }) : await threadService.bySession({ agentId, session: wake.origin.chat_id })
+  const item = wake.id.startsWith('inbox:') ? wake.id.slice('inbox:'.length) : undefined
+  const threadId = item ? await inboxService.threadFor({ agentId, id: item }) : await threadService.bySession({ agentId, session: wake.origin.chat_id })
+  const metadata = item ? await inboxService.webhookCall({ agentId, id: item }) : undefined
   await wakes.report({ agentId, id: wake.id, body: { picked: true } })
   for (let attempt = 0; ; attempt++) {
     try {
-      const said = await threadService.runRoutine({ agentId, threadId, text: wake.text })
+      const said = await threadService.runRoutine({ agentId, threadId, text: wake.text, metadata })
       await wakes.report({ agentId, id: wake.id, body: { said } })
       if (wake.id.startsWith('inbox:')) await inboxService.answered({ agentId, id: wake.id.slice('inbox:'.length), threadId, said })
         .catch((err: unknown) => log.warn({ event: 'wake.post_failed', agent: agentId, wake: wake.id, error: messageOf(err) }))
