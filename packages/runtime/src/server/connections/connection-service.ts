@@ -33,6 +33,7 @@ const queues = new Map<string, Promise<unknown>>()
 const toolCache = new Map<string, { at: number; tools: ToolSpec[] }>()
 const actionCache = new Map<string, Map<string, ToolSpec>>()
 const JOURNAL = 100
+const JOURNAL_TEXT = 4000
 const journal = new Map<string, AppCall[]>()
 const redirectUrl = () => `${callbackBase()}/api/connection-authorizations/callback`
 export const callbackBase = (): string => publicAddress()
@@ -281,7 +282,7 @@ async function run({ agentId, tool: { name, connection, spec }, action, args, re
 
 async function record({ agentId, connectionId, tool, reason, outcome, ms = 0, approvedBy = null, app, spec, action, args, output, error }: { agentId: string; connectionId: string | null; tool: string; reason: string; outcome: Outcome; ms?: number; approvedBy?: string | null; app?: string; spec?: ToolSpec; action?: Action; args: Record<string, unknown>; output?: string; error?: string }): Promise<void> {
   const calls = journal.get(agentId) ?? []
-  calls.push({ at: Date.now(), name: tool, connectionId, app: app ?? null, spec, action, args, outcome, ms, output, error })
+  calls.push({ at: Date.now(), name: tool, connectionId, app: app ?? null, spec, action, args, outcome, ms, output: output?.slice(0, JOURNAL_TEXT), error: error?.slice(0, JOURNAL_TEXT) })
   journal.set(agentId, calls.slice(-JOURNAL))
   await db.insertInto('connection_event').values({ agent_id: agentId, connection_id: connectionId, tool, reason: reason.slice(0, 500), outcome, ms, approved_by: approvedBy }).execute()
 }
