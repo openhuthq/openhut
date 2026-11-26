@@ -1,7 +1,10 @@
+import { lookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
 import pg from 'pg'
 import * as z from 'zod/mini'
-import { HttpError } from '../../platform/http-error.ts'
+import { publicAddress } from '../../platform/address.ts'
+import { config as runtimeConfig } from '../../platform/config.ts'
+import { HttpError, messageOf } from '../../platform/http-error.ts'
 import { checkedAddress } from '../../platform/network.ts'
 import { nativeConnector, nativeTool } from '../connector.ts'
 
@@ -18,6 +21,7 @@ const SSL_MODES = {
 
 export const postgres = {
   parseDsn,
+  probe,
   query: runQuery,
   explain: runExplain,
   connector: nativeConnector({
@@ -108,6 +112,7 @@ async function readOnly<T>({ dsn, run }: { dsn: string; run: (client: pg.Client)
       or pg_has_role(current_user, 'pg_read_server_files', 'member') as risky`)
     if (risky.rows[0]?.risky) throw new Error('Refused: this connection logs in as a superuser, a member of one, or a role that can run server programs or touch server files. Use a read-only role.')
     await client.query('begin read only')
+    await client.query('set local statement_timeout = 15000')
     return await run(client)
   } catch (err) {
     if (tooBig) throw new Error('Result too large: over 8 MB. Select fewer or narrower columns.')
@@ -121,7 +126,7 @@ async function readOnly<T>({ dsn, run }: { dsn: string; run: (client: pg.Client)
 async function connectFirst({ attempts }: { attempts: pg.ClientConfig[] }): Promise<pg.Client> {
   let lastError: unknown
   for (const attempt of attempts) {
-    const client = new pg.Client({ ...attempt, statement_timeout: 15_000, query_timeout: 20_000, connectionTimeoutMillis: 5_000 })
+    const client = new pg.Client({ ...attempt, query_timeout: 20_000, connectionTimeoutMillis: 5_000 })
     client.on('error', () => undefined)
     try {
       await client.connect()
@@ -132,6 +137,36 @@ async function connectFirst({ attempts }: { attempts: pg.ClientConfig[] }): Prom
     }
   }
   throw lastError
+}
+
+const WRITABLE = `select exists (select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where c.relkind in ('r', 'p') and n.nspname not like 'pg\\_%' and n.nspname <> 'information_schema'
+  and has_table_privilege(c.oid, 'INSERT, UPDATE, DELETE, TRUNCATE')) as writable`
+
+async function probe(dsn: string): Promise<string> {
+  const account = postgres.account(dsn)
+  const writable = await readOnly({ dsn, run: async (client) => (await client.query<{ writable: boolean }>(WRITABLE)).rows[0]?.writable })
+    .catch(async (err: unknown) => { throw new HttpError(400, await testFailure({ dsn, err }), { param: 'dsn' }) })
+  return writable ? `${account} · can write` : account
+}
+
+async function testFailure({ dsn, err }: { dsn: string; err: unknown }): Promise<string> {
+  const { host, port, user } = parseDsn(dsn)
+  const code = (err as { code?: unknown } | undefined)?.code
+  const message = messageOf(err)
+  if (message.startsWith('Refused')) return message
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return `No database answers at ${host}. Check the host name.`
+  if (/\bSSL\b/i.test(message) && typeof code !== 'string') return `${message}. Set sslmode in the connection string to what the database supports.`
+  if (code === '28P01' || code === '28000' || /authentication failed|password/i.test(message)) return `The database turned down ${user || 'this user'}: ${message}. Check the user name and password.`
+  if (typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code)) return `The test query failed: ${message}. Check the connection string.`
+  const ip = await outboundIp()
+  return `Couldn't reach ${host}:${port}: ${message}. Add this computer${ip ? ` (${ip})` : ''} to the database's trusted sources or firewall, then check the host and port.`
+}
+
+async function outboundIp(): Promise<string | undefined> {
+  const address = publicAddress()
+  if (runtimeConfig.behindProxy || address.startsWith('http://127.0.0.1')) return undefined
+  return (await lookup(new URL(address).hostname, { family: 4 }).catch(() => undefined))?.address
 }
 
 const isSslMode = (mode: string): mode is keyof typeof SSL_MODES => mode in SSL_MODES

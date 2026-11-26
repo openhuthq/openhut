@@ -64,6 +64,7 @@ function AccessSheet({ connection, agents }: { connection: Connection; agents: O
 
 function successLine(connection: Connection) {
   if (connection.signIn && connection.account) return `Signed in as ${connection.account}`
+  if (connection.kind === 'postgres' && connection.account.endsWith(' · can write')) return `${connection.name} is connected. Agents only read, but this user can change data. Connect with a read-only user to be safe.`
   if (connection.kind === 'postgres') return `${connection.name} is connected. Read-only.`
   return `${connection.name} is connected.`
 }

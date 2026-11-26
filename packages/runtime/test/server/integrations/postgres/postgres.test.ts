@@ -36,7 +36,7 @@ test('explain shows the plan in a read-only transaction, after the superuser che
   })
   const dsn = 'postgres://u:p@203.0.113.7/x'
   assert.deepEqual(await postgres.explain({ dsn, sql: 'select * from orders where id = 1' }), { plan: 'Seq Scan on orders\n  Filter: (id = 1)' })
-  assert.deepEqual(sent.slice(1), ['begin read only', 'explain (format text) select * from orders where id = 1', 'rollback'])
+  assert.deepEqual(sent.slice(1), ['begin read only', 'set local statement_timeout = 15000', 'explain (format text) select * from orders where id = 1', 'rollback'])
   assert.deepEqual(await postgres.explain({ dsn, sql: 'select 1', format: 'json' }), { plan: [{ Plan: { 'Node Type': 'Seq Scan' } }] })
   sent.length = 0
   await assert.rejects(postgres.explain({ dsn, sql: 'explain analyze select 1' }), /without EXPLAIN/)
@@ -50,4 +50,41 @@ test('explain still refuses a superuser login', async (t) => {
   const query = t.mock.method(pg.Client.prototype, 'query', async () => ({ rows: [{ risky: true }] }))
   await assert.rejects(postgres.explain({ dsn: 'postgres://u:p@203.0.113.7/x', sql: 'select 1' }), /logs in as a superuser/)
   assert.ok(!query.mock.calls.some((call) => String(call.arguments[0]).startsWith('explain')))
+})
+
+test('the statement timeout is set inside the transaction, never as a startup parameter connection pools turn down', async (t) => {
+  const configs: unknown[] = []
+  t.mock.method(pg.Client.prototype, 'connect', async function (this: { connectionParameters: unknown }) { configs.push(this.connectionParameters) })
+  t.mock.method(pg.Client.prototype, 'end', async () => undefined)
+  const sent: string[] = []
+  t.mock.method(pg.Client.prototype, 'query', async (query: string | { text: string }) => {
+    sent.push(typeof query === 'string' ? query : query.text)
+    return { rows: [{ risky: false }] }
+  })
+  await postgres.query({ dsn: 'postgres://u:p@203.0.113.7/x', sql: 'select 1' })
+  assert.equal((configs[0] as { statement_timeout?: unknown }).statement_timeout, false)
+  assert.deepEqual(sent.slice(1, 3), ['begin read only', 'set local statement_timeout = 15000'])
+})
+
+test('saving tests the connection and names the likely fix when it fails', async (t) => {
+  t.mock.method(pg.Client.prototype, 'end', async () => undefined)
+  const connect = t.mock.method(pg.Client.prototype, 'connect', async () => { throw new Error('timeout expired') })
+  const dsn = 'postgres://reader:p@203.0.113.7:25061/app?sslmode=disable'
+  await assert.rejects(postgres.probe(dsn), { param: 'dsn', message: /Couldn't reach 203\.0\.113\.7:25061: timeout expired\. Add this computer to the database's trusted sources or firewall/ })
+  connect.mock.mockImplementation(async () => { throw Object.assign(new Error('password authentication failed for user "reader"'), { code: '28P01' }) })
+  await assert.rejects(postgres.probe(dsn), { message: /turned down reader: password authentication failed.*Check the user name and password/ })
+  connect.mock.mockImplementation(async () => { throw Object.assign(new Error('SASL authentication failed'), { code: '08P01' }) })
+  await assert.rejects(postgres.probe(dsn), { message: /turned down reader: SASL authentication failed/ })
+  connect.mock.mockImplementation(async () => { throw Object.assign(new Error('connect ECONNREFUSED 203.0.113.7:25061'), { code: 'ECONNREFUSED' }) })
+  await assert.rejects(postgres.probe(dsn), { message: /Couldn't reach/ })
+})
+
+test('a user that can change data connects with a warning in its account line', async (t) => {
+  t.mock.method(pg.Client.prototype, 'connect', async () => undefined)
+  t.mock.method(pg.Client.prototype, 'end', async () => undefined)
+  let writable = true
+  t.mock.method(pg.Client.prototype, 'query', async (query: string) => ({ rows: [query.includes('as writable') ? { writable } : { risky: false }] }))
+  assert.equal(await postgres.probe('postgres://u:p@203.0.113.7/app'), '203.0.113.7/app · can write')
+  writable = false
+  assert.equal(await postgres.probe('postgres://u:p@203.0.113.7/app'), '203.0.113.7/app')
 })

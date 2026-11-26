@@ -35,7 +35,7 @@ Each is an official MCP server, run with your own credentials:
 - **Linear** and **PostHog:** sign in.
 - **Convex:** a deploy key.
 - **Excalidraw:** no account. Agents draw a diagram and send a link to it; anyone with the link can open it.
-- **Postgres:** read-only. Paste a connection string, or host, database, user and password. **Copy SQL** gives you the statements for a read-only role.
+- **Postgres:** read-only. Paste a connection string, or host, database, user and password. **Copy SQL** gives you the statements for a read-only role. OpenHut runs a test query when you save: if the database can't be reached, add this computer's IP to its trusted sources or firewall. A user that can change data still connects, with a warning to use a read-only one. Connection pools like PgBouncer work in any mode.
 - **Custom MCP:** any MCP server by URL, with a header (like `Authorization`) or OAuth.
 
 ## Apps not on the list
