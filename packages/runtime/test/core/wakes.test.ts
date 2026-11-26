@@ -88,3 +88,9 @@ test('a Discord turn the Hermes plugin reports lands in that channel thread\'s w
   assert.deepEqual([row.key, JSON.parse(row.mirrors)], ['discord:333:444', [{ platform: 'discord', chat_id: '333', thread_id: '444', chat_name: 'incident' }]])
   assert.equal((await turn({ platform: 'telegram', chat_id: '1' })).status, 400)
 })
+
+test('the Hermes plugin asks for a Discord thread\'s OpenHut context through the gateway', async () => {
+  const ask = (body: unknown) => fetch(url('/thread-context'), { method: 'POST', headers, body: JSON.stringify(body) })
+  assert.deepEqual(await (await ask({ origin: { platform: 'discord', chat_id: '999', thread_id: '999', parent_chat_id: '1' } })).json(), { object: 'thread_context', context: null })
+  assert.equal((await ask({})).status, 400)
+})

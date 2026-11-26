@@ -148,6 +148,14 @@ export const threadService = {
     emit({ name: 'thread.updated', target: { type: 'thread', id, agentId: chat.agent.id } })
   },
 
+  async contextFor({ agentId, origin }: { agentId: string; origin: { platform: string; chat_id: string; thread_id?: string | null; parent_chat_id?: string | null } }): Promise<{ object: 'thread_context'; context: string | null }> {
+    const id = await threadService.threadOfOrigin({ agentId, origin })
+    const chat = id ? await chatOf(id) : undefined
+    if (!chat?.row?.continue_url) return { object: 'thread_context', context: null }
+    const lines = (await saidOf(chat)).slice(-SEED).map(({ message }) => `${message.role === 'assistant' ? 'You' : 'OpenHut'}: ${textOf(message).trim().slice(0, SEED_CHARS)}`)
+    return { object: 'thread_context', context: lines.length ? `This Discord thread continues "${chat.row.title}", which you handled in OpenHut. What happened there:\n\n${lines.join('\n\n')}` : null }
+  },
+
   discordThread: ({ agentId, place }: { agentId: string; place: Place }): Promise<string> => threadService.open({
     agentId, key: `${place.platform}:${place.chat_id}:${place.thread_id ?? ''}`, title: place.chat_name || 'Discord', origin: { platform: 'discord', label: place.chat_name || 'Discord' }, mirrors: [place],
   }),

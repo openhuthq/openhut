@@ -29,7 +29,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   inbox wake for the app or Discord (`runsOnServer`, `nudge(agentId)` runs them at once): a webhook call gets a new web thread (with a Discord channel, the server posts its answer there and starts a Discord thread; the web thread is then read only, `continue_url`), a routine runs in the thread it was set in
   (a Discord channel thread has one, keyed by channel and thread), and a thread's `mirrors` get its replies through `channelService.send`. The Hermes plugin polls `/wakes`
   only for the rest (asks answered in a channel, inbox wakes for Slack, Telegram or WhatsApp) and reports each Discord turn to `/turns`, so Discord conversations
-  show in the app. Threads besides an agent's own app chat (id = agent id) are `chat_thread` rows (`th_*`). `start()` runs at boot.
+  show in the app; on a Discord thread's first turn it asks `/thread-context` for what happened in the OpenHut thread that started it (a webhook's Discord thread) and adds it to that turn. Threads besides an agent's own app chat (id = agent id) are `chat_thread` rows (`th_*`). `start()` runs at boot.
   A plugin also owns its tables (`migrate`, run by `platform/db.ts` after the core tables, in list order), its API
   (`routes: () => ({ '/api/<prefix>': controller })`, registered by `app.ts`; two plugins with one prefix fail at boot)
   and a part under the app chat's reply (`afterTurn`, like asks' `data-asks`). The subagents plugin keeps each agent's running sub-agents in memory from the `subagent_start`/`subagent_stop` hooks and serves them at `/api/agents/:id/subagents` for the sidebar.

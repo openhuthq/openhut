@@ -36,6 +36,7 @@ def register(ctx):
         ctx.register_tool(name=tool["name"], toolset=LOCAL_TOOLSET, schema=tool, handler=local(tool["name"]))
     ctx.register_hook("pre_tool_call", stamp)
     ctx.register_hook("post_llm_call", said)
+    ctx.register_hook("pre_llm_call", primed)
     for name in ctx.get_config("hooks", []) or []:
         ctx.register_hook(name, dispatch if name == "pre_gateway_dispatch" else forward(name))
     for prefix in ctx.get_config("slack_actions", []) or []:
@@ -165,6 +166,18 @@ def describe(err):
         except Exception:
             return "gateway answered " + str(err.code)
     return type(err).__name__ + ": " + str(err)
+
+
+def primed(is_first_turn=False, **_):
+    where = origin()
+    if not is_first_turn or where.get("platform") not in RECORDED or not where.get("thread_id"):
+        return None
+    try:
+        found = gateway("/thread-context", {"origin": where}).get("context")
+    except Exception as err:
+        warn("thread context", describe(err))
+        return None
+    return {"context": found} if found else None
 
 
 def said(user_message="", assistant_response="", **_):
