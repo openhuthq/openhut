@@ -9,6 +9,10 @@ import { discord } from '../../server/integrations/discord/discord.ts'
 import { whatsapp } from '../../server/integrations/whatsapp/whatsapp.ts'
 import { channelService } from '../../server/channels/channel-service.ts'
 import { changeTool } from '../asks/change.ts'
+import { channelController } from '../../server/channels/channel-controller.ts'
+import { log } from '../../server/platform/events.ts'
+import { messageOf } from '../../server/platform/http-error.ts'
+import { createTables } from './tables.ts'
 
 const INVITE = /^\/start(?:@\w+)?\s+([\w-]{16,64})$/
 const TELEGRAM_USER = /^[1-9]\d{4,14}$/
@@ -27,6 +31,9 @@ export type RenderedChannel =
 
 export const channels = definePlugin({
   name: 'channels',
+  migrate: createTables,
+  routes: () => ({ '/api/channels': channelController }),
+  start: () => void channelService.resumeTelegramClaims().catch((err: unknown) => log.warn({ event: 'telegram.claim_resume_failed', error: messageOf(err) })),
   hermes: ({ agent, channels: list, gateway, token }) => {
     const parts = list.map((channel) => partOf({ channel, gateway, token, net: agent.net }))
     return { config: Object.assign({}, ...parts.map((part) => part.config)), env: Object.assign({}, ...parts.map((part) => part.env)) }

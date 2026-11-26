@@ -2,9 +2,11 @@ import { definePlugin } from '../../core/plugin.ts'
 import { config } from '../../server/platform/config.ts'
 import { AGENT_API_PORT_BASE } from '../../agentd/sandbox/sandbox.ts'
 import { deliverAppWakes } from './wakes.ts'
+import { threadController } from '../../server/threads/thread-controller.ts'
 
 export const chat = definePlugin({
   name: 'chat',
+  routes: () => ({ '/api/threads': threadController }),
   hermes: ({ agent, channelKey }) => ({
     config: { platform_toolsets: { api_server: ['hermes-api-server', 'openhut'] } },
     env: {

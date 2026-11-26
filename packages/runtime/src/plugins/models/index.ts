@@ -2,12 +2,14 @@ import { definePlugin } from '../../core/plugin.ts'
 import { config } from '../../server/platform/config.ts'
 import { providers } from '../../server/models/providers/index.ts'
 import type { Slot } from '../../server/models/model-slots.ts'
+import { providerController } from '../../server/models/provider-controller.ts'
 
 const AUXILIARY = ['approval', 'compression', 'title_generation', 'background_review']
 const TEST_CONTEXT = 200_000
 
 export const models = definePlugin({
   name: 'models',
+  routes: () => ({ '/api/providers': providerController }),
   hermes: ({ agent, gateway, token }) => {
     const setup = providers[agent.slots.primary.provider].setup({ gateway, token })
     return {

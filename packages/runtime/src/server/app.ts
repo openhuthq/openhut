@@ -8,23 +8,12 @@ import { webApp } from './platform/web-app.ts'
 import { writeCaddyfile } from './platform/address.ts'
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod'
 import { adminController, healthController, updateController } from './admin/admin-controller.ts'
-import { agentController, grantController } from './agents/agent-controller.ts'
+import { agentController } from './agents/agent-controller.ts'
 import { memoryController } from './agents/memory-controller.ts'
-import { browserController } from './agents/browser-controller.ts'
 import { eventsController } from './platform/events-controller.ts'
 import { skillController } from './agents/skill-controller.ts'
 import { agentService } from './agents/agent-service.ts'
-import { channelController } from './channels/channel-controller.ts'
-import { channelService } from './channels/channel-service.ts'
-import { connectionAuthorizationController, connectionController, connectionEventController, connectionToolController } from './connections/connection-controller.ts'
-import { permissionController } from './permissions/permission-controller.ts'
-import { providerController } from './models/provider-controller.ts'
 import { gatewayServer } from './gateway/gateway-server.ts'
-import { threadController } from './threads/thread-controller.ts'
-import { changeRequestController } from './agents/change-request-controller.ts'
-import { secretController } from './agents/secret-controller.ts'
-import { deliveryTargetController, inboxReceiver, routineController, webhookController } from './inbox/inbox-controller.ts'
-import { inboxService } from './inbox/inbox-service.ts'
 import { addressController, googleSignInController, inviteController, meController, ownerResetController, passwordResetController, peopleController, installSettingsController, sessionController, setupController } from './team/team-controller.ts'
 import { installSettingsService } from './team/install-settings-service.ts'
 import { runSet } from './agents/run-set.ts'
@@ -59,24 +48,11 @@ await app.register(googleSignInController, { prefix: '/api/google-sign-in' })
 await app.register(installSettingsController, { prefix: '/api/install-settings' })
 await app.register(computerController, { prefix: '/api/computers' })
 await app.register(agentController, { prefix: '/api/agents' })
-await app.register(grantController, { prefix: '/api/grants' })
 await app.register(skillController, { prefix: '/api/skills' })
 await app.register(memoryController, { prefix: '/api/memories' })
-await app.register(browserController, { prefix: '/api/browsers' })
-await app.register(threadController, { prefix: '/api/threads' })
-await app.register(routineController, { prefix: '/api/routines' })
-await app.register(changeRequestController, { prefix: '/api/change-requests' })
-await app.register(secretController, { prefix: '/api/agent-secrets' })
-await app.register(webhookController, { prefix: '/api/webhooks' })
-await app.register(deliveryTargetController, { prefix: '/api/delivery-targets' })
-await app.register(inboxReceiver, { prefix: '/inbox' })
-await app.register(channelController, { prefix: '/api/channels' })
-await app.register(connectionController, { prefix: '/api/connections' })
-await app.register(connectionEventController, { prefix: '/api/connection-events' })
-await app.register(connectionToolController, { prefix: '/api/connection-tools' })
-await app.register(permissionController, { prefix: '/api/agent-tools' })
-await app.register(connectionAuthorizationController, { prefix: '/api/connection-authorizations' })
-await app.register(providerController, { prefix: '/api/providers' })
+for (const plugin of plugins()) {
+  for (const [prefix, routes] of Object.entries(plugin.routes?.() ?? {})) await app.register(routes, { prefix })
+}
 await app.register(adminController, { prefix: '/api/admin' })
 await app.register(eventsController, { prefix: '/api/events' })
 await app.register(updateController, { prefix: '/api/updates' })
@@ -102,6 +78,4 @@ await gatewayServer.start().catch(async (err: unknown) => {
 await runSet.start()
 await agentService.boot()
 for (const plugin of plugins()) plugin.start?.()
-inboxService.start()
 installSettingsService.startUsageData()
-void channelService.resumeTelegramClaims().catch((err: unknown) => log.warn({ event: 'telegram.claim_resume_failed', error: messageOf(err) }))

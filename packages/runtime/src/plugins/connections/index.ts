@@ -1,9 +1,22 @@
 import * as z from 'zod'
 import { definePlugin, defineTool } from '../../core/plugin.ts'
 import { connectionService, type AgentTool } from '../../server/connections/connection-service.ts'
+import { connectionAuthorizationController, connectionController, connectionEventController, connectionToolController } from '../../server/connections/connection-controller.ts'
+import { grantController } from '../../server/agents/agent-controller.ts'
+import { permissionController } from '../../server/permissions/permission-controller.ts'
+import { createTables } from './tables.ts'
 
 export const connections = definePlugin({
   name: 'connections',
+  migrate: createTables,
+  routes: () => ({
+    '/api/grants': grantController,
+    '/api/connections': connectionController,
+    '/api/connection-events': connectionEventController,
+    '/api/connection-tools': connectionToolController,
+    '/api/agent-tools': permissionController,
+    '/api/connection-authorizations': connectionAuthorizationController,
+  }),
   hermes: ({ connections: list }) => ({ prompt: connectedApps(list) }),
   tools: {
     list_tools: defineTool({

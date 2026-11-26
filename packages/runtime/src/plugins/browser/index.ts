@@ -1,4 +1,5 @@
 import { definePlugin } from '../../core/plugin.ts'
+import { browserController } from '../../server/agents/browser-controller.ts'
 
 const BROWSER_NOTE = `## Web browser
 
@@ -15,5 +16,6 @@ Never reach the browser another way while a person is using it: no second agent-
 
 export const browser = definePlugin({
   name: 'browser',
+  routes: () => ({ '/api/browsers': browserController }),
   hermes: ({ agent }) => ({ prompt: agent.web_browser ? BROWSER_NOTE : '' }),
 })

@@ -1,4 +1,7 @@
 import type * as z from 'zod'
+import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
+import type { Kysely } from 'kysely'
+import type { Database } from '../server/platform/db-schema.ts'
 import type { GatewayAgent } from '../server/agents/agent-service.ts'
 import type { Slots } from '../server/models/model-slots.ts'
 import type { RenderedChannel } from '../plugins/channels/index.ts'
@@ -43,6 +46,9 @@ export type Plugin = {
     said?: (x: { agentId: string; id: string; reply: string }) => Promise<void>
   }
   start?: () => void
+  migrate?: (db: Kysely<Database>) => Promise<void>
+  routes?: () => Record<string, FastifyPluginAsyncZod>
+  afterTurn?: (x: { agentId: string; since: Date }) => Promise<{ type: `data-${string}`; data: unknown } | undefined>
   slackAction?: { prefix: string; run: (x: { agent: GatewayAgent; body: unknown; action: { action_id: string; value?: string } }) => Promise<{ text: string; origin: Origin } | undefined> }
 }
 

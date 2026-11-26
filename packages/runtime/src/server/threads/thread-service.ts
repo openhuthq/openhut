@@ -18,7 +18,7 @@ import { agentService } from '../agents/agent-service.ts'
 import { HERE, HOME } from '../team/home.ts'
 import { recordsService } from '../platform/records.ts'
 import { peopleOf, type Caller } from '../team/identity.ts'
-import { changeRequestService } from '../agents/change-request-service.ts'
+import { plugins } from '../../core/plugins.ts'
 import { providers } from '../models/providers/index.ts'
 import { turnWork } from './work.ts'
 
@@ -158,8 +158,10 @@ export const threadService = {
         const done = work.done({ error: failed === undefined ? undefined : messageOf(failed) })
         if (done) writer.write({ type: 'data-work', id: 'work', data: done })
         if (failed !== undefined) throw failed
-        const changes = await changeRequestService.inChat({ agentId: agent.id, since: new Date(started) })
-        if (changes.length) writer.write({ type: 'data-changes', data: changes })
+        for (const plugin of plugins()) {
+          const part = await plugin.afterTurn?.({ agentId: agent.id, since: new Date(started) })
+          if (part) writer.write(part)
+        }
         writer.write({ type: 'finish' })
       },
       onError: messageOf,

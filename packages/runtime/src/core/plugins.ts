@@ -23,5 +23,8 @@ export function checked(list: Plugin[]): Plugin[] {
   const names = list.flatMap((plugin) => Object.keys(plugin.tools ?? {}))
   const clash = names.find((name, index) => names.indexOf(name) !== index)
   if (clash) throw new HttpError(500, `Two plugins define the tool ${clash}.`)
+  const prefixes = list.flatMap((plugin) => Object.keys(plugin.routes?.() ?? {}))
+  const shared = prefixes.find((prefix, index) => prefixes.indexOf(prefix) !== index)
+  if (shared) throw new HttpError(500, `Two plugins serve ${shared}.`)
   return list
 }
