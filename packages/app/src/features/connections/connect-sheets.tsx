@@ -10,6 +10,7 @@ import { Field } from '@/features/connections/sheet'
 import { GoogleClientGuide } from '@/features/connections/google-client'
 import { useInstallSettings, useUpdateInstallSettings } from '@/features/settings/admin'
 import { useIsAdmin } from '@/features/people/api'
+import { useAskForGithub, useGithubApp } from '@/features/settings/github-app'
 import { CopyButton } from '@/components/copy-button'
 import { useAgents, useCreateGrant } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
@@ -50,6 +51,7 @@ export function ConnectSheet({ me, item }: { me: Me; item: Integration }) {
     case 'postgres': return <PostgresSheet {...props} />
     case 'convex': return <ConvexSheet {...props} />
     case 'mcp': return <McpSheet {...props} />
+    case 'github': return <GitHubSheet {...props} />
     default: return <QuickSheet {...props} />
   }
 }
@@ -170,6 +172,20 @@ function GoogleSheet(props: FlowProps) {
   </SetupSheet>
 }
 
+function GitHubSheet(props: FlowProps) {
+  const { item, close, ask } = props
+  const admin = useIsAdmin()
+  const info = useGithubApp().data
+  const askAdmin = useAskForGithub()
+  if (!info) return null
+  if (info.app) return <QuickSheet {...props} />
+  return <SetupSheet {...sheetOf(item)} blurb="This server has no GitHub App yet. An admin sets it up once, then agents open pull requests as it." onClose={close}
+    foot={<><Button type="button" variant="secondary" onClick={close}>Cancel</Button>
+      {admin ? <Button type="button" variant="primary" onClick={() => navigate('/settings/admin?open=github')}>Set up GitHub</Button>
+        : info.asked ? <span className="inline-flex h-8 items-center gap-1.5 px-1 text-[13px] text-mute"><i className="size-1.5 rounded-full bg-amber" />Asked. Waiting for an admin to set up GitHub</span>
+          : <Button type="button" variant="primary" disabled={askAdmin.isPending} onClick={() => askAdmin.mutate(undefined)}>Ask an admin</Button>}</>}>{ask.line}</SetupSheet>
+}
+
 function QuickSheet({ item, close, returned, ask }: FlowProps) {
   const quick = useQuickConnect()
   const again = quick.error || returned ? 'Try again' : 'Connect'
@@ -186,7 +202,6 @@ export function useQuickConnect() {
   const connect = (item: Integration) => {
     const name = uniqueName({ title: item.title, taken })
     if (item.name === 'excalidraw') return create.mutate({ kind: 'excalidraw', name }, { onError: toastError })
-    if (item.name === 'github') return authorize.mutate({ kind: 'github', name: `openhut-${Math.random().toString(36).slice(2, 8)}` }, { onError: toastError })
     const kind = SIGN_IN_KINDS.find((each) => each === item.name)
     if (kind) authorize.mutate({ kind, name }, { onError: toastError })
   }

@@ -8,6 +8,10 @@ import { seal, unseal } from './secrets.ts'
 const GoogleClient = z.object({ id: z.string(), secret: z.string() })
 const Smtp = z.object({ host: z.string(), port: z.number(), user: z.string(), password: z.string(), from: z.string() })
 const CodexTokens = z.object({ accessToken: z.string(), refreshToken: z.string() })
+const GithubApp = z.object({
+  id: z.number(), slug: z.string(), name: z.string(), owner: z.string(), ownerType: z.enum(['User', 'Organization']), ownerAvatar: z.string(),
+  pem: z.string(), botId: z.number(), logo: z.boolean(),
+})
 const StoredCatalog = z.object({ at: z.string(), models: z.array(ProviderModel) })
 const loaded = await db.selectFrom('install_setting').select(['name', 'value']).execute()
 const rows = new Map(loaded.map((row) => [row.name, row.value]))
@@ -66,6 +70,13 @@ export const settings = {
   setGoogleClient: (client: GoogleClient) => write('google_client', seal(JSON.stringify(client))),
   googleSignIn: (): boolean => rows.get('google_sign_in') === 'on' && !!rows.get('google_client'),
   setGoogleSignIn: (on: boolean) => write('google_sign_in', on ? 'on' : 'off'),
+  githubApp: (): GithubApp | undefined => {
+    const sealed = rows.get('github_app')
+    return sealed ? z.parse(GithubApp, JSON.parse(unseal(sealed))) : undefined
+  },
+  setGithubApp: (app: GithubApp | null) => app ? write('github_app', seal(JSON.stringify(app))) : forget('github_app'),
+  githubAsks: (): string[] => z.safeParse(z.array(z.string()), JSON.parse(rows.get('github_asks') ?? '[]')).data ?? [],
+  setGithubAsks: (ids: string[]) => write('github_asks', JSON.stringify(ids.slice(-50))),
   smtp: (): Smtp | undefined => {
     const sealed = rows.get('smtp')
     return sealed ? z.parse(Smtp, JSON.parse(unseal(sealed))) : undefined
@@ -98,3 +109,5 @@ export type GoogleClient = z.infer<typeof GoogleClient>
 export type Smtp = z.infer<typeof Smtp>
 export type CodexTokens = z.infer<typeof CodexTokens>
 export type StoredCatalog = z.infer<typeof StoredCatalog>
+
+export type GithubApp = z.infer<typeof GithubApp>

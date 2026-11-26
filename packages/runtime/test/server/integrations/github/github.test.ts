@@ -2,29 +2,60 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createVerify, generateKeyPairSync } from 'node:crypto'
 import { github } from '../../../../src/server/integrations/github/github.ts'
+import { settings } from '../../../../src/server/platform/settings.ts'
 
-test('the bot is registered under the organization and comes back to the callback twice', () => {
-  const { authorizationUrl, manifest } = github.registration({ name: 'acme-hut', organization: 'acme', homeUrl: 'https://fm.example', redirectUrl: 'https://fm.example/cb', state: 's1' })
-  assert.equal(authorizationUrl, 'https://github.com/organizations/acme/settings/apps/new?state=s1')
-  const parsed = JSON.parse(manifest)
-  assert.equal(parsed.redirect_url, 'https://fm.example/cb')
-  assert.equal(parsed.setup_url, 'https://fm.example/cb')
-  assert.equal(parsed.public, false)
-  assert.equal(github.registration({ name: 'x', homeUrl: 'h', redirectUrl: 'r', state: 's' }).authorizationUrl, 'https://github.com/settings/apps/new?state=s')
+const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
+const APP = { id: 42, slug: 'acme-openhut', name: 'acme-openhut', owner: 'acme', ownerType: 'Organization' as const, ownerAvatar: 'https://avatars.githubusercontent.com/u/1', pem: privateKey.export({ type: 'pkcs1', format: 'pem' }).toString(), botId: 99, logo: false }
+
+test('the server\'s app is made on the chosen owner, comes back to this server, and installs come back to the connection callback', () => {
+  const org = github.manifest({ owner: 'acme', ownerType: 'Organization', name: 'acme-openhut', address: 'https://agents.acme.dev', state: 's1' })
+  assert.equal(org.url, 'https://github.com/organizations/acme/settings/apps/new?state=s1')
+  const manifest = JSON.parse(org.manifest)
+  assert.equal(manifest.name, 'acme-openhut')
+  assert.equal(manifest.url, 'https://openhut.dev')
+  assert.equal(manifest.redirect_url, 'https://agents.acme.dev/api/github-app/callback')
+  assert.equal(manifest.setup_url, 'https://agents.acme.dev/api/connection-authorizations/callback')
+  assert.equal(manifest.public, false)
+  assert.equal(github.manifest({ owner: 'mo', ownerType: 'User', name: 'mo-openhut', address: 'https://a.b', state: 's' }).url, 'https://github.com/settings/apps/new?state=s')
+  assert.equal(github.settingsUrl(APP), 'https://github.com/organizations/acme/settings/apps/acme-openhut')
+  assert.equal(github.settingsUrl({ ...APP, ownerType: 'User', owner: 'mo' }), 'https://github.com/settings/apps/acme-openhut')
+  assert.equal(github.installUrl({ app: APP, state: 'x' }), 'https://github.com/apps/acme-openhut/installations/new?state=x')
 })
 
-test('git_credentials routes git through the gateway and sets the bot identity, with no token in it', async () => {
-  const result = await github.connector.call({ config: { appId: 42, slug: 'acme-hut', pem: 'unused', installationId: 7, botId: 99 }, refresh: async () => ({}), tool: 'git_credentials', args: {} })
+test('the manifest code becomes the stored app, with its owner and bot', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (url: string) => String(url).includes('/app-manifests/')
+    ? Response.json({ id: 42, slug: 'acme-openhut', name: 'acme-openhut', pem: APP.pem, owner: { login: 'acme', type: 'Organization', avatar_url: APP.ownerAvatar } }, { status: 201 })
+    : Response.json({ id: 99, login: 'acme-openhut[bot]' }))
+  assert.deepEqual(await github.created('code1'), APP)
+})
+
+test('the owner picker lists the person and their public orgs, each with the first free {owner}-openhut name', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (url: string) => {
+    const path = new URL(url).pathname
+    if (path === '/users/mo') return Response.json({ login: 'mo', name: 'Mo', type: 'User', avatar_url: 'https://a/mo' })
+    if (path === '/users/mo/orgs') return Response.json([{ login: 'acme', avatar_url: 'https://a/acme' }])
+    if (path === '/apps/acme-openhut') return Response.json({ slug: 'acme-openhut' })
+    return new Response('{}', { status: 404 })
+  })
+  assert.deepEqual(await github.accounts('mo'), [
+    { login: 'mo', name: 'Mo', type: 'User', avatarUrl: 'https://a/mo', appName: 'mo-openhut' },
+    { login: 'acme', name: 'acme', type: 'Organization', avatarUrl: 'https://a/acme', appName: 'acme-openhut-2' },
+  ])
+})
+
+test('git_credentials routes git through the gateway as the server app\'s bot; connections from the old app-per-connect say to reconnect', async () => {
+  await settings.setGithubApp(APP)
+  const result = await github.connector.call({ config: { installationId: 7 }, refresh: async () => ({}), tool: 'git_credentials', args: {} })
   assert.match(result.text, /url\."\$OPENHUT_GATEWAY\/u\/github\/"\.insteadOf https:\/\/github\.com\//)
-  assert.match(result.text, /extraHeader" "Authorization: Agent \$OPENHUT_AGENT_TOKEN"/)
-  assert.match(result.text, /user\.email '99\+acme-hut\[bot\]@users\.noreply\.github\.com'/)
+  assert.match(result.text, /user\.email '99\+acme-openhut\[bot\]@users\.noreply\.github\.com'/)
   assert.doesNotMatch(result.text, /password|ghs_|x-access-token/)
-  await assert.rejects(github.connector.call({ config: { headers: {} }, refresh: async () => ({}), tool: 'git_credentials', args: {} }), /connect GitHub again/)
+  await assert.rejects(github.connector.call({ config: { appId: 1, slug: 'old', pem: 'x', installationId: 7, botId: 1 }, refresh: async () => ({}), tool: 'git_credentials', args: {} }), /Reconnect it/)
+  await settings.setGithubApp(null)
+  await assert.rejects(github.connector.call({ config: { installationId: 7 }, refresh: async () => ({}), tool: 'git_credentials', args: {} }), /Settings › Admin › GitHub/)
 })
 
-test('the gateway\'s token is minted as the app, then cached', async (t) => {
-  const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
-  const pem = privateKey.export({ type: 'pkcs1', format: 'pem' }).toString()
+test('the gateway\'s token is minted as the server app, then cached', async (t) => {
+  await settings.setGithubApp(APP)
   const seen: { url: string; authorization: string }[] = []
   t.mock.method(globalThis, 'fetch', async (url: string | URL, init?: RequestInit) => {
     seen.push({ url: String(url), authorization: new Headers(init?.headers).get('authorization') ?? '' })
@@ -35,7 +66,7 @@ test('the gateway\'s token is minted as the app, then cached', async (t) => {
   await migrate()
   await db.insertInto('person').values({ id: 'usr_ghtokenn', email: 'gh@example.com', role: 'owner', removed_at: null }).execute()
   await db.insertInto('agent').values({ id: 'ag_ghtokenn', name: 'Dev', owner_id: 'usr_ghtokenn', instructions: '#', model: 'sonnet', net: 13, channel_key: seal('k'.repeat(32)) }).execute()
-  await db.insertInto('connection').values({ id: 'cn_ghtokenn', kind: 'github', name: 'GitHub', owner_id: 'usr_ghtokenn', config: seal(JSON.stringify({ appId: 42, slug: 'acme-hut', pem, installationId: 8, botId: 99 })), created_at: new Date() }).execute()
+  await db.insertInto('connection').values({ id: 'cn_ghtokenn', kind: 'github', name: 'GitHub', owner_id: 'usr_ghtokenn', config: seal(JSON.stringify({ installationId: 8 })), created_at: new Date() }).execute()
   await assert.rejects(github.gitToken({ agentId: 'ag_ghtokenn' }), /No GitHub connection is granted/)
   await db.insertInto('connection_grant').values({ id: 'gr_ghtokenn', connection_id: 'cn_ghtokenn', agent_id: 'ag_ghtokenn', created_at: new Date() }).execute()
   assert.equal(await github.gitToken({ agentId: 'ag_ghtokenn' }), 'ghs_fresh')

@@ -1,0 +1,119 @@
+import { randomBytes } from 'node:crypto'
+import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
+import * as z from 'zod/mini'
+import { CreateGithubApp, ListGithubAccounts, UpdateGithubApp, type GithubAccount, type GithubAppInfo } from '@openhut/common/connections/github-app.ts'
+import { github } from '../../server/integrations/github/github.ts'
+import { publicAddress } from '../../server/platform/address.ts'
+import { db } from '../../server/platform/db.ts'
+import { emit, log } from '../../server/platform/events.ts'
+import { HttpError, messageOf } from '../../server/platform/http-error.ts'
+import { page, posting } from '../../server/platform/page.ts'
+import { listOf } from '../../server/platform/responses.ts'
+import { settings } from '../../server/platform/settings.ts'
+import { isAdmin, requireAdmin, who, type Caller } from '../../server/team/identity.ts'
+
+const LAUNCH_MS = 15 * 60_000
+const launches = new Map<string, { url: string; manifest: string; expires: number }>()
+
+export const serverAppService = {
+  async get({ actor }: { actor: Caller }): Promise<GithubAppInfo> {
+    const app = github.app()
+    const asks = settings.githubAsks()
+    const askedBy = isAdmin(actor) && asks.length ? (await db.selectFrom('person').select(['name', 'email']).where('id', 'in', asks).execute()).map((person) => person.name || person.email) : []
+    if (!app) return { object: 'github_app', app: null, asked: asks.includes(actor.id), askedBy }
+    const repositories = await github.repositories().catch((err: unknown) => {
+      log.warn({ event: 'github.repositories_failed', error: messageOf(err) })
+      return null
+    })
+    return {
+      object: 'github_app', asked: false, askedBy: [],
+      app: { name: app.name, slug: app.slug, owner: app.owner, ownerType: app.ownerType, ownerAvatar: app.ownerAvatar, settingsUrl: github.settingsUrl(app), installUrl: github.installUrl({ app }), logo: app.logo, repositories },
+    }
+  },
+
+  async accounts({ actor, login }: { actor: Caller; login: string }): Promise<GithubAccount[]> {
+    requireAdmin(actor)
+    const found = await github.accounts(login).catch((err: unknown) => {
+      throw new HttpError(400, `GitHub has no account ${login}: ${messageOf(err)}`, { param: 'login' })
+    })
+    return found.map((account) => ({ object: 'github_account', ...account }))
+  },
+
+  create({ actor, owner, ownerType, name }: { actor: Caller } & CreateGithubApp): { object: 'github_app_launch'; url: string } {
+    requireAdmin(actor)
+    if (github.app()) throw new HttpError(409, 'This server already has a GitHub App. Remove it first to make another.')
+    const state = randomBytes(24).toString('base64url')
+    for (const [key, each] of launches) if (each.expires < Date.now()) launches.delete(key)
+    launches.set(state, { ...github.manifest({ owner, ownerType, name, address: publicAddress(), state }), expires: Date.now() + LAUNCH_MS })
+    return { object: 'github_app_launch', url: `${publicAddress()}/api/github-app/launch?state=${state}` }
+  },
+
+  launch: (state: string): { url: string; manifest: string } | undefined => {
+    const found = launches.get(state)
+    return found && found.expires >= Date.now() ? found : undefined
+  },
+
+  async created({ state, code }: { state?: string; code?: string }): Promise<void> {
+    if (!state || !code || !launches.delete(state)) throw new HttpError(400, 'This setup expired or was already used. Start it again in Settings › Admin › GitHub.')
+    if (github.app()) throw new HttpError(409, 'This server already has a GitHub App.')
+    const app = await github.created(code)
+    await settings.setGithubApp(app)
+    await settings.setGithubAsks([])
+    emit({ name: 'github_app.created', target: { type: 'github_app', id: String(app.id), name: app.name } })
+  },
+
+  async update({ actor, logo }: { actor: Caller; logo: boolean }): Promise<GithubAppInfo> {
+    requireAdmin(actor)
+    const app = github.app()
+    if (!app) throw new HttpError(404, github.NOT_SET_UP)
+    await settings.setGithubApp({ ...app, logo })
+    return serverAppService.get({ actor })
+  },
+
+  async remove({ actor }: { actor: Caller }): Promise<GithubAppInfo> {
+    requireAdmin(actor)
+    await settings.setGithubApp(null)
+    github.forgetTokens()
+    emit({ name: 'github_app.removed', actor, target: { type: 'github_app', id: 'github_app' } })
+    return serverAppService.get({ actor })
+  },
+
+  async ask({ actor }: { actor: Caller }): Promise<GithubAppInfo> {
+    if (!github.app() && !settings.githubAsks().includes(actor.id)) await settings.setGithubAsks([...settings.githubAsks(), actor.id])
+    return serverAppService.get({ actor })
+  },
+}
+
+export const serverAppController: FastifyPluginAsyncZod = async (app) => {
+  app.get('/', async (req) => serverAppService.get({ actor: await who(req) }))
+
+  app.get('/accounts', AccountsRequest, async (req) => listOf({ req, data: await serverAppService.accounts({ actor: await who(req), login: req.query.login }) }))
+
+  app.post('/', CreateRequest, async (req) => serverAppService.create({ actor: await who(req), ...req.body }))
+
+  app.patch('/', UpdateRequest, async (req) => serverAppService.update({ actor: await who(req), logo: req.body.logo }))
+
+  app.delete('/', async (req) => serverAppService.remove({ actor: await who(req) }))
+
+  app.post('/requests', async (req) => serverAppService.ask({ actor: await who(req) }))
+
+  app.get('/launch', StateRequest, async (req, reply) => {
+    const launch = serverAppService.launch(req.query.state ?? '')
+    return reply.type('text/html; charset=utf-8').send(launch ? posting({ url: launch.url, field: 'manifest', value: launch.manifest }) : page('This setup expired. Go back to OpenHut and start it again.'))
+  })
+
+  app.get('/callback', CallbackRequest, async (req, reply) => {
+    try {
+      await serverAppService.created(req.query)
+      return reply.redirect('/settings/admin?open=github-logo')
+    } catch (err) {
+      return reply.type('text/html; charset=utf-8').send(page(`${messageOf(err)} Go back to OpenHut and try again.`, { title: 'GitHub isn\'t set up' }))
+    }
+  })
+}
+
+const AccountsRequest = { schema: { querystring: ListGithubAccounts } }
+const CreateRequest = { schema: { body: CreateGithubApp } }
+const UpdateRequest = { schema: { body: UpdateGithubApp } }
+const StateRequest = { schema: { querystring: z.object({ state: z.optional(z.string()) }) } }
+const CallbackRequest = { schema: { querystring: z.object({ state: z.optional(z.string()), code: z.optional(z.string()) }) } }
