@@ -153,6 +153,7 @@
   .msg-t { font-size: 14px; line-height: 1.5; color: var(--ink); overflow-wrap: anywhere }
   .msg-t > :first-child { margin-top: 0 }
   .msg-t > :last-child { margin-bottom: 0 }
+  .msg-t.caret > :last-child::after { content: ""; display: inline-block; width: .5em; height: 1.15em; margin-left: 2px; vertical-align: -.2em; background: var(--ink); animation: blinkdot 1s steps(1) infinite }
   .msg-t :is(p, ul, ol) { margin: 0 0 8px }
   .msg-t :is(blockquote, table, .table-scroll, pre, .code-block, img) { margin: 12px 0 }
   .msg-t strong { font-weight: 600 }
