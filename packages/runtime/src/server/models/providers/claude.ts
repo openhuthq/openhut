@@ -25,8 +25,7 @@ export const claude: Provider = {
   },
   route: ({ model }) => ({ provider: PLUGIN, model }),
   setup: ({ gateway, token }) => ({
-    env: [`CLAUDE_CODE_OAUTH_TOKEN=${token}`],
-    yaml: '',
-    pluginSettings: { [PLUGIN]: { relay_upstream: `${gateway}/u/anthropic` } },
+    env: { CLAUDE_CODE_OAUTH_TOKEN: token },
+    config: { plugins: { entries: { [PLUGIN]: { settings: { relay_upstream: `${gateway}/u/anthropic` } } } } },
   }),
 }
