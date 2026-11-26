@@ -73,7 +73,9 @@ function replyTo({ last, callTool, shell, schedule, ask, names }: { last: { role
   if (sql && callTool) return { tool: { name: callTool, args: JSON.stringify({ reason: 'The user asked for data', name: 'postgres_query', arguments: { sql } }) } }
   const command = /browser:\s*([a-z][a-z -]*(?:\s+[^\s'"`$;&|<>\\]+)*)\s*"?\s*$/i.exec(lastText(last.content))?.[1]
   if (command && shell) return { tool: { name: shell, args: JSON.stringify({ command: `agent-browser ${command}`, description: 'Use the browser' }) } }
-  return { content: `ECHO: ${asText(last.content).slice(-200)}` }
+  const said = asText(last.content)
+  const wake = said.indexOf('[OpenHut asks:')
+  return { content: `ECHO: ${wake < 0 ? said.slice(-200) : said.slice(wake, wake + 2000)}` }
 }
 
 function lastText(content: unknown): string {
