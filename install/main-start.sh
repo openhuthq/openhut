@@ -13,7 +13,7 @@ runtime() {
   docker container inspect openhut-runtime >/dev/null 2>&1 && return 0
   R=$(cat $J/RUNTIME_IMAGE)
   if [ -d /data/agents ]; then
-    docker pull -q "$R" >/dev/null
+    c=$(mktemp -d); echo '{}' > "$c/config.json"; docker --config "$c" pull -q "$R" >/dev/null; rm -rf "$c"
     docker run --rm -v openhut-data:/old -v openhut-runtime-data:/data --entrypoint sh "$R" -c 'mkdir -p /data && cp -a /old/agents /old/agent-conf /data/ 2>/dev/null; true'
     rm -rf /data/agents /data/agent-conf
     docker volume rm openhut >/dev/null 2>&1 || true
