@@ -6,7 +6,8 @@ OpenHut is a web app. You see a change in a browser in seconds.
 
 **1. Start the web app (every change)**
 - `npm install` once per worktree, then `npm run dev`. It prints the Vite URL (5173 or the next free port). Open it in Claude in Chrome: it opens straight into the app, no sign-in (Vite's `/api` proxy adds `Authorization: Bearer dev`).
-- `npm run seed` adds sample agents and connections to a fresh `.data`. `npm run reset` wipes it.
+- `npm run seed` adds sample agents to a fresh `.data`, and the sample Orders DB only with `SEED_POSTGRES_DSN` set to a database it can reach (OpenHut checks a database before saving it). On a Mac the agents are refused (firewall off), so the seed finishes only on Linux. `npm run reset` wipes it.
+- A second data folder: `OPENHUT_DATA=.data-<name>` inside the worktree. Keep the path short: macOS caps Unix socket paths at about 104 characters, and a long one fails as `EADDRINUSE` on `agentd.sock`.
 - Agents are Docker containers (gVisor where `runsc` works). They start only where the agents firewall applies (Linux, agentd as root), so on a Mac screens and the API work and agents stay stopped; the image smoke in CI runs real ones.
 - Edit, and Vite hot-reloads. A runtime edit needs Ctrl-C and `npm run dev` again.
 

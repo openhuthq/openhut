@@ -3,7 +3,7 @@ set -euo pipefail
 OUT=${OUT:-$(mktemp -d)}
 DATA=$(mktemp -d)
 mkdir -p "$OUT"
-trap 'kill "$dev" 2>/dev/null || true; rm -rf "$DATA"' EXIT
+trap 'kill "$dev" 2>/dev/null || true; rm -rf "$DATA" 2>/dev/null || true' EXIT
 wait_for() { for _ in $(seq 120); do curl -s -o /dev/null "$1" && return; sleep 1; done; echo "never came up: $1"; exit 1; }
 
 OPENHUT_DATA=$DATA node scripts/dev.ts > "$OUT/dev.log" 2>&1 & dev=$!
