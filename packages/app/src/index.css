@@ -191,7 +191,6 @@
 @keyframes blive { 50% { opacity: .25 } }
 @keyframes bripple { from { transform: scale(.3); opacity: 1 } to { transform: scale(1.4); opacity: 0 } }
 @keyframes outhut { 0% { opacity: 0; transform: translate(0, 34px) scale(.2) } 55% { opacity: 1 } 100% { opacity: 1; transform: translate(var(--sx), var(--sy)) scale(1) } }
-@keyframes shimmer { from { background-position: 150% 0 } to { background-position: -50% 0 } }
 
 @layer base {
   * { scrollbar-width: thin; scrollbar-color: transparent transparent }
@@ -206,7 +205,6 @@
 
 @utility no-scrollbar { scrollbar-width: none; &::-webkit-scrollbar { display: none } }
 @utility fade-b { mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent) }
-@utility fade-t { mask-image: linear-gradient(to bottom, transparent, #000 24px) }
 @utility fade-r { mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent) }
 @utility fade-y { mask-image: linear-gradient(to bottom, transparent, #000 12px, #000 calc(100% - 16px), transparent) }
 
