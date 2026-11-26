@@ -20,6 +20,7 @@ import { recordsService } from '../platform/records.ts'
 import { peopleOf, type Caller } from '../team/identity.ts'
 import { changeRequestService } from '../agents/change-request-service.ts'
 import { providers } from '../models/providers/index.ts'
+import { turnWork } from './work.ts'
 
 const TURN_MS = 15 * 60_000
 const SEED = 20
@@ -132,30 +133,31 @@ export const threadService = {
     if (agent.wanted !== 'running') throw new HttpError(409, `${agent.name} is stopped. Start it and try again.`)
     busy.add(id)
     reply.raw.on('close', () => busy.delete(id))
-    const lastCall = await db.selectFrom('connection_event').select((eb) => eb.fn.max('id').as('id')).where('agent_id', '=', agent.id).executeTakeFirst()
     const abort = new AbortController()
     reply.raw.on('close', () => abort.abort())
     const started = Date.now()
     const answerId = nextId()
     let session = sessionOf(said)
+    const work = turnWork({ agent, started })
     const asked = together({ messages: said.map((each) => each.message), shared: agent.shared || peopleOf(agent.people).length > 0 })
     const answer = async (writer: { write: (chunk: UIMessageChunk) => void }) => {
       const message = await seeded({ said, session, message: asked })
-      for await (const chunk of joinText(pipeJsonRender(relayed({ agent, session, message, signal: abort.signal })))) writer.write(chunk)
+      for await (const chunk of joinText(pipeJsonRender(relayed({ agent, session, message, signal: abort.signal, work })))) writer.write(chunk)
     }
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
         writer.write({ type: 'start', messageId: answerId })
-        await answer(writer).catch(async (err: unknown) => {
+        const failed = await answer(writer).catch(async (err: unknown) => {
           if (!(err instanceof LostTurn)) throw err
           // Hermes lost a turn of this session (its gateway was killed mid-turn, e.g. by an update) and
           // pauses the session for good; carry on in a fresh session, seeded with the chat so far.
           log.warn({ event: 'agent.session_lost', agent: agent.id, session })
           session = `${sessionOf([], said[0]?.id)}.${nextId()}`
           await answer(writer)
-        })
-        const calls = await callsSince({ agentId: agent.id, after: lastCall?.id ?? '0' })
-        if (calls.length) writer.write({ type: 'data-calls', data: calls })
+        }).then(() => undefined, (err: unknown) => err)
+        const done = work.done({ error: failed === undefined ? undefined : messageOf(failed) })
+        if (done) writer.write({ type: 'data-work', id: 'work', data: done })
+        if (failed !== undefined) throw failed
         const changes = await changeRequestService.inChat({ agentId: agent.id, since: new Date(started) })
         if (changes.length) writer.write({ type: 'data-changes', data: changes })
         writer.write({ type: 'finish' })
@@ -297,7 +299,7 @@ async function callAgent({ agent, session, message, signal }: { agent: AgentRow;
   return res.body
 }
 
-function relayed(input: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal }): ReadableStream<UIMessageChunk> {
+function relayed(input: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal; work: TurnWork }): ReadableStream<UIMessageChunk> {
   return new ReadableStream({
     start: (controller) => relay({ ...input, writer: { write: (chunk) => controller.enqueue(chunk) } }).then(() => controller.close(), (err: unknown) => controller.error(err)),
   })
@@ -331,7 +333,7 @@ function foldCard(message: UIMessage): UIMessage {
   }) }
 }
 
-async function relay({ agent, session, message, writer, signal }: { agent: AgentRow; session: string; message: ChatMessage; writer: { write: (chunk: UIMessageChunk) => void }; signal: AbortSignal }): Promise<void> {
+async function relay({ agent, session, message, writer, signal, work }: { agent: AgentRow; session: string; message: ChatMessage; writer: { write: (chunk: UIMessageChunk) => void }; signal: AbortSignal; work?: TurnWork }): Promise<void> {
   const body = await callAgent({ agent, session, message: await openAiOf({ agentId: agent.id, message }), signal })
   let text = 0
   let open = false
@@ -340,7 +342,8 @@ async function relay({ agent, session, message, writer, signal }: { agent: Agent
     if (event.name === 'hermes.tool.progress') {
       if (open) writer.write({ type: 'text-end', id: `t${text}` })
       open = false
-      writer.write({ type: 'data-tool', data: z.safeParse(ToolProgress, parseJson(event.data)).data ?? {} })
+      const shown = await work?.tool(z.safeParse(ToolProgress, parseJson(event.data)).data ?? {})
+      if (shown) writer.write({ type: 'data-work', id: 'work', data: shown })
       continue
     }
     const chunk = z.safeParse(Chunk, parseJson(event.data)).data
@@ -440,12 +443,6 @@ export function shownCall(tool: string) {
   return !PLUMBING.some((upstream) => tool.startsWith(`${upstream} `))
 }
 
-async function callsSince({ agentId, after }: { agentId: string; after: string }): Promise<ChatCall[]> {
-  const rows = await db.selectFrom('connection_event as e').leftJoin('connection as c', 'c.id', 'e.connection_id')
-    .select(['e.tool', 'c.name', 'e.outcome', 'e.reason', 'e.ms']).where('e.agent_id', '=', agentId).where('e.id', '>', after).orderBy('e.id').limit(200).execute()
-  return rows.filter((row) => shownCall(row.tool)).slice(0, 50).map((row) => ({ tool: row.tool, connectionName: row.name, outcome: row.outcome, reason: row.reason, ms: row.ms }))
-}
-
 const parseJson = (text: string): unknown => { try { return JSON.parse(text) } catch { return undefined } }
 
 function withoutPlumbing(message: ChatMessage): ChatMessage {
@@ -469,6 +466,7 @@ type FilePart = z.infer<typeof FilePart>
 type ImagePart = { type: 'image_url'; image_url: { url: string } }
 type OpenAiMessage = { role: 'user' | 'assistant'; content: string | ({ type: 'text'; text: string } | ImagePart)[] }
 type AgentRow = Selectable<Database['agent']>
+type TurnWork = ReturnType<typeof turnWork>
 
 function uploadPath(name: string): string {
   return `home/uploads/${name}`

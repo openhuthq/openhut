@@ -39,6 +39,25 @@ export const ChatCall = z.object({
 })
 export type ChatCall = z.infer<typeof ChatCall>
 
+export const ToolCall = z.object({
+  id: z.string(),
+  tool: z.string(),
+  app: z.nullable(z.string()),
+  connectionId: z.optional(z.string()),
+  kind: z.enum(['read', 'change', 'delete', 'other']),
+  label: z.string(),
+  past: z.string(),
+  input: z.optional(z.string()),
+  output: z.optional(z.string()),
+  error: z.optional(z.string()),
+  ms: z.number(),
+  status: z.enum(['running', 'done', 'failed', 'blocked', 'asked']),
+})
+export type ToolCall = z.infer<typeof ToolCall>
+
+export const Work = z.object({ calls: z.array(ToolCall), ms: z.number(), error: z.optional(z.string()) })
+export type Work = z.infer<typeof Work>
+
 export const ToolProgress = z.looseObject({ tool: z.optional(z.string()), name: z.optional(z.string()), label: z.optional(z.string()) })
 export type ToolProgress = z.infer<typeof ToolProgress>
 
