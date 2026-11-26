@@ -75,10 +75,10 @@ export const inboxService = {
 
   routines: (input: { actor: Caller; agentId: string }): Promise<Routine[]> => routineService.list(input),
 
-  async createSource({ actor, agentId, name, channel = 'app', target }: { actor: Caller; agentId: string; name: string; channel?: WebhookChannel; target?: string }): Promise<Webhook> {
+  async createSource({ actor, agentId, name, channel = 'app', target, threads }: { actor: Caller; agentId: string; name: string; channel?: WebhookChannel; target?: string; threads?: WebhookThreads }): Promise<Webhook> {
     await agentService.requireOwner({ actor, id: agentId })
     const origin = target ? await placed({ agentId, origin: await originFor({ agentId, target }) }) : await originOfChannel({ agentId, channel })
-    const row = await db.insertInto('inbox_source').values({ id: newId('wh'), agent_id: agentId, kind: 'webhook', name: name.trim(), origin: JSON.stringify(origin), secret: seal(newToken('whsec')) })
+    const row = await db.insertInto('inbox_source').values({ id: newId('wh'), agent_id: agentId, kind: 'webhook', name: name.trim(), origin: JSON.stringify(origin), secret: seal(newToken('whsec')), ...threads && { threads } })
       .returningAll().executeTakeFirstOrThrow()
     emit({ name: 'inbox.source_created', actor, target: { type: 'inbox_source', id: row.id, agentId, kind: 'webhook' } })
     return webhookOf(row)
@@ -180,16 +180,16 @@ export const inboxService = {
     return { author: row.name, call: { webhookId: row.id, ...label && { label } }, source: { kind: 'webhook', id: row.id, name: row.name }, payload }
   },
 
-  async setTemplates({ agentId, id, groupBy, titleBy, labelBy }: { agentId: string; id: string; groupBy?: string; titleBy?: string; labelBy?: string }): Promise<string> {
+  async setThreads({ agentId, id, threads, groupBy, titleBy, labelBy }: { agentId: string; id: string; threads?: WebhookThreads; groupBy?: string; titleBy?: string; labelBy?: string }): Promise<string> {
     await inboxService.ownWebhook({ agentId, id })
-    if (groupBy === undefined && titleBy === undefined && labelBy === undefined) throw new HttpError(400, 'Give at least one of groupBy, titleBy or labelBy.')
+    if (!threads && groupBy === undefined && titleBy === undefined && labelBy === undefined) throw new HttpError(400, 'Give at least one of threads, groupBy, titleBy or labelBy.')
     const value = (template: string | undefined) => template === undefined ? undefined : template.trim() || null
-    const row = await db.updateTable('inbox_source').set({ group_by: value(groupBy), title_by: value(titleBy), label_by: value(labelBy) }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
+    const row = await db.updateTable('inbox_source').set({ threads, group_by: value(groupBy), title_by: value(titleBy), label_by: value(labelBy) }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
     const last = (await lastPayloads([id])).get(id)
     const payload = last === undefined ? undefined : payloadOf(last)
     const shown = (template: string | null, unset: string) => render({ template, payload }) ?? unset
     const preview = payload === undefined ? '' : ` With the last call: group "${shown(row.group_by, '')}", thread title "${shown(row.title_by, row.name)}", label "${shown(row.label_by, '')}".`
-    const each = row.threads === 'each' ? ' The owner set this webhook to start a new thread for each call, so groupBy isn\'t used.' : ''
+    const each = row.threads === 'each' ? ' Each call starts a new thread, so groupBy isn\'t used.' : ' Related calls share a thread.'
     return `Saved.${preview}${each}`
   },
 

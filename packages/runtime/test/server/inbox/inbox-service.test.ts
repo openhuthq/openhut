@@ -114,8 +114,12 @@ test('add_webhook waits for approval; approving creates the webhook and tells th
   const token = agentToken({ id: 'ag_hookpuls', epoch: 0 })
   const client = new Client({ name: 'hermes', version: '1' })
   await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/api/v1/mcp`), { requestInit: { headers: { authorization: `Agent ${token}` } } }))
+  const listed = new Map((await client.listTools()).tools.map((tool) => [tool.name, tool.inputSchema]))
+  assert.deepEqual(Object.keys(listed.get('set_webhook_threads')?.properties ?? {}).sort(), ['groupBy', 'id', 'labelBy', 'threads', 'titleBy'])
+  assert.deepEqual((listed.get('set_webhook_threads')?.properties?.threads as { enum?: string[] }).enum, ['group', 'each'])
+  assert.deepEqual((listed.get('add_webhook')?.properties?.threads as { enum?: string[] }).enum, ['group', 'each'])
   const slack = { platform: 'slack', chat_id: 'C0ALERTS', chat_type: 'group', chat_name: 'db-alerts' }
-  const asked = await client.callTool({ name: 'add_webhook', arguments: { description: 'React to Postgres alerts.', name: 'DO Postgres alerts', origin: slack } })
+  const asked = await client.callTool({ name: 'add_webhook', arguments: { description: 'React to Postgres alerts.', name: 'DO Postgres alerts', threads: 'each', origin: slack } })
   const text = (asked.content as { text: string }[])[0].text
   assert.match(text, /^Asked for approval \(ask_[a-z0-9]+\): Add a webhook named DO Postgres alerts\./)
   const id = /ask_[a-z0-9]+/.exec(text)?.[0] ?? ''
@@ -123,6 +127,7 @@ test('add_webhook waits for approval; approving creates the webhook and tells th
   const approved = await asks.approve({ actor: owner, id })
   assert.equal(approved.status, 'done')
   const hook = (await inboxService.webhooks({ actor: owner, agentId: 'ag_hookpuls' })).find((each) => !known.has(each.id))
+  assert.equal(hook?.threads, 'each')
   const hookId = hook?.id ?? ''
 
   const headers = { authorization: `Agent ${token}`, 'content-type': 'application/json' }
@@ -225,7 +230,7 @@ test('in group mode an alert and its recovery share a thread; a resend with the 
   assert.equal((await doPost({ hook, body: doAlert({ id: 'g-1', state: 'STATE_TRIGGERED', value: 93.4, time: '2026-11-26T10:00:00Z' }) })).json().repeat, false)
   await settle()
   assert.match(told[first].text, /First call set_webhook_threads for wh_/)
-  assert.match(await inboxService.setTemplates({ agentId: 'ag_hookpuls', id: hook.id, groupBy: '{subject}/{data.alert_rule_name}', titleBy: '{data.alert_rule_name} · {data.resource_name}', labelBy: '{data.state} · {data.value}%' }), /group "pulse-db\/CPU high", thread title "CPU high · pulse-db"/)
+  assert.match(await inboxService.setThreads({ agentId: 'ag_hookpuls', id: hook.id, groupBy: '{subject}/{data.alert_rule_name}', titleBy: '{data.alert_rule_name} · {data.resource_name}', labelBy: '{data.state} · {data.value}%' }), /group "pulse-db\/CPU high", thread title "CPU high · pulse-db"/)
   assert.equal((await doPost({ hook, body: doAlert({ id: 'g-2', state: 'STATE_TRIGGERED', value: 95, time: '2026-11-26T10:05:00Z' }) })).json().repeat, false)
   assert.equal((await doPost({ hook, body: doAlert({ id: 'g-3', state: 'STATE_RECOVERED', value: 40.25, time: '2026-11-26T10:20:00Z' }) })).json().repeat, false)
   assert.equal((await doPost({ hook, body: doAlert({ id: 'g-3', state: 'STATE_RECOVERED', value: 40.25, time: '2026-11-26T10:21:00Z' }) })).json().repeat, true)
@@ -247,6 +252,8 @@ test('X-Group-Key picks the thread, and each mode starts a new thread per call',
   await doPost({ hook, body: '{"n":2}', headers: { 'x-group-key': 'order-9' } })
   await settle()
   assert.equal(told[first].threadId, told[first + 1].threadId)
+  assert.match(await inboxService.setThreads({ agentId: 'ag_hookpuls', id: hook.id, threads: 'each' }), /Each call starts a new thread/)
+  assert.equal((await inboxService.webhooks({ actor: owner, agentId: 'ag_hookpuls' })).find((each) => each.id === hook.id)?.threads, 'each')
   assert.equal((await inboxService.updateWebhook({ actor: owner, id: hook.id, threads: 'each' })).threads, 'each')
   await doPost({ hook, body: '{"n":3}', headers: { 'x-group-key': 'order-9' } })
   await doPost({ hook, body: '{"n":4}', headers: { 'x-group-key': 'order-9' } })
