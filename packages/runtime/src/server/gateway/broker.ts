@@ -9,6 +9,8 @@ import { channelService } from '../channels/channel-service.ts'
 import { STAND_IN } from '../integrations/slack/slack.ts'
 import { providers } from '../models/providers/index.ts'
 import { github } from '../integrations/github/github.ts'
+import { secretService, type HeldSecret } from '../agents/secret-service.ts'
+import { guardedLookup } from '../platform/network.ts'
 
 const IDLE_MS = 120_000
 const QUIET_MS = 60_000
@@ -20,7 +22,10 @@ const GIT_PATH = /^\/([A-Za-z0-9][\w-]*\/[\w.-]+?)(?:\.git)?\/(info\/refs|git-up
 const GIT_VERB: Record<string, string> = { 'info/refs': 'refs', 'git-upload-pack': 'fetch from', 'git-receive-pack': 'push to' }
 const GIT_IDLE_MS = 600_000
 const GIT_FETCH_MS = 10_000
+const PLACEHOLDER = /openhut-secret-([A-Z][A-Z0-9_]{1,39})/g
 const lastQuiet = new Map<string, number>()
+
+export const keyedRoute = { origin: (host: string): string => `https://${host}` }
 
 export type Upstream = {
   name: string
@@ -32,6 +37,7 @@ export type Upstream = {
   body?: (json: Record<string, unknown>) => Record<string, unknown>
   tool?: (path: string) => string | undefined
   idleMs?: number
+  lookup?: typeof guardedLookup
 }
 
 export type Outgoing = { path: string; headers: Headers }
@@ -92,13 +98,52 @@ export const brokerService = {
     const out = { path, headers: forwardable(req.headers) }
     upstream.apply({ out, secret: await upstream.credential(agent, req.headers) })
     const body = upstream.body && method === 'POST' ? await rewritten({ req, headers: out.headers, change: upstream.body }) : req
-    const status = await relay({ url: new URL(upstream.origin + out.path), method, headers: out.headers, body, res, idleMs, observe: upstream.observe })
+    const status = await relay({ url: new URL(upstream.origin + out.path), method, headers: out.headers, body, res, idleMs, observe: upstream.observe, lookup: upstream.lookup })
       .catch(async (err: unknown) => {
         await audit({ agent, tool, reason: messageOf(err).slice(0, 200), outcome: 'failed', started })
         throw err
       })
     await audit({ agent, tool, reason: `HTTP ${status}`, outcome: status < 400 ? 'allowed' : 'failed', started })
   },
+
+  async withSecrets({ agent, host, path, req, res }: { agent: GatewayAgent; host: string; path: string; req: IncomingMessage; res: ServerResponse }): Promise<void> {
+    const secrets = await secretService.held({ agentId: agent.id })
+    const named = new Set([...Object.values(req.headers).flat(), path].flatMap((text) => [...String(text ?? '').matchAll(PLACEHOLDER)].map((match) => match[1])))
+    const strays = [...named].filter((name) => !secrets.some((secret) => secret.name === name && secret.hosts.includes(host)))
+    const tool = `${host} ${req.method ?? 'GET'} ${path.split('?')[0]}`
+    if (strays.length) {
+      await audit({ agent, tool, reason: `Refused: ${strays.join(', ')} may not go to ${host}`, outcome: 'denied', started: Date.now() })
+      throw new HttpError(403, `The gateway won't send ${strays.join(', ')} to ${host}: ${strays.map((name) => routeOf({ secrets, name })).join(' ')}`)
+    }
+    const sent = secrets.filter((secret) => secret.hosts.includes(host))
+    if (!sent.length) throw new HttpError(403, `None of your keys go to ${host}. Call https://${host} directly, or ask for a key with add_secret.`)
+    await brokerService.forward({
+      agent, path, req, res,
+      upstream: {
+        name: host, origin: keyedRoute.origin(host), allow: () => true, credential: async () => '', tool: () => tool, lookup: guardedLookup,
+        apply: ({ out }) => {
+          const fill = (text: string, encode: (value: string) => string) => text.replace(PLACEHOLDER, (_, name: string) => encode(sent.find((secret) => secret.name === name)?.value ?? ''))
+          out.path = fill(out.path, encodeURIComponent)
+          for (const [name, value] of out.headers) out.headers.set(name, fill(value, (each) => each))
+          for (const secret of sent) {
+            const [header, format] = splitHeader(secret.header)
+            out.headers.set(header, format.replaceAll('{value}', secret.value))
+          }
+        },
+      },
+    })
+    await secretService.used({ ids: sent.map((secret) => secret.id) })
+  },
+}
+
+function splitHeader(header: string): [string, string] {
+  const at = header.indexOf(': ')
+  return [header.slice(0, at), header.slice(at + 2)]
+}
+
+function routeOf({ secrets, name }: { secrets: HeldSecret[]; name: string }): string {
+  const secret = secrets.find((each) => each.name === name)
+  return secret ? `${name} only goes to ${secret.hosts.join(', ')}.` : `You have no key named ${name}.`
 }
 
 async function rewritten({ req, headers, change }: { req: IncomingMessage; headers: Headers; change: (json: Record<string, unknown>) => Record<string, unknown> }): Promise<Buffer> {
@@ -112,9 +157,9 @@ async function rewritten({ req, headers, change }: { req: IncomingMessage; heade
   return out
 }
 
-function relay({ url, method, headers, body, res, idleMs, observe }: { url: URL; method: string; headers: Headers; body: IncomingMessage | Buffer; res: ServerResponse; idleMs: number; observe?: (headers: Headers) => void }): Promise<number> {
+function relay({ url, method, headers, body, res, idleMs, observe, lookup }: { url: URL; method: string; headers: Headers; body: IncomingMessage | Buffer; res: ServerResponse; idleMs: number; observe?: (headers: Headers) => void; lookup?: typeof guardedLookup }): Promise<number> {
   return new Promise((resolve, reject) => {
-    const outgoing = (url.protocol === 'https:' ? httpsRequest : httpRequest)(url, { method, headers: Object.fromEntries(headers) }, (answer) => {
+    const outgoing = (url.protocol === 'https:' ? httpsRequest : httpRequest)(url, { method, headers: Object.fromEntries(headers), ...(lookup && { lookup }) }, (answer) => {
       const status = answer.statusCode ?? 502
       observe?.(headersOf(answer.headers))
       res.writeHead(status, Object.fromEntries(Object.entries(answer.headers).filter(([name]) => !UNRELAYED.has(name))))

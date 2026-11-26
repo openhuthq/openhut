@@ -43,7 +43,7 @@ function guardedConnect(options: buildConnector.Options, callback: buildConnecto
   connector(options, callback)
 }
 
-function guardedLookup(hostname: string, options: LookupOptions, callback: (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void): void {
+export function guardedLookup(hostname: string, options: LookupOptions, callback: (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void): void {
   lookupAll(hostname, { ...options, all: true }, (err, addresses) => {
     if (err) return callback(err, [])
     const bad = addresses.find((each) => refused(each.address))

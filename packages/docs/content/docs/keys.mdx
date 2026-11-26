@@ -1,0 +1,35 @@
+---
+title: Keys
+description: Give an agent an API key without it ever seeing the key. It asks, you paste it, OpenHut adds it on the way out.
+icon: hut
+---
+
+When an agent needs a key for a service OpenHut has no app for, like Stripe or Sentry, it asks in the chat. You paste the key in OpenHut. The agent never sees it: OpenHut keeps it sealed and adds it only to requests going to the hosts you approved.
+
+## Give a key
+
+The agent shows a card: the key's name, why it needs it, and where it goes (**Details** shows the header it's sent in). Paste the key and press **Save key**, or **Not now**. The agent restarts to pick it up.
+
+Never paste a key into the chat itself.
+
+## See, replace or remove keys
+
+On the agent, open **More › Keys**. Each key shows the hosts it's sent to and when it was last used. **Replace** pastes a new value; **Remove** takes the key away (the agent restarts without it).
+
+## How the agent uses a key
+
+The agent calls the service through OpenHut's gateway instead of directly: `https://api.stripe.com/v1/charges` becomes `$OPENHUT_GATEWAY/x/api.stripe.com/v1/charges`, sent with its own `Authorization: Agent $OPENHUT_AGENT_TOKEN`. The gateway adds the header you saw on the card, like `Authorization: Bearer <key>`, and forwards it over HTTPS.
+
+The agent's terminal also has `$OPENHUT_SECRET_<NAME>`, a stand-in (`openhut-secret-<NAME>`), never the key. Where a service wants the key in another header or in the URL, the agent writes the stand-in there and the gateway swaps in the key.
+
+## What it guards against
+
+- The key is never in the agent's files, environment, chat or logs. Only the gateway, on the main install, reads it.
+- A request carrying a stand-in to a host the key isn't approved for is refused, and shows as **Not allowed** in **Activity**. So is a request to a host none of the agent's keys go to.
+- Approve the service's API host (`api.stripe.com`), not a site that echoes requests back: whatever a host sends back reaches the agent.
+
+## Limits
+
+- The gateway swaps stand-ins in headers and the URL, not in request bodies.
+- Agents can still reach other HTTPS hosts directly, without keys. Denying unknown hosts outright is planned.
+- Git push to GitHub keeps its own route through the GitHub app (see [Apps](/apps)).

@@ -18,6 +18,7 @@ import { agentPath } from '@/app/routes'
 import { request } from '@/lib/api-client'
 import { CONNECTIONS_KEY, GRANTS_KEY } from '@/lib/query-keys'
 import { ProposedConnectionCard } from '@/features/connections/proposed-connection'
+import { SecretCard } from '@/features/agents/secrets'
 
 import { navigate } from '@/lib/router'
 import { plainKey, toolLabel } from '@/lib/tool-label'
@@ -66,6 +67,7 @@ function ChangeCard({ agent, change }: { agent: Agent; change: ChangeRequest }) 
   const props = { agent, change, busy: decide.isPending, error: decide.error?.message, send: (verb: 'approve' | 'deny', body: object) => decide.mutate({ id: change.id, verb, body }) }
   if (change.action === 'call_tool') return <ToolCallCard {...props} />
   if (change.action === 'propose_connection') return <ProposedConnectionCard {...props} />
+  if (change.action === 'add_secret') return <SecretCard {...props} />
   return <SettingsCard {...props} />
 }
 

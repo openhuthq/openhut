@@ -25,6 +25,7 @@ import { threadService } from './threads/thread-service.ts'
 import { routineController } from './routines/routine-controller.ts'
 import { changeRequestController } from './agents/change-request-controller.ts'
 import { changeRequestService } from './agents/change-request-service.ts'
+import { secretController } from './agents/secret-controller.ts'
 import { routineService } from './routines/routine-service.ts'
 import { addressController, googleSignInController, inviteController, meController, ownerResetController, passwordResetController, peopleController, installSettingsController, sessionController, setupController } from './team/team-controller.ts'
 import { installSettingsService } from './team/install-settings-service.ts'
@@ -66,6 +67,7 @@ await app.register(browserController, { prefix: '/api/browsers' })
 await app.register(threadController, { prefix: '/api/threads' })
 await app.register(routineController, { prefix: '/api/routines' })
 await app.register(changeRequestController, { prefix: '/api/change-requests' })
+await app.register(secretController, { prefix: '/api/agent-secrets' })
 await app.register(channelController, { prefix: '/api/channels' })
 await app.register(connectionController, { prefix: '/api/connections' })
 await app.register(connectionEventController, { prefix: '/api/connection-events' })

@@ -32,6 +32,7 @@ export interface Database {
   }
   tool_permission: { agent_id: string; connection_id: string; tool: string; state: 'allow' | 'ask' | 'deny'; changed_by: string; changed_at: Generated<Date> }
   record: { key: string; collection: string; id: string; workspace: string; parent: string | null; ver: number; value: string; secret: string | null; personal: boolean; deleted: boolean }
+  agent_secret: { id: string; agent_id: string; name: string; hosts: string; header: string; value: string; created_at: Generated<Date>; used_at: Timestamp | null }
   telegram_code: { hash: string; channel_id: string; agent_id: string; kind: 'claim' | 'invite'; sealed: string | null; expires_at: Timestamp }
   change_request: {
     id: string; agent_id: string; action: string; input: string; summary: string; why: string; origin: string
