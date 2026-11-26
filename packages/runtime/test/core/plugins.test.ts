@@ -34,6 +34,6 @@ test('the plugins serve their own API routes', () => {
   const served = Object.fromEntries(plugins().filter((plugin) => plugin.routes).map((plugin) => [plugin.name, Object.keys(plugin.routes?.() ?? {})]))
   assert.deepEqual(served.inbox, ['/api/routines', '/api/webhooks', '/api/delivery-targets', '/inbox'])
   assert.deepEqual(served.chat, ['/api/threads'])
-  assert.deepEqual(served.github, ['/api/agent-faces'])
+  assert.deepEqual(served.github, ['/api/agent-faces', '/api/github-app'])
   assert.ok(served.connections.includes('/api/grants'))
 })

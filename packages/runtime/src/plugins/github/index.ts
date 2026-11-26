@@ -4,13 +4,14 @@ import { db } from '../../server/platform/db.ts'
 import { log } from '../../server/platform/events.ts'
 import { messageOf } from '../../server/platform/http-error.ts'
 import { faceController, faceService } from './faces.ts'
+import { serverAppController } from './server-app.ts'
 import { BODY_TOOLS, signed, signingOf, threadOf } from './sign.ts'
 import { createTables } from './tables.ts'
 
 export const github = definePlugin({
   name: 'github',
   migrate: createTables,
-  routes: () => ({ '/api/agent-faces': faceController }),
+  routes: () => ({ '/api/agent-faces': faceController, '/api/github-app': serverAppController }),
   hermes: ({ agent, connections }) => ({ prompt: connections.some(({ kind }) => kind === 'github') ? trailerNote(agent.name) : '' }),
   connectorCall: async ({ agentId, kind, tool, args }) => {
     if (kind !== 'github') return args

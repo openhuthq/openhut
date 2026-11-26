@@ -12,6 +12,7 @@ import { Busy, I, PILL, SetupSheet } from '@/components/kit'
 import { Field } from '@/features/connections/sheet'
 import { GoogleClientGuide } from '@/features/connections/google-client'
 import { Row, Rows } from '@/features/settings/kit'
+import { GitHubDialogs, GitHubRow } from '@/features/settings/github-app'
 import { fieldError, formError, request } from '@/lib/api-client'
 import { formValues } from '@/lib/form'
 import { longDate } from '@/lib/format'
@@ -54,12 +55,14 @@ export function AdminSettings() {
     <Row icon={<I icon={Globe02Icon} size={20} className="text-hue-slate" />} title="Address" note={data.address.url ? `${data.address.url} · ${data.address.proxy ? 'HTTPS by your proxy' : https}` : 'Not set'}>{edit('address', 'Edit')}</Row>
     <Row icon={<Glyph name="google_sign_in" size={20} />} title="Sign in with Google" note={data.google.signIn ? 'On' : 'Off'}>{edit('google-sign-in', data.google.signIn ? 'Edit' : 'Set up')}</Row>
     <Row icon={<I icon={Mail01Icon} size={20} className="text-hue-blue" />} title="Email" note={data.smtp.set ? `${data.smtp.host}:${data.smtp.port} · from ${data.smtp.from}` : 'Not set up'}>{edit('email', data.smtp.set ? 'Edit' : 'Set up')}</Row>
+    <GitHubRow />
     <Row icon={<I icon={Analytics01Icon} size={20} className="text-hue-green" />} title="Share usage data" note={data.usageData ? 'On · version and agent count, once a day' : 'Off'}>
       <Switch checked={data.usageData} aria-label="Share usage data" onCheckedChange={(on) => update.mutate({ usageData: on }, { onError: toastError })} />
     </Row>
     {opened === 'address' && <AddressSheet settings={data} />}
     {opened === 'google-sign-in' && <GoogleSignInSheet settings={data} />}
     {opened === 'email' && <SmtpSheet settings={data} />}
+    <GitHubDialogs opened={opened} />
   </Rows>
 }
 

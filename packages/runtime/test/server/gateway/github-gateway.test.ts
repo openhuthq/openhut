@@ -31,7 +31,9 @@ const { permissions } = await import('../../../src/server/permissions/permission
 upstreams.get('github')!.origin = `http://127.0.0.1:${(fake.address() as AddressInfo).port}`
 
 await migrate()
-const app = { appId: 42, slug: 'acme-hut', pem: generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs1', format: 'pem' }).toString(), installationId: 7, botId: 99 }
+const { settings } = await import('../../../src/server/platform/settings.ts')
+await settings.setGithubApp({ id: 42, slug: 'acme-hut', name: 'acme-hut', owner: 'acme', ownerType: 'Organization', ownerAvatar: '', pem: generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs1', format: 'pem' }).toString(), botId: 99, logo: false })
+const app = { installationId: 7 }
 await db.insertInto('person').values({ id: 'usr_gitowner', email: 'git@example.com', role: 'owner', removed_at: null }).execute()
 for (const [id, net] of [['ag_gitgrant', 11], ['ag_gitnone0', 12]] as const) await db.insertInto('agent').values({ id, name: id, owner_id: 'usr_gitowner', instructions: '#', model: 'sonnet', net, channel_key: seal('k'.repeat(32)) }).execute()
 await db.insertInto('connection').values({ id: 'cn_gitgithub', kind: 'github', name: 'GitHub', owner_id: 'usr_gitowner', config: seal(JSON.stringify(app)), created_at: new Date() }).execute()

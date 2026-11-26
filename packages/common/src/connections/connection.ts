@@ -129,7 +129,6 @@ export const CreateConnectionAuthorization = z.object({
   kind: z.optional(z.enum(SIGN_IN_KINDS)),
   name: z.optional(Name),
   url: z.optional(McpUrl),
-  organization: z.optional(z.string().check(z.regex(/^[A-Za-z0-9-]{1,39}$/, 'Write the organization as it appears in its GitHub URL.'))),
   connectionId: z.optional(z.string().check(z.maxLength(40))),
 })
 export type CreateConnectionAuthorization = z.infer<typeof CreateConnectionAuthorization>
