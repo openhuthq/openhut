@@ -90,7 +90,7 @@ export const connections = definePlugin({
         connectionId: z.string().max(40), tool: z.string().max(200), name: z.string().max(200), arguments: z.record(z.string(), z.unknown()),
         action: z.object({ name: z.string().max(200), label: z.string().max(200) }).optional(), always: z.boolean().optional(),
       }),
-      answer: z.object({ always: z.boolean().optional() }),
+      answer: z.object({ always: z.boolean().optional().describe('Always allow this from now on') }),
       title: async ({ input }) => {
         const connection = await db.selectFrom('connection').select('name').where('id', '=', input.connectionId).executeTakeFirstOrThrow()
         return input.action ? `${connection.name}: ${input.action.label}` : `Run ${input.tool} on ${connection.name}`

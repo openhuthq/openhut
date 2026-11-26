@@ -90,7 +90,7 @@ function FormField({ name, field, value }: { name: string; field: Field; value: 
   const label = field.description ?? plainKey(name)
   const given = typeof value === 'string' ? value : undefined
   if (field.type === 'boolean') return <label className="flex items-center gap-2 text-[13px] text-ink"><Switch name={name} defaultChecked={value === true} aria-label={label} />{label}</label>
-  if ((field.maxLength ?? 0) > LONG) return <label className="flex flex-col gap-1 text-[12.5px] text-mute">{label}<Textarea name={name} aria-label={label} defaultValue={given} maxLength={field.maxLength} className="min-h-40" /></label>
+  if ((field.maxLength ?? 0) > LONG && !field.secret) return <label className="flex flex-col gap-1 text-[12.5px] text-mute">{label}<Textarea name={name} aria-label={label} defaultValue={given} maxLength={field.maxLength} className="min-h-40" /></label>
   return <label className="flex flex-col gap-1 text-[12.5px] text-mute">{label}<Input name={name} aria-label={label} type={field.secret ? 'password' : 'text'} autoComplete="off" defaultValue={field.secret ? undefined : given} maxLength={field.maxLength} placeholder={field.secret ? `Paste the ${label.toLowerCase()}` : undefined} /></label>
 }
 
