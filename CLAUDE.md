@@ -101,10 +101,15 @@ The notes and decisions live in the private repo `openhuthq/openhut-private`, un
 
 ## Shipping
 
-Open the PR with the first push, and leave one background `gh run watch <id> --exit-status --interval 120` to hear
-when CI ends (no polling loops: the account's API limit is 5000/h, shared by every agent). After one review round
-with no open blocker and CI green, merge with `gh pr merge --merge` (no auto-merge). The main ruleset has no bypass, so a
-red `gate` means fixing it, never forcing it. CI (`ci.yml`, Linux only) is checks (typecheck, tests, the site), the browser
+One PR per feature. A feature and its dependent steps go on one branch, built by one agent: no milestone PRs that wait
+on each other's merges and get rebased onto main one by one. Split work across agents only when the parts are truly
+independent (different files, no ordering).
+
+CI is not part of the edit loop. Iterate locally (`npm run check`, one test file, the dev app) until it is green, then
+push once and open the PR. After one review round with no open blocker, run `gh pr merge --auto --merge` and stop: no
+`gh run watch`, `gh pr checks` or sleep loops (the account's API limit is 5000/h, shared by every agent). If `gate`
+fails, auto-merge waits; fix it and push again. The main ruleset has no bypass, so a red `gate` means fixing it, never
+forcing it. CI (`ci.yml`, Linux only) is checks (typecheck, tests, the site), the browser
 run and, on `main`, the runtime image pushed by commit; `gate` waits on all of them. Deploy then ships main's newest green
 commit to openhut.dev. Reviewer loop and flaky tests: `openhut-private: brain/openhut-deploy.md`.
 
