@@ -47,15 +47,15 @@ export const connectionAuthorizationService = {
     return done ? { ...now, status: done.error ? 'failed' : 'done', connectionId: done.connectionId, error: done.error } : now
   },
 
-  async finish(query: { state?: string; code?: string; error?: string; installation_id?: string; setup_action?: string }): Promise<{ kind?: SignInKind; connectionId?: string; error?: string; redirect?: string }> {
+  async finish(query: { state?: string; code?: string; error?: string; installation_id?: string; setup_action?: string }): Promise<{ kind?: SignInKind; connectionId?: string; error?: string }> {
     const sign = query.state ? pending.get(query.state) : undefined
     const result = await finishing({ ...query, sign })
-    if (query.state && sign && !result.redirect) finished.set(query.state, { actor: sign.actor, kind: sign.kind, connectionId: result.connectionId, error: result.error, expires: Date.now() + SIGN_IN_MS })
+    if (query.state && sign) finished.set(query.state, { actor: sign.actor, kind: sign.kind, connectionId: result.connectionId, error: result.error, expires: Date.now() + SIGN_IN_MS })
     return result
   },
 }
 
-async function finishing({ state, code, error, installation_id: installationId, setup_action: action, sign }: { state?: string; code?: string; error?: string; installation_id?: string; setup_action?: string; sign?: Pending }): Promise<{ kind?: SignInKind; connectionId?: string; error?: string; redirect?: string }> {
+async function finishing({ state, code, error, installation_id: installationId, setup_action: action, sign }: { state?: string; code?: string; error?: string; installation_id?: string; setup_action?: string; sign?: Pending }): Promise<{ kind?: SignInKind; connectionId?: string; error?: string }> {
   if (state) pending.delete(state)
   if (!sign || sign.expires < Date.now()) return { error: 'This sign-in expired or was already used. Start it again.' }
   if (sign.kind === 'github' && action === 'request') return { kind: sign.kind, error: 'GitHub sent your install request to the account\'s owner. Connect again once they approve it.' }
