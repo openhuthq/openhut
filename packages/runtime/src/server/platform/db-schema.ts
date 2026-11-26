@@ -38,6 +38,10 @@ export interface Database {
     run_text: string | null; failures: Generated<number>; secret: string | null; last_at: Timestamp | null
   }
   inbox_item: { id: string; source_id: string; agent_id: string; digest: string; text: string; told: Generated<boolean>; created_at: Generated<Date> }
+  sign_in: {
+    state: string; actor: string; actor_id: string; kind: string; name: string; existing_id: string | null; data: string
+    status: 'pending' | 'working' | 'done' | 'failed'; connection_id: Generated<string | null>; error: Generated<string | null>; expires_at: Timestamp; created_at: Generated<Date>
+  }
   ask: {
     id: string; agent_id: string; kind: string; input: string; title: string; why: string; origin: string
     status: Generated<'open' | 'done' | 'declined' | 'expired'>; note: string | null; reply: string | null; told: Generated<boolean>; created_at: Generated<Date>

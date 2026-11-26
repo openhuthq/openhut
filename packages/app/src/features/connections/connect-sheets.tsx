@@ -4,7 +4,7 @@ import type { Me } from '@openhut/common/team/team.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { useAuthorizeConnection, useBackToAsker, useConnections, useCreateConnection } from '@/features/connections/api'
+import { openSignInTab, useAuthorizeConnection, useBackToAsker, useConnections, useCreateConnection } from '@/features/connections/api'
 import { uniqueName, type Integration } from '@/features/connections/catalog'
 import { Field } from '@/features/connections/sheet'
 import { GoogleClientGuide } from '@/features/connections/google-client'
@@ -132,7 +132,7 @@ function McpSheet({ item, close, returned, ask }: FlowProps) {
     onSubmit={(event) => {
       const field = formValues(event)
       const server = { name: field('name').trim(), url: field('url') }
-      if (auth === 'oauth') return authorize.mutate({ kind: 'mcp', ...server })
+      if (auth === 'oauth') return authorize.mutate({ kind: 'mcp', ...server, tab: openSignInTab() })
       create.mutate({ kind: 'mcp', ...server, header: auth === 'header' ? `${field('headerName')}: ${field('headerValue')}` : undefined })
     }}
     foot={FOOT(close, create.isPending || authorize.isPending, 'Connect')}>
@@ -164,7 +164,8 @@ function GoogleSheet(props: FlowProps) {
     error={formError(save.error, ['googleClientId', 'googleClientSecret']) ?? returned} safe="The secret stays on this server."
     onSubmit={(event) => {
       const field = formValues(event)
-      save.mutate({ googleClientId: field('clientId').trim(), googleClientSecret: field('clientSecret').trim() }, { onSuccess: () => quick.connect(item) })
+      const tab = openSignInTab()
+      save.mutate({ googleClientId: field('clientId').trim(), googleClientSecret: field('clientSecret').trim() }, { onSuccess: () => quick.connect(item, tab), onError: () => tab?.close() })
     }}
     foot={FOOT(close, save.isPending || quick.pending, 'Save and connect')}>
     {ask.line}
@@ -199,11 +200,12 @@ export function useQuickConnect() {
   const create = useCreateConnection()
   const taken = (useConnections().data ?? []).map((connection) => connection.name)
   const direct = (item: Integration) => QUICK.has(item.name) || GOOGLE_KINDS.some((kind) => kind === item.name)
-  const connect = (item: Integration) => {
+  const connect = (item: Integration, opened?: Window | null) => {
     const name = uniqueName({ title: item.title, taken })
     if (item.name === 'excalidraw') return create.mutate({ kind: 'excalidraw', name }, { onError: toastError })
+    const tab = opened === undefined ? openSignInTab() : opened
     const kind = SIGN_IN_KINDS.find((each) => each === item.name)
-    if (kind) authorize.mutate({ kind, name }, { onError: toastError })
+    if (kind) authorize.mutate({ kind, name, tab }, { onError: toastError })
   }
   return { direct, connect, pending: authorize.isPending || create.isPending, error: authorize.error ?? create.error }
 }

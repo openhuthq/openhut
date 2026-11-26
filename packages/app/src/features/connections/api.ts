@@ -1,8 +1,8 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@openhut/common/api.ts'
 import { AgentTool, Connection, ConnectionAuthorization, ConnectionEvent, ConnectionTool, type UpdateAgentTools, type CreateConnection, type CreateConnectionAuthorization } from '@openhut/common/connections/connection.ts'
-import { request } from '@/lib/api-client'
+import { request, RequestError } from '@/lib/api-client'
 import { AGENTS_KEY, CONNECTIONS_KEY, GRANTS_KEY } from '@/lib/query-keys'
 import { asked } from '@/features/connections/asked'
 import { navigate } from '@/lib/router'
@@ -40,24 +40,43 @@ export function useCreateConnection() {
 
 const SIGN_IN_POLL_MS = 1500
 const SIGN_IN_WAIT_MS = 15 * 60_000
+const CLOSED_GRACE_MS = 4000
+
+export function openSignInTab(): Window | null {
+  const tab = window.open('', '_blank')
+  if (tab) tab.opener = null
+  return tab
+}
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 export function useAuthorizeConnection() {
   const client = useQueryClient()
   const live = useRef(true)
+  const [url, setUrl] = useState<string>()
   useEffect(() => {
     live.current = true
     return () => { live.current = false }
   }, [])
-  return useMutation({
-    mutationFn: async (body: CreateConnectionAuthorization) => {
-      const started = await request({ schema: ConnectionAuthorization, path: '/api/connection-authorizations', method: 'POST', body })
-      window.open(started.authorizationUrl, '_blank', 'noopener')
+  const mutation = useMutation({
+    mutationFn: async ({ tab, ...body }: CreateConnectionAuthorization & { tab: Window | null }) => {
+      const started = await request({ schema: ConnectionAuthorization, path: '/api/connection-authorizations', method: 'POST', body }).catch((err: unknown) => {
+        tab?.close()
+        throw err
+      })
+      setUrl(started.authorizationUrl)
+      if (tab && !tab.closed) tab.location.href = started.authorizationUrl
+      else window.open(started.authorizationUrl, '_blank', 'noopener')
+      let closedAt: number | undefined
       for (let waited = 0; live.current && waited < SIGN_IN_WAIT_MS; waited += SIGN_IN_POLL_MS) {
         await sleep(SIGN_IN_POLL_MS)
-        const now = await request({ schema: ConnectionAuthorization, path: `/api/connection-authorizations/${encodeURIComponent(started.id)}` })
-        if (now.status === 'failed') throw new Error(now.error ?? 'The sign-in didn’t finish. Try again.')
-        if (now.status === 'done') return now
+        const now = await request({ schema: ConnectionAuthorization, path: `/api/connection-authorizations/${encodeURIComponent(started.id)}` }).catch((err: unknown) => {
+          if (err instanceof RequestError && err.status < 500) throw err
+          return undefined
+        })
+        if (now?.status === 'failed') throw new Error(now.error ?? 'The sign-in didn’t finish. Try again.')
+        if (now?.status === 'done') return now
+        if (tab?.closed) closedAt ??= Date.now()
+        if (closedAt && Date.now() - closedAt > CLOSED_GRACE_MS) throw new Error('The sign-in tab was closed before it finished. Sign in again.')
       }
       return null
     },
@@ -67,6 +86,7 @@ export function useAuthorizeConnection() {
       navigate(`/connections/${done.connectionId}?connected=1`, true)
     },
   })
+  return { ...mutation, url }
 }
 
 export function useConnectionTools(connection: Connection) {
