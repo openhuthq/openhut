@@ -18,7 +18,9 @@ ORIGIN_FIELDS = ("platform", "chat_id", "chat_type", "chat_name", "thread_id", "
 LOCAL_TOOLSET = "openhut-local"
 WAKE = re.compile(r"\[OpenHut (\w+:\w+)\]")
 POLL_SECONDS = 15
+STRANGER = {"action": "skip", "reason": "openhut stranger"}
 injected = set()
+allowing = threading.Lock()
 
 
 def register(ctx):
@@ -28,7 +30,7 @@ def register(ctx):
     ctx.register_hook("pre_tool_call", stamp)
     ctx.register_hook("post_llm_call", said)
     for name in ctx.get_config("hooks", []) or []:
-        ctx.register_hook(name, forward(name))
+        ctx.register_hook(name, dispatch if name == "pre_gateway_dispatch" else forward(name))
     for prefix in ctx.get_config("slack_actions", []) or []:
         ctx.register_slack_action_handler(re.compile("^" + re.escape(prefix)), lambda ack, body, action: clicked(ctx, ack, body, action))
     if os.environ.get("OPENHUT_GATEWAY"):
@@ -66,6 +68,22 @@ def forward(name):
         except Exception:
             return None
     return hook
+
+
+def dispatch(**kwargs):
+    source = getattr(kwargs.get("event"), "source", None)
+    user = str(getattr(source, "user_id", None) or "")
+    result = forward("pre_gateway_dispatch")(**kwargs)
+    if plain(getattr(source, "platform", None)) != "telegram" or not user:
+        return result
+    with allowing:
+        allowed = os.environ.get("TELEGRAM_ALLOWED_USERS", "")
+        if os.environ.get("TELEGRAM_ALLOW_ALL_USERS") == "true" or user in allowed.split(","):
+            return result
+        if isinstance(result, dict) and result.get("action") == "allow":
+            os.environ["TELEGRAM_ALLOWED_USERS"] = allowed + "," + user if allowed else user
+            return result
+    return result if isinstance(result, dict) and result.get("action") == "skip" else STRANGER
 
 
 def plain(value, depth=0):
