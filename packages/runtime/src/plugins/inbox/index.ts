@@ -3,9 +3,14 @@ import { definePlugin, defineTool } from '../../core/plugin.ts'
 import { routineService } from '../../server/inbox/routines.ts'
 import { inboxService } from '../../server/inbox/inbox-service.ts'
 import { changeTool } from '../asks/change.ts'
+import { deliveryTargetController, inboxReceiver, routineController, webhookController } from '../../server/inbox/inbox-controller.ts'
+import { createTables } from './tables.ts'
 
 export const inbox = definePlugin({
   name: 'inbox',
+  migrate: createTables,
+  routes: () => ({ '/api/routines': routineController, '/api/webhooks': webhookController, '/api/delivery-targets': deliveryTargetController, '/inbox': inboxReceiver }),
+  start: () => inboxService.start(),
   tools: {
     schedule_routine: defineTool({
       description: 'Use this whenever something needs a follow-up later: a promise you made, a reply you\'re waiting on, a date someone mentioned. Don\'t wait to be asked. Then tell the person in one line what you set up. Check list_routines first, and don\'t set up the same follow-up twice. Each run starts in the chat where you call this, with that chat\'s history.',

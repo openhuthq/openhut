@@ -4,9 +4,17 @@ import { ConnectionKind } from '@openhut/common/connections/connection.ts'
 import { definePlugin, defineTool } from '../../core/plugin.ts'
 import { changeRequestService } from '../../server/agents/change-request-service.ts'
 import { changeTool } from './change.ts'
+import { changeRequestController } from '../../server/agents/change-request-controller.ts'
+import { createTables } from './tables.ts'
 
 export const asks = definePlugin({
   name: 'asks',
+  migrate: createTables,
+  routes: () => ({ '/api/change-requests': changeRequestController }),
+  afterTurn: async ({ agentId, since }) => {
+    const changes = await changeRequestService.inChat({ agentId, since })
+    return changes.length ? { type: 'data-changes', data: changes } : undefined
+  },
   hermes: () => ({ prompt: ASK_PROMPT }),
   tools: {
     ask_to_connect: defineTool({

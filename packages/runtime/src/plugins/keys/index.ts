@@ -1,8 +1,12 @@
 import { secretPlaceholder } from '@openhut/common/agents/secret.ts'
 import { definePlugin } from '../../core/plugin.ts'
+import { secretController } from '../../server/agents/secret-controller.ts'
+import { createTables } from './tables.ts'
 
 export const keys = definePlugin({
   name: 'keys',
+  migrate: createTables,
+  routes: () => ({ '/api/agent-secrets': secretController }),
   hermes: ({ secrets }) => ({
     prompt: keysNote(secrets),
     env: Object.fromEntries(secrets.map(({ name }) => [`OPENHUT_SECRET_${name}`, secretPlaceholder(name)])),
