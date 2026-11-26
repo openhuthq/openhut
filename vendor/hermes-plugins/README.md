@@ -37,7 +37,14 @@ Lines we added are marked `OpenHut`. To offer upstream: the same setting, withou
   first one that isn't null; every plugin's handler runs). Today: `transform_llm_output` (cards: a reply's
   ```` ```spec ```` card, `packages/common/src/cards/card.ts`, goes to Slack as Block Kit in the turn's thread, or becomes
   text on other chats; the app chat, `api_server`, is left alone since the thread stream renders cards itself) and
-  `pre_gateway_dispatch` (channels: a Telegram `/start <invite>` is taken and skipped, so the agent never sees it).
+  `pre_gateway_dispatch` (channels: a Telegram `/start <invite>` is taken and skipped, so the agent never sees it). Telegram's
+  `pre_gateway_dispatch` gets one more step here, for senders not on Hermes's `TELEGRAM_ALLOWED_USERS` (and no
+  `TELEGRAM_ALLOW_ALL_USERS=true`): the channels plugin answers `allow` for someone the channel has (just joined by invite,
+  before agentd restarts the agent with the new list), and the forwarder adds them to `TELEGRAM_ALLOWED_USERS` in this
+  process's environment, which Hermes's auth reads on every message (`platform_gate_env`), so their message goes through
+  now; the restart writes the same list to `.env`. Anything else (a skip, no answer, the gateway down or slow) is a skip,
+  so a stranger never gets Hermes's decline text (`unauthorized_dm_behavior: decline` is only there so the adapter lets
+  their DMs reach this hook).
 - `slack_actions`: a Slack action handler per prefix (`card:`), to `POST /slack-actions`; the cards plugin answers with
   the button's text and its thread, which goes back in through `inject_message` as the person's reply. `core/hermes.ts`
   allows `allow_gateway_injection`.

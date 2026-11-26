@@ -181,7 +181,7 @@ test('Telegram for listed people: the agent token stands in for the bot token, t
   assert.equal(env.TELEGRAM_HOME_CHANNEL, '111222333')
   assert.equal(env.TELEGRAM_ALLOW_ALL_USERS, undefined)
   assert.deepEqual(yaml.telegram, { require_mention: true, unauthorized_dm_behavior: 'decline', gateway_restart_notification: false })
-  assert.match(String(yaml.unauthorized_dm_decline_message), /just invited/)
+  assert.equal(yaml.unauthorized_dm_decline_message, undefined)
 })
 
 test('Telegram open to anyone: everyone allowed', () => {
