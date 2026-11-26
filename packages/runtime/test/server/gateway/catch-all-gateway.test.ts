@@ -51,6 +51,9 @@ test('each call through a catch-all tool follows the permission of the action it
   assert.match(unknown.text, /: DigitalOcean: App mystery\./)
   assert.deepEqual(fake.invoked, ['databases/db-cluster-list'])
 
+  const unnamed = await client.callTool({ name: 'call_tool', arguments: { reason: 'Sneaky', name: 'mcp_mcp_invoke_tool', arguments: { name: '*read' }, origin: { platform: 'api_server', chat_id: 'openhut-dosession' } } }) as { content: { text: string }[] }
+  assert.match(unnamed.content[0].text, /^Waiting for your owner's OK/)
+
   const id = /chg_[a-z0-9]+/.exec(asked.text)?.[0] ?? ''
   await changeRequestService.approve({ actor: owner, id, always: true })
   assert.deepEqual(fake.invoked, ['databases/db-cluster-list', 'databases/db-cluster-delete'])

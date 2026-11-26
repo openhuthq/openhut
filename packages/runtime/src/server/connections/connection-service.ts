@@ -190,10 +190,10 @@ export const connectionService = {
 
 async function actionOf({ connection, spec, args }: { connection: ReachableConnection; spec: ToolSpec; args: Record<string, unknown> }): Promise<{ spec: ToolSpec; label: string } | undefined> {
   if (!permissions.isCatchAll(spec)) return undefined
-  const properties = Object.keys(spec.schema.properties ?? {})
-  const key = [...properties, ...Object.keys(args)].find((each) => /name|tool/i.test(each) && typeof args[each] === 'string')
-  const name = key ? String(args[key]) : ''
-  if (!name) return undefined
+  const declared = Object.keys(spec.schema.properties ?? {})
+  const keys = (declared.length ? declared : Object.keys(args)).filter((each) => /name|tool/i.test(each) && typeof args[each] === 'string')
+  const name = keys.length === 1 ? String(args[keys[0]]) : ''
+  if (!name || name.startsWith('*')) return { spec: { name: '*other', description: humanized(spec.name), schema: {} }, label: humanized(spec.name) }
   const known = actionCache.get(connection.id) ?? new Map<string, ToolSpec>()
   actionCache.set(connection.id, known)
   const found = known.get(name) ?? await lookUp({ connection, name }).catch((err: unknown) => {
