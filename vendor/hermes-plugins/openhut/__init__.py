@@ -5,6 +5,7 @@ import json
 import os
 import queue
 import re
+import sys
 import threading
 import time
 import urllib.error
@@ -23,6 +24,7 @@ ANSWERED = ("pre_", "transform_")
 NOTIFY_SECONDS = 5
 STRANGER = {"action": "skip", "reason": "openhut stranger"}
 injected = set()
+warned = {}
 notices = queue.Queue()
 allowing = threading.Lock()
 
@@ -134,14 +136,34 @@ def poll(ctx):
     while True:
         try:
             for wake in gateway("/wakes")["data"]:
-                if wake["id"] not in injected:
-                    if not ctx.inject_message(wake["text"], origin=wake["origin"]):
-                        continue
-                    injected.add(wake["id"])
-                gateway("/wakes/" + wake["id"], {"picked": True})
-        except Exception:
-            pass
+                try:
+                    if wake["id"] not in injected:
+                        if not ctx.inject_message(wake["text"], origin=wake["origin"]):
+                            warn(wake["id"], "Hermes refused to start a turn at " + json.dumps(wake["origin"]) + "; its log says why")
+                            continue
+                        injected.add(wake["id"])
+                    gateway("/wakes/" + wake["id"], {"picked": True})
+                except Exception as err:
+                    warn(wake["id"], describe(err))
+        except Exception as err:
+            warn("/wakes", describe(err))
         time.sleep(POLL_SECONDS)
+
+
+def warn(key, message):
+    if warned.get(key) == message:
+        return
+    warned[key] = message
+    print("openhut: wake " + key + ": " + message, file=sys.stderr, flush=True)
+
+
+def describe(err):
+    if isinstance(err, urllib.error.HTTPError):
+        try:
+            return "gateway answered " + str(err.code) + ": " + json.load(err).get("error", {}).get("message", "")
+        except Exception:
+            return "gateway answered " + str(err.code)
+    return type(err).__name__ + ": " + str(err)
 
 
 def said(user_message="", assistant_response="", **_):

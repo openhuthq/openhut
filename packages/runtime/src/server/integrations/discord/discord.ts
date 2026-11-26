@@ -15,6 +15,11 @@ const VIEW_CHANNEL = 1n << 10n
 const TEXT = new Set([0, 5])
 const PERMISSIONS = '309237713920'
 const MESSAGE_CONTENT = (1 << 18) | (1 << 19)
+const MAX_LENGTH = 2000
+const RETRIES = 3
+const MAX_WAIT_MS = 30_000
+const Thread = z.object({ parent_id: z.optional(z.nullable(z.string())) })
+const Failure = z.object({ message: z.optional(z.string()), retry_after: z.optional(z.number()) })
 export const DiscordSecrets = z.object({ botToken: z.string() })
 
 export const discord = {
@@ -68,6 +73,12 @@ export const discord = {
     return failed
   },
 
+  async post({ botToken, channelId, threadId, text }: { botToken: string; channelId: string; threadId?: string; text: string }): Promise<void> {
+    const thread = threadId ? z.safeParse(Thread, (await call({ path: `/channels/${threadId}`, botToken })).body).data : undefined
+    if (threadId && thread?.parent_id !== channelId) throw new HttpError(400, 'That thread isn\'t in the channel. Post in the channel instead.')
+    for (const part of split(text)) await write({ path: `/channels/${threadId ?? channelId}/messages`, botToken, body: { content: part, allowed_mentions: { parse: [] } } })
+  },
+
   env({ botToken, channels }: { botToken: string; channels: string[] }): Record<string, string> {
     if (!channels.length) return {}
     return { DISCORD_BOT_TOKEN: botToken, DISCORD_ALLOWED_CHANNELS: channels.join(','), DISCORD_HOME_CHANNEL: channels[0] }
@@ -80,6 +91,36 @@ async function call({ path, botToken }: { path: string; botToken: string }): Pro
   const res = await fetch(`${config.discordApi}${path}`, { headers: { authorization: `Bot ${botToken}` }, signal: AbortSignal.timeout(10_000) })
     .catch((err: unknown) => { throw new HttpError(502, `Discord didn't answer (${messageOf(err).replaceAll(botToken, '…')}). Try again.`) })
   return { ok: res.ok, status: res.status, body: await res.json().catch(() => undefined) }
+}
+
+async function write({ path, botToken, body }: { path: string; botToken: string; body: unknown }): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(`${config.discordApi}${path}`, { method: 'POST', headers: { authorization: `Bot ${botToken}`, 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10_000) })
+      .catch((err: unknown) => { throw new HttpError(502, `Discord didn't answer (${messageOf(err).replaceAll(botToken, '…')}). Try again.`) })
+    if (res.ok) return
+    const failure = z.safeParse(Failure, await res.json().catch(() => undefined)).data
+    const wait = (failure?.retry_after ?? Number(res.headers.get('retry-after') ?? 1)) * 1000
+    if (res.status === 429 && attempt < RETRIES && wait <= MAX_WAIT_MS) {
+      await new Promise((resolve) => setTimeout(resolve, wait))
+      continue
+    }
+    if (res.status === 429) throw new HttpError(429, 'Discord is rate limiting the bot. Try again in a minute.')
+    if (res.status === 401) throw new HttpError(400, 'Discord didn\'t accept the bot token. Reset it on the Bot page and connect Discord again.')
+    if (res.status === 403 || res.status === 404) throw new HttpError(400, `The bot can't post there (${failure?.message ?? `HTTP ${res.status}`}). In Discord, open the channel's settings, then Permissions, and let the bot send messages.`)
+    throw new HttpError(502, `Discord refused the message (${failure?.message ?? `HTTP ${res.status}`}). Try again.`)
+  }
+}
+
+export function split(text: string): string[] {
+  const parts: string[] = []
+  let rest = text.trim()
+  while (rest.length > MAX_LENGTH) {
+    const window = rest.slice(0, MAX_LENGTH)
+    const at = [window.lastIndexOf('\n'), window.lastIndexOf(' ')].find((index) => index > MAX_LENGTH / 2) ?? MAX_LENGTH
+    parts.push(rest.slice(0, at).trimEnd())
+    rest = rest.slice(at).trimStart()
+  }
+  return [...parts, rest]
 }
 
 type GuildChannel = z.infer<typeof GuildChannel>

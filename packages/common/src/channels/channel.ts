@@ -100,6 +100,14 @@ export const ChannelRecord = z.object({
 })
 export type ChannelRecord = z.infer<typeof ChannelRecord>
 
+export const Place = z.object({
+  platform: z.string().check(z.minLength(1), z.maxLength(40)),
+  chat_id: z.string().check(z.minLength(1), z.maxLength(200)),
+  thread_id: z.optional(z.string().check(z.minLength(1), z.maxLength(200))),
+  chat_name: z.string(),
+})
+export type Place = z.infer<typeof Place>
+
 export const ChannelSecrets = z.object({ botToken: z.optional(z.string()), appToken: z.optional(z.string()) })
 export type ChannelSecrets = z.infer<typeof ChannelSecrets>
 
