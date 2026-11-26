@@ -80,7 +80,7 @@ function ProviderRow({ provider, note, lead, used }: { provider: Provider; note:
   return <Row icon={<Glyph name={provider.id} size={20} />} title={providerInfo(provider.id).short} note={used ? `${note} · In use` : note}>
     {provider.connected
       ? <><Status tone="on">{subscription ? 'Signed in' : 'Connected'}</Status><Button type="button" variant="ghost" className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id) }}>Manage</Button></>
-      : <Button type="button" variant={lead ? 'primary' : 'secondary'} className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id === 'claude' ? 'seat' : provider.id) }}>{subscription ? 'Sign in' : 'Add key'}</Button>}
+      : <Button type="button" variant={lead ? 'primary' : 'ghost'} className={PILL} data-provider={provider.id} onClick={() => { returningTo = provider.id; open(provider.id === 'claude' ? 'seat' : provider.id) }}>{subscription ? 'Sign in' : 'Add key'}</Button>}
   </Row>
 }
 

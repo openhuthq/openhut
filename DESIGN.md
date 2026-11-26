@@ -19,11 +19,11 @@ Every labelled button is one of four tiers, loudest first. Pick by what the acti
 | Tier | `Button` | Looks like | Use for |
 |---|---|---|---|
 | 1 Primary | `variant="primary"` | ink fill, white text | the one commit of a layer: Test and connect, Add, Start again, New agent |
-| 2 Secondary | `variant="secondary"` | `--soft` grey fill | what a row needs next: Sign in, Add key, Connect, Set up, Update, Restart to update, Download, Try again; and Cancel |
-| 3 Ghost | `variant="ghost"` | surface background (transparent), ink text, soft fill on hover | actions on a row that is already done: Manage, Show folder, Check now, Refresh, Copy, I've installed it; red text (`danger`) for Remove, Disconnect |
+| 2 Secondary | `variant="secondary"` | `--soft` grey fill | what a view or row needs next outside Settings rows: Update, Restart to update, Download, Try again; and Cancel |
+| 3 Ghost | `variant="ghost"` | surface background (transparent), ink text, soft fill on hover | every Settings row action (owner, 2026-11-26): Edit, Set up, Sign in, Add key, Connect, Manage; and Show folder, Check now, Refresh, Copy, I've installed it; red text (`danger`) for Remove, Disconnect |
 | 4 Text | `variant="text"` | coloured text only, no padding or fill, hover underline | a quiet way onward: Show all N, + Add, 2 connected ›, Edit beside a value |
 
-Icon-only buttons sit outside the tiers. They are ghost squares, ink by default. Delete's trash is red at rest and Stop/Start are tinted (rule 13). The test for 2 against 3 is state: a row that still needs setting up gets a secondary; once it's set up, its action drops to ghost so the rows that need you stand out. Tier 4 replaces the hand-styled `variant="bare"` text buttons (`connections-view.tsx` "N connected", `agent-connections.tsx` "+ Add"). Settings page by page: see the table under "Settings, by tier".
+Icon-only buttons sit outside the tiers. They are ghost squares, ink by default. Delete's trash is red at rest and Stop/Start are tinted (rule 13). The test for 2 against 3 is state: a row that still needs setting up gets a secondary; once it's set up, its action drops to ghost so the rows that need you stand out. Settings rows are the exception (owner, 2026-11-26): every row action there is ghost, set up or not, and the row's note carries the state. Tier 4 replaces the hand-styled `variant="bare"` text buttons (`connections-view.tsx` "N connected", `agent-connections.tsx` "+ Add"). Settings page by page: see the table under "Settings, by tier".
 
 ### Variants
 
@@ -98,11 +98,11 @@ Today every Settings action is a secondary pill, so Sign in and Manage look the 
 | General › Updates | Check now | secondary | 3 ghost |
 | General › Updates | Download, Restart to update, Update | secondary | 2 secondary |
 | Computers | Update (computer row) | secondary | 2 secondary |
-| Computers | Remove (opens the in-place confirm) | secondary | 3 ghost, red |
+| Computers | Remove (opens the confirm) | secondary | 3 ghost, red |
 | Computers | inline confirm Cancel / Remove | secondary / destructive | 2 secondary / 3 ghost, red (no fill: a computer can be added again) |
 | Models › provider | inline confirm Cancel / Disconnect | secondary / destructive | 2 secondary / 3 ghost, red |
 | Computers | enrolment Try again / Remove | secondary / secondary | 2 secondary / 3 ghost |
-| Models | Sign in, Add key (not set up) | secondary | 2 secondary |
+| Models | Sign in, Add key (not set up) | secondary | 3 ghost (primary while nothing is connected) |
 | Models | Manage (signed in or connected) | secondary | 3 ghost |
 | Models › provider | Refresh models | secondary | 3 ghost |
 | Models › provider | Disconnect / Sign out (opens confirm) | secondary | 3 ghost, red |
@@ -110,9 +110,11 @@ Today every Settings action is a secondary pill, so Sign in and Manage look the 
 | Models › key form | Cancel / Connect | secondary / primary | 2 / 1 |
 | Models › sign-in | Copy code / Open host | secondary / secondary | 3 ghost / 2 secondary |
 | MCP | Copy (command, path) | secondary | 3 ghost |
+| Admin | Edit, Set up | secondary | 3 ghost |
+| Apps | Connect | secondary | 3 ghost |
 | Settings | Back, Close | icon | icon (ghost) |
 
-Outside Settings the same test holds: agent panel channels "Set up" is secondary until set up, then "Edit" is ghost; Connections "Connect" stays secondary; "+ Add" and "N connected ›" become text.
+Outside Settings the same test holds: agent panel channels "Set up" is secondary until set up, then "Edit" is ghost; "+ Add" and "N connected ›" become text.
 
 ### Code
 
