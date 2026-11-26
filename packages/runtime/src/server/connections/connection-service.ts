@@ -315,7 +315,7 @@ async function keyedConfig({ kind, dsn, deployKey, url, header }: Omit<CreateCon
     return { config: { url, headers }, account: `${new URL(url).host} · ${tools} tools` }
   }
   if (!dsn) throw new HttpError(400, 'Paste a postgres:// connection string.', { param: 'dsn' })
-  return { config: { dsn }, account: postgres.account(dsn) }
+  return { config: { dsn }, account: await postgres.probe(dsn) }
 }
 
 async function toolsOf(connection: { id: string; kind: ConnectionKind }): Promise<ToolSpec[]> {
