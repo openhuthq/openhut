@@ -6,6 +6,12 @@ import type { Caller } from '../team/identity.ts'
 
 const OPERATIONS = new Set<string>(['read', 'create', 'update', 'delete'])
 const CATCH_ALL = /(^|_)(invoke|call|execute|run)_(a_|any_)?tool$/
+const ANY: Record<Exclude<ToolGroup, 'create'>, { description: string; annotations?: ToolSpec['annotations'] }> = {
+  read: { description: 'Any other lookup', annotations: { readOnlyHint: true } },
+  update: { description: 'Any other change', annotations: { readOnlyHint: false, destructiveHint: false } },
+  delete: { description: 'Any other delete or overwrite', annotations: { destructiveHint: true } },
+  other: { description: 'Any action the app doesn\'t label' },
+}
 
 export const permissions = {
   groupOf(spec: ToolSpec): ToolGroup {
@@ -25,9 +31,17 @@ export const permissions = {
     return group === 'read' ? 'allow' : 'ask'
   },
 
+  isCatchAll,
+
+  actions({ specs, discovered }: { specs: ToolSpec[]; discovered: ToolSpec[] }): ToolSpec[] {
+    if (!specs.some(isCatchAll)) return specs
+    const any = Object.entries(ANY).map(([group, each]) => ({ name: `*${group}`, schema: {}, ...each }))
+    return [...specs.filter((spec) => !isCatchAll(spec)), ...discovered, ...any]
+  },
+
   async decide({ agentId, connectionId, spec }: { agentId: string; connectionId: string; spec: ToolSpec }): Promise<Permission> {
-    const row = await db.selectFrom('tool_permission').select('state').where('agent_id', '=', agentId).where('connection_id', '=', connectionId).where('tool', '=', spec.name).executeTakeFirst()
-    return row?.state ?? permissions.defaultOf(spec)
+    const rows = await db.selectFrom('tool_permission').select(['tool', 'state']).where('agent_id', '=', agentId).where('connection_id', '=', connectionId).where('tool', 'in', [spec.name, `*${permissions.groupOf(spec)}`]).execute()
+    return (rows.find((row) => row.tool === spec.name) ?? rows[0])?.state ?? permissions.defaultOf(spec)
   },
 
   async list({ agentId, connectionId, tools }: { agentId: string; connectionId: string; tools: ToolSpec[] }): Promise<AgentTool[]> {

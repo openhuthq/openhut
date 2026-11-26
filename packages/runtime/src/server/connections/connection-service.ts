@@ -31,6 +31,7 @@ const TOOLS_FRESH_MS = 5 * 60_000
 const running = new Map<string, number>()
 const queues = new Map<string, Promise<unknown>>()
 const toolCache = new Map<string, { at: number; tools: ToolSpec[] }>()
+const actionCache = new Map<string, Map<string, ToolSpec>>()
 const redirectUrl = () => `${callbackBase()}/api/connection-authorizations/callback`
 export const callbackBase = (): string => publicAddress()
 const CONNECTORS: Record<ConnectionKind, Connector> = {
@@ -51,7 +52,9 @@ const CONNECTORS: Record<ConnectionKind, Connector> = {
 }
 
 listen((event) => {
-  if (event.target?.type === 'connection') toolCache.delete(event.target.id)
+  if (event.target?.type !== 'connection') return
+  toolCache.delete(event.target.id)
+  actionCache.delete(event.target.id)
 })
 
 export const connectionService = {
@@ -109,6 +112,7 @@ export const connectionService = {
     await db.deleteFrom('connection').execute()
     for (const { id } of PROVIDERS) await settings.forgetProvider(id)
     toolCache.clear()
+    actionCache.clear()
   },
 
   async rotatable(): Promise<{ id: string; kind: string; name: string }[]> {
@@ -139,9 +143,10 @@ export const connectionService = {
 
   async specs({ actor, connectionId }: { actor: Caller; connectionId: string }): Promise<ToolSpec[]> {
     const connection = await connectionService.get({ actor, id: connectionId })
-    return toolsOf({ id: connection.id, kind: connection.kind }).catch((err: unknown) => {
+    const specs = await toolsOf({ id: connection.id, kind: connection.kind }).catch((err: unknown) => {
       throw new HttpError(502, `${connection.name} didn't list its tools: ${messageOf(err)}`)
     })
+    return permissions.actions({ specs, discovered: [...actionCache.get(connection.id)?.values() ?? []] })
   },
 
   async call({ agent, name, args, connectionId, reason, origin }: { agent: { id: string; owner_id: string }; name: string; args: Record<string, unknown>; connectionId?: string; reason: string; origin?: unknown }): Promise<{ text: string; isError: boolean }> {
@@ -155,13 +160,15 @@ export const connectionService = {
       return { text: `More than one connection has ${name}; pass connectionId (${matches.map((m) => m.connection.id).join(', ')}).`, isError: true }
     }
     const [{ connection, spec }] = matches
-    const state = await permissions.decide({ agentId: agent.id, connectionId: connection.id, spec })
+    const action = await actionOf({ connection, spec, args })
+    const state = await permissions.decide({ agentId: agent.id, connectionId: connection.id, spec: action?.spec ?? spec })
     if (state === 'deny') {
       await record({ agentId: agent.id, connectionId: connection.id, tool: name, reason, outcome: 'denied' })
-      return { text: `Not allowed: your owner set ${name} on ${connection.name} to Never. Don't try it again; tell the person if it matters.`, isError: true }
+      return { text: `Not allowed: your owner set ${action?.label ?? name} on ${connection.name} to Never. Don't try it again; tell the person if it matters.`, isError: true }
     }
     if (state === 'ask') {
-      const asked = await changeRequestService.ask({ agentId: agent.id, action: 'call_tool', input: { connectionId: connection.id, tool: spec.name, name, arguments: args }, why: reason, origin })
+      const inner = action && { name: action.spec.name, label: action.label }
+      const asked = await changeRequestService.ask({ agentId: agent.id, action: 'call_tool', input: { connectionId: connection.id, tool: spec.name, name, arguments: args, action: inner }, why: reason, origin })
       await record({ agentId: agent.id, connectionId: connection.id, tool: name, reason, outcome: 'asked' })
       return { text: asked, isError: false }
     }
@@ -171,13 +178,76 @@ export const connectionService = {
   async callApproved({ actor, agentId, connectionId, tool, args, reason }: { actor: Caller; agentId: string; connectionId: string; tool: string; args: Record<string, unknown>; reason: string }): Promise<{ text: string; isError: boolean }> {
     const granted = (await connectionService.tools({ agent: { id: agentId, owner_id: '' } })).find((each) => each.connection.id === connectionId && each.spec.name === tool)
     if (!granted) return { text: `Not run: ${tool} isn't on a connection this agent can use any more.`, isError: true }
-    if (await permissions.decide({ agentId, connectionId, spec: granted.spec }) === 'deny') return { text: `Not run: ${granted.name} was set to Never before it was approved.`, isError: true }
+    const action = await actionOf({ connection: granted.connection, spec: granted.spec, args })
+    if (await permissions.decide({ agentId, connectionId, spec: action?.spec ?? granted.spec }) === 'deny') return { text: `Not run: ${granted.name} was set to Never before it was approved.`, isError: true }
     return run({ agentId, tool: granted, args, reason, approvedBy: actor.id })
   },
 
   execute({ connection, tool, args }: { connection: ReachableConnection; tool: string; args: Record<string, unknown> }): Promise<{ text: string; isError: boolean }> {
     return withConnector(connection, (ctx) => CONNECTORS[connection.kind].call({ ...ctx, tool, args }))
   },
+}
+
+async function actionOf({ connection, spec, args }: { connection: ReachableConnection; spec: ToolSpec; args: Record<string, unknown> }): Promise<{ spec: ToolSpec; label: string } | undefined> {
+  if (!permissions.isCatchAll(spec)) return undefined
+  const declared = Object.keys(spec.schema.properties ?? {})
+  const keys = (declared.length ? declared : Object.keys(args)).filter((each) => /name|tool/i.test(each) && typeof args[each] === 'string')
+  const name = keys.length === 1 ? String(args[keys[0]]) : ''
+  if (!name || name.startsWith('*')) return { spec: { name: '*other', description: humanized(spec.name), schema: {} }, label: humanized(spec.name) }
+  const known = actionCache.get(connection.id) ?? new Map<string, ToolSpec>()
+  actionCache.set(connection.id, known)
+  const found = known.get(name) ?? await lookUp({ connection, name }).catch((err: unknown) => {
+    log.warn({ event: 'connection.action_lookup_failed', connection: connection.id, error: messageOf(err) })
+    return undefined
+  })
+  if (found) known.set(name, found)
+  const action = found ?? { name, description: humanized(name), schema: {} }
+  return { spec: action, label: action.annotations?.title || (action.description.length <= 60 ? action.description : humanized(name)) }
+}
+
+// ponytail: the action list lives in memory, so a restart forgets which inner actions were seen (their saved settings stay).
+async function lookUp({ connection, name }: { connection: ReachableConnection; name: string }): Promise<ToolSpec> {
+  const lookups = (await toolsOf(connection)).filter((tool) => !permissions.isCatchAll(tool) && /schema|describe|find|search/i.test(tool.name))
+    .sort((a, b) => Number(/schema|describe/i.test(b.name)) - Number(/schema|describe/i.test(a.name)))
+  for (const tool of lookups) {
+    const arg = firstStringArg(tool.schema) ?? 'name'
+    const result = await connectionService.execute({ connection, tool: tool.name, args: { [arg]: name } })
+    const found = result.isError ? undefined : labeled({ value: parsed(result.text), name })
+    if (found) return found
+  }
+  return { name, description: humanized(name), schema: {} }
+}
+
+function labeled({ value, name }: { value: unknown; name: string }): ToolSpec | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const each = value as Record<string, unknown>
+  const named = typeof each.name !== 'string' || each.name === name || name.endsWith(`/${each.name}`)
+  const annotations = each.annotations
+  if (named && typeof annotations === 'object' && annotations !== null) {
+    const description = typeof each.description === 'string' ? each.description : humanized(name)
+    const meta = typeof each._meta === 'object' && each._meta !== null ? each._meta as Record<string, unknown> : undefined
+    return { name, description, schema: {}, annotations: annotations as ToolSpec['annotations'], meta }
+  }
+  for (const child of Object.values(each)) {
+    const found = labeled({ value: child, name })
+    if (found) return found
+  }
+  return undefined
+}
+
+function firstStringArg(schema: Record<string, unknown>): string | undefined {
+  const properties = (schema.properties ?? {}) as Record<string, { type?: unknown }>
+  const required = Array.isArray(schema.required) ? schema.required.map(String) : []
+  return [...required, ...Object.keys(properties)].find((key) => properties[key]?.type === 'string')
+}
+
+function parsed(text: string): unknown {
+  try { return JSON.parse(text) } catch { return undefined }
+}
+
+function humanized(name: string): string {
+  const words = (name.split('/').pop() ?? name).replace(/[-_]+/g, ' ').trim()
+  return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
 async function run({ agentId, tool: { name, connection, spec }, args, reason, approvedBy }: { agentId: string; tool: AgentTool; args: Record<string, unknown>; reason: string; approvedBy: string | null }): Promise<{ text: string; isError: boolean }> {

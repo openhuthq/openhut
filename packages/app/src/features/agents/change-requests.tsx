@@ -132,7 +132,7 @@ function LineDiff({ before, after }: { before: string; after: string }) {
   </span>
 }
 
-const ToolInput = z.object({ connectionId: z.string(), tool: z.string(), arguments: z.record(z.string(), z.unknown()), always: z.optional(z.boolean()) })
+const ToolInput = z.object({ connectionId: z.string(), tool: z.string(), arguments: z.record(z.string(), z.unknown()), action: z.optional(z.object({ name: z.string(), label: z.string() })), always: z.optional(z.boolean()) })
 const RISKY = /delete|remove|destroy|drop|purge|wipe/i
 
 function ToolCallCard({ agent, change, busy, error, send }: CardProps) {
@@ -141,17 +141,19 @@ function ToolCallCard({ agent, change, busy, error, send }: CardProps) {
   if (!input) return null
   const decided = { approved: { label: input.always ? `Saved: ${agent.name} can always do this` : 'Allowed once', tone: 'success' as const }, denied: { label: 'Not allowed', tone: 'secondary' as const }, pending: undefined, expired: EXPIRED }[change.status]
   const args = flat(input.arguments)
+  const tool = input.action?.name ?? input.tool
+  const wants = input.action ? <>run “{input.action.label}”</> : toolLabel(input.tool, 'now')
   return <RequestCard agent={agent} change={change} error={error} decided={decided} icon={connection ? <Glyph name={connectionBrand(connection)} size={22} /> : <Face agent={agent} size={28} />} action={{ icon: SecurityCheckIcon, hue: 'text-hue-amber' }}
-    title={<>{agent.name} wants to {toolLabel(input.tool, 'now')}{connection && <> in {connection.name}</>}.</>}
+    title={<>{agent.name} wants to {wants}{connection && <> in {connection.name}</>}.</>}
     actions={<>
       <Button type="button" variant="primary" size="sm" disabled={busy} onClick={() => send('approve', {})}>Allow once</Button>
       <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => send('approve', { always: true })}>Always allow</Button>
       <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => send('deny', {})}>Don't allow</Button>
     </>}>
-    {RISKY.test(input.tool) && <span className="inline-flex items-center gap-1.5 text-[13px] text-ink"><I icon={AlertCircleIcon} size={14} className="text-hue-red" />This can't be undone.</span>}
+    {RISKY.test(tool) && <span className="inline-flex items-center gap-1.5 text-[13px] text-ink"><I icon={AlertCircleIcon} size={14} className="text-hue-red" />This can't be undone.</span>}
     <DetailsToggle>
       {args.map(([key, value]) => <DetailRow key={key} label={plainKey(key)}>{value}</DetailRow>)}
-      <DetailRow label="Tool"><code className="font-mono text-[12px]">{input.tool}</code></DetailRow>
+      <DetailRow label="Tool"><code className="font-mono text-[12px]">{tool}</code></DetailRow>
     </DetailsToggle>
   </RequestCard>
 }

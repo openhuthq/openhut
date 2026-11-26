@@ -13,7 +13,7 @@ On the agent, click an app under **Can use**. **What it may do** groups the acti
 - **Look things up:** reads that change nothing.
 - **Add new things**, **Change things:** writes.
 - **Delete or overwrite:** can't be undone.
-- **Other actions:** the app doesn't say what they do, or one action runs any of the app's tools (like DigitalOcean's *Invoke a DigitalOcean tool*).
+- **Other actions:** the app doesn't say what they do.
 
 Set a whole group with its menu, or open **N actions** to set one. **Reset to defaults** clears your choices.
 
@@ -25,10 +25,15 @@ OpenHut reads the labels the app puts on each action:
 |---|---|
 | Read-only | Always allow |
 | A write, or no label | Ask first |
-| One action that runs any other action | Ask first |
 | Destructive, a delete, or high risk | Never |
 
 Nothing destructive or high risk starts as Always allow. When you approve an app an agent proposed, each kind of action gets the setting you approved; kinds the card didn't list keep these defaults. Postgres runs read-only, so its actions start as Always allow.
+
+## Apps with one tool that runs any other
+
+Some apps, like DigitalOcean, give the agent one tool that runs any of their actions, plus tools to look those actions up. That tool isn't on the list. Each call through it follows the setting of the action it actually runs: OpenHut asks the app what the action does, then applies **Look things up**, **Change things** or **Delete or overwrite**. An action the app doesn't label asks first.
+
+Actions the agent has run appear under their group, so you can set one on its own. Each group also has **Any other lookup**, **Any other change**, **Any other delete or overwrite** and **Any action the app doesn't label**, for the actions it hasn't run yet. The approval card names the action: *Database wants to run “Delete a database” in DigitalOcean*.
 
 ## When it asks
 
