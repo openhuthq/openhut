@@ -8,6 +8,7 @@ import { db, migrate } from '../../../src/server/platform/db.ts'
 import { seal } from '../../../src/server/platform/secrets.ts'
 import { fakeAgentd, refresh, signIn } from '../../server/agents/signed-in.ts'
 import { appWakes } from './app-wakes.ts'
+import { runsOnServer } from '../../../src/plugins/chat/wakes.ts'
 
 await migrate()
 await db.insertInto('person').values({ id: 'usr_appwownr', email: 'appw@example.com', role: 'owner', removed_at: null }).execute()
@@ -66,4 +67,20 @@ test('a decision asked from WhatsApp is left to the Hermes plugin; one asked in 
   const row = await db.selectFrom('ask').select('told').where('id', '=', fromApp).executeTakeFirstOrThrow()
   assert.equal(row.told, true)
   assert.ok((await wakes.due({ agentId: 'ag_appwagnt' })).every((wake) => wake.origin.platform !== 'api_server'))
+})
+
+test('every webhook call runs on the server in a web thread of its own, and a routine set in WhatsApp is left to the Hermes plugin', async () => {
+  const before = told.length
+  for (const id of ['wh_appwnone', 'wh_appwtwoo']) {
+    await db.insertInto('inbox_source').values({ id, agent_id: 'ag_appwagnt', kind: 'webhook', name: `Hook ${id}`, origin: JSON.stringify({ platform: 'api_server', chat_id: 'openhut-inbox' }) }).execute()
+    await inboxService.deliver({ agentId: 'ag_appwagnt', sourceId: id, kind: 'webhook', body: `{"from":"${id}"}` })
+  }
+  deliver('ag_appwagnt')
+  await settled()
+  const ran = told.slice(before)
+  const threads = await db.selectFrom('chat_thread').select(['id', 'title', 'origin', 'mirrors']).where('agent_id', '=', 'ag_appwagnt').orderBy('title').execute()
+  assert.deepEqual(threads.map((thread) => [thread.title, JSON.parse(thread.origin).platform, thread.mirrors]), [['Hook wh_appwnone', 'webhook', '[]'], ['Hook wh_appwtwoo', 'webhook', '[]']])
+  assert.deepEqual(new Set(ran.map((each) => each.threadId)), new Set(threads.map((thread) => thread.id)))
+  assert.equal(runsOnServer({ id: 'inbox:ru_x', text: '', origin: whatsapp }), false)
+  assert.equal(runsOnServer({ id: 'inbox:ru_x', text: '', origin: { platform: 'discord', chat_id: '1' } }), true)
 })

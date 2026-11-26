@@ -9,7 +9,7 @@ import type { Origin } from '../server/inbox/routines.ts'
 import type { Caller } from '../server/team/identity.ts'
 
 export type HermesCtx = {
-  agent: { id: string; name: string; instructions: string; slots: Slots; net: number; code_execution: boolean; web_browser: boolean }
+  agent: { id: string; name: string; instructions: string; slots: Slots; net: number; code_execution: boolean; web_browser: boolean; notify?: string | null }
   gateway: string
   token: string
   channelKey: string

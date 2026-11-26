@@ -4,12 +4,16 @@ import { db } from '../../server/platform/db.ts'
 import { log } from '../../server/platform/events.ts'
 import { messageOf } from '../../server/platform/http-error.ts'
 import { threadService } from '../../server/threads/thread-service.ts'
+import { inboxService } from '../../server/inbox/inbox-service.ts'
 
 const TICK_MS = 15_000
 const RETRY_MS = 30_000
 const RETRIES = 20
+const SERVER_SENDS = new Set([APP_PLATFORM, 'discord'])
 const running = new Set<string>()
 const again = new Set<string>()
+
+export const runsOnServer = (wake: Wake): boolean => wake.origin.platform === APP_PLATFORM || (wake.id.startsWith('inbox:') && SERVER_SENDS.has(wake.origin.platform))
 
 export function deliverAppWakes(): void {
   wakes.onNudge((agentId) => void deliver(agentId))
@@ -29,7 +33,7 @@ export async function deliver(agentId: string): Promise<void> {
   try {
     do {
       again.delete(agentId)
-      for (const wake of (await wakes.due({ agentId })).filter((each) => each.origin.platform === APP_PLATFORM)) await run({ agentId, wake })
+      for (const wake of (await wakes.due({ agentId })).filter(runsOnServer)) await run({ agentId, wake })
     } while (again.has(agentId))
   } catch (err) {
     log.warn({ event: 'wake.deliver_failed', agent: agentId, error: messageOf(err) })
@@ -39,11 +43,14 @@ export async function deliver(agentId: string): Promise<void> {
 }
 
 async function run({ agentId, wake }: { agentId: string; wake: Wake }): Promise<void> {
+  const threadId = wake.id.startsWith('inbox:') ? await inboxService.threadFor({ agentId, id: wake.id.slice('inbox:'.length) }) : await threadService.bySession({ agentId, session: wake.origin.chat_id })
   await wakes.report({ agentId, id: wake.id, body: { picked: true } })
   for (let attempt = 0; ; attempt++) {
     try {
-      const said = await threadService.runRoutine({ agentId, text: wake.text })
+      const said = await threadService.runRoutine({ agentId, threadId, text: wake.text })
       await wakes.report({ agentId, id: wake.id, body: { said } })
+      if (wake.id.startsWith('inbox:')) await inboxService.answered({ agentId, id: wake.id.slice('inbox:'.length), threadId, said })
+        .catch((err: unknown) => log.warn({ event: 'wake.post_failed', agent: agentId, wake: wake.id, error: messageOf(err) }))
       return
     } catch (err) {
       log.warn({ event: 'wake.run_failed', agent: agentId, wake: wake.id, attempt, error: messageOf(err) })

@@ -4,18 +4,22 @@ import type { Selectable } from 'kysely'
 import { createUIMessageStream, pipeUIMessageStreamToResponse, readUIMessageStream, type UIMessage, type UIMessageChunk } from 'ai'
 import { applySpecPatch, pipeJsonRender, SPEC_DATA_PART_TYPE, type JsonPatch } from '@json-render/core'
 import * as z from 'zod/mini'
-import { AGENT_HOME, ChatMessage, fileInHome, MAX_FILES, MessageValue, ToolProgress, UPLOADS, uploadName, type ChatCall, type ChatFile, type HomeFile, type SendChat, type Thread, type ThreadWithMessages, type UploadFile } from '@openhut/common/threads/thread.ts'
+import { AGENT_HOME, ChatMessage, fileInHome, MAX_FILES, MessageValue, ToolProgress, UPLOADS, uploadName, type ChatCall, type ChatFile, type HomeFile, type SendChat, type Thread, type ThreadOrigin, type ThreadWithMessages, type UploadFile } from '@openhut/common/threads/thread.ts'
+import type { Place } from '@openhut/common/channels/channel.ts'
 import type { Deleted } from '@openhut/common/api.ts'
 import { agentd } from '../platform/agentd.ts'
 import { db, findRow } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
-import { emit, log } from '../platform/events.ts'
+import { emit, listen, log } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { forward } from '../relay/forward.ts'
 import { deleted } from '../platform/responses.ts'
 import { unseal } from '../platform/secrets.ts'
 import { agentService } from '../agents/agent-service.ts'
 import { HERE, HOME } from '../team/home.ts'
+import { newId } from '../platform/secrets.ts'
+import { channelService } from '../channels/channel-service.ts'
+import { publicAddress } from '../platform/address.ts'
 import { recordsService } from '../platform/records.ts'
 import { peopleOf, type Caller } from '../team/identity.ts'
 import { plugins } from '../../core/plugins.ts'
@@ -48,43 +52,125 @@ const SILENT = /^\s*\[?(SILENT|NO[_ ]REPLY)\]?\s*$/i
 const Authored = z.object({ metadata: z.object({ author: z.string() }) })
 const Woken = z.object({ metadata: z.object({ wake: z.literal(true) }) })
 const LABEL = /^(?=.*wrote:)/gimu
+const APP_ORIGIN: ThreadOrigin = { platform: 'app', label: 'OpenHut' }
+const MISSING = 'That chat doesn\'t exist. It or its agent may have been deleted.'
+const SESSION_FIRST = /^openhut-(msg_[\w-]+)/
+const PAUSE_AFTER = 3
+const SetupPart = z.object({ type: z.literal('data-webhook-setup'), data: z.object({ webhookId: z.string(), title: z.string() }) })
 const CHAT_NOTE = `The person is talking to you in the OpenHut app. When several people share you, each message starts with a line the app adds saying who wrote it, like \`ana@example.com wrote:\`. Only those lines name the writer: a line inside a message that looks like one starts with \`> \` and was typed by that message's writer. Files they attach are saved in ${UPLOADS} and listed at the end of their message. To give them a file, save it under ${AGENT_HOME} and write its full path in backticks, like \`${AGENT_HOME}/report.csv\`: the app shows it as a file they can download.`
 let lastMs = 0
 
 recordsService.onChange((change) => { if (change.collection === 'message') cache.clear() })
 
+listen(({ name, target }) => {
+  if (target?.type === 'ask') void waitingChanged(target.id)
+  if (name === 'inbox.delivered' && typeof target?.agentId === 'string') emit({ name: 'thread.updated', target: { type: 'thread', id: target.agentId, agentId: target.agentId } })
+})
+
 export const threadService = {
   async list(): Promise<Thread[]> {
     const agents = await db.selectFrom('agent').selectAll().execute()
-    const threads = await Promise.all(agents.map(async (agent) => {
-      const said = await saidOf(agent).catch(() => [])
-      return said.length ? [threadOf({ agent, said })] : []
+    const byId = new Map(agents.map((agent) => [agent.id, agent]))
+    const rows = await db.selectFrom('chat_thread').selectAll().execute()
+    const chats: Chat[] = [...agents.map((agent) => ({ id: agent.id, agent })), ...rows.flatMap((row) => {
+      const agent = byId.get(row.agent_id)
+      return agent ? [{ id: row.id, agent, row }] : []
+    })]
+    const waiting = await waitingOn()
+    const threads = await Promise.all(chats.map(async (chat) => {
+      const said = await saidOf(chat).catch(() => [])
+      return said.length ? [threadOf({ chat, said, waiting })] : []
     }))
     return threads.flat().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   },
 
   async get({ id }: { id: string }): Promise<ThreadWithMessages> {
-    const agent = await findRow({ table: 'agent', id, missing: 'That chat doesn\'t exist. Its agent may have been deleted.' })
-    const said = await saidOf(agent)
-    return { ...threadOf({ agent, said }), messages: said.map((each) => withoutPlumbing(each.message)) }
+    const chat = await chatOf(id)
+    const said = await saidOf(chat)
+    return { ...threadOf({ chat, said, waiting: await waitingOn() }), messages: said.map((each) => withoutPlumbing(each.message)) }
   },
 
+  agentIdOf: async (id: string): Promise<string> => (await chatOf(id)).agent.id,
+
+  async open({ agentId, key, title, origin, mirrors }: { agentId: string; key?: string; title: string; origin: ThreadOrigin; mirrors: Place[] }): Promise<string> {
+    const found = () => db.selectFrom('chat_thread').select('id').where('agent_id', '=', agentId).where('key', '=', key ?? '').executeTakeFirst()
+    const held = key ? await found() : undefined
+    if (held) return held.id
+    const made = await db.insertInto('chat_thread').values({ id: newId('th'), agent_id: agentId, key: key ?? null, title: title.slice(0, 120), origin: JSON.stringify(origin), mirrors: JSON.stringify(mirrors) })
+      .onConflict((conflict) => conflict.columns(['agent_id', 'key']).doNothing()).returning('id').executeTakeFirst()
+    const id = made?.id ?? (await found())?.id
+    if (!id) throw new HttpError(500, 'The chat couldn\'t be saved. Try again.')
+    emit({ name: 'thread.created', target: { type: 'thread', id, agentId, platform: origin.platform } })
+    return id
+  },
+
+  async bySession({ agentId, session }: { agentId: string; session: string }): Promise<string> {
+    const first = SESSION_FIRST.exec(session)?.[1]
+    if (!first) return agentId
+    const agent = await db.selectFrom('agent').select('workspace').where('id', '=', agentId).executeTakeFirst()
+    const id = agent ? (await recordsService.get({ collection: 'message', workspace: agent.workspace ?? HOME, id: first }))?.parent : undefined
+    return id && (id === agentId || (await db.selectFrom('chat_thread').select('id').where('id', '=', id).where('agent_id', '=', agentId).executeTakeFirst())) ? id : agentId
+  },
+
+  async recordTurn({ agentId, origin, user, author, reply }: { agentId: string; origin: Place; user: string; author: string; reply: string }): Promise<{ object: 'thread'; id: string }> {
+    const id = await threadService.discordThread({ agentId, place: origin })
+    await db.updateTable('chat_thread').set({ mirror_paused: false, web_streak: 0 }).where('id', '=', id).execute()
+    const chat = await chatOf(id)
+    if (user.trim()) await write({ chat, message: { id: nextId(), role: 'user', parts: [{ type: 'text', text: user }], metadata: { author } } })
+    if (reply.trim() && !SILENT.test(reply)) await write({ chat, message: { id: nextId(), role: 'assistant', parts: [{ type: 'text', text: reply }] } })
+    return { object: 'thread', id }
+  },
+
+  async mirror({ actor, id, paused }: { actor: Caller; id: string; paused: boolean }): Promise<Thread> {
+    const chat = await chatOf(id)
+    await runner({ actor, id: chat.agent.id })
+    if (!chat.row) throw new HttpError(400, 'This chat isn\'t posted anywhere else.')
+    await db.updateTable('chat_thread').set({ mirror_paused: paused, web_streak: 0 }).where('id', '=', id).execute()
+    emit({ name: 'thread.updated', actor, target: { type: 'thread', id, agentId: chat.agent.id } })
+    const fresh = await chatOf(id)
+    return threadOf({ chat: fresh, said: await saidOf(fresh), waiting: await waitingOn() })
+  },
+
+  async threadOfOrigin({ agentId, origin }: { agentId: string; origin: { platform: string; chat_id: string; thread_id?: string | null; parent_chat_id?: string | null } }): Promise<string | undefined> {
+    if (origin.platform === 'api_server') return threadService.bySession({ agentId, session: origin.chat_id })
+    if (origin.platform !== 'discord') return undefined
+    const place = discordPlace(origin)
+    const row = await db.selectFrom('chat_thread').select('id').where('agent_id', '=', agentId).where('key', '=', `discord:${place.chat_id}:${place.thread_id ?? ''}`).executeTakeFirst()
+    return row?.id
+  },
+
+  async startChannelThread({ id, place, text, title }: { id: string; place: Place; text: string; title: string }): Promise<void> {
+    const chat = await chatOf(id)
+    if (!chat.row || !text.trim() || SILENT.test(text)) return
+    const sent = await channelService.send({ agentId: chat.agent.id, place, text, startThread: title.slice(0, 100) })
+    const home = { ...place, ...sent.threadId && { thread_id: sent.threadId } }
+    await db.updateTable('chat_thread').set({ key: `${place.platform}:${place.chat_id}:${home.thread_id ?? ''}`, mirrors: JSON.stringify([home]), continue_url: sent.url }).where('id', '=', id).execute()
+    emit({ name: 'thread.updated', target: { type: 'thread', id, agentId: chat.agent.id } })
+  },
+
+  discordThread: ({ agentId, place }: { agentId: string; place: Place }): Promise<string> => threadService.open({
+    agentId, key: `${place.platform}:${place.chat_id}:${place.thread_id ?? ''}`, title: place.chat_name || 'Discord', origin: { platform: 'discord', label: place.chat_name || 'Discord' }, mirrors: [place],
+  }),
+
   async delete({ actor, id, uploads }: { actor: Caller; id: string; uploads: string[] }): Promise<Deleted<'thread'>> {
-    const agent = await runner({ actor, id })
-    const said = await saidOf(agent)
+    const chat = await chatOf(id)
+    const agent = await runner({ actor, id: chat.agent.id })
+    const said = await saidOf(chat)
     for (const each of said) await recordsService.remove({ collection: 'message', workspace: workspaceOf(agent), id: each.id, queue: true })
+    if (chat.row) await db.deleteFrom('chat_thread').where('id', '=', id).execute()
     cache.delete(id)
-    emit({ name: 'thread.deleted', actor, target: { type: 'thread', id, agentId: id } })
+    emit({ name: 'thread.deleted', actor, target: { type: 'thread', id, agentId: agent.id } })
     const sent = said.flatMap((each) => filesOf(each.message)).map((file) => file.url)
     const names = [...new Set([...sent, ...uploads].flatMap((path) => uploadName(path) ?? []))]
     for (let start = 0; start < names.length; start += MAX_REMOVED) {
-      await agentd.delete({ id, paths: names.slice(start, start + MAX_REMOVED).map(uploadPath) })
-        .catch((err: unknown) => log.warn({ event: 'thread.uploads_kept', agent: id, error: messageOf(err) }))
+      await agentd.delete({ id: agent.id, paths: names.slice(start, start + MAX_REMOVED).map(uploadPath) })
+        .catch((err: unknown) => log.warn({ event: 'thread.uploads_kept', agent: agent.id, error: messageOf(err) }))
     }
     return deleted({ id, object: 'thread' })
   },
 
   async removeFile({ actor, id, path }: { actor: Caller; id: string; path: string }): Promise<Deleted<'file'>> {
+    id = await threadService.agentIdOf(id)
     await agentService.requireUse({ actor, id })
     const name = uploadName(path)
     if (!name) throw new HttpError(400, 'Only files you sent in a chat can be deleted here.', { param: 'path' })
@@ -94,6 +180,7 @@ export const threadService = {
   },
 
   async lookUpFiles({ actor, id, paths }: { actor: Caller; id: string; paths: string[] }): Promise<HomeFile[]> {
+    id = await threadService.agentIdOf(id)
     await agentService.requireUse({ actor, id })
     const wanted = [...new Set(paths)].flatMap((path) => {
       const inside = fileInHome(path)
@@ -109,6 +196,7 @@ export const threadService = {
   },
 
   async upload({ actor, id, file, body }: { actor: Caller; id: string; file: UploadFile; body: unknown }): Promise<ChatFile> {
+    id = await threadService.agentIdOf(id)
     await agentService.requireUse({ actor, id })
     if (!Buffer.isBuffer(body) || !body.length) throw new HttpError(400, 'Send the file\'s bytes as the request body, with Content-Type: application/octet-stream. Empty files can\'t be attached.')
     const saved = await agentd.write({ id, path: uploadPath(safeFileName(file.name)), body })
@@ -117,6 +205,7 @@ export const threadService = {
   },
 
   async download({ actor, id, path, reply }: { actor: Caller; id: string; path: string; reply: FastifyReply }): Promise<FastifyReply> {
+    id = await threadService.agentIdOf(id)
     await agentService.requireUse({ actor, id })
     const inside = fileInHome(path)
     if (!inside) throw new HttpError(400, 'Only files in the agent\'s own folder can be saved.', { param: 'path' })
@@ -127,12 +216,15 @@ export const threadService = {
   },
 
   async chat({ actor, id, body, reply }: { actor: Caller; id: string; body: SendChat; reply: FastifyReply }): Promise<void> {
-    await idle(id)
-    const agent = await runner({ actor, id })
-    const said = await nextSaid({ agent, stored: await saidOf(agent), body, author: actor.email })
+    const chat = await chatOf(id)
+    if (chat.row?.continue_url) throw new HttpError(409, `Continue this in ${(JSON.parse(chat.row.mirrors) as Place[])[0]?.chat_name || 'its channel'}.`)
+    await idle(chat.agent.id)
+    const agent = await runner({ actor, id: chat.agent.id })
+    const said = await nextSaid({ chat, stored: await saidOf(chat), body, author: actor.email })
+    if (body.trigger === 'submit-message' && said.at(-1)?.message.role === 'user') await mirrorAsked({ chat, author: actor.email, text: textOf(said[said.length - 1].message) })
     if (agent.wanted !== 'running') throw new HttpError(409, `${agent.name} is stopped. Start it and try again.`)
-    busy.add(id)
-    reply.raw.on('close', () => busy.delete(id))
+    busy.add(agent.id)
+    reply.raw.on('close', () => busy.delete(agent.id))
     const abort = new AbortController()
     reply.raw.on('close', () => abort.abort())
     const started = Date.now()
@@ -169,8 +261,11 @@ export const threadService = {
       onError: messageOf,
       onEnd: async ({ messages: answered, isAborted }) => {
         const answer = z.safeParse(ChatMessage, answered.map(foldCard).find((each) => each.role === 'assistant')).data
-        if (answer?.parts.some((part) => part.type !== 'step-start')) await write({ agent, message: { ...answer, id: answerId }, session })
-        busy.delete(id)
+        if (answer?.parts.some((part) => part.type !== 'step-start')) {
+          await write({ chat, message: { ...answer, id: answerId }, session })
+          if (!isAborted) await afterAnswer({ chat, message: answer })
+        }
+        busy.delete(agent.id)
         log.info({ event: 'agent.chat', agent: agent.id, ms: Date.now() - started, aborted: isAborted })
       },
     })
@@ -178,17 +273,25 @@ export const threadService = {
     await pipeUIMessageStreamToResponse({ response: reply.raw, stream })
   },
 
-  async runRoutine({ agentId, text }: { agentId: string; threadId?: string; text: string }): Promise<string> {
+  async runRoutine({ agentId, threadId = agentId, text }: { agentId: string; threadId?: string; text: string }): Promise<string> {
     await idle(agentId)
     busy.add(agentId)
     try {
-      const agent = await findRow({ table: 'agent', id: agentId, missing: 'That agent doesn\'t exist.' })
+      const chat = await chatOf(threadId)
+      if (chat.agent.id !== agentId) throw new HttpError(404, MISSING)
+      const agent = chat.agent
+      const last = (await saidOf(chat)).at(-1)?.message
+      const retried = last?.role === 'user' && textOf(last) === text ? last : undefined
+      const asked: ChatMessage | undefined = chat.row ? retried ?? { id: nextId(), role: 'user', parts: [{ type: 'text', text }], metadata: { author: chat.row.title } } : undefined
+      if (asked && !retried) await write({ chat, message: asked })
+      const said = await saidOf(chat)
       const id = nextId()
-      const session = sessionOf(await saidOf(agent), id)
+      const session = sessionOf(said, asked ? undefined : id)
+      const message = asked ? await seeded({ said, session, message: asked }) : { id, role: 'user' as const, parts: [{ type: 'text', text }] }
       const started = Date.now()
       const work = turnWork({ agent, started })
       const chunks = async function* (): AsyncGenerator<UIMessageChunk> {
-        yield* answerStream({ agent, session, message: { id, role: 'user', parts: [{ type: 'text', text }] }, signal: AbortSignal.timeout(TURN_MS), work })
+        yield* answerStream({ agent, session, message, signal: AbortSignal.timeout(TURN_MS), work })
         const done = work.done({})
         if (done) yield { type: 'data-work', id: 'work', data: done }
         yield* await afterTurn({ agentId, since: started })
@@ -196,10 +299,13 @@ export const threadService = {
       let built: UIMessage = { id, role: 'assistant', parts: [] }
       for await (const each of readUIMessageStream({ message: built, stream: ReadableStream.from(chunks()), terminateOnError: true })) built = each
       const answer = foldCard(built)
-      const said = answer.parts.map((part) => part.type === 'text' ? part.text : '').join('')
-      const message = z.safeParse(ChatMessage, { ...answer, id, metadata: { wake: true } }).data
-      if (message && !SILENT.test(said)) await write({ agent, message, session })
-      return said
+      const reply = textOf(answer)
+      const stored = z.safeParse(ChatMessage, { ...answer, id, ...!chat.row && { metadata: { wake: true } } }).data
+      if (stored && !SILENT.test(reply)) {
+        await write({ chat, message: stored, session })
+        await afterAnswer({ chat, message: stored })
+      }
+      return reply
     } finally {
       busy.delete(agentId)
     }
@@ -211,22 +317,83 @@ async function runner({ actor, id }: { actor: Caller; id: string }): Promise<Age
   return agent
 }
 
-function saidOf(agent: AgentRow): Promise<Said[]> {
-  const held = cache.get(agent.id)
+function saidOf({ id, agent }: Chat): Promise<Said[]> {
+  const held = cache.get(id)
   if (held) return held
-  const found = recordsService.list({ collection: 'message', workspace: workspaceOf(agent), parent: agent.id }).then((rows) => rows.flatMap((row) => {
+  const found = recordsService.list({ collection: 'message', workspace: workspaceOf(agent), parent: id }).then((rows) => rows.flatMap((row) => {
     const value = z.safeParse(MessageValue, row.value).data
     return value ? [{ id: row.id, by: row.by, message: { ...value.message, id: row.id }, session: value.session }] : []
   }).sort((a, b) => a.id < b.id ? -1 : 1))
-  cache.set(agent.id, found)
-  found.catch(() => { if (cache.get(agent.id) === found) cache.delete(agent.id) })
+  cache.set(id, found)
+  found.catch(() => { if (cache.get(id) === found) cache.delete(id) })
   return found
 }
 
-async function write({ agent, message, session }: { agent: AgentRow; message: ChatMessage; session?: string }): Promise<void> {
-  await recordsService.put({ collection: 'message', id: message.id, parent: agent.id, workspace: workspaceOf(agent), value: { message, ...session && { session } } satisfies MessageValue, queue: true })
-  cache.delete(agent.id)
-  emit({ name: 'thread.updated', target: { type: 'thread', id: agent.id } })
+async function write({ chat, message, session }: { chat: Chat; message: ChatMessage; session?: string }): Promise<void> {
+  await recordsService.put({ collection: 'message', id: message.id, parent: chat.id, workspace: workspaceOf(chat.agent), value: { message, ...session && { session } } satisfies MessageValue, queue: true })
+  cache.delete(chat.id)
+  emit({ name: 'thread.updated', target: { type: 'thread', id: chat.id, agentId: chat.agent.id } })
+}
+
+async function chatOf(id: string): Promise<Chat> {
+  const row = id.startsWith('th_') ? await db.selectFrom('chat_thread').selectAll().where('id', '=', id).executeTakeFirst() : undefined
+  if (id.startsWith('th_') && !row) throw new HttpError(404, MISSING)
+  const agent = await findRow({ table: 'agent', id: row?.agent_id ?? id, missing: MISSING })
+  return { id, agent, row }
+}
+
+async function afterAnswer({ chat, message }: { chat: Chat; message: ChatMessage | UIMessage }): Promise<void> {
+  const row = chat.row && await db.selectFrom('chat_thread').selectAll().where('id', '=', chat.id).executeTakeFirst()
+  if (row) await mirror({ chat: { ...chat, row }, text: textOf(message) })
+}
+
+async function mirrorAsked({ chat, author, text }: { chat: Chat; author: string; text: string }): Promise<void> {
+  if (!chat.row || chat.row.mirror_paused || chat.row.mirrors === '[]') return
+  const row = await db.updateTable('chat_thread').set((eb) => ({ web_streak: eb('web_streak', '+', 1) })).where('id', '=', chat.id).returningAll().executeTakeFirstOrThrow()
+  if (row.web_streak < PAUSE_AFTER) return mirror({ chat: { ...chat, row }, text: `${author} wrote in OpenHut:\n${text}` })
+  await mirror({ chat: { ...chat, row }, text: `Continuing in OpenHut ↗ ${publicAddress()}/agents/${encodeURIComponent(chat.agent.id)}/threads/${encodeURIComponent(chat.id)}` })
+  await db.updateTable('chat_thread').set({ mirror_paused: true }).where('id', '=', chat.id).execute()
+  emit({ name: 'thread.updated', target: { type: 'thread', id: chat.id, agentId: chat.agent.id } })
+}
+
+async function waitingChanged(askId: string): Promise<void> {
+  const ask = await db.selectFrom('ask').select(['agent_id', 'origin']).where('id', '=', askId).executeTakeFirst().catch(() => undefined)
+  const id = ask && await threadService.threadOfOrigin({ agentId: ask.agent_id, origin: JSON.parse(ask.origin) as { platform: string; chat_id: string } }).catch(() => undefined)
+  if (ask && id) emit({ name: 'thread.updated', target: { type: 'thread', id, agentId: ask.agent_id } })
+}
+
+async function waitingOn(): Promise<{ threads: Set<string>; calledAt: Map<string, number> }> {
+  const [asked, hooks] = await Promise.all([
+    db.selectFrom('ask').select(['agent_id', 'origin']).where('status', '=', 'open').execute(),
+    db.selectFrom('inbox_source').select(['id', 'last_at']).where('kind', '=', 'webhook').execute(),
+  ])
+  const threads = new Set<string>()
+  for (const ask of asked) {
+    const id = await threadService.threadOfOrigin({ agentId: ask.agent_id, origin: JSON.parse(ask.origin) as { platform: string; chat_id: string } }).catch(() => undefined)
+    if (id) threads.add(id)
+  }
+  return { threads, calledAt: new Map(hooks.map((hook) => [hook.id, hook.last_at ? new Date(hook.last_at).getTime() : 0])) }
+}
+
+function isWaiting({ id, said, waiting }: { id: string; said: Said[]; waiting: Awaited<ReturnType<typeof waitingOn>> }): boolean {
+  if (waiting.threads.has(id)) return true
+  return said.some((each, index) => each.message.parts.some((part) => {
+    const card = z.safeParse(SetupPart, part).data
+    if (!card || (waiting.calledAt.get(card.data.webhookId) ?? Infinity) > timeOf(each.id)) return false
+    return !said.slice(index + 1).some((later) => later.message.role === 'user' && textOf(later.message).trim() === `Done: ${card.data.title}`)
+  }))
+}
+
+async function mirror({ chat, text }: { chat: Chat; text: string }): Promise<void> {
+  if (!chat.row || chat.row.mirror_paused || !text.trim()) return
+  for (const place of JSON.parse(chat.row.mirrors) as Place[]) {
+    await channelService.send({ agentId: chat.agent.id, place, text })
+      .catch((err: unknown) => log.warn({ event: 'thread.mirror_failed', agent: chat.agent.id, thread: chat.id, platform: place.platform, error: messageOf(err) }))
+  }
+}
+
+function textOf(message: UIMessage | ChatMessage): string {
+  return message.parts.map((part) => part.type === 'text' && 'text' in part && typeof part.text === 'string' ? part.text : '').join('')
 }
 
 function workspaceOf(agent: AgentRow): string {
@@ -261,18 +428,18 @@ async function seeded({ said, session, message }: { said: Said[]; session: strin
   return { ...message, parts: [{ type: 'text', text: `Earlier in this chat, before this computer ran you:\n\n${lines.join('\n\n')}\n\nNow:\n\n` }, ...message.parts] }
 }
 
-async function nextSaid({ agent, stored, body, author }: { agent: AgentRow; stored: Said[]; body: SendChat; author: string }): Promise<Said[]> {
+async function nextSaid({ chat, stored, body, author }: { chat: Chat; stored: Said[]; body: SendChat; author: string }): Promise<Said[]> {
   if (body.message) checkFiles(body.message)
   const trailing = body.trigger === 'regenerate-message' && stored.at(-1)?.message.role === 'assistant' ? stored.at(-1) : undefined
   const kept = trailing ? stored.slice(0, -1) : stored
   const asked = body.message && body.trigger === 'submit-message' ? authored({ message: { ...body.message, id: nextId(), role: 'user' }, author }) : undefined
   if (!asked && kept.at(-1)?.message.role !== 'user') throw new HttpError(400, 'Send a message first.', { param: 'message' })
   if (trailing) {
-    await recordsService.remove({ collection: 'message', workspace: workspaceOf(agent), id: trailing.id, queue: true })
-    cache.delete(agent.id)
+    await recordsService.remove({ collection: 'message', workspace: workspaceOf(chat.agent), id: trailing.id, queue: true })
+    cache.delete(chat.id)
   }
   if (!asked) return kept
-  await write({ agent, message: asked })
+  await write({ chat, message: asked })
   return [...kept, { id: asked.id, by: HERE, message: asked }]
 }
 
@@ -404,6 +571,16 @@ async function relay({ agent, session, message, writer, signal, work }: { agent:
   return `Stopped: ${agent.name} ended its turn without an answer. Ask again.`
 }
 
+export function discordPlace(origin: { chat_id: string; chat_name?: string | null; thread_id?: string | null; parent_chat_id?: string | null }): Place {
+  const inThread = !!origin.thread_id && origin.thread_id === origin.chat_id && !!origin.parent_chat_id
+  return {
+    platform: 'discord',
+    chat_id: inThread && origin.parent_chat_id ? origin.parent_chat_id : origin.chat_id,
+    ...origin.thread_id && { thread_id: origin.thread_id },
+    chat_name: origin.chat_name ?? '',
+  }
+}
+
 class LostTurn extends Error {}
 
 const dropped = (name: string): string => `Stopped: the connection to ${name} dropped before it answered. Ask again.`
@@ -511,9 +688,12 @@ function withoutPlumbing(message: ChatMessage): ChatMessage {
   return { ...message, parts }
 }
 
-function threadOf({ agent, said }: { agent: AgentRow; said: Said[] }): Thread {
-  const at = (id: string | undefined) => new Date(id ? timeOf(id) : agent.created_at).toISOString()
-  return { id: agent.id, object: 'thread', agentId: agent.id, title: agent.name, createdAt: at(said[0]?.id), updatedAt: at(said.findLast((each) => !isWake(each.message))?.id) }
+function threadOf({ chat: { id, agent, row }, said, waiting }: { chat: Chat; said: Said[]; waiting: Awaited<ReturnType<typeof waitingOn>> }): Thread {
+  const at = (each: string | undefined) => new Date(each ? timeOf(each) : row?.created_at ?? agent.created_at).toISOString()
+  return {
+    id, object: 'thread', agentId: agent.id, title: row?.title ?? agent.name, origin: row ? JSON.parse(row.origin) as ThreadOrigin : APP_ORIGIN, mirrors: row ? JSON.parse(row.mirrors) as Place[] : [], mirrorPaused: row?.mirror_paused ?? false, readOnly: !!row?.continue_url, continueUrl: row?.continue_url ?? null, waiting: isWaiting({ id, said, waiting }),
+    createdAt: at(said[0]?.id), updatedAt: at(said.findLast((each) => !isWake(each.message))?.id),
+  }
 }
 
 const isWake = (message: ChatMessage): boolean => z.safeParse(Woken, message).success
@@ -523,6 +703,7 @@ type FilePart = z.infer<typeof FilePart>
 type ImagePart = { type: 'image_url'; image_url: { url: string } }
 type OpenAiMessage = { role: 'user' | 'assistant'; content: string | ({ type: 'text'; text: string } | ImagePart)[] }
 type AgentRow = Selectable<Database['agent']>
+type Chat = { id: string; agent: AgentRow; row?: Selectable<Database['chat_thread']> }
 type TurnWork = ReturnType<typeof turnWork>
 
 function uploadPath(name: string): string {
