@@ -23,13 +23,13 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   JSON), `.env`, `SOUL.md` and `auth.json`, and `mcp.ts` serves every plugin's tools on the gateway's MCP server. A tool
   with `local: true` runs inside Hermes instead, `hooks` maps Hermes hook names to handlers, and `slackAction` takes Slack
   buttons by prefix: the one Hermes plugin, `vendor/hermes-plugins/openhut`, registers what `core/hooks.ts`'s manifest
-  lists and calls the gateway's `/tools/<name>`, `/hooks/<hook>` and `/slack-actions` for each. `wakes` are turns the
+  lists and calls the gateway's `/tools/<name>`, `/hooks/<hook>` and `/slack-actions` for each (hooks whose answer Hermes ignores, everything but `pre_*` and `transform_*`, are sent from a background thread, so a slow gateway never holds the agent). `wakes` are turns the
   runtime wants the agent to take (routine runs and webhook calls from inbox, answered asks):
   `core/wakes.ts` lists every plugin's due wakes as `[OpenHut <plugin>:<id>] <text>`; the Hermes plugin polls `/wakes`
   for chat ones, the chat plugin runs the app's itself (`nudge(agentId)` runs them at once), and `start()` runs at boot.
   A plugin also owns its tables (`migrate`, run by `platform/db.ts` after the core tables, in list order), its API
   (`routes: () => ({ '/api/<prefix>': controller })`, registered by `app.ts`; two plugins with one prefix fail at boot)
-  and a part under the app chat's reply (`afterTurn`, like asks' `data-asks`).
+  and a part under the app chat's reply (`afterTurn`, like asks' `data-asks`). The subagents plugin keeps each agent's running sub-agents in memory from the `subagent_start`/`subagent_stop` hooks and serves them at `/api/agents/:id/subagents` for the sidebar.
   Anything an agent needs its owner's OK for is an ask: a plugin declares its kinds as `asks: { <kind>: defineAsk({ input, title, run,
   tool?, answer?, declined? }) }`, and `core/asks.ts` owns the rest (the `ask` table, `/api/asks`, an MCP tool per kind with `tool`,
   the notes the agent gets, the sweep that expires them). Its whole API is `asks.create` (returns the text for the agent) and
