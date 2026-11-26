@@ -11,5 +11,5 @@ test('two plugins with the same tool name fail at boot', () => {
 test('every openhut tool comes from exactly one plugin', () => {
   const names = plugins().flatMap((plugin) => Object.keys(plugin.tools ?? {}))
   assert.equal(new Set(names).size, names.length)
-  assert.equal(names.length, 16)
+  assert.equal(names.length, 17)
 })

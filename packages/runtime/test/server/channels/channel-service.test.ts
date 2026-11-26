@@ -47,15 +47,22 @@ test('an open Telegram channel posts only to its owner, and an agent with no cha
   await assert.rejects(channelService.postTarget({ agentId: 'ag_postother', channel: 'ch_postdisco' }), /no channels to post in/)
 })
 
-test('the gateway answers the plugin\'s post_message only with the calling agent\'s own targets', async () => {
+test('the post plugin\'s local post_message answers only with the calling agent\'s own targets, for Hermes to send', async () => {
   const server = gatewayServer.create().listen(0, '127.0.0.1')
   await new Promise((resolve) => server.once('listening', resolve))
-  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/messages/target`
-  const post = (body: unknown, token = agentToken({ id: 'ag_postpulse', epoch: 0 })) => fetch(url, { method: 'POST', headers: { authorization: `Agent ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(body) })
-  assert.deepEqual(await (await post({ channel: 'ch_postslack' })).json(), { object: 'message_target', target: 'slack:C0PULSE001', place: '#pulse' })
-  assert.equal((await post({ channel: 'ch_postslack' }, agentToken({ id: 'ag_postother', epoch: 0 }))).status, 400)
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/tools/post_message`
+  const post = (args: unknown, token = agentToken({ id: 'ag_postpulse', epoch: 0 })) => fetch(url, { method: 'POST', headers: { authorization: `Agent ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ args, origin: { platform: 'api_server', chat_id: 'openhut-x' } }) })
+  assert.deepEqual(await (await post({ channel: 'ch_postslack', message: ' DB is healthy. ' })).json(), { send: { target: 'slack:C0PULSE001', message: 'DB is healthy.' } })
+  assert.deepEqual(await (await post({ channel: 'ch_posttgram', chat: '987654321', message: 'hi' })).json(), { send: { target: 'telegram:987654321', message: 'hi' } })
+  const other = await post({ channel: 'ch_postslack', message: 'hi' }, agentToken({ id: 'ag_postother', epoch: 0 }))
+  assert.equal(other.status, 400)
+  assert.match(((await other.json()) as { error: { message: string } }).error.message, /no channels to post in/)
+  const empty = await post({ channel: 'ch_postslack', message: '  ' })
+  assert.equal(empty.status, 400)
+  assert.match(((await empty.json()) as { error: { message: string } }).error.message, /Send the message to post/)
   assert.equal((await post({ nope: true })).status, 400)
-  assert.equal((await post({ channel: 'ch_postslack' }, 'nope')).status, 401)
+  assert.equal((await post({ channel: 'ch_postslack', message: 'hi' }, 'nope')).status, 401)
+  assert.equal((await fetch(url.replace('post_message', 'get_self'), { method: 'POST', headers: { authorization: `Agent ${agentToken({ id: 'ag_postpulse', epoch: 0 })}` }, body: '{}' })).status, 404, 'an MCP tool is not a local tool')
   server.close()
   slackApi.close()
 })
