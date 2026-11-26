@@ -4,7 +4,7 @@ import { Kysely, PGliteDialect, sql, type Selectable } from 'kysely'
 import { config } from './config.ts'
 import type { Database } from './db-schema.ts'
 import { ChannelKind } from '@openhut/common/channels/channel.ts'
-import { ConnectionKind } from '@openhut/common/connections/connection.ts'
+import { CallOutcome, ConnectionKind } from '@openhut/common/connections/connection.ts'
 import { HttpError } from './http-error.ts'
 
 const ID = /^[a-z]+_[a-z0-9]{8}$/
@@ -83,4 +83,22 @@ export async function migrate(): Promise<void> {
   await sql`create table if not exists telegram_code (
     hash text primary key, channel_id text not null, agent_id text not null, kind text not null check (kind in ('claim', 'invite')),
     sealed text, expires_at timestamptz not null)`.execute(db)
+  await upgrade()
+}
+
+async function upgrade(): Promise<void> {
+  await sql`alter table connection_event add column if not exists approved_by text`.execute(db)
+  await sql`alter table change_request add column if not exists expires_at timestamptz, add column if not exists result text`.execute(db)
+  await allowOnly({ table: 'connection_event', column: 'outcome', values: CallOutcome.options })
+  await allowOnly({ table: 'change_request', column: 'status', values: ['pending', 'approved', 'denied', 'expired'] })
+  await allowOnly({ table: 'channel', column: 'kind', values: ChannelKind.options })
+  await allowOnly({ table: 'connection', column: 'kind', values: ConnectionKind.options })
+}
+
+async function allowOnly({ table, column, values }: { table: string; column: string; values: readonly string[] }): Promise<void> {
+  const name = `${table}_${column}_check`
+  const { rows } = await sql<{ def: string }>`select pg_get_constraintdef(oid) as def from pg_constraint where conname = ${name}`.execute(db)
+  const current = new Set([...(rows[0]?.def ?? '').matchAll(/'([^']*)'/g)].map((match) => match[1]))
+  if (current.size === values.length && values.every((value) => current.has(value))) return
+  await sql`alter table ${sql.table(table)} drop constraint if exists ${sql.id(name)}, add constraint ${sql.id(name)} check (${sql.ref(column)} in (${sql.join(values.map((value) => sql.lit(value)))}))`.execute(db)
 }
