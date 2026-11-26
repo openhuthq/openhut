@@ -1,4 +1,8 @@
 import { randomBytes } from 'node:crypto'
+import type { Selectable } from 'kysely'
+import { db } from '../platform/db.ts'
+import type { Database } from '../platform/db-schema.ts'
+import { seal, unseal } from '../platform/secrets.ts'
 import { CONNECTION_TITLES as TITLES, GOOGLE_KINDS, SIGN_IN_KINDS, type ConnectionAuthorization, type CreateConnectionAuthorization } from '@openhut/common/connections/connection.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { github } from '../integrations/github/github.ts'
@@ -9,8 +13,6 @@ import { callbackBase, connectionService } from './connection-service.ts'
 import type { Secret } from './connection-records.ts'
 
 const SIGN_IN_MS = 15 * 60_000
-const pending = new Map<string, Pending>()
-const finished = new Map<string, Finished>()
 
 export const connectionAuthorizationService = {
   async create({ actor, kind: chosen, name, url: given, connectionId }: { actor: Caller } & CreateConnectionAuthorization): Promise<ConnectionAuthorization> {
@@ -24,40 +26,43 @@ export const connectionAuthorizationService = {
     if (kind === 'github') {
       const app = github.app()
       if (!app) throw new HttpError(409, github.NOT_SET_UP)
-      remember(state, { ...base, name: existing?.name ?? app.name })
+      await remember(state, { ...base, name: existing?.name ?? app.name })
       return started({ state, kind, authorizationUrl: github.installUrl({ app, state }) })
     }
     if (isGoogle(kind)) {
       const { authorizationUrl, verifier } = await google.beginSignIn({ kind, redirectUri: connectionService.redirectUrl(), state })
-      remember(state, { ...base, verifier })
+      await remember(state, { ...base, verifier })
       return started({ state, kind, authorizationUrl })
     }
     const { authorizationUrl, flow } = await mcp.beginSignIn({ url: url ?? '', redirectUrl: connectionService.redirectUrl(), state })
-    remember(state, { ...base, url, flow })
+    await remember(state, { ...base, url, flow })
     return started({ state, kind, authorizationUrl })
   },
 
-  get({ actor, id }: { actor: Caller; id: string }): ConnectionAuthorization {
-    const sign = pending.get(id)
-    const done = finished.get(id)
-    const owner = sign?.actor ?? done?.actor
-    if (!owner || owner.id !== actor.id) throw new HttpError(404, 'That sign-in isn’t waiting anymore. Start it again.')
-    const kind = sign?.kind ?? done?.kind ?? 'mcp'
-    const now = started({ state: id, kind, authorizationUrl: '' })
-    return done ? { ...now, status: done.error ? 'failed' : 'done', connectionId: done.connectionId, error: done.error } : now
+  async get({ actor, id }: { actor: Caller; id: string }): Promise<ConnectionAuthorization> {
+    const row = await db.selectFrom('sign_in').selectAll().where('state', '=', id).where('actor_id', '=', actor.id).executeTakeFirst()
+    if (!row) throw new HttpError(404, 'That sign-in isn’t waiting anymore. Start it again.')
+    const now = started({ state: id, kind: signInKind(row.kind), authorizationUrl: '' })
+    if (row.status === 'done') return { ...now, status: 'done', connectionId: row.connection_id ?? undefined }
+    if (row.status === 'failed') return { ...now, status: 'failed', connectionId: row.connection_id ?? undefined, error: row.error ?? undefined }
+    if (row.expires_at < new Date()) return { ...now, status: 'failed', error: 'This sign-in expired. Start it again.' }
+    return now
   },
 
   async finish(query: { state?: string; code?: string; error?: string; installation_id?: string; setup_action?: string }): Promise<{ kind?: SignInKind; connectionId?: string; error?: string }> {
-    const sign = query.state ? pending.get(query.state) : undefined
-    const result = await finishing({ ...query, sign })
-    if (query.state && sign) finished.set(query.state, { actor: sign.actor, kind: sign.kind, connectionId: result.connectionId, error: result.error, expires: Date.now() + SIGN_IN_MS })
+    const row = query.state ? await db.updateTable('sign_in').set({ status: 'working' }).where('state', '=', query.state).where('status', '=', 'pending').where('expires_at', '>', new Date()).returningAll().executeTakeFirst() : undefined
+    const result = await finishing({ ...query, sign: row && pendingOf(row) })
+    if (row) await db.updateTable('sign_in').set({ status: result.error ? 'failed' : 'done', connection_id: result.connectionId ?? null, error: result.error ?? null, data: '' }).where('state', '=', row.state).execute()
     return result
+  },
+
+  async sweep(): Promise<void> {
+    await db.deleteFrom('sign_in').where('expires_at', '<', new Date(Date.now() - SIGN_IN_MS)).execute()
   },
 }
 
 async function finishing({ state, code, error, installation_id: installationId, setup_action: action, sign }: { state?: string; code?: string; error?: string; installation_id?: string; setup_action?: string; sign?: Pending }): Promise<{ kind?: SignInKind; connectionId?: string; error?: string }> {
-  if (state) pending.delete(state)
-  if (!sign || sign.expires < Date.now()) return { error: 'This sign-in expired or was already used. Start it again.' }
+  if (!sign) return { error: 'This sign-in expired or was already used. Start it again.' }
   if (sign.kind === 'github' && action === 'request') return { kind: sign.kind, error: 'GitHub sent your install request to the account\'s owner. Connect again once they approve it.' }
   const grant = sign.kind === 'github' ? installationId : code
   if (error || !grant) return { kind: sign.kind, error: `${TITLES[sign.kind]} didn't approve OpenHut (${error ?? 'no code'}).` }
@@ -88,10 +93,16 @@ async function signedIn({ sign, code }: { sign: Pending; code: string }): Promis
   return { config: sign.kind === 'mcp' ? { url, oauth } : { oauth }, account: `${new URL(url).host} · signed in by ${sign.actor.email}` }
 }
 
-function remember(state: string, sign: Pending): void {
-  for (const [key, each] of pending) if (each.expires < Date.now()) pending.delete(key)
-  for (const [key, each] of finished) if (each.expires < Date.now()) finished.delete(key)
-  pending.set(state, sign)
+async function remember(state: string, sign: Pending): Promise<void> {
+  const { actor, kind, name, connectionId, expires, ...rest } = sign
+  const row = { actor: JSON.stringify(actor), actor_id: actor.id, kind, name, existing_id: connectionId ?? null, data: seal(JSON.stringify(rest)), status: 'pending' as const, expires_at: new Date(expires) }
+  await db.insertInto('sign_in').values({ state, ...row }).onConflict((conflict) => conflict.column('state').doUpdateSet(row)).execute()
+  await connectionAuthorizationService.sweep()
+}
+
+function pendingOf(row: Selectable<Database['sign_in']>): Pending {
+  const rest = row.data ? JSON.parse(unseal(row.data)) as Omit<Pending, 'actor' | 'kind' | 'name' | 'connectionId' | 'expires'> : {}
+  return { ...rest, actor: JSON.parse(row.actor) as Caller, kind: signInKind(row.kind), name: row.name, connectionId: row.existing_id ?? undefined, expires: new Date(row.expires_at).getTime() }
 }
 
 function serverUrl({ existing, given }: { existing?: { config: string }; given?: string }): string | undefined {
@@ -115,4 +126,3 @@ const isGoogle = (kind: SignInKind): kind is GoogleKind => (GOOGLE_KINDS as read
 
 type SignInKind = (typeof SIGN_IN_KINDS)[number]
 type Pending = { kind: SignInKind; name: string; actor: Caller; connectionId?: string; expires: number; url?: string; flow?: SignIn; verifier?: string }
-type Finished = { actor: Caller; kind: SignInKind; connectionId?: string; error?: string; expires: number }

@@ -24,9 +24,15 @@ test('a sign-in registers OpenHut, finishes once, and its token reaches the tool
     assert.match((await connectionAuthorizationService.finish({ state: begin.searchParams.get('state') ?? '', code: 'wrong' })).error ?? '', /refused the sign-in/)
 
     const state = new URL((await connectionAuthorizationService.create({ actor, kind: 'mcp', name: 'Local', url })).authorizationUrl).searchParams.get('state') ?? ''
+    const stored = await db.selectFrom('sign_in').selectAll().where('state', '=', state).executeTakeFirstOrThrow()
+    assert.equal(stored.status, 'pending')
+    assert.doesNotMatch(stored.data, /client-1|codeVerifier/, 'what the sign-in needs later is sealed')
+    assert.equal((await connectionAuthorizationService.get({ actor, id: state })).status, 'pending')
     const done = await connectionAuthorizationService.finish({ state, code: 'good' })
     if (!done.connectionId) assert.fail(done.error ?? 'no connection')
     assert.match((await connectionAuthorizationService.finish({ state, code: 'good' })).error ?? '', /expired or was already used/)
+    assert.deepEqual(await db.selectFrom('sign_in').select(['status', 'data']).where('state', '=', state).executeTakeFirstOrThrow(), { status: 'done', data: '' })
+    assert.equal((await connectionAuthorizationService.get({ actor, id: state })).connectionId, done.connectionId)
     const connection = await connectionService.get({ actor, id: done.connectionId })
     assert.equal(connection.signIn, true)
     assert.deepEqual((await connectionService.listTools({ actor, connectionId: connection.id })).map((tool) => tool.name), ['mcp_ping'])
@@ -35,6 +41,19 @@ test('a sign-in registers OpenHut, finishes once, and its token reaches the tool
   } finally {
     server.close()
   }
+})
+
+test('a sign-in lives in the database: only its owner can read it, an expired one reads as failed, and old ones are swept', async () => {
+  const row = { actor: JSON.stringify(actor), actor_id: actor.id, kind: 'linear', name: 'Linear', existing_id: null, data: '', status: 'pending' as const }
+  await db.insertInto('sign_in').values([
+    { ...row, state: 'st_late', expires_at: new Date(Date.now() - 60_000) },
+    { ...row, state: 'st_ancient', expires_at: new Date(Date.now() - 60 * 60_000) },
+  ]).execute()
+  assert.deepEqual(await connectionAuthorizationService.get({ actor, id: 'st_late' }), { object: 'connection_authorization', id: 'st_late', kind: 'linear', authorizationUrl: '', status: 'failed', error: 'This sign-in expired. Start it again.' })
+  await assert.rejects(connectionAuthorizationService.get({ actor: { ...actor, id: 'usr_someone' }, id: 'st_late' }), { status: 404 })
+  assert.match((await connectionAuthorizationService.finish({ state: 'st_late', code: 'x' })).error ?? '', /expired or was already used/)
+  await connectionAuthorizationService.sweep()
+  assert.deepEqual((await db.selectFrom('sign_in').select('state').where('state', 'like', 'st_%').execute()).map((each) => each.state), ['st_late'])
 })
 
 test('a custom MCP header must be one plain Name: value, never a transport header', () => {
