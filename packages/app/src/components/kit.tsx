@@ -91,8 +91,8 @@ export function Frame({ face, title, subtitle, action, foot, onClose, children }
   </DialogCard>
 }
 
-export function SetupSheet({ brand, icon, title, blurb, eta, safe, error, foot, onSubmit, onClose, modal, className, children }: {
-  brand: BrandName; icon?: ReactNode; className?: string; title: string; blurb: string; eta?: string; safe?: ReactNode; error?: string; foot: ReactNode
+export function SetupSheet({ brand, icon, title, blurb, eta, safe, error, foot, action, onSubmit, onClose, modal, className, children }: {
+  brand: BrandName; icon?: ReactNode; className?: string; title: string; blurb: ReactNode; action?: ReactNode; eta?: string; safe?: ReactNode; error?: string; foot: ReactNode
   onSubmit?: (event: FormEvent<HTMLFormElement>) => void; onClose: () => void; modal?: boolean; children?: ReactNode
 }) {
   const inWindow = useContext(InWindow) && !modal
@@ -104,6 +104,7 @@ export function SetupSheet({ brand, icon, title, blurb, eta, safe, error, foot, 
         <div className="flex items-center gap-2"><DialogTitle className={inWindow ? 'text-[17px]/[24px] font-medium' : 'text-[15px]/[22px] font-medium'}>{title}</DialogTitle>{eta && <span className="inline-flex items-center gap-1 text-[11.5px] text-mute-2"><I icon={Clock01Icon} size={12} />{eta}</span>}</div>
         <p className="m-0 text-[13px]/[18px] text-body">{blurb}</p>
       </div>
+      {action}
       {!inWindow && <Button type="button" size="icon-sm" aria-label="Close" tabIndex={-1} className="-mt-1 -mr-1" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>}
     </div>
     {children && <div className={cn('flex min-h-0 flex-1 flex-col gap-5 overflow-auto px-5 pt-1 pb-5', inWindow && 'no-scrollbar fade-b px-8 pb-6')}>{children}</div>}
