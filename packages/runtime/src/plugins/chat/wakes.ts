@@ -44,9 +44,9 @@ export async function deliver(agentId: string): Promise<void> {
 
 async function run({ agentId, wake }: { agentId: string; wake: Wake }): Promise<void> {
   const item = wake.id.startsWith('inbox:') ? wake.id.slice('inbox:'.length) : undefined
+  await wakes.report({ agentId, id: wake.id, body: { picked: true } })
   const threadId = item ? await inboxService.threadFor({ agentId, id: item }) : await threadService.bySession({ agentId, session: wake.origin.chat_id })
   const metadata = item ? await inboxService.webhookCall({ agentId, id: item }) : undefined
-  await wakes.report({ agentId, id: wake.id, body: { picked: true } })
   for (let attempt = 0; ; attempt++) {
     try {
       const said = await threadService.runRoutine({ agentId, threadId, text: wake.text, metadata })

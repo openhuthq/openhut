@@ -11,6 +11,11 @@ export async function createTables(db: Kysely<Database>): Promise<void> {
   await sql`create table if not exists inbox_item (
     id text primary key, source_id text not null references inbox_source(id) on delete cascade, agent_id text not null, digest text not null, text text not null,
     told boolean not null default false, created_at timestamptz not null default now(), unique (source_id, digest))`.execute(db)
+  await sql`alter table inbox_source add column if not exists threads text not null default 'group' check (threads in ('group', 'each'))`.execute(db)
+  await sql`alter table inbox_source add column if not exists group_by text`.execute(db)
+  await sql`alter table inbox_source add column if not exists title_by text`.execute(db)
+  await sql`alter table inbox_source add column if not exists label_by text`.execute(db)
+  await sql`alter table inbox_item add column if not exists group_key text`.execute(db)
   const { rows } = await sql<{ found: string | null }>`select to_regclass('routine')::text as found`.execute(db)
   if (rows[0]?.found) await sql`insert into inbox_source (id, agent_id, kind, name, origin, created_at, plan, at, cron, until, next_run_at, run_id, run_status, run_picked_at, run_at, run_text, failures)
     select id, agent_id, 'schedule', name, origin, created_at, plan, at, cron, until, next_run_at, run_id, run_status, run_picked_at, run_at, run_text, failures from routine

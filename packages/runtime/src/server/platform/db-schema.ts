@@ -39,8 +39,9 @@ export interface Database {
     plan: Generated<string>; at: Timestamp | null; cron: string | null; until: Timestamp | null; next_run_at: Timestamp | null
     run_id: string | null; run_status: 'open' | 'told' | 'quiet' | 'failed' | null; run_picked_at: Timestamp | null; run_at: Timestamp | null
     run_text: string | null; failures: Generated<number>; secret: string | null; last_at: Timestamp | null
+    threads: Generated<'group' | 'each'>; group_by: string | null; title_by: string | null; label_by: string | null
   }
-  inbox_item: { id: string; source_id: string; agent_id: string; digest: string; text: string; told: Generated<boolean>; created_at: Generated<Date> }
+  inbox_item: { id: string; source_id: string; agent_id: string; digest: string; text: string; group_key: string | null; told: Generated<boolean>; created_at: Generated<Date> }
   sign_in: {
     state: string; actor: string; actor_id: string; kind: string; name: string; existing_id: string | null; data: string
     status: 'pending' | 'working' | 'done' | 'failed'; connection_id: Generated<string | null>; error: Generated<string | null>; expires_at: Timestamp; created_at: Generated<Date>
