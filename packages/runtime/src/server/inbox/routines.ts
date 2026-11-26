@@ -13,6 +13,7 @@ import { settings } from '../platform/settings.ts'
 import { agentService, mayEdit, placeOf as recordPlace, type AgentFacts } from '../agents/agent-service.ts'
 import { recordsService, type Held } from '../platform/records.ts'
 import { HOME } from '../team/home.ts'
+import { APP_PLATFORM } from '../../core/plugin.ts'
 import type { Caller } from '../team/identity.ts'
 
 const TICK_MS = 60_000
@@ -27,7 +28,6 @@ const MAX_FAILURES = 3
 const CRON_SAMPLE = 100
 const SILENT = /^\s*\[?(SILENT|NO[_ ]REPLY)\]?\s*$/i
 const OFFSET = /(Z|[+-]\d\d:?\d\d)$/i
-const DASHBOARD = 'api_server'
 const CHAT_SESSION = /^openhut-\S+$/
 const PLATFORM_NAMES: Record<string, string> = { slack: 'Slack', whatsapp: 'WhatsApp', telegram: 'Telegram', discord: 'Discord' }
 
@@ -180,7 +180,6 @@ export const routineService = {
     return routineOf(next)
   },
 
-  fail: (input: { routineId: string; runId: string; text: string }): Promise<void> => fail(input),
 }
 
 async function tickOnce(now: Date): Promise<{ fired: Fired[]; failed: string[] }> {
@@ -252,7 +251,7 @@ async function openRun(agentId: string): Promise<boolean> {
 }
 
 async function placeOf({ agentId, origin }: { agentId: string; origin: Origin }): Promise<string> {
-  if (origin.platform === DASHBOARD) {
+  if (origin.platform === APP_PLATFORM) {
     if (!CHAT_SESSION.test(origin.chat_id)) throw new HttpError(400, 'You can only set up routines from a chat you\'re in.')
     return 'the OpenHut app'
   }
@@ -276,7 +275,7 @@ async function placeOf({ agentId, origin }: { agentId: string; origin: Origin })
 }
 
 export function targetOf(origin: Origin): string {
-  if (origin.platform === DASHBOARD) return 'app'
+  if (origin.platform === APP_PLATFORM) return 'app'
   return sha(`${origin.platform}:${origin.chat_id}:${origin.thread_id ?? ''}`).slice(0, 12)
 }
 
@@ -298,7 +297,7 @@ function stoppedOf(row: RoutineRow): string | null {
 
 function runText(row: RoutineRow): string {
   const end = row.cron ? ' When this is done for good, say so in one line, then call cancel_routine.' : ' This runs once and ends by itself.'
-  return `[Routine ${row.id} · run ${row.run_id}] Time for "${row.name}". Your plan: ${row.plan}\nIf there's nothing worth telling, reply [SILENT].${end}`
+  return `Routine ${row.id}: time for "${row.name}". Your plan: ${row.plan}\nIf there's nothing worth telling, reply [SILENT].${end}`
 }
 
 function originOf(row: RoutineRow): Stored {

@@ -17,6 +17,7 @@ import { agentToken, seal } from '../../../src/server/platform/secrets.ts'
 import { runSet } from '../../../src/server/agents/run-set.ts'
 import { agentService } from '../../../src/server/agents/agent-service.ts'
 import { fakeAgentd, refresh, signIn } from '../agents/signed-in.ts'
+import { appWakes } from '../../plugins/chat/app-wakes.ts'
 
 fakeAgentd()
 await migrate()
@@ -27,9 +28,7 @@ signIn({ email: 'hook@example.com' })
 runSet.watch()
 await refresh()
 const owner = { id: 'usr_hookownr', email: 'hook@example.com', role: 'owner' as const }
-const told: { agentId: string; text: string }[] = []
-inboxService.runDashboardWith(async (input) => { told.push(input); return '' })
-changeRequestService.runDashboardWith(async () => '')
+const { told, settled } = appWakes()
 
 const app = Fastify()
 answerErrors(app)
@@ -42,7 +41,7 @@ const doSigned = ({ secret, body, at = Math.floor(Date.now() / 1000) }: { secret
   `t=${at},v1=${createHmac('sha256', secret).update(`${at}.${body}`).digest('hex')}`
 const post = ({ id, body, headers }: { id: string; body: string | Buffer; headers: Record<string, string> }) =>
   app.inject({ method: 'POST', url: `/inbox/${id}`, payload: body, headers: { 'content-type': 'application/cloudevents+json', ...headers } })
-const settle = () => new Promise((resolve) => setTimeout(resolve, 50))
+const settle = settled
 
 test('a DigitalOcean alert with a valid signature reaches the agent\'s chat as a message with the raw payload', async () => {
   const hook = await inboxService.createSource({ actor: owner, agentId: 'ag_hookpuls', name: 'DO Postgres alerts' })
@@ -53,7 +52,7 @@ test('a DigitalOcean alert with a valid signature reaches the agent\'s chat as a
   assert.equal(res.json().repeat, false)
   await settle()
   assert.equal(told.length, 1)
-  assert.match(told[0].text, /^\[Webhook wh_[a-z0-9]+ · hd_[a-z0-9]+\] "DO Postgres alerts" was just called\./)
+  assert.match(told[0].text, /^\[OpenHut inbox:hd_[a-z0-9]+\] Webhook wh_[a-z0-9]+ "DO Postgres alerts" was just called\./)
   assert.ok(told[0].text.endsWith(body))
   assert.ok((await inboxService.webhooks({ actor: owner, agentId: 'ag_hookpuls' }))[0].lastAt)
 })
@@ -107,7 +106,7 @@ test('a rotated secret stops the old one, and a deleted hook is gone', async () 
   assert.equal((await post({ id: hook.id, body: '{"a":2}', headers: { authorization: `Bearer ${rotated.secret}` } })).statusCode, 404)
 })
 
-test('add_webhook waits for approval; approving creates the webhook, tells the agent its address, and Slack deliveries arrive through the due feed', async () => {
+test('add_webhook waits for approval; approving creates the webhook, tells the agent its address, and Slack deliveries arrive through the plugin\'s wakes poll', async () => {
   const server = gatewayServer.create().listen(0, '127.0.0.1')
   await new Promise((resolve) => server.once('listening', resolve))
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
@@ -129,17 +128,17 @@ test('add_webhook waits for approval; approving creates the webhook, tells the a
   assert.equal(hook?.place, '#db-alerts')
 
   const headers = { authorization: `Agent ${token}`, 'content-type': 'application/json' }
-  const decision = (await (await fetch(`${base}/routines/due`, { headers })).json() as { data: { runId: string; text: string }[] }).data.find((run) => run.runId === id)
+  const decision = (await (await fetch(`${base}/wakes`, { headers })).json() as { data: { id: string; text: string }[] }).data.find((wake) => wake.id === `asks:${id}`)
   assert.match(decision?.text ?? '', new RegExp(`Its address is \\S+/inbox/${hookId}\\.`))
   assert.doesNotMatch(decision?.text ?? '', new RegExp(hook?.secret ?? 'none'))
 
   const body = alert('evt-slack')
   assert.equal((await post({ id: hookId, body, headers: { 'x-digitalocean-signature': doSigned({ secret: hook?.secret ?? '', body }) } })).statusCode, 200)
-  const due = (await (await fetch(`${base}/routines/due`, { headers })).json() as { data: { runId: string; text: string; origin: unknown }[] }).data.filter((run) => run.runId.startsWith('hd_'))
+  const due = (await (await fetch(`${base}/wakes`, { headers })).json() as { data: { id: string; text: string; origin: unknown }[] }).data.filter((wake) => wake.id.startsWith('inbox:hd_'))
   assert.equal(due.length, 1)
   assert.deepEqual(due[0].origin, slack)
-  assert.equal((await fetch(`${base}/routines/runs/${due[0].runId}`, { method: 'POST', headers, body: JSON.stringify({ picked: true }) })).status, 200)
-  assert.equal((await (await fetch(`${base}/routines/due`, { headers })).json() as { data: { runId: string }[] }).data.filter((run) => run.runId.startsWith('hd_')).length, 0)
+  assert.equal((await fetch(`${base}/wakes/${due[0].id}`, { method: 'POST', headers, body: JSON.stringify({ picked: true }) })).status, 200)
+  assert.equal((await (await fetch(`${base}/wakes`, { headers })).json() as { data: { id: string }[] }).data.filter((wake) => wake.id.startsWith('inbox:hd_')).length, 0)
   const self = JSON.parse(((await client.callTool({ name: 'get_self', arguments: {} })).content as { text: string }[])[0].text)
   assert.ok(self.webhooks.some((each: { url: string }) => each.url.endsWith(hookId)))
   await client.close()

@@ -44,6 +44,9 @@ Lines we added are marked `OpenHut`. To offer upstream: the same setting, withou
 
 Its `pre_tool_call` hook stamps every `mcp__openhut__*` call with the chat it came from (`origin`), with no list of tools to
 keep in sync. Every gateway tool takes `origin` and reads it in one place (`core/mcp.ts`); it is advice,
-since the gateway checks the chat again before it posts there. It also polls the gateway for due routine runs and starts
-them in their chat. `slack_transport.py` is transport, not a feature: Hermes has no Slack API base URL, so it points
+since the gateway checks the chat again before it posts there. Every 15 s it polls the gateway's `GET /wakes` for turns the
+runtime wants the agent to take in a chat (a routine run, a webhook call, an answered change request), starts each once
+with `inject_message`, and reports `POST /wakes/<plugin>:<id>` `{ picked: true }`, then `{ said }` with the reply
+(`post_llm_call` finds the wake by its `[OpenHut <plugin>:<id>]` prefix). Wakes in the app chat never reach it: the chat
+plugin runs those itself. `slack_transport.py` is transport, not a feature: Hermes has no Slack API base URL, so it points
 `slack_sdk` and Slack file downloads at the gateway (`OPENHUT_SLACK_API`, `OPENHUT_SLACK_FILES`).

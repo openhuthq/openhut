@@ -30,11 +30,19 @@ export type Tool<S extends z.ZodRawShape = z.ZodRawShape> = {
   run(input: z.infer<z.ZodObject<S>>, ctx: { agent: GatewayAgent; origin: unknown }): Promise<ToolResult>
 }
 
+export type Wake = { id: string; text: string; origin: Origin }
+
 export type Plugin = {
   name: string
   hermes?: (ctx: HermesCtx) => HermesPart
   tools?: Record<string, Tool>
   hooks?: Record<string, (x: { agent: GatewayAgent; args: Record<string, unknown>; origin: unknown }) => Promise<unknown>>
+  wakes?: {
+    due: (x: { agentId: string }) => Promise<Wake[]>
+    picked: (x: { agentId: string; id: string }) => Promise<void>
+    said?: (x: { agentId: string; id: string; reply: string }) => Promise<void>
+  }
+  start?: () => void
   slackAction?: { prefix: string; run: (x: { agent: GatewayAgent; body: unknown; action: { action_id: string; value?: string } }) => Promise<{ text: string; origin: Origin } | undefined> }
 }
 

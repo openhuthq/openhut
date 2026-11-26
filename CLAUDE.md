@@ -16,14 +16,17 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   `src/server/` is the API (Fastify, Kysely on PGlite), grouped by domain: `platform/` (config, db, secrets, settings,
   errors, evlog logging, the typed agentd client), `team/`, `agents/` (agents, grants), `channels/`,
   `connections/`, `gateway/` (the agents' MCP gateway and key broker on :8081), `admin/`, and `integrations/<service>/`.
-  What an agent's Hermes gets comes from plugins: `src/plugins/<name>/index.ts` is `definePlugin({ name, hermes, tools, hooks, slackAction })`,
+  What an agent's Hermes gets comes from plugins: `src/plugins/<name>/index.ts` is `definePlugin({ name, hermes, tools, hooks, slackAction, wakes, start })`,
   where `hermes()` returns that feature's SOUL.md paragraph, config and env, and `tools` its MCP tools (zod `input` and
   `run(input, { agent, origin })`). `src/core/` holds no feature code: `plugins.ts` is the ordered list (its order is the
   SOUL.md order; two plugins with one tool name fail at boot), `hermes.ts` merges the parts into `config.yaml` (written as
   JSON), `.env`, `SOUL.md` and `auth.json`, and `mcp.ts` serves every plugin's tools on the gateway's MCP server. A tool
   with `local: true` runs inside Hermes instead, `hooks` maps Hermes hook names to handlers, and `slackAction` takes Slack
   buttons by prefix: the one Hermes plugin, `vendor/hermes-plugins/openhut`, registers what `core/hooks.ts`'s manifest
-  lists and calls the gateway's `/tools/<name>`, `/hooks/<hook>` and `/slack-actions` for each.
+  lists and calls the gateway's `/tools/<name>`, `/hooks/<hook>` and `/slack-actions` for each. `wakes` are turns the
+  runtime wants the agent to take (routine runs and webhook calls from inbox, answered change requests from asks):
+  `core/wakes.ts` lists every plugin's due wakes as `[OpenHut <plugin>:<id>] <text>`; the Hermes plugin polls `/wakes`
+  for chat ones, the chat plugin runs the app's itself (`nudge(agentId)` runs them at once), and `start()` runs at boot.
   An agent and its control, memory, skills, routines, channels and messages are rows in the local `record` table
   (`platform/records.ts`, secrets sealed with the install secret); `agents/run-set.ts` applies them to the agents this computer
   runs. People sign in with a session cookie (`team/identity.ts`, `team/team-service.ts`): while there is no owner, the first

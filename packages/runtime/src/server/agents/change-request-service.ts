@@ -21,12 +21,10 @@ import { connectionService } from '../connections/connection-service.ts'
 import { permissions } from '../permissions/permissions.ts'
 import { secretService } from './secret-service.ts'
 import { inboxService, urlOf } from '../inbox/inbox-service.ts'
+import { APP_PLATFORM, type Wake } from '../../core/plugin.ts'
+import { wakes } from '../../core/wakes.ts'
 
-const DASHBOARD = 'api_server'
 const QUIET_MS = 10_000
-const RETRY_MS = 30_000
-const RETRIES = 20
-const delivering = new Set<string>()
 const LABEL = { slack: 'Slack', whatsapp: 'WhatsApp', telegram: 'Telegram', discord: 'Discord' } as const
 const SelfChange = z.object({ name: UpdateAgentFields.name, instructions: UpdateAgentFields.instructions })
 const ChannelChange = z.object({ id: z.string().check(z.maxLength(40)), open: z.optional(z.boolean()), allowed: z.optional(z.array(z.string().check(z.maxLength(20))).check(z.maxLength(50))) })
@@ -37,8 +35,6 @@ const WebhookChange = z.object({ name: WebhookName })
 const ASK_EXPIRES_MS = 30 * 60_000
 
 type Row = Selectable<Database['change_request']>
-type Runner = (input: { agentId: string; text: string }) => Promise<string>
-let dashboardRunner: Runner = async () => { throw new Error('No dashboard runner.') }
 
 export const changeRequestService = {
   async ask({ agentId, action, input, why, origin }: { agentId: string; action: ChangeAction; input: unknown; why: string; origin: unknown }): Promise<string> {
@@ -102,24 +98,15 @@ export const changeRequestService = {
     return requestOf(decided)
   },
 
-  async due({ agentId }: { agentId: string }): Promise<{ runId: string; text: string; origin: Origin }[]> {
+  async due({ agentId }: { agentId: string }): Promise<Wake[]> {
     await expire()
     const rows = await db.selectFrom('change_request').selectAll().where('agent_id', '=', agentId).where('status', '<>', 'pending').where('told', '=', false).execute()
-    return rows.filter((row) => !inApp(row)).map((row) => ({ runId: row.id, text: decisionText(row), origin: originOf(row) }))
+    return rows.map((row) => ({ id: row.id, text: decisionText(row), origin: originOf(row) }))
   },
 
   async picked({ agentId, id }: { agentId: string; id: string }): Promise<void> {
     const done = await db.updateTable('change_request').set({ told: true }).where('agent_id', '=', agentId).where('id', '=', id).where('status', '<>', 'pending').returning('id').executeTakeFirst()
     if (!done) throw new HttpError(404, `No decided request ${id}.`)
-  },
-
-  async resume(): Promise<void> {
-    const rows = await db.selectFrom('change_request').selectAll().where('status', '<>', 'pending').where('told', '=', false).execute()
-    for (const row of rows) deliver(row)
-  },
-
-  runDashboardWith(runner: Runner): void {
-    dashboardRunner = runner
   },
 }
 
@@ -274,31 +261,23 @@ async function decide({ id, status, input, summary, note, told = false }: { id: 
   return row
 }
 
-function deliver(row: Row, attempt = 0): void {
-  if (!inApp(row) || delivering.has(row.id)) return
-  delivering.add(row.id)
-  void dashboardRunner({ agentId: row.agent_id, text: decisionText(row) })
-    .then(() => db.updateTable('change_request').set({ told: true }).where('id', '=', row.id).execute())
-    .then(() => { delivering.delete(row.id) }, (err: unknown) => {
-      delivering.delete(row.id)
-      log.warn({ event: 'change_request.deliver_failed', id: row.id, attempt, error: messageOf(err) })
-      if (attempt < RETRIES) setTimeout(() => deliver(row, attempt + 1), RETRY_MS).unref()
-    })
+function deliver(row: Row): void {
+  if (inApp(row)) wakes.nudge(row.agent_id)
 }
 
 function decisionText(row: Row): string {
-  if (row.status === 'expired') return `[OpenHut ${row.id}] Nobody answered in time: ${row.summary} didn't run. Carry on without it, and say in your report that it needs your owner's OK.`
+  if (row.status === 'expired') return `Nobody answered in time: ${row.summary} didn't run. Carry on without it, and say in your report that it needs your owner's OK.`
   if (action(row) === 'call_tool' && row.status === 'approved') {
     const always = (JSON.parse(row.input) as { always?: boolean }).always ? ' From now on it runs without asking.' : ''
-    return `[OpenHut ${row.id}] Your owner allowed it: ${row.summary}.${always} The result:\n\n${row.result ?? 'Lost in a restart. Call the tool again.'}\n\nCarry on with what you were doing.`
+    return `Your owner allowed it: ${row.summary}.${always} The result:\n\n${row.result ?? 'Lost in a restart. Call the tool again.'}\n\nCarry on with what you were doing.`
   }
-  if (row.status === 'denied' && action(row) === 'propose_connection') return `[OpenHut ${row.id}] Not connected: ${row.summary}.${row.note ? ` They chose: "${row.note}".` : ''} Nothing changed. If they chose the browser, do this one job in your browser now and don't keep the login. If they'll set it up themselves, give them short numbered steps: where to make the token, then Apps in OpenHut to add it, then to give you access. Otherwise tell the chat in one line, and don't ask again unless they bring it up.`
-  if (row.status === 'denied') return `[OpenHut ${row.id}] Not approved: ${row.summary}.${row.note ? ` They said: "${row.note}"` : ''} Nothing changed. Tell the chat in one line, and don't ask again unless they bring it up.`
-  return `[OpenHut ${row.id}] Approved and done: ${row.summary}.${afterApproval({ row, input: JSON.parse(row.input) })} Tell the chat in one line, with the final values if they differ from what you asked for.`
+  if (row.status === 'denied' && action(row) === 'propose_connection') return `Not connected: ${row.summary}.${row.note ? ` They chose: "${row.note}".` : ''} Nothing changed. If they chose the browser, do this one job in your browser now and don't keep the login. If they'll set it up themselves, give them short numbered steps: where to make the token, then Apps in OpenHut to add it, then to give you access. Otherwise tell the chat in one line, and don't ask again unless they bring it up.`
+  if (row.status === 'denied') return `Not approved: ${row.summary}.${row.note ? ` They said: "${row.note}"` : ''} Nothing changed. Tell the chat in one line, and don't ask again unless they bring it up.`
+  return `Approved and done: ${row.summary}.${afterApproval({ row, input: JSON.parse(row.input) })} Tell the chat in one line, with the final values if they differ from what you asked for.`
 }
 
 function inApp(row: Pick<Row, 'origin'>): boolean {
-  return originOf(row).platform === DASHBOARD
+  return originOf(row).platform === APP_PLATFORM
 }
 
 function originOf(row: Pick<Row, 'origin'>): Origin {

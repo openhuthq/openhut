@@ -7,10 +7,15 @@ ANSWERS = {
     "/hooks/transform_llm_output": lambda body: (200, {"result": body["args"]["response_text"].replace("CARD", "card posted") if "CARD" in body["args"]["response_text"] else None}),
     "/hooks/pre_gateway_dispatch": lambda body: (200, {"result": {"action": "skip", "reason": "openhut invite"} if body["args"]["event"]["text"].startswith("/start ") else None}),
     "/hooks/subagent_stop": lambda body: (200, {"result": None}),
+    "/wakes/inbox:ru_abc123": lambda body: (200, {"object": "wake", "id": "inbox:ru_abc123"}),
     "/slack-actions": lambda body: (200, {"inject": {"text": body["action"]["value"], "origin": {"platform": "slack", "chat_id": body["body"]["channel"]["id"]}}}),
 }
+WAKES = [{"id": "inbox:ru_abc123", "text": "[OpenHut inbox:ru_abc123] Routine rt_x: time for \"Chase Acme\".", "origin": {"platform": "slack", "chat_id": "C9", "thread_id": "1.2"}}]
 class Gateway(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
+    def do_GET(self):
+        calls.append((self.path, None))
+        self.send_response(200); self.send_header("content-type", "application/json"); self.end_headers(); self.wfile.write(json.dumps({"object": "list", "data": WAKES}).encode())
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["content-length"])))
         calls.append((self.path, body))
@@ -67,6 +72,27 @@ assert calls[-1][1]["args"] == {"parent_session_id": "s1", "child_status": "comp
 async def ack(): pass
 asyncio.run(actions[0][1](ack, {"channel": {"id": "C9"}}, {"action_id": "card:approve", "value": "Approve"}))
 assert injected == [("Approve", {"platform": "slack", "chat_id": "C9"})], injected
+class Stop(Exception): pass
+def stop(_): raise Stop()
+m.time.sleep = stop
+injected.clear()
+try:
+    m.poll(ctx)
+except Stop:
+    pass
+assert injected == [(WAKES[0]["text"], WAKES[0]["origin"])], injected
+assert calls[-2:] == [("/wakes", None), ("/wakes/inbox:ru_abc123", {"picked": True})], calls[-2:]
+try:
+    m.poll(ctx)
+except Stop:
+    pass
+assert len(injected) == 1, "a wake is injected once, however often it is listed"
+hooks["post_llm_call"](user_message="Slack says: " + WAKES[0]["text"], assistant_response="Chased Acme.")
+assert calls[-1] == ("/wakes/inbox:ru_abc123", {"said": "Chased Acme."}), calls[-1]
+before = len(calls)
+hooks["post_llm_call"](user_message="[OpenHut inbox:ru_other1] not ours", assistant_response="x")
+hooks["post_llm_call"](user_message="hello", assistant_response="x")
+assert len(calls) == before, "only a wake this plugin injected is reported"
 os.environ["OPENHUT_GATEWAY"] = "http://127.0.0.1:9"
 assert hooks["transform_llm_output"](response_text="CARD", platform="slack") is None
 assert hooks["pre_gateway_dispatch"](event=event("/start abcdefghijklmnop")) is None

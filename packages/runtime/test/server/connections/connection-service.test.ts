@@ -6,6 +6,7 @@ import { permissions } from '../../../src/server/permissions/permissions.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { seal } from '../../../src/server/platform/secrets.ts'
 import { fakeAgentd, refresh, signIn } from '../agents/signed-in.ts'
+import { appWakes } from '../../plugins/chat/app-wakes.ts'
 
 fakeAgentd()
 await migrate()
@@ -27,9 +28,9 @@ mock.method(connectionService, 'execute', async ({ tool: name, args }: { tool: s
   ran.push({ tool: name, args })
   return { text: JSON.stringify({ ran: name, password: 'hunter2' }), isError: false }
 })
-const told: string[] = []
-changeRequestService.runDashboardWith(async ({ text }) => { told.push(text); return '' })
-const settle = () => new Promise((resolve) => setTimeout(resolve, 50))
+const chat = appWakes()
+const told = { at: (index: number) => chat.told.at(index)?.text }
+const settle = () => chat.settled()
 const idIn = (text: string) => /chg_[a-z0-9]+/.exec(text)?.[0] ?? ''
 const events = () => db.selectFrom('connection_event').select(['tool', 'outcome', 'approved_by']).where('agent_id', '=', agent.id).orderBy('id').execute()
 
@@ -94,7 +95,7 @@ test('a request nobody answers expires and the agent hears about it', async () =
   await db.updateTable('change_request').set({ expires_at: new Date(Date.now() - 1000) }).where('id', '=', id).execute()
   await assert.rejects(changeRequestService.approve({ actor: owner, id }), /already expired/)
   await settle()
-  assert.match(told.at(-1) ?? '', new RegExp(`\\[OpenHut ${id}\\] Nobody answered in time`))
+  assert.match(told.at(-1) ?? '', new RegExp(`\\[OpenHut asks:${id}\\] Nobody answered in time`))
 })
 
 test('an app\'s status follows its latest call, and apps list by name', async () => {
