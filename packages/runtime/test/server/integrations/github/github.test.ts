@@ -8,7 +8,7 @@ const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 20
 const APP = { id: 42, slug: 'acme-openhut', name: 'acme-openhut', owner: 'acme', ownerType: 'Organization' as const, ownerAvatar: 'https://avatars.githubusercontent.com/u/1', pem: privateKey.export({ type: 'pkcs1', format: 'pem' }).toString(), botId: 99 }
 
 test('the server\'s app is made on the chosen owner, comes back to this server, and installs come back to the connection callback', () => {
-  const org = github.manifest({ owner: 'acme', ownerType: 'Organization', name: 'acme-openhut', address: 'https://agents.acme.dev', state: 's1' })
+  const org = github.manifest({ organization: 'acme', name: 'acme-openhut', address: 'https://agents.acme.dev', state: 's1' })
   assert.equal(org.url, 'https://github.com/organizations/acme/settings/apps/new?state=s1')
   const manifest = JSON.parse(org.manifest)
   assert.equal(manifest.name, 'acme-openhut')
@@ -16,7 +16,7 @@ test('the server\'s app is made on the chosen owner, comes back to this server, 
   assert.equal(manifest.redirect_url, 'https://agents.acme.dev/api/github-app/callback')
   assert.equal(manifest.setup_url, 'https://agents.acme.dev/api/connection-authorizations/callback')
   assert.equal(manifest.public, false)
-  assert.equal(github.manifest({ owner: 'mo', ownerType: 'User', name: 'mo-openhut', address: 'https://a.b', state: 's' }).url, 'https://github.com/settings/apps/new?state=s')
+  assert.equal(github.manifest({ name: 'mo-openhut', address: 'https://a.b', state: 's' }).url, 'https://github.com/settings/apps/new?state=s')
   assert.equal(github.settingsUrl(APP), 'https://github.com/organizations/acme/settings/apps/acme-openhut')
   assert.equal(github.settingsUrl({ ...APP, ownerType: 'User', owner: 'mo' }), 'https://github.com/settings/apps/acme-openhut')
   assert.equal(github.installUrl({ app: APP, state: 'x' }), 'https://github.com/apps/acme-openhut/installations/new?state=x')
@@ -27,20 +27,6 @@ test('the manifest code becomes the stored app, with its owner and bot', async (
     ? Response.json({ id: 42, slug: 'acme-openhut', name: 'acme-openhut', pem: APP.pem, owner: { login: 'acme', type: 'Organization', avatar_url: APP.ownerAvatar } }, { status: 201 })
     : Response.json({ id: 99, login: 'acme-openhut[bot]' }))
   assert.deepEqual(await github.created('code1'), APP)
-})
-
-test('the owner picker lists the person and their public orgs, each with the first free {owner}-openhut name', async (t) => {
-  t.mock.method(globalThis, 'fetch', async (url: string) => {
-    const path = new URL(url).pathname
-    if (path === '/users/mo') return Response.json({ login: 'mo', name: 'Mo', type: 'User', avatar_url: 'https://a/mo' })
-    if (path === '/users/mo/orgs') return Response.json([{ login: 'acme', avatar_url: 'https://a/acme' }])
-    if (path === '/apps/acme-openhut') return Response.json({ slug: 'acme-openhut' })
-    return new Response('{}', { status: 404 })
-  })
-  assert.deepEqual(await github.accounts('mo'), [
-    { login: 'mo', name: 'Mo', type: 'User', avatarUrl: 'https://a/mo', appName: 'mo-openhut' },
-    { login: 'acme', name: 'acme', type: 'Organization', avatarUrl: 'https://a/acme', appName: 'acme-openhut-2' },
-  ])
 })
 
 test('git_credentials routes git through the gateway as the server app\'s bot; connections from the old app-per-connect say to reconnect', async () => {
