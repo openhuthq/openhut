@@ -277,8 +277,7 @@ async function placeOf({ agentId, origin }: { agentId: string; origin: Origin })
 
 export function targetOf(origin: Origin): string {
   if (origin.platform === DASHBOARD) return 'app'
-  const { place: _place, ...rest } = origin as Stored
-  return sha(JSON.stringify(rest)).slice(0, 12)
+  return sha(`${origin.platform}:${origin.chat_id}:${origin.thread_id ?? ''}`).slice(0, 12)
 }
 
 function routineOf(row: RoutineRow): Routine {

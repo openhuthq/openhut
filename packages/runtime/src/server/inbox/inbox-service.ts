@@ -5,6 +5,7 @@ import type { Deleted } from '@openhut/common/api.ts'
 import type { Routine } from '@openhut/common/routines/routine.ts'
 import type { DeliveryTarget, Webhook } from '@openhut/common/webhooks/webhook.ts'
 import { agentService } from '../agents/agent-service.ts'
+import { channelService, type PostTarget } from '../channels/channel-service.ts'
 import { publicAddress } from '../platform/address.ts'
 import { db, isUniqueViolation } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
@@ -243,8 +244,11 @@ async function webhookRow({ actor, id }: { actor: Caller; id: string }): Promise
 }
 
 async function knownOrigins(agentId: string): Promise<Origin[]> {
-  const rows = await db.selectFrom('inbox_source').select('origin').where('agent_id', '=', agentId).orderBy('created_at').execute()
-  const all = [APP, ...rows.map((row) => chatOf(originOf(row)))]
+  const [rows, posts] = await Promise.all([
+    db.selectFrom('inbox_source').select('origin').where('agent_id', '=', agentId).orderBy('created_at').execute(),
+    channelService.postTargets({ agentId }),
+  ])
+  const all = [APP, ...rows.map((row) => chatOf(originOf(row))), ...posts.map(originOfPost)]
   return all.filter((origin, index) => all.findIndex((each) => targetOf(each) === targetOf(origin)) === index)
 }
 
@@ -253,6 +257,12 @@ async function originFor({ agentId, target }: { agentId: string; target: string 
   const found = (await knownOrigins(agentId)).find((origin) => targetOf(origin) === target)
   if (!found) throw new HttpError(400, 'Pick where it posts from the list.', { param: 'target' })
   return found
+}
+
+function originOfPost(post: PostTarget): Origin {
+  const [platform, ...rest] = post.target.split(':')
+  const group = platform === 'slack' || platform === 'discord'
+  return { platform, chat_id: rest.join(':'), chat_type: group ? 'group' : 'dm', ...post.place.startsWith('#') && { chat_name: post.place.slice(1) } }
 }
 
 function originOf(row: Pick<SourceRow, 'origin'>): Origin & { place?: string } {
