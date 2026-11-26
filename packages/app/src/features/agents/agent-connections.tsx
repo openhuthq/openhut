@@ -11,17 +11,17 @@ import { useConnections } from '@/features/connections/api'
 import { toastError } from '@/lib/toast'
 import { navigate } from '@/lib/router'
 import { agentPath } from '@/app/routes'
-import { connectionBrand } from '@/features/connections/catalog'
+import { byName, connectionBrand } from '@/features/connections/catalog'
 import { cn } from '@/lib/utils'
 
 export function CanUse({ agent }: { agent: Agent }) {
   const connections = useConnections()
   const grants = useGrants({ agentId: agent.id })
   const deleteGrant = useDeleteGrant()
-  const granted = (grants.data ?? []).flatMap((grant) => {
+  const granted = byName((grants.data ?? []).flatMap((grant) => {
     const connection = connections.data?.find((each) => each.id === grant.connectionId)
     return connection ? [{ grant, connection }] : []
-  })
+  }), (each) => each.connection.name)
   const others = (connections.data ?? []).filter((connection) => !grants.data?.some((grant) => grant.connectionId === connection.id))
   return <Section title="Can use" action={<AddConnection agent={agent} connections={others} />}>
     <ErrorNote message={(connections.error ?? grants.error)?.message} />

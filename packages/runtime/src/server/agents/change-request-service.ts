@@ -57,7 +57,7 @@ export const changeRequestService = {
   async list({ actor, agentId }: { actor: Caller; agentId: string }): Promise<ChangeRequest[]> {
     await agentService.get({ actor, id: agentId })
     await expire()
-    const rows = await db.selectFrom('change_request').selectAll().where('agent_id', '=', agentId).orderBy('created_at', 'desc').limit(50).execute()
+    const rows = await db.selectFrom('change_request').selectAll().where('agent_id', '=', agentId).orderBy('created_at', 'desc').orderBy('id', 'desc').limit(50).execute()
     return rows.map(requestOf)
   },
 

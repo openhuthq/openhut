@@ -1,4 +1,4 @@
-import type { Selectable } from 'kysely'
+import { sql, type Selectable } from 'kysely'
 import type { Deleted } from '@openhut/common/api.ts'
 import { SIGN_IN_KINDS, type Connection, type ConnectionKind, type ConnectionStatus, type ConnectionTool, type CreateConnection } from '@openhut/common/connections/connection.ts'
 import { config } from '../platform/config.ts'
@@ -63,7 +63,7 @@ export const connectionService = {
   },
 
   async list({ actor }: { actor: Caller }): Promise<Connection[]> {
-    const rows = await db.selectFrom('connection').select(COLUMNS).orderBy('created_at').execute()
+    const rows = await db.selectFrom('connection').select(COLUMNS).orderBy(sql`lower(name)`).orderBy('created_at').execute()
     return connectionsOf({ rows })
   },
 
@@ -257,27 +257,27 @@ async function connectionsOf({ rows }: { rows: Row[] }): Promise<Connection[]> {
     db.selectFrom('person').select(['id', 'email']).where('id', 'in', rows.map((row) => row.owner_id)).execute(),
     db.selectFrom('connection_grant').select((eb) => ['connection_id', eb.fn.countAll<string>().as('n')]).where('connection_id', 'in', ids).groupBy('connection_id').execute(),
     db.selectFrom('connection_event').select((eb) => ['connection_id', eb.fn.max('at').as('at')]).where('connection_id', 'in', ids).where('outcome', '=', 'allowed').groupBy('connection_id').execute(),
-    db.selectFrom('connection_event').select('connection_id').distinct().where('connection_id', 'in', ids).where('outcome', '=', 'failed').execute(),
+    db.selectFrom('connection_event').select((eb) => ['connection_id', eb.fn.max('at').as('at')]).where('connection_id', 'in', ids).where('outcome', '=', 'failed').groupBy('connection_id').execute(),
   ])
   const ownerName = new Map(owners.map((owner) => [owner.id, owner.email]))
   const agents = new Map(counts.map((count) => [count.connection_id, Number(count.n)]))
   const lastSuccess = new Map(successes.map((success) => [success.connection_id, success.at]))
-  const failing = new Set(failures.map((failure) => failure.connection_id))
+  const lastFailure = new Map(failures.map((failure) => [failure.connection_id, failure.at]))
   return rows.map((row) => {
     const success = lastSuccess.get(row.id)
     return {
       id: row.id, object: 'connection', kind: row.kind, name: row.name, account: row.account, signIn: row.sign_in,
       ownerId: row.owner_id, ownerName: ownerName.get(row.owner_id) ?? 'someone',
       canDelete: true, agents: agents.get(row.id) ?? 0,
-      status: statusOf({ succeeded: !!success, failed: failing.has(row.id) }), lastSuccessAt: success ? new Date(success).toISOString() : null,
+      status: statusOf({ success, failure: lastFailure.get(row.id) }), lastSuccessAt: success ? new Date(success).toISOString() : null,
       createdAt: new Date(row.created_at).toISOString(),
     }
   })
 }
 
-function statusOf({ succeeded, failed }: { succeeded: boolean; failed: boolean }): ConnectionStatus {
-  if (succeeded) return 'connected'
-  if (failed) return 'failing'
+function statusOf({ success, failure }: { success?: Date | string | null; failure?: Date | string | null }): ConnectionStatus {
+  if (failure && (!success || new Date(failure) > new Date(success))) return 'failing'
+  if (success) return 'connected'
   return 'no_calls'
 }
 

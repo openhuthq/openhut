@@ -303,9 +303,14 @@ test('messages sort by their ids, and a routine\'s output becomes a message', as
   put('msg_000000002b', 'second')
   put('msg_000000001a', 'first')
   assert.deepEqual((await messagesOf('ag_chatsort')).map((message) => message.parts[0].text), ['first', 'second'])
+  const updatedAt = async () => (await app.inject({ method: 'GET', url: '/api/threads/ag_chatsort', headers: as() })).json().updatedAt as string
+  const before = await updatedAt()
   assert.equal(await threadService.runRoutine({ agentId: 'ag_chatsort', text: 'Daily summary' }), 'Let me check.214 orders.')
   const last = (await messagesOf('ag_chatsort')).at(-1)
   assert.deepEqual([last?.role, last?.parts[0].text], ['assistant', 'Let me check.214 orders.'])
+  assert.equal(await updatedAt(), before, 'a reply to a hidden wake doesn\'t move the agent up the sidebar')
+  await say('ag_chatsort', 'a person writes')
+  assert.notEqual(await updatedAt(), before)
 })
 
 
