@@ -18,6 +18,7 @@ import { config } from '../platform/config.ts'
 import { deleted } from '../platform/responses.ts'
 import { unseal } from '../platform/secrets.ts'
 import { agentService } from '../agents/agent-service.ts'
+import { apply } from '../agents/apply.ts'
 import { HERE, HOME } from '../team/home.ts'
 import { newId } from '../platform/secrets.ts'
 import { channelService } from '../channels/channel-service.ts'
@@ -503,6 +504,7 @@ async function idle(id: string): Promise<void> {
 }
 
 async function callAgent({ agent, session, message, signal }: { agent: AgentRow; session: string; message: OpenAiMessage; signal: AbortSignal }): Promise<ReadableStream<Uint8Array>> {
+  await apply.settled(agent.id)
   const until = Date.now() + config.startWaitMs
   const ask = async (): Promise<Response> => {
     const res = await forward.fetch({ agent, path: '/v1/chat/completions', init: {

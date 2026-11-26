@@ -8,6 +8,7 @@ import { emit, log } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { newId, seal, unseal } from '../platform/secrets.ts'
 import type { Caller } from '../team/identity.ts'
+import { apply } from './apply.ts'
 import { agentService } from './agent-service.ts'
 
 type Row = Selectable<Database['agent_secret']>
@@ -59,7 +60,7 @@ async function editable({ actor, id }: { actor: Caller; id: string }): Promise<R
 }
 
 async function reapply(agentId: string): Promise<void> {
-  await agentService.reapply({ id: agentId }).catch((err: unknown) => log.warn({ event: 'agent.reapply_failed', agent: agentId, error: messageOf(err) }))
+  await apply.request(agentId).catch((err: unknown) => log.warn({ event: 'agent.reapply_failed', agent: agentId, error: messageOf(err) }))
 }
 
 const hostsOf = (row: Pick<Row, 'hosts'>): string[] => JSON.parse(row.hosts) as string[]

@@ -48,7 +48,14 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   `connectorCall` may rewrite an app call's arguments just before the connector runs it (`connection-service` `run()`): `plugins/github` signs PR, issue and first-comment bodies with the agent's face there. Git through the gateway's `/u/github` follows two GitHub permissions, `git_read` (Read code, Always allow) and `git_push` (Push branches, Ask first); with Ask first a push needs an approved `call_tool github_git_push` ask for that repo in the last 10 minutes, and a refused git call joins the chat's work line as blocked.
   An agent and its control, memory, skills, routines, channels and messages are rows in the local `record` table
   (`platform/records.ts`, secrets sealed with the install secret); `agents/run-set.ts` applies them to the agents this computer
-  runs. People sign in with a session cookie (`team/identity.ts`, `team/team-service.ts`): while there is no owner, the first
+  runs. A record write updates the database rows (`project`) before it returns, and requests the agent's apply (`agents/apply.ts`): edits answer
+  at once, and the apply (agentd files, memory, skills, greetings) runs in the background, one at a time per agent, with `applying` and `applyError`
+  on the agent and `agent.applying` / `agent.applied` / `agent.apply_failed` events; Retry is `POST /api/agents/:id/apply`, and an app chat waits up to 20 s
+  for a pending apply. Work that must survive a crash goes through `core/durable.ts`: `durable(name, mode, run)` returns `{ send(key, data) }`, on
+  pg-boss in the same PGlite (its own `pgboss` schema), started by `startDurable()` after the migrations. Mode `latest` keeps one running and one
+  queued job per key, so a burst collapses; mode `each` runs every job, in order per key. A job that throws runs again (5 retries, 15 s heartbeat,
+  so a crashed run resumes within seconds), and `run` learns when it is on its last try. Two rules: a `run` must be safe to run twice, and `send`
+  comes after the change it acts on is saved. Tests set `OPENHUT_DURABLE_INLINE`, which runs a task inside `send()`. People sign in with a session cookie (`team/identity.ts`, `team/team-service.ts`): while there is no owner, the first
   visitor creates the owner account (and sets the HTTPS address); everyone else joins by invite link; roles owner, admin, member.
   `docker exec -it openhut openhut reset-owner` (new owner password) and `openhut address [url|clear]` use the local socket. The address (`platform/address.ts`, Settings ›
   Admin) sets the cookie's Secure flag, every redirect URL and the Caddyfile: Caddy in the image serves :80, and once the address

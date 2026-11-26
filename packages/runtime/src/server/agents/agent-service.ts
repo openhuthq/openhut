@@ -24,6 +24,7 @@ import type { RenderedChannel } from '../../plugins/channels/index.ts'
 import { recordsService, type Held } from '../platform/records.ts'
 import { HERE, HOME } from '../team/home.ts'
 import { runSet } from './run-set.ts'
+import { apply } from './apply.ts'
 import { activity } from '../gateway/activity.ts'
 import { wakes } from '../../core/wakes.ts'
 
@@ -94,7 +95,6 @@ export const agentService = {
     await recordsService.put({ collection: 'agent', id, workspace: ws, parent: actor.email, personal: !shared, value })
     const control: ControlRecord = { runsOn, model: model ?? DEFAULT_MODEL, codeExecution: true, browser: !!health.features?.browser, grants: [], ...access }
     await recordsService.put({ collection: 'control', parent: id, workspace: ws, personal: !shared, value: control })
-    await runSet.apply({ workspace: ws, id })
     emit({ name: 'agent.created', actor, target: { type: 'agent', id, name: clean, model: control.model } })
     return agentService.get({ actor, id })
   },
@@ -111,7 +111,6 @@ export const agentService = {
       await recordsService.remove({ collection: child.collection, workspace: facts.workspace, id: child.id }).catch((err: unknown) => log.warn({ event: 'agent.child_not_removed', agent: id, error: messageOf(err) }))
     }
     await recordsService.remove({ collection: 'agent', workspace: facts.workspace, id })
-    await runSet.apply({ workspace: facts.workspace, id })
     emit({ name: 'agent.deleted', actor, target: { type: 'agent', id, name: facts.value.name } })
     return deleted({ id, object: 'agent' })
   },
@@ -119,6 +118,12 @@ export const agentService = {
   async wipe(): Promise<void> {
     for (const { id } of await db.selectFrom('agent').select('id').execute()) await agentd.remove({ id, trash: true }).catch((err: unknown) => log.warn({ event: 'agent.wipe_failed', agent: id, error: messageOf(err) }))
     await db.deleteFrom('agent').execute()
+  },
+
+  async retryApply({ actor, id }: { actor: Caller; id: string }): Promise<Agent> {
+    await requireOwner({ actor, id })
+    await apply.request(id)
+    return agentService.get({ actor, id })
   },
 
   restartPending(id: string): boolean {
@@ -223,7 +228,6 @@ async function granted({ actor, agentId, connectionId }: { actor: Caller; agentI
   await connectionService.get({ actor, id: connectionId })
   const at = new Date().toISOString()
   await editControl({ facts, change: (value) => value.grants.some((grant) => grant.connection === connectionId) ? value : { ...value, grants: [...value.grants, { connection: connectionId, at }] } })
-  await runSet.apply({ workspace: facts.workspace, id: agentId })
   const grant = grantOf({ agentId, connectionId, at: facts.control?.grants.find((each) => each.connection === connectionId)?.at ?? at })
   emit({ name: 'grant.created', actor, target: { type: 'grant', id: grant.id, agentId, connectionId } })
   return grant
@@ -234,7 +238,6 @@ async function ungranted({ actor, id }: { actor: Caller; id: string }): Promise<
   const facts = await requireOwner({ actor, id: agentId })
   if (!facts.control?.grants.some((grant) => grant.connection === connectionId)) throw new HttpError(404, 'That grant doesn\'t exist. It may have been removed already.')
   await editControl({ facts, change: (value) => ({ ...value, grants: value.grants.filter((grant) => grant.connection !== connectionId) }) })
-  await runSet.apply({ workspace: facts.workspace, id: agentId })
   emit({ name: 'grant.deleted', actor, target: { type: 'grant', id, agentId, connectionId } })
   return deleted({ id, object: 'grant' })
 }
@@ -264,7 +267,6 @@ async function updated({ actor, id, patch }: { actor: Caller; id: string; patch:
     await editControl({ facts, personal, change })
   }
   if (resealed) await reseal({ facts, personal })
-  await runSet.apply({ workspace: facts.workspace, id })
   emit({ name: 'agent.updated', actor, target: { type: 'agent', id, fields: Object.keys(patch) } })
   return agentService.get({ actor, id })
 }
@@ -330,11 +332,11 @@ async function move({ facts, from, to }: { facts: AgentFacts; from: string; to: 
     try {
       await copyHome({ id: facts.id, from, to })
       await place(to)
-      await runSet.apply({ workspace: facts.workspace, id: facts.id })
+      await runSet.settle(facts.id)
     } catch (err) {
       await place(from).catch(() => undefined)
       await agentd.remove({ id: facts.id, on: to }).catch(() => undefined)
-      await runSet.apply({ workspace: facts.workspace, id: facts.id }).catch((again: unknown) => log.error({ event: 'agent.move_undo_failed', agent: facts.id, error: messageOf(again) }))
+      await runSet.settle(facts.id).catch((again: unknown) => log.error({ event: 'agent.move_undo_failed', agent: facts.id, error: messageOf(again) }))
       throw new HttpError(502, `Couldn’t move ${facts.value.name}, so it stays where it was. ${messageOf(err)}`, { param: 'runsOn' })
     }
     await agentd.remove({ id: facts.id, on: from, trash: true }).catch((err: unknown) => log.warn({ event: 'agent.move_cleanup_failed', agent: facts.id, error: messageOf(err) }))
@@ -407,7 +409,7 @@ async function agentOf({ facts, actor, states }: { facts: AgentFacts; actor: Cal
     instructions: value.instructions, codeExecution: control?.codeExecution ?? true, browser: control?.browser ?? false, face: value.face, canEdit: mayEdit({ facts, actor }),
     runsHere: here, runsNowhere: !here, runsOn: control?.runsOn ?? null, runsOnName: null, runsOnServer: false,
     changedBy: null, workspace: null, shared: !facts.personal, people: facts.control?.people ?? [], sidebars: facts.control?.sidebars ?? [], inSidebar: inSidebar(accessOf(facts), actor.email), owner: facts.owner,
-    canManage: mine, createdAt: value.createdAt,
+    canManage: mine, ...apply.state(facts.id), createdAt: value.createdAt,
   }
 }
 
@@ -441,7 +443,7 @@ function requireModel(model: string | undefined): void {
 const rowOf = (id: string): Promise<AgentRow> => findRow({ table: 'agent', id, missing: 'That agent doesn\'t exist. It may have been deleted.' })
 
 async function tellAgent(id: string): Promise<void> {
-  await agentService.reapply({ id }).catch((err: unknown) => log.warn({ event: 'agent.reapply_failed', agent: id, error: messageOf(err) }))
+  await apply.request(id).catch((err: unknown) => log.warn({ event: 'agent.reapply_failed', agent: id, error: messageOf(err) }))
 }
 
 async function filesOf(row: AgentRow): Promise<AgentFiles> {
