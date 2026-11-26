@@ -5,7 +5,7 @@ export const base = definePlugin({
   hermes: ({ agent }) => ({
     config: {
       terminal: { backend: 'local' },
-      agent: { api_max_retries: 30, disabled_toolsets: ['browser', 'delegation', 'cronjob', 'connections', ...(agent.code_execution ? [] : ['code_execution'])] },
+      agent: { api_max_retries: 30, disabled_toolsets: ['browser', 'cronjob', 'connections', ...(agent.code_execution ? [] : ['code_execution'])] },
       approvals: { mode: 'off' },
       tools: { tool_search: { enabled: 'off' } },
     },
