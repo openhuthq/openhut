@@ -59,9 +59,9 @@ export function fakeAgentd({ path = process.env.AGENTD_SOCK }: { path?: string }
     sock.setEncoding('utf8').on('data', (chunk) => {
       raw += chunk
       const lines = raw.split('\n')
+      if (lines.length < 2) return
       const req = JSON.parse(lines[0] ?? '{}')
       if (req.cmd === 'write' && lines.length < 3) return
-      if (lines.length < 2) return
       const key = `${req.id}/${req.path}`
       if (req.cmd === 'write') files.set(key, Buffer.from(lines[1] ?? '', 'base64').toString('utf8'))
       const restartKey = req.files?.['restart.key']

@@ -106,8 +106,9 @@ export const threadService = {
 
   async bySession({ agentId, session }: { agentId: string; session: string }): Promise<string> {
     const first = SESSION_FIRST.exec(session)?.[1]
-    const agent = await findRow({ table: 'agent', id: agentId, missing: MISSING })
-    const id = first ? (await recordsService.get({ collection: 'message', workspace: workspaceOf(agent), id: first }))?.parent : undefined
+    if (!first) return agentId
+    const agent = await db.selectFrom('agent').select('workspace').where('id', '=', agentId).executeTakeFirst()
+    const id = agent ? (await recordsService.get({ collection: 'message', workspace: agent.workspace ?? HOME, id: first }))?.parent : undefined
     return id && (id === agentId || (await db.selectFrom('chat_thread').select('id').where('id', '=', id).where('agent_id', '=', agentId).executeTakeFirst())) ? id : agentId
   },
 
