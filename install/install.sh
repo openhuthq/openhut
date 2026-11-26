@@ -19,7 +19,12 @@ D=docker; docker info >/dev/null 2>&1 || D="$SUDO docker"
 i=0; until $D info >/dev/null 2>&1; do i=$((i+1)); [ $i -gt 30 ] && die "Docker isn't running. Start it, then run this again."; sleep 1; done
 
 exists() { $D container inspect "$1" >/dev/null 2>&1; }
-pull() { n=0; until $D pull -q "$1" >/dev/null; do n=$((n+1)); [ $n -ge 4 ] && die "couldn't download $1"; echo "  retrying the download ($n)"; sleep 5; done; }
+# OpenHut's images are public: pull them with an empty Docker config, so a saved login for ghcr.io (another org's) isn't sent and denied
+pull() {
+  c=$(mktemp -d); echo '{}' > "$c/config.json"; n=0
+  until $D --config "$c" pull -q "$1" >/dev/null; do n=$((n+1)); [ $n -ge 4 ] && { rm -rf "$c"; die "couldn't download $1"; }; echo "  retrying the download ($n)"; sleep 5; done
+  rm -rf "$c"
+}
 
 if [ "${1:-}" = join ]; then
   rdata() { $D run --rm -v openhut-runtime-data:/data --entrypoint sh "$RUNTIME" -c "$@"; }

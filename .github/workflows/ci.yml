@@ -30,6 +30,15 @@ jobs:
         run: |
           npm audit --omit=dev --audit-level=high
           ! grep '"resolved":' package-lock.json | grep -v '"https://registry.npmjs.org/\|"packages/'
+      - name: install.sh pulls with an empty Docker config, so a saved ghcr.io login that's denied doesn't break the install
+        run: |
+          t=$(mktemp -d); mkdir "$t/bin" "$t/saved" "$t/tmp"
+          echo '{"auths":{"ghcr.io":{"auth":"b3RoZXI6dG9rZW4="}}}' > "$t/saved/config.json"
+          # a docker that, like ghcr.io, denies the pull unless it was sent no saved login
+          printf '#!/bin/sh\n[ "$1" = --config ] && [ "$(cat "$2/config.json")" = "{}" ] || { echo "error from registry: denied" >&2; exit 1; }\n' > "$t/bin/docker"
+          chmod +x "$t/bin/docker"
+          PATH="$t/bin:$PATH" DOCKER_CONFIG="$t/saved" TMPDIR="$t/tmp" D=docker sh -c "set -eu; die() { echo \"\$*\"; exit 1; }; $(sed -n '/^pull() {$/,/^}$/p' install/install.sh); pull ghcr.io/openhuthq/openhut@sha256:test"
+          [ -z "$(ls -A "$t/tmp")" ] || { echo "::error::pull() left its temporary Docker config behind"; exit 1; }
       - uses: actions/cache/restore@v4
         with:
           path: .turbo/cache
