@@ -1,7 +1,7 @@
 import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { asks } from '../../../src/core/asks.ts'
-import { connectionService, toolsShown, type AgentTool } from '../../../src/server/connections/connection-service.ts'
+import { connectionService, problemOf, statusOf, toolsShown, type AgentTool } from '../../../src/server/connections/connection-service.ts'
 import { permissions } from '../../../src/server/permissions/permissions.ts'
 import { postgres } from '../../../src/server/integrations/postgres/postgres.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
@@ -99,21 +99,45 @@ test('a request nobody answers expires and the agent hears about it', async () =
   assert.match(told.at(-1) ?? '', /\[OpenHut asks:wk_[a-z0-9]+\] Your owner answered your ask:\n- Nobody answered in time/)
 })
 
-test('an app\'s status follows its latest call, and apps list by name', async () => {
-  const add = (id: string, kind: 'linear' | 'postgres', name: string) => db.insertInto('connection').values({ id, kind, name, owner_id: 'usr_permowner', config: seal('{}') }).execute()
+test('an app shows a problem only when it needs you: a rejected sign-in or repeated recent failures', async () => {
+  const add = (id: string, kind: 'linear' | 'postgres', name: string) => db.insertInto('connection').values({ id, kind, name, owner_id: 'usr_permowner', config: seal('{}'), sign_in: kind === 'linear' }).execute()
   await add('cn_permpg00001', 'postgres', 'postgres')
   await add('cn_permlin0001', 'linear', 'Linear')
-  const call = (connectionId: string, outcome: 'allowed' | 'failed', minutesAgo: number) => db.insertInto('connection_event').values({ agent_id: agent.id, connection_id: connectionId, tool: 'x', reason: 'r', outcome, ms: 1, approved_by: null, at: new Date(Date.now() - minutesAgo * 60_000) }).execute()
-  for (const minutes of [4, 3, 2, 1]) await call('cn_permpg00001', 'failed', minutes)
-  await call('cn_permlin0001', 'failed', 5)
+  const call = (connectionId: string, outcome: 'allowed' | 'failed', minutesAgo: number, problem: 'auth' | null = null) => db.insertInto('connection_event').values({ agent_id: agent.id, connection_id: connectionId, tool: 'x', reason: 'r', outcome, ms: 1, approved_by: null, problem, at: new Date(Date.now() - minutesAgo * 60_000) }).execute()
+  const status = async (id: string) => (await connectionService.get({ actor: owner, id })).status
+  await call('cn_permpg00001', 'allowed', 10)
+  await call('cn_permpg00001', 'failed', 4)
+  assert.equal(await status('cn_permpg00001'), 'connected')
+  for (const minutes of [3, 2]) await call('cn_permpg00001', 'failed', minutes)
+  assert.equal(await status('cn_permpg00001'), 'failing')
+  await call('cn_permpg00001', 'failed', 1, 'auth')
+  assert.equal(await status('cn_permpg00001'), 'rejected')
+  await call('cn_permlin0001', 'failed', 5, 'auth')
+  assert.equal(await status('cn_permlin0001'), 'signed_out')
   await call('cn_permlin0001', 'allowed', 1)
+  assert.equal(await status('cn_permlin0001'), 'connected')
   const listed = await connectionService.list({ actor: owner })
   assert.deepEqual(listed.map((each) => each.name).filter((name) => ['DigitalOcean', 'Linear', 'postgres'].includes(name)), ['DigitalOcean', 'Linear', 'postgres'])
-  const status = Object.fromEntries(listed.map((each) => [each.name, each.status]))
-  assert.equal(status.postgres, 'failing')
-  assert.equal(status.Linear, 'connected')
-  await call('cn_permlin0001', 'failed', 0)
-  assert.equal((await connectionService.get({ actor: owner, id: 'cn_permlin0001' })).status, 'failing')
+  await db.updateTable('connection').set({ reconnected_at: new Date() }).where('id', '=', 'cn_permpg00001').execute()
+  assert.equal(await status('cn_permpg00001'), 'connected')
+})
+
+test('the status rule: one failed call is the agent\'s business, old failures fade', () => {
+  const now = Date.now()
+  const at = (hoursAgo: number) => new Date(now - hoursAgo * 3_600_000)
+  const failed = (hoursAgo: number, problem: string | null = null) => ({ at: at(hoursAgo), outcome: 'failed', problem })
+  assert.equal(statusOf({ signIn: false, calls: [], now }), 'connected')
+  assert.equal(statusOf({ signIn: false, calls: [failed(0)], now }), 'connected')
+  assert.equal(statusOf({ signIn: false, calls: [failed(0), failed(1), failed(2)], now }), 'failing')
+  assert.equal(statusOf({ signIn: false, calls: [failed(30), failed(31), failed(32)], now }), 'connected')
+  assert.equal(statusOf({ signIn: false, calls: [failed(0), { at: at(1), outcome: 'allowed', problem: null }, failed(2)], now }), 'connected')
+  assert.equal(statusOf({ signIn: true, calls: [failed(40, 'auth')], now }), 'signed_out')
+  assert.equal(statusOf({ signIn: false, calls: [failed(0, 'auth')], now }), 'rejected')
+  assert.equal(problemOf('password authentication failed for user "reader"'), 'auth')
+  assert.equal(problemOf('The sign-in to mcp.linear.app expired or was revoked. Press Reconnect on its page.'), 'auth')
+  assert.equal(problemOf('HTTP 401 Unauthorized'), 'auth')
+  assert.equal(problemOf('relation "orders" does not exist'), null)
+  assert.equal(problemOf('canceling statement due to statement timeout'), null)
 })
 
 test('reconnect swaps the key in place: the same id, its grants and its tool permissions stay', async (t) => {

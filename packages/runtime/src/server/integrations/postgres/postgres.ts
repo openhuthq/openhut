@@ -28,16 +28,19 @@ export const postgres = {
     config: z.object({ dsn: z.string() }),
     tools: {
       tables: nativeTool({
+        title: 'List tables',
         description: 'List tables and their columns.',
         input: z.strictObject({}),
         run: ({ config }: { config: { dsn: string } }) => runQuery({ dsn: config.dsn, sql: 'select table_schema, table_name, string_agg(column_name, \', \' order by ordinal_position) as columns from information_schema.columns where table_schema not in (\'pg_catalog\', \'information_schema\') group by 1, 2 order by 1, 2' }),
       }),
       query: nativeTool({
+        title: 'Query data',
         description: 'Run one read-only SELECT. 15 s timeout, at most 1000 rows.',
         input: z.strictObject({ sql: z.string().check(z.minLength(1, 'Pass the SELECT to run.')) }),
         run: ({ config, args }: { config: { dsn: string }; args: { sql: string } }) => runQuery({ dsn: config.dsn, sql: args.sql }),
       }),
       explain: nativeTool({
+        title: 'Explain queries',
         description: 'Show the query plan for one statement, without running it: plain EXPLAIN in a read-only transaction, never ANALYZE. Pass the query without EXPLAIN. format json gives the plan as JSON.',
         input: z.strictObject({ sql: z.string().check(z.minLength(1, 'Pass the query to explain.')), format: z.optional(z.enum(['text', 'json'])) }),
         run: ({ config, args }: { config: { dsn: string }; args: { sql: string; format?: 'text' | 'json' } }) => runExplain({ dsn: config.dsn, sql: args.sql, format: args.format }),

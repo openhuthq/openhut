@@ -1,19 +1,16 @@
 import type { ReactNode } from 'react'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
-import { AlertCircleIcon, CheckmarkBadge01Icon, DashedLineCircleIcon, UnavailableIcon } from '@hugeicons/core-free-icons'
+import { AlertCircleIcon, CheckmarkBadge01Icon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Badge } from '@/components/ui/badge'
 
 const BADGE_CHECK = badge(CheckmarkBadge01Icon)
-const DASHED = badge(DashedLineCircleIcon)
-const BAN = badge(UnavailableIcon)
 const ALERT = badge(AlertCircleIcon)
 const STATUS = {
-  connected: { word: 'Connected', tip: 'It worked last time', variant: 'success', icon: BADGE_CHECK },
-  failing: { word: 'Failing', tip: 'It failed last time', variant: 'outline', icon: ALERT },
-  no_calls: { word: 'Not used yet', tip: 'No agent has used it yet', variant: 'outline', icon: DASHED },
-  denied: { word: 'Blocked', tip: 'This agent isn\'t allowed to use this tool', variant: 'destructive', icon: BAN },
-  failed: { word: 'Failed', tip: 'The tool ran and failed', variant: 'outline', icon: ALERT },
+  connected: { word: 'Connected', tip: 'Agents can use it', variant: 'success', icon: BADGE_CHECK },
+  signed_out: { word: 'Signed out', tip: 'Its sign-in expired. Reconnect to keep using it.', variant: 'outline', icon: ALERT },
+  rejected: { word: 'Login rejected', tip: 'It turned down the login. Reconnect to fix it.', variant: 'outline', icon: ALERT },
+  failing: { word: 'Not working', tip: 'Its last few calls failed', variant: 'outline', icon: ALERT },
 } satisfies Record<string, { word: string; tip: string; variant: 'success' | 'destructive' | 'outline'; icon: ReactNode }>
 
 export function StatusBadge({ status, tip = STATUS[status].tip, word = STATUS[status].word }: { status: keyof typeof STATUS; tip?: string; word?: string }) {

@@ -18,12 +18,12 @@ export interface Database {
   channel: { id: string; agent_id: string; kind: 'slack' | 'whatsapp' | 'telegram' | 'discord'; status: 'connected' | 'linking'; account: string | null; owner_address: string; secrets: string; open: boolean; allowed: string; created_at: Timestamp }
   connection: {
     id: string; kind: ConnectionKind; name: string; account: Generated<string>; sign_in: Generated<boolean>; owner_id: string; config: string
-    everyone: Generated<boolean>; created_at: Timestamp; changed_by: Generated<string | null>
+    everyone: Generated<boolean>; created_at: Timestamp; changed_by: Generated<string | null>; reconnected_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>
   }
   connection_grant: { id: string; connection_id: string; agent_id: string; created_at: Timestamp }
   connection_event: {
     id: Generated<string>; at: Timestamp; agent_id: string; connection_id: string | null; tool: string; reason: string
-    outcome: 'allowed' | 'asked' | 'denied' | 'failed'; ms: number; approved_by: Generated<string | null>
+    outcome: 'allowed' | 'asked' | 'denied' | 'failed'; ms: number; approved_by: Generated<string | null>; problem: Generated<'auth' | null>
   }
   tool_permission: { agent_id: string; connection_id: string; tool: string; state: 'allow' | 'ask' | 'deny'; changed_by: string; changed_at: Generated<Date> }
   record: { key: string; collection: string; id: string; workspace: string; parent: string | null; ver: number; value: string; secret: string | null; personal: boolean; deleted: boolean }

@@ -25,14 +25,6 @@ export function useReconnect(connection: Connection) {
   })
 }
 
-export function useConnectionEvents(connection: Connection) {
-  return useQuery({
-    queryKey: ['connection-events', connection.id],
-    queryFn: () => request({ schema: EVENT_LIST, path: `/api/connection-events?${new URLSearchParams({ connectionId: connection.id, limit: EVENTS_PER_PAGE })}` }).then((page) => page.data),
-    retry: false,
-  })
-}
-
 export function useCreateConnection() {
   const client = useQueryClient()
   return useMutation({

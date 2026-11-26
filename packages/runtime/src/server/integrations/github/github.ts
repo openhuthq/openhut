@@ -75,6 +75,16 @@ export const github = {
     return { config: { installationId, ...repositories && { repositories } }, account: `${installation.account.login}${scope} · ${app.slug}[bot]` }
   },
 
+  async recheck(stored: unknown): Promise<{ config: GithubConfig; account: string }> {
+    try {
+      const config = configOf(stored)
+      for (const key of tokens.keys()) if (key.startsWith(`${config.installationId}:`)) tokens.delete(key)
+      return await github.installed(config.installationId, config.repositories)
+    } catch {
+      throw new HttpError(409, 'OpenHut can\'t reach this GitHub install anymore. Delete this connection and connect GitHub again.')
+    }
+  },
+
   async repositories(): Promise<number> {
     return (await github.installations()).reduce((sum, each) => sum + each.total, 0)
   },

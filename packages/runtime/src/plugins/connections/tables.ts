@@ -21,6 +21,8 @@ export async function createTables(db: Kysely<Database>): Promise<void> {
     state text not null check (state in ('allow', 'ask', 'deny')), changed_by text not null, changed_at timestamptz not null default now(),
     primary key (agent_id, connection_id, tool))`.execute(db)
   await sql`alter table connection_event add column if not exists approved_by text`.execute(db)
+  await sql`alter table connection_event add column if not exists problem text`.execute(db)
+  await sql`alter table connection add column if not exists reconnected_at timestamptz`.execute(db)
   await sql`create table if not exists sign_in (
     state text primary key, actor text not null, actor_id text not null, kind text not null, name text not null, existing_id text, data text not null,
     status text not null check (status in ('pending', 'working', 'done', 'failed')), connection_id text, error text, expires_at timestamptz not null,
