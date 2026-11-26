@@ -9,7 +9,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { gatewayServer } from '../../../src/server/gateway/gateway-server.ts'
 import { asks } from '../../../src/core/asks.ts'
 import { inboxReceiver } from '../../../src/server/inbox/inbox-controller.ts'
-import { inboxService } from '../../../src/server/inbox/inbox-service.ts'
+import { deliveryIdOf, inboxService, render } from '../../../src/server/inbox/inbox-service.ts'
 import { routineService } from '../../../src/server/inbox/routines.ts'
 import { channelService } from '../../../src/server/channels/channel-service.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
@@ -195,4 +195,63 @@ test('a webhook\'s channel is the app unless set to a place the agent posts in',
   await assert.rejects(inboxService.updateWebhook({ actor: owner, id: hook.id, channel: { ...humans, chat_id: '1' } }), /Pick a channel from the list/)
   assert.equal((await inboxService.updateWebhook({ actor: owner, id: hook.id, channel: 'app' })).channel, 'app')
   places.mock.restore()
+})
+
+const doAlert = ({ id, state, value, time }: { id: string; state: string; value: number; time: string }) => JSON.stringify({ id, subject: 'pulse-db', time, data: { alert_rule_name: 'CPU high', resource_name: 'pulse-db', state, value } })
+const doPost = ({ hook, body, headers = {} }: { hook: { id: string; secret: string }; body: string; headers?: Record<string, string> }) =>
+  post({ id: hook.id, body, headers: { 'x-digitalocean-signature': doSigned({ secret: hook.secret, body }), ...headers } })
+
+test('a template fills its holes from the payload, rounds numbers to one decimal, and is unset when nothing resolves', () => {
+  const payload = JSON.parse(doAlert({ id: 'e1', state: 'STATE_TRIGGERED', value: 93.456, time: 't' }))
+  assert.equal(render({ template: '{subject}/{data.alert_rule_name}', payload }), 'pulse-db/CPU high')
+  assert.equal(render({ template: '{data.state} · {data.value}%', payload }), 'STATE_TRIGGERED · 93.5%')
+  assert.equal(render({ template: '{nope} · {data.missing}', payload }), undefined)
+  assert.equal(render({ template: null, payload }), undefined)
+  assert.equal(render({ template: '{a}', payload: 'not json' }), undefined)
+})
+
+test('the delivery id comes from the sender\'s header, else the payload\'s top-level id', () => {
+  assert.equal(deliveryIdOf({ headers: { 'x-github-delivery': 'g1' }, payload: { id: 'p1' } }), 'g1')
+  assert.equal(deliveryIdOf({ headers: { 'idempotency-key': 'k1' }, payload: {} }), 'k1')
+  assert.equal(deliveryIdOf({ headers: { 'webhook-id': 'w1' }, payload: {} }), 'w1')
+  assert.equal(deliveryIdOf({ headers: {}, payload: { id: 'p1' } }), 'p1')
+  assert.equal(deliveryIdOf({ headers: {}, payload: { id: 7 } }), undefined)
+})
+
+test('in group mode an alert and its recovery share a thread; a resend with the same id is skipped; each call gets a labelled message from the webhook', async () => {
+  const hook = await inboxService.createSource({ actor: owner, agentId: 'ag_hookpuls', name: 'DO alerts' })
+  assert.equal(hook.threads, 'group')
+  const first = told.length
+  assert.equal((await doPost({ hook, body: doAlert({ id: 'g-1', state: 'STATE_TRIGGERED', value: 93.4, time: '2026-11-26T10:00:00Z' }) })).json().repeat, false)
+  await settle()
+  assert.match(told[first].text, /First call set_webhook_threads for wh_/)
+  assert.match(await inboxService.setTemplates({ agentId: 'ag_hookpuls', id: hook.id, groupBy: '{subject}/{data.alert_rule_name}', titleBy: '{data.alert_rule_name} · {data.resource_name}', labelBy: '{data.state} · {data.value}%' }), /group "pulse-db\/CPU high", thread title "CPU high · pulse-db"/)
+  assert.equal((await doPost({ hook, body: doAlert({ id: 'g-2', state: 'STATE_TRIGGERED', value: 95, time: '2026-11-26T10:05:00Z' }) })).json().repeat, false)
+  assert.equal((await doPost({ hook, body: doAlert({ id: 'g-3', state: 'STATE_RECOVERED', value: 40.25, time: '2026-11-26T10:20:00Z' }) })).json().repeat, false)
+  assert.equal((await doPost({ hook, body: doAlert({ id: 'g-3', state: 'STATE_RECOVERED', value: 40.25, time: '2026-11-26T10:21:00Z' }) })).json().repeat, true)
+  await settle()
+  const [, triggered, recovered] = told.slice(first)
+  assert.equal(told.length - first, 3)
+  assert.doesNotMatch(triggered.text, /set_webhook_threads/)
+  assert.equal(triggered.threadId, recovered.threadId)
+  assert.notEqual(told[first].threadId, triggered.threadId)
+  assert.deepEqual({ author: recovered.metadata?.author, call: recovered.metadata?.call }, { author: 'DO alerts', call: { webhookId: hook.id, label: 'STATE_RECOVERED · 40.3%' } })
+  const thread = await db.selectFrom('chat_thread').select(['title', 'key']).where('id', '=', triggered.threadId ?? '').executeTakeFirstOrThrow()
+  assert.deepEqual(thread, { title: 'CPU high · pulse-db', key: `wh:${hook.id}:pulse-db/CPU high` })
+})
+
+test('X-Group-Key picks the thread, and each mode starts a new thread per call', async () => {
+  const hook = await inboxService.createSource({ actor: owner, agentId: 'ag_hookpuls', name: 'Keys' })
+  const first = told.length
+  await doPost({ hook, body: '{"n":1}', headers: { 'x-group-key': 'order-9' } })
+  await doPost({ hook, body: '{"n":2}', headers: { 'x-group-key': 'order-9' } })
+  await settle()
+  assert.equal(told[first].threadId, told[first + 1].threadId)
+  assert.equal((await inboxService.updateWebhook({ actor: owner, id: hook.id, threads: 'each' })).threads, 'each')
+  await doPost({ hook, body: '{"n":3}', headers: { 'x-group-key': 'order-9' } })
+  await doPost({ hook, body: '{"n":4}', headers: { 'x-group-key': 'order-9' } })
+  await settle()
+  assert.equal(told.length - first, 4)
+  assert.notEqual(told[first + 2].threadId, told[first + 3].threadId)
+  assert.notEqual(told[first + 2].threadId, told[first].threadId)
 })

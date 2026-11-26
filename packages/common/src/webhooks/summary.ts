@@ -130,4 +130,4 @@ function isUrl(value: string): boolean {
 
 const clip = (value: string): string => value.length > MAX_VALUE ? `${value.slice(0, MAX_VALUE - 1)}…` : value
 
-export type WebhookCall = { source: { kind: 'webhook'; id: string; name: string }; payload: unknown }
+export type WebhookCall = { author: string; call: { webhookId: string; label?: string }; source: { kind: 'webhook'; id: string; name: string }; payload: unknown }

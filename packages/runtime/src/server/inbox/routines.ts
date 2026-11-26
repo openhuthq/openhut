@@ -119,7 +119,7 @@ export const routineService = {
     const held = await recordsService.list({ collection: 'routine', workspace: facts.workspace, parent: agentId })
     return held.flatMap((each) => {
       const value = RoutineRecord.safeParse(each.value).data
-      return value ? [routineOf({ ...value, at: dateOf(value.at), until: dateOf(value.until), id: each.id, agent_id: agentId, kind: 'schedule', secret: null, last_at: null, next_run_at: null, run_id: null, run_status: null, run_picked_at: null, run_at: null, run_text: null, failures: 0, created_at: new Date(value.createdAt) })] : []
+      return value ? [routineOf({ ...value, at: dateOf(value.at), until: dateOf(value.until), id: each.id, agent_id: agentId, kind: 'schedule', secret: null, last_at: null, next_run_at: null, run_id: null, run_status: null, run_picked_at: null, run_at: null, run_text: null, failures: 0, threads: 'each', group_by: null, title_by: null, label_by: null, created_at: new Date(value.createdAt) })] : []
     })
   },
 

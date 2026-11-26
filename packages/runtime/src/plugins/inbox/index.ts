@@ -27,6 +27,16 @@ export const inbox = definePlugin({
       },
       run: (input, { agent, origin }) => routineService.schedule({ agentId: agent.id, input: { ...input, origin } }),
     }),
+    set_webhook_threads: defineTool({
+      description: 'Set how one of your webhooks files its calls, from what its payloads look like. Each template is text with {dotted.path} holes into the JSON payload, like {data.alert_rule_name}. An empty string clears one.',
+      input: {
+        id: z.string().max(40).describe('The webhook\'s id, like wh_ab12cd34.'),
+        groupBy: z.string().max(200).optional().describe('What calls about the same thing have in common, so they share a thread: DigitalOcean "{subject}/{data.alert_rule_name}". Leave it empty to keep every call in one thread.'),
+        titleBy: z.string().max(200).optional().describe('A new thread\'s title: "{data.alert_rule_name} · {data.resource_name}".'),
+        labelBy: z.string().max(200).optional().describe('A short line for each call in the thread: "{data.state} · {data.value}%".'),
+      },
+      run: (input, { agent }) => inboxService.setTemplates({ agentId: agent.id, ...input }),
+    }),
     list_routines: defineTool({ description: 'List your routines, one line each.', input: {}, run: (_, { agent }) => routineService.listForAgent({ agentId: agent.id }) }),
     cancel_routine: defineTool({
       description: 'Use this when what you were following up on is done, or no longer needed. Tell the chat first: the routine leaves the owner\'s list.',
@@ -37,11 +47,11 @@ export const inbox = definePlugin({
   asks: {
     add_webhook: defineAsk({
       input: z.object({ name: z.string().trim().min(1).max(60).describe('What calls it, in a few words: "DigitalOcean Postgres alerts".') }),
-      tool: 'Ask for a webhook: an address another service (like DigitalOcean alerts) calls when something happens. Each call starts a new chat in OpenHut with the raw payload; to tell people about it, use notify. Once approved, call show_webhook_setup to show the person how to set it up.',
+      tool: 'Ask for a webhook: an address another service (like DigitalOcean alerts) calls when something happens. Each call reaches you in an OpenHut thread with the raw payload, and related calls (like an alert and its recovery) share one; to tell people about it, use notify. Once approved, call show_webhook_setup to show the person how to set it up.',
       title: ({ input }) => `Add a webhook named ${input.name}`,
       run: async ({ actor, ask: { agentId, input } }) => {
         const { id } = await inboxService.createSource({ actor, agentId, name: input.name })
-        return `Its address is ${urlOf(id)}. Each call starts a new chat in OpenHut. Now call show_webhook_setup with ${id} so the person gets the address and secret to paste into the sender (DigitalOcean: a webhook notification channel signed with that secret).`
+        return `Its address is ${urlOf(id)}. Related calls share a thread in OpenHut. Now call show_webhook_setup with ${id} so the person gets the address and secret to paste into the sender (DigitalOcean: a webhook notification channel signed with that secret).`
       },
     }),
   },

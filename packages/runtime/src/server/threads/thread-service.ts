@@ -312,7 +312,7 @@ export const threadService = {
       const agent = chat.agent
       const last = (await saidOf(chat)).at(-1)?.message
       const retried = last?.role === 'user' && textOf(last) === text ? last : undefined
-      const asked: ChatMessage | undefined = chat.row ? retried ?? { id: nextId(), role: 'user', parts: [{ type: 'text', text }], metadata: { ...metadata, author: chat.row.title } } : undefined
+      const asked: ChatMessage | undefined = chat.row ? retried ?? { id: nextId(), role: 'user', parts: [{ type: 'text', text }], metadata: { author: chat.row.title, ...metadata } } : undefined
       if (asked && !retried) await write({ chat, message: asked })
       const said = await saidOf(chat)
       const id = nextId()
