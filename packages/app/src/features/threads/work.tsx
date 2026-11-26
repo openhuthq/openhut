@@ -15,7 +15,7 @@ import { useAgentTools, useConnections, useSetToolPermission } from '@/features/
 import { connectionBrand } from '@/features/connections/catalog'
 import { durationOf, kindOf, summaryOf, troubleOf } from '@/features/threads/steps'
 
-const LIVE = 'animate-[shimmer_1.4s_linear_infinite] bg-[linear-gradient(90deg,var(--mute)_30%,var(--ink)_50%,var(--mute)_70%)] bg-size-[200%_100%] bg-clip-text text-transparent motion-reduce:animate-none motion-reduce:bg-none motion-reduce:text-mute'
+const LIVE = 'text-mute'
 
 export function WorkLine({ agent, work, live, answered, onRetry }: { agent: Agent; work: Work; live: boolean; answered: boolean; onRetry?: () => void }) {
   const running = live ? work.calls.filter((call) => call.status === 'running').at(-1) : undefined
