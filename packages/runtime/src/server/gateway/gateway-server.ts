@@ -24,7 +24,7 @@ const PER_AGENT = 8
 // Background polls (Telegram's long poll, the plugin's routines poll every 15 s) aren't the agent at work, so they don't count toward its request limit.
 const LONG_POLL = /^(\/u\/telegram\/bot[^/]+\/getUpdates|\/routines\/due)$/
 const MAX_BODY = 1 << 20
-const LIMITS = { requestTimeout: 60_000, headersTimeout: 10_000, connectionsCheckingInterval: 2_000 }
+const LIMITS = { requestTimeout: 600_000, headersTimeout: 10_000, connectionsCheckingInterval: 2_000 }
 const RunReport = z.object({ picked: z.literal(true).optional(), said: z.string().max(200_000).optional() })
 const TelegramJoin = z.object({ code: z.string().max(64), userId: z.string().regex(/^[1-9]\d{4,14}$/), name: z.string().max(100).default('there'), chatId: z.number() })
 const RenderCard = z.object({ text: z.string().max(200_000), channel: z.string().max(40), chatId: z.string().max(200).optional(), threadId: z.string().max(200).optional() })

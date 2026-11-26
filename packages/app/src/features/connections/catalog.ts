@@ -35,8 +35,8 @@ export const SHELVES: { shelf: string; items: Integration[] }[] = [
     },
     {
       name: 'github', short: 'Code, commits and pull requests', safeLine: 'The bot reaches only the repositories you install it on.', warn: 'Agents can push commits and open pull requests in the repositories you pick, and clone them.', eta: 'Two approvals', title: 'GitHub', blurb: 'A GitHub App of your own: agents commit and open pull requests as the bot.',
-      gets: ['Read files, commits and branches', 'Create branches, commit files and open pull requests, as the bot', 'Search code, read and file issues, review pull requests', 'git_credentials: clone, pull and push from the agent’s terminal with a token that lasts an hour', "Whatever else GitHub adds to its MCP server"],
-      safe: ['The bot is a GitHub App you own: it reaches only the repositories you install it on.', 'Agents never see its private key.', 'Commits show as the bot, not as a person.'],
+      gets: ['Read files, commits and branches', 'Create branches, commit files and open pull requests, as the bot', 'Search code, read and file issues, review pull requests', 'git_credentials: clone, pull and push from the agent’s terminal, through OpenHut, which adds the key', "Whatever else GitHub adds to its MCP server"],
+      safe: ['The bot is a GitHub App you own: it reaches only the repositories you install it on.', 'Agents never see its private key or a token: git goes through OpenHut, which adds it.', 'Commits show as the bot, not as a person.'],
     },
     {
       name: 'excalidraw', short: 'Diagrams shared as a link', safeLine: 'Drawings live on excalidraw.com. Anyone with the link can open them.', eta: 'One click', title: 'Excalidraw', blurb: 'Excalidraw’s official MCP server: agents draw a diagram and send a link that opens it. No account or key.',
