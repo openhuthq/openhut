@@ -15,6 +15,7 @@ export const agentController: FastifyPluginAsyncZod = async (app) => {
 
   app.delete('/:id', { schema: { params: IdParams } }, async (req) => agentService.delete({ actor: await who(req), id: req.params.id }))
 
+  app.post('/:id/apply', { schema: { params: IdParams } }, async (req) => agentService.retryApply({ actor: await who(req), id: req.params.id }))
   app.delete('/:id/token', { schema: { params: IdParams } }, async (req) => agentService.revokeToken({ actor: await who(req), id: req.params.id }))
 }
 

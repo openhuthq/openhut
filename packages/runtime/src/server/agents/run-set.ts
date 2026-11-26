@@ -13,6 +13,7 @@ import { portsFree } from '../platform/network.ts'
 import { newId, seal } from '../platform/secrets.ts'
 import { recordsService, type Change, type Held } from '../platform/records.ts'
 import { HOME } from '../team/home.ts'
+import { apply } from './apply.ts'
 
 const MAX_AGENTS = 250
 const START_MS = 5_000
@@ -21,6 +22,7 @@ const CHILD_KINDS = new Set(['skill', 'routine', 'channel'])
 
 let queue: Promise<void> = Promise.resolve()
 let watching: (() => void) | undefined
+const greetings = new Map<string, () => Promise<void>>()
 
 export const runSet = {
   async start(): Promise<void> {
@@ -30,12 +32,15 @@ export const runSet = {
   },
 
   watch(): void {
-    watching ??= recordsService.onChange((change) => void heard(change))
+    apply.use((id) => settle(id))
+    watching ??= recordsService.onChange((change) => heard(change))
   },
 
   refresh: (): Promise<void> => serial(refreshOnce),
 
-  apply: ({ workspace, id }: { workspace: string; id: string }): Promise<void> => serial(() => applyOne({ workspace, id })),
+  project: ({ workspace, id }: { workspace: string; id: string }): Promise<void> => serial(() => project({ workspace, id })),
+
+  settle: (id: string): Promise<void> => settle(id),
 
   async afterTurn({ agentId }: { agentId: string }): Promise<void> {
     await memoryService.backUp({ agentId }).catch((err: unknown) => log.warn({ event: 'memory.backup_failed', agent: agentId, error: messageOf(err) }))
@@ -53,30 +58,44 @@ async function heard(change: Change): Promise<void> {
   const id = CHILD_KINDS.has(change.collection) ? (await recordsService.get({ collection: change.collection, workspace: change.workspace, id: change.id }).catch(() => null))?.parent : AGENT_KINDS.has(change.collection) ? change.id : undefined
   if (!id) return
   if (change.collection !== 'agent' && change.collection !== 'control' && !await db.selectFrom('agent').select('id').where('id', '=', id).executeTakeFirst()) return
-  await runSet.apply({ workspace: change.workspace, id }).catch((err: unknown) => log.warn({ event: 'run_set.apply_failed', agent: id, error: messageOf(err) }))
+  await runSet.project({ workspace: change.workspace, id })
+    .then(() => change.backup ? undefined : apply.request(id))
+    .catch((err: unknown) => log.warn({ event: 'run_set.apply_failed', agent: id, error: messageOf(err) }))
 }
 
 async function refreshOnce(): Promise<void> {
-  const kept = new Set<string>()
-  const [agents, controls] = await Promise.all([recordsService.list({ collection: 'agent', workspace: HOME }), recordsService.list({ collection: 'control', workspace: HOME })])
-  const control = new Map(controls.map((each) => [each.id, each]))
-  for (const agent of agents) {
-    const placed = control.get(agent.id)
-    if (!placed || !placeable({ agent, control: placed })) continue
-    kept.add(agent.id)
-    await keep({ agent, control: placed }).catch((err: unknown) => log.warn({ event: 'run_set.apply_failed', agent: agent.id, error: messageOf(err) }))
+  const ids = new Set<string>()
+  for (const agent of await recordsService.list({ collection: 'agent', workspace: HOME })) {
+    await project({ workspace: HOME, id: agent.id }).catch((err: unknown) => log.warn({ event: 'run_set.apply_failed', agent: agent.id, error: messageOf(err) }))
+    ids.add(agent.id)
   }
-  for (const row of await db.selectFrom('agent').select(['id', 'workspace']).execute()) {
-    if (!kept.has(row.id)) await applyOne({ workspace: row.workspace ?? HOME, id: row.id })
-  }
+  for (const row of await db.selectFrom('agent').select('id').execute()) ids.add(row.id)
+  for (const id of ids) await apply.request(id).catch((err: unknown) => log.warn({ event: 'run_set.apply_failed', agent: id, error: messageOf(err) }))
 }
 
-async function applyOne({ workspace, id }: { workspace: string; id: string }): Promise<void> {
-  const row = await db.selectFrom('agent').selectAll().where('id', '=', id).executeTakeFirst()
-  if (workspace !== HOME) return row ? leave(row) : undefined
+async function project({ workspace, id }: { workspace: string; id: string }): Promise<void> {
+  if (workspace !== HOME) return
   const [agent, control] = await Promise.all([recordsService.get({ collection: 'agent', workspace, id }), recordsService.get({ collection: 'control', workspace, id })])
-  if (agent && control && placeable({ agent, control })) return keep({ agent, control })
-  if (row && (agent?.deleted || control?.deleted)) await leave(row)
+  if (agent && control && placeable({ agent, control })) await keep({ agent, control })
+}
+
+async function settle(id: string): Promise<void> {
+  const row = await db.selectFrom('agent').selectAll().where('id', '=', id).executeTakeFirst()
+  if (!row) return
+  const workspace = row.workspace ?? HOME
+  const [agent, control] = await Promise.all([recordsService.get({ collection: 'agent', workspace, id }), recordsService.get({ collection: 'control', workspace, id })])
+  if (workspace !== HOME || !agent || !control || !placeable({ agent, control })) {
+    if (workspace !== HOME || agent?.deleted || control?.deleted) await leave(row)
+    return
+  }
+  const children = async (collection: 'skill') => recordsService.list({ collection, workspace, parent: id })
+  const [skills, memory] = await Promise.all([children('skill'), recordsService.get({ collection: 'memory', workspace, id })])
+  await agentService.reapply({ id })
+  await memoryService.applyRecord({ agentId: id, record: memory && !memory.deleted ? memory : null })
+  await skillService.applyRecords({ agentId: id, records: skills })
+  const greet = greetings.get(id)
+  greetings.delete(id)
+  await greet?.()
 }
 
 function placeable({ agent, control }: { agent: Held; control: Held }): boolean {
@@ -94,14 +113,12 @@ async function keep({ agent, control }: { agent: Held; control: Held }): Promise
   if (row) await db.updateTable('agent').set(fields).where('id', '=', agent.id).execute()
   else await db.insertInto('agent').values({ id: agent.id, ...fields, owner_id: await ownerId(), net: await freeNet(), channel_key: seal(randomBytes(24).toString('hex')), created_at: value.createdAt }).execute()
   await grantsOf({ agentId: agent.id, connections: placed.grants.map((grant) => grant.connection) })
-  const children = async (collection: 'channel' | 'routine' | 'skill') => recordsService.list({ collection, workspace: agent.workspace, parent: agent.id })
-  const [channels, routines, skills, memory] = await Promise.all([children('channel'), children('routine'), children('skill'), recordsService.get({ collection: 'memory', workspace: agent.workspace, id: agent.id })])
+  const children = async (collection: 'channel' | 'routine') => recordsService.list({ collection, workspace: agent.workspace, parent: agent.id })
+  const [channels, routines] = await Promise.all([children('channel'), children('routine')])
   const greet = await channelService.applyRecords({ agentId: agent.id, records: channels })
+  const before = greetings.get(agent.id)
+  greetings.set(agent.id, async () => { await before?.(); await greet() })
   await routineService.applyRecords({ agentId: agent.id, records: routines })
-  await agentService.reapply({ id: agent.id })
-  await memoryService.applyRecord({ agentId: agent.id, record: memory && !memory.deleted ? memory : null })
-  await skillService.applyRecords({ agentId: agent.id, records: skills })
-  await greet()
   if (!row) emit({ name: 'agent.synced', target: { type: 'agent', id: agent.id } })
 }
 
@@ -132,3 +149,5 @@ async function freeNet(): Promise<number> {
   for (let net = 1; net <= MAX_AGENTS; net++) if (!used.has(net) && await portsFree(net)) return net
   throw new HttpError(409, `This computer already runs ${MAX_AGENTS} agents. Run some on another computer first.`)
 }
+
+runSet.watch()

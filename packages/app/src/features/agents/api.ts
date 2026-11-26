@@ -96,6 +96,17 @@ export function useUpdateAgent(agentId: string) {
   })
 }
 
+export function useRetryApply(agentId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => request({ schema: Agent, of: agentId, path: `${agentPath(agentId)}/apply`, method: 'POST' }),
+    onSuccess: (agent) => {
+      client.setQueryData([...AGENTS_KEY, agent.id], agent)
+      client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents?.map((each) => each.id === agent.id ? { ...each, ...agent } : each))
+    },
+  })
+}
+
 export function useDeleteAgent(agentId: string) {
   const client = useQueryClient()
   return useMutation({
