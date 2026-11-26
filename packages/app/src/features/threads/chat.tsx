@@ -293,7 +293,7 @@ function AgentReply({ agent, message, live, onRetry }: { agent: Agent; message: 
   const paths = live ? [] : homePathsIn(blocks.flatMap((block) => block.type === 'text' ? [block.text] : []).join('\n'))
   const found = useHomeFiles({ agentId, threadId, paths })
   const plugins = found?.size ? [remarkGfm, linkHomeFiles(found)] : [remarkGfm]
-  return <div className="grid animate-grow grid-cols-[34px_minmax(0,1fr)] gap-3">
+  return <div className="grid grid-cols-[34px_minmax(0,1fr)] gap-3">
     <span className={live ? 'talking' : undefined}><Face agent={agent} size={34} /></span>
     <CopyMenu text={textOf(message)}><div className="flex min-w-0 flex-col gap-2 pt-1.5 pointer-coarse:select-none">
       {work && <WorkLine agent={agent} work={work} live={live} answered={blocks.length > 0} onRetry={onRetry} />}
@@ -314,14 +314,14 @@ function UserMessage({ message }: { message: AgentMessage }) {
   const files = message.parts.flatMap((part) => part.type === 'file' ? [part] : [])
   const author = z.safeParse(Authored, message.metadata).data?.author
   const me = useOwner()
-  if (author && me && author !== me) return <div className="flex animate-grow gap-3">
+  if (author && me && author !== me) return <div className="flex gap-3">
     <PersonFace name={personName(author)} email={author} size={28} />
     <span className="grid min-w-0 gap-1"><span className="text-[12px] text-mute">{personName(author)}</span>
       {files.length > 0 && <span className="flex flex-wrap gap-1.5">{files.map((file) => <SentFile key={file.url} name={file.filename ?? nameOf(file.url)} path={file.url} mediaType={file.mediaType} />)}</span>}
       {text && <CopyMenu text={text}><span className="max-w-[420px] rounded-[4px_12px_12px_12px] bg-soft px-3.5 py-2 text-[14px]/[1.5] [overflow-wrap:anywhere] whitespace-pre-wrap text-ink pointer-coarse:select-none">{text}</span></CopyMenu>}
     </span>
   </div>
-  return <div className="flex animate-grow flex-col items-end gap-1.5">
+  return <div className="flex flex-col items-end gap-1.5">
     {files.length > 0 && <div className="flex max-w-[78%] flex-wrap justify-end gap-1.5">{files.map((file) => <SentFile key={file.url} name={file.filename ?? nameOf(file.url)} path={file.url} mediaType={file.mediaType} />)}</div>}
     {text && <CopyMenu text={text}><div className="max-w-[78%] rounded-[12px_12px_4px_12px] bg-soft px-3.5 py-2 text-[14px]/[1.5] [overflow-wrap:anywhere] whitespace-pre-wrap text-ink pointer-coarse:select-none">{text}</div></CopyMenu>}
   </div>
