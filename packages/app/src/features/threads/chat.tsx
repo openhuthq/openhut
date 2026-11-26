@@ -374,7 +374,8 @@ function blocksOf(message: AgentMessage): Block[] {
   const blocks: Block[] = []
   let events: ToolProgress[] = []
   const flush = () => {
-    if (events.length) blocks.push({ type: 'steps', steps: stepsOf(events) })
+    const steps = stepsOf(events)
+    if (steps.length) blocks.push({ type: 'steps', steps })
     events = []
   }
   for (const part of message.parts) {
