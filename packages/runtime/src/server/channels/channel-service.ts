@@ -1,6 +1,6 @@
 import type { Selectable } from 'kysely'
 import type { Deleted } from '@openhut/common/api.ts'
-import { ADDRESS, ChannelRecord, ChannelSecrets, type Channel, type ChannelKind, type Conversation, type CreateChannel, type Place, type TelegramInvite, type UpdateChannel } from '@openhut/common/channels/channel.ts'
+import { ADDRESS, ChannelRecord, ChannelSecrets, type Channel, type ChannelKind, type Conversation, type CreateChannel, type Place, type Sent, type TelegramInvite, type UpdateChannel } from '@openhut/common/channels/channel.ts'
 import { db } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { log, emit } from '../platform/events.ts'
@@ -21,8 +21,8 @@ import { whatsappPairing } from './whatsapp-pairing.ts'
 import { telegramCodes, welcome, type Person } from './telegram-codes.ts'
 
 const CHANNEL_KINDS = new Set<ChannelKind>(['slack', 'discord'])
-const SENDERS: Record<string, (input: { botToken: string; place: Place; text: string }) => Promise<void>> = {
-  discord: ({ botToken, place, text }) => discord.post({ botToken, channelId: place.chat_id, threadId: place.thread_id, text }),
+const SENDERS: Record<string, (input: { botToken: string; place: Place; text: string; startThread?: string }) => Promise<Sent>> = {
+  discord: ({ botToken, place, text, startThread }) => discord.post({ botToken, channelId: place.chat_id, threadId: place.thread_id, text, startThread }),
 }
 const LABEL = { slack: 'Slack', whatsapp: 'WhatsApp', telegram: 'Telegram', discord: 'Discord' } as const
 
@@ -164,7 +164,7 @@ export const channelService = {
     return targets.map((each) => ({ platform: each.target.split(':')[0] ?? '', chat_id: each.chat, chat_name: each.place })).filter((place) => place.platform in SENDERS)
   },
 
-  async send({ agentId, place, text }: { agentId: string; place: Place; text: string }): Promise<void> {
+  async send({ agentId, place, text, startThread }: { agentId: string; place: Place; text: string; startThread?: string }): Promise<Sent> {
     const sender = SENDERS[place.platform]
     if (!sender) throw new HttpError(400, `OpenHut can't post to ${place.platform} yet. Pick a Discord channel.`)
     if (!text.trim()) throw new HttpError(400, 'Send the text to post.')
@@ -173,7 +173,7 @@ export const channelService = {
     const row = await db.selectFrom('channel').select('secrets').where('id', '=', target.channel).executeTakeFirstOrThrow()
     const botToken = ChannelSecrets.parse(JSON.parse(unseal(row.secrets))).botToken
     if (!botToken) throw new HttpError(409, 'This channel has no bot token. Connect it again on the agent\'s page.')
-    await sender({ botToken, place, text })
+    return sender({ botToken, place, text, startThread })
   },
 
   async postTarget({ agentId, channel, chat }: { agentId: string; channel: string; chat?: string }): Promise<PostTarget> {

@@ -107,6 +107,7 @@ export const Place = z.object({
   chat_name: z.string(),
 })
 export type Place = z.infer<typeof Place>
+export type Sent = { url: string; messageId: string; threadId?: string }
 
 export const ChannelSecrets = z.object({ botToken: z.optional(z.string()), appToken: z.optional(z.string()) })
 export type ChannelSecrets = z.infer<typeof ChannelSecrets>
