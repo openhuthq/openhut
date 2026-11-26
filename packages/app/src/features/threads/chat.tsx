@@ -359,7 +359,7 @@ function useOffline(agent: Agent) {
 
 function Message({ agent, thread, message, seen, mirrors = [], live, onRetry }: { agent: Agent; thread: SourcedThread; message: AgentMessage; seen: boolean; mirrors?: Place[]; live: boolean; onRetry?: () => void }) {
   const webhook = webhookOf(message.metadata)
-  if (webhook && message.role === 'user') return <WebhookMessage webhook={webhook} at={thread.createdAt} />
+  if (webhook && !callOf(message.metadata) && message.role === 'user') return <WebhookMessage webhook={webhook} at={thread.createdAt} />
   return message.role === 'user' ? <UserMessage message={message} mirrors={mirrors} seen={seen ? thread.id : undefined} /> : <AgentReply agent={agent} threadId={thread.id} message={message} live={live} onRetry={onRetry} />
 }
 
