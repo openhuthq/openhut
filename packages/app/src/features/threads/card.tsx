@@ -9,6 +9,10 @@ import { cn } from '@/lib/utils'
 import { isBrand } from '@/components/brand-icons'
 import { Glyph } from '@/components/glyph'
 import { integration } from '@/features/connections/catalog'
+import { useGrants } from '@/features/agents/api'
+import { useConnections } from '@/features/connections/api'
+import { I } from '@/components/kit'
+import { CheckmarkCircle02Icon } from '@hugeicons/core-free-icons'
 
 export const CardReply = createContext<(text: string) => void>(() => undefined)
 
@@ -18,11 +22,11 @@ export const MessageCard = createRenderer(cardCatalog, {
   Card: ({ element: { props }, children }) => {
     const brand = props.brand && isBrand(props.brand) ? props.brand : undefined
     const subtitle = props.subtitle ?? (brand && integration(brand)?.short)
-    return <div className="flex max-w-[560px] min-w-0 flex-col gap-3 rounded-lg border border-hair bg-sidebar p-4">
+    return <div className="flex max-w-[560px] min-w-0 flex-col gap-3.5 rounded-xl bg-sidebar p-4">
     <div className="flex min-w-0 items-center gap-3">
-      {brand && <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-card shadow-[inset_0_0_0_1px_var(--hair)]"><Glyph name={brand} size={20} /></span>}
+      {brand && <span className="grid size-8 shrink-0 place-items-center"><Glyph name={brand} size={22} /></span>}
       <div className="min-w-0">
-        <div className="text-[15px] font-semibold text-ink">{props.title}</div>
+        <div className="text-[14px]/[20px] font-medium text-ink">{props.title}</div>
         {subtitle && <div className="truncate text-[13px] text-mute">{subtitle}</div>}
       </div>
     </div>
@@ -67,4 +71,26 @@ export const MessageCard = createRenderer(cardCatalog, {
     if (inApp) return <a href={inApp} className={cn(buttonVariants({ variant: 'text' }), 'ml-auto')}>{props.label}</a>
     return <a href={props.url} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'secondary', size: 'sm' })}>{props.label}<span className="text-[11px] text-mute">↗</span></a>
   },
+  Connect: ({ element: { props } }) => {
+    const brand = props.brand && isBrand(props.brand) ? props.brand : undefined
+    const inApp = askedPath(props.url)
+    const done = useConnected(inApp)
+    return <div className="flex min-w-0 items-center gap-3">
+      <span className="grid size-6 shrink-0 place-items-center">{brand && <Glyph name={brand} size={20} />}</span>
+      <span className="min-w-0 flex-1 truncate text-[13.5px]"><span className="text-ink">{props.title}</span>{props.subtitle && <span className="text-mute"> · {props.subtitle}</span>}</span>
+      {done
+        ? <span className="inline-flex h-7 items-center gap-1.5 text-[13px] text-ink"><I icon={CheckmarkCircle02Icon} size={16} className="animate-[pop_.45s_cubic-bezier(.2,.8,.2,1)] text-hue-green" />Connected</span>
+        : <a href={inApp ?? props.url} className={buttonVariants({ variant: 'secondary', size: 'sm' })}>Connect</a>}
+    </div>
+  },
 })
+
+function useConnected(path: string | undefined): boolean {
+  const [, kind = '', query = ''] = (path && /^\/connections\/new\/([a-z_]+)\?(.*)$/.exec(path)) || []
+  const wanted = new URLSearchParams(query)
+  const url = wanted.get('url')
+  const host = url && URL.canParse(url) ? new URL(url).host : undefined
+  const grants = useGrants({ agentId: wanted.get('for') ?? '' }).data ?? []
+  const connections = useConnections().data ?? []
+  return grants.some((grant) => connections.some((connection) => connection.id === grant.connectionId && connection.kind === kind && (kind !== 'mcp' || connection.account.split(' · ')[0] === host)))
+}

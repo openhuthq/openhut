@@ -18,22 +18,42 @@ export function askedPath(link: string): string | undefined {
   return hash && ConnectionKind.safeParse(kind).success && !new URLSearchParams(query).has('error') ? hash : undefined
 }
 
-export function askCard({ app, url, name, auth, why, agentId }: Ask & { why: string }): string {
+export function brandOf({ app, url }: Pick<Ask, 'app' | 'url'>): string {
   const host = url ? new URL(url).hostname : undefined
-  const brand = app === 'mcp' ? BRANDED_HOSTS.find((each) => host === `${each}.com` || host?.endsWith(`.${each}.com`)) ?? 'mcp' : app
-  const link = `${OPEN_PAGE}#${askPath({ agentId, app, url, name, auth })}`
+  return app === 'mcp' ? BRANDED_HOSTS.find((each) => host === `${each}.com` || host?.endsWith(`.${each}.com`)) ?? 'mcp' : app
+}
+
+export function askCard({ asks, why }: { asks: (Ask & { line?: string })[]; why: string }): string {
+  const titleOf = (ask: Ask) => ask.name ?? CONNECTION_TITLES[ask.app]
+  const ids = asks.map((_, index) => `app${index}`)
   const patch = [
     { op: 'add', path: '/root', value: 'ask' },
-    { op: 'add', path: '/elements/ask', value: { type: 'Card', props: { title: name ?? CONNECTION_TITLES[app], brand, ...(host && { subtitle: host }) }, children: ['why', 'acts'] } },
+    { op: 'add', path: '/elements/ask', value: { type: 'Card', props: { title: asks.length === 1 ? `Connect ${titleOf(asks[0])}` : 'Connect apps' }, children: ['why', ...ids] } },
     { op: 'add', path: '/elements/why', value: { type: 'Text', props: { content: why } } },
-    { op: 'add', path: '/elements/acts', value: { type: 'Actions', props: {}, children: ['go'] } },
-    { op: 'add', path: '/elements/go', value: { type: 'LinkButton', props: { label: 'Connect', url: link } } },
+    ...asks.map((ask, index) => {
+      const subtitle = ask.line ?? (ask.url && new URL(ask.url).hostname)
+      return { op: 'add', path: `/elements/${ids[index]}`, value: { type: 'Connect', props: { title: titleOf(ask), brand: brandOf(ask), ...(subtitle && { subtitle }), url: `${OPEN_PAGE}#${askPath(ask)}` } } }
+    }),
   ]
   return `\`\`\`spec\n${patch.map((line) => JSON.stringify(line)).join('\n')}\n\`\`\``
+}
+
+export function isStarter({ name, instructions }: { name: string; instructions: string }): boolean {
+  return instructions === starterInstructions(name)
+}
+
+export function starterInstructions(name: string): string {
+  return `# ${name}\n\nYou are ${name}. Answer briefly.`
 }
 
 export const ASK_PROMPT = `
 ## Getting access
 
-You decide what a job needs and how to set it up. When you need an app you can't reach yet, ask with ask_to_connect. Never ask for a password, key or token in chat.
+You decide what a job needs and how to set it up. When you need apps you can't reach yet, ask for all of them in one ask_to_connect call. For an app that isn't on ask_to_connect's list but has an official remote MCP server, use propose_connection: your owner pastes the token in OpenHut and you never see it. Never ask for a password, key or token in chat.
+`
+
+export const INTERVIEW_PROMPT = `
+## Your first chat
+
+You're new and nobody has told you your job yet. In your first chat, before any work, interview the person: ask three or four short questions in one message about the job (what to look after or do, where it lives, who to tell, what needs their OK first). Use their words, no jargon. Once they answer, write your own instructions with update_self (the whole text: short lines, plain words), then ask for the apps the job needs in one ask_to_connect call, and propose_connection for any app that isn't on its list.
 `

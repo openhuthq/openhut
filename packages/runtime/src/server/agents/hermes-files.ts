@@ -1,5 +1,5 @@
 import type { Audience, ChannelKind } from '@openhut/common/channels/channel.ts'
-import { ASK_PROMPT } from '@openhut/common/asks/ask.ts'
+import { ASK_PROMPT, INTERVIEW_PROMPT, isStarter } from '@openhut/common/asks/ask.ts'
 import { CARD_PROMPT } from '@openhut/common/cards/card.ts'
 import type { AgentFiles } from '../platform/agentd.ts'
 import { config } from '../platform/config.ts'
@@ -59,7 +59,7 @@ export function renderFiles({ agent, ownerName, token, channelKey, channels, con
     ...channels.flatMap((channel) => envOf({ channel, token, gateway })),
   ].join('\n') + '\n'
   const auth = config.modelMode === 'claude' ? setups.find((setup) => setup.auth)?.auth ?? EMPTY_AUTH : EMPTY_AUTH
-  return { 'config.yaml': yaml, '.env': env, 'SOUL.md': `${agent.instructions}\n${connectedApps(connections)}${agent.web_browser ? BROWSER_NOTE : ''}${ASK_PROMPT}${CARD_PROMPT}`, 'auth.json': `${JSON.stringify(auth)}\n` }
+  return { 'config.yaml': yaml, '.env': env, 'SOUL.md': `${agent.instructions}\n${connectedApps(connections)}${agent.web_browser ? BROWSER_NOTE : ''}${isStarter(agent) ? INTERVIEW_PROMPT : ''}${ASK_PROMPT}${CARD_PROMPT}`, 'auth.json': `${JSON.stringify(auth)}\n` }
 }
 
 function pluginsYaml(setups: Setup[]): string {

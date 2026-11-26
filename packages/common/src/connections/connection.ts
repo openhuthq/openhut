@@ -65,6 +65,25 @@ export const UpdateAgentTools = z.extend(ListAgentTools, {
 })
 export type UpdateAgentTools = z.infer<typeof UpdateAgentTools>
 
+const HttpsUrl = z.url({ protocol: /^https$/ }).check(z.maxLength(500))
+
+export const ProposedGroup = z.object({ group: ToolGroup, label: z.string().check(z.minLength(1), z.maxLength(80)), permission: Permission })
+export type ProposedGroup = z.infer<typeof ProposedGroup>
+
+export const ProposedConnection = z.object({
+  name: z.string().check(z.minLength(1), z.maxLength(60)),
+  line: z.optional(z.string().check(z.maxLength(120))),
+  url: HttpsUrl,
+  token: z.object({
+    label: z.string().check(z.minLength(1), z.maxLength(60)),
+    guide: z.string().check(z.minLength(1), z.maxLength(300)),
+    link: HttpsUrl,
+    scopes: z.optional(z.array(z.string().check(z.maxLength(100))).check(z.maxLength(30))),
+  }),
+  groups: z.array(ProposedGroup).check(z.minLength(1), z.maxLength(5), z.refine((groups) => new Set(groups.map((each) => each.group)).size === groups.length, 'Give each kind of tool once.')),
+})
+export type ProposedConnection = z.infer<typeof ProposedConnection>
+
 export const ListConnectionTools = z.object({ connectionId: z.string().check(z.maxLength(40)) })
 export type ListConnectionTools = z.infer<typeof ListConnectionTools>
 

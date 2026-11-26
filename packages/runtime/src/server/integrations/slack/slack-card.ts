@@ -25,6 +25,7 @@ export function slackBlocks(card: CardSpec): Block[] {
       case 'Chart': return [section(`*${props.title}*\n\`\`\`${barsText(props)}\`\`\``)]
       case 'Image': return [{ type: 'image', image_url: props.url, alt_text: props.alt }]
       case 'Divider': return [{ type: 'divider' }]
+      case 'Connect': return [{ ...section(`*${props.title}*${props.subtitle ? ` · ${props.subtitle}` : ''}`), accessory: { type: 'button', text: plain('Connect'), action_id: `card-link:${id}`, url: props.url } }]
       case 'Actions': return [{ type: 'actions', elements: (element.children ?? []).flatMap((child) => button(child, card.elements[child])).slice(0, 25) }]
       default: return []
     }

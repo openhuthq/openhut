@@ -12,7 +12,7 @@ export const changeRequestController: FastifyPluginAsyncZod = async (app) => {
     return listOf({ req, data: await changeRequestService.list({ actor, agentId: req.query.agentId }) })
   })
 
-  app.post('/:id/approvals', ApproveRequest, async (req) => changeRequestService.approve({ actor: await who(req), id: req.params.id, input: req.body?.input, always: req.body?.always }))
+  app.post('/:id/approvals', ApproveRequest, async (req) => changeRequestService.approve({ actor: await who(req), id: req.params.id, input: req.body?.input, always: req.body?.always, token: req.body?.token }))
 
   app.post('/:id/denials', DenyRequest, async (req) => changeRequestService.deny({ actor: await who(req), id: req.params.id, note: req.body?.note }))
 }

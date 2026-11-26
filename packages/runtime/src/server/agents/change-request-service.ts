@@ -3,6 +3,7 @@ import * as z from 'zod/mini'
 import { UpdateAgentFields } from '@openhut/common/agents/agent.ts'
 import type { ChangeAction, ChangeRequest } from '@openhut/common/agents/change-request.ts'
 import { CreateChannel } from '@openhut/common/channels/channel.ts'
+import { ProposedConnection } from '@openhut/common/connections/connection.ts'
 import { db } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { emit, log } from '../platform/events.ts'
@@ -60,13 +61,13 @@ export const changeRequestService = {
     return rows.filter(inApp).map((row) => row.id)
   },
 
-  async approve({ actor, id, input, always }: { actor: Caller; id: string; input?: Record<string, unknown>; always?: boolean }): Promise<ChangeRequest> {
+  async approve({ actor, id, input, always, token }: { actor: Caller; id: string; input?: Record<string, unknown>; always?: boolean; token?: string }): Promise<ChangeRequest> {
     const row = await pendingRow({ actor, id })
     if (action(row) === 'call_tool') return requestOf(await approveCall({ actor, row, always: always === true }))
     const final = input ? checkedInput({ action: action(row), input, agentId: row.agent_id }) : JSON.parse(row.input) as Record<string, unknown>
     agentService.holdReapply(row.agent_id)
     try {
-      await apply({ actor, row, input: final })
+      await apply({ actor, row, input: final, token })
     } catch (err) {
       await agentService.releaseReapply(row.agent_id)
       throw err
@@ -131,6 +132,7 @@ function parsedInput({ action, input, agentId }: { action: ChangeAction; input: 
     case 'remove_channel': return z.safeParse(ChannelId, input)
     case 'request_connection': return z.safeParse(ConnectionId, input)
     case 'call_tool': return z.safeParse(ToolCall, input)
+    case 'propose_connection': return z.safeParse(ProposedConnection, input)
   }
 }
 
@@ -153,10 +155,11 @@ async function summaryOf({ action, input, agentId }: { action: ChangeAction; inp
       const connection = await db.selectFrom('connection').select('name').where('id', '=', String(input.connectionId)).executeTakeFirstOrThrow()
       return `Run ${String(input.tool)} on ${connection.name}`
     }
+    case 'propose_connection': return `Connect ${String(input.name)}`
   }
 }
 
-async function apply({ actor, row, input }: { actor: Caller; row: Row; input: unknown }): Promise<void> {
+async function apply({ actor, row, input, token }: { actor: Caller; row: Row; input: unknown; token?: string }): Promise<void> {
   const agentId = row.agent_id
   const fields = input as Record<string, unknown>
   switch (action(row)) {
@@ -173,6 +176,25 @@ async function apply({ actor, row, input }: { actor: Caller; row: Row; input: un
     }
     case 'request_connection': return void await agentService.createGrant({ actor, agentId, connectionId: z.parse(ConnectionId, input).connectionId })
     case 'call_tool': throw new HttpError(500, 'A tool call is approved through approveCall.')
+    case 'propose_connection': return connectProposed({ actor, agentId, proposal: z.parse(ProposedConnection, input), token })
+  }
+}
+
+async function connectProposed({ actor, agentId, proposal, token }: { actor: Caller; agentId: string; proposal: ProposedConnection; token?: string }): Promise<void> {
+  const key = token?.trim()
+  if (!key) throw new HttpError(400, `Paste the ${proposal.token.label}.`, { param: 'token' })
+  if (/\s/.test(key)) throw new HttpError(400, `Paste the ${proposal.token.label} as it is, with no spaces.`, { param: 'token' })
+  const connection = await connectionService.create({ actor, kind: 'mcp', name: proposal.name, url: proposal.url, header: `Authorization: Bearer ${key}` })
+  try {
+    const specs = await connectionService.specs({ actor, connectionId: connection.id })
+    for (const { group, permission } of proposal.groups) {
+      const tools = specs.filter((spec) => permissions.groupOf(spec) === group).map((spec) => spec.name)
+      if (tools.length) await permissions.set({ actor, agentId, connectionId: connection.id, tools, state: permission })
+    }
+    await agentService.createGrant({ actor, agentId, connectionId: connection.id })
+  } catch (err) {
+    await connectionService.delete({ actor, id: connection.id })
+    throw err
   }
 }
 
@@ -246,6 +268,7 @@ function decisionText(row: Row): string {
     const always = (JSON.parse(row.input) as { always?: boolean }).always ? ' From now on it runs without asking.' : ''
     return `[OpenHut ${row.id}] Your owner allowed it: ${row.summary}.${always} The result:\n\n${row.result ?? 'Lost in a restart. Call the tool again.'}\n\nCarry on with what you were doing.`
   }
+  if (row.status === 'denied' && action(row) === 'propose_connection') return `[OpenHut ${row.id}] Not connected: ${row.summary}.${row.note ? ` They chose: "${row.note}".` : ''} Nothing changed. If they chose the browser, do this one job in your browser now and don't keep the login. If they'll set it up themselves, give them short numbered steps: where to make the token, then Apps in OpenHut to add it, then to give you access. Otherwise tell the chat in one line, and don't ask again unless they bring it up.`
   if (row.status === 'denied') return `[OpenHut ${row.id}] Not approved: ${row.summary}.${row.note ? ` They said: "${row.note}"` : ''} Nothing changed. Tell the chat in one line, and don't ask again unless they bring it up.`
   return `[OpenHut ${row.id}] Approved and done: ${row.summary}.${afterApproval({ row, input: JSON.parse(row.input) })} Tell the chat in one line, with the final values if they differ from what you asked for.`
 }
