@@ -14,6 +14,7 @@ export const Webhook = z.object({
   target: z.string(),
   place: z.string(),
   lastAt: z.nullable(Timestamp),
+  lastPayload: z.nullable(z.string()),
   createdAt: Timestamp,
 })
 export type Webhook = z.infer<typeof Webhook>

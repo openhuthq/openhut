@@ -21,6 +21,7 @@ const REPEAT_MS = 10 * 60_000
 const SIGNATURE_AGE_S = 300
 const MAX_WEBHOOK_CALLS = 120
 const TICK_MS = 60_000
+const PREVIEW_MAX = 4000
 const RETRY_MS = 30_000
 const RETRIES = 20
 const DASHBOARD = 'api_server'
@@ -64,7 +65,8 @@ export const inboxService = {
   async webhooks({ actor, agentId }: { actor: Caller; agentId: string }): Promise<Webhook[]> {
     await agentService.requireEditable({ actor, id: agentId })
     const rows = await db.selectFrom('inbox_source').selectAll().where('agent_id', '=', agentId).where('kind', '=', 'webhook').orderBy('created_at').execute()
-    return rows.map(webhookOf)
+    const last = await lastPayloads(rows.map((row) => row.id))
+    return rows.map((row) => webhookOf(row, last.get(row.id)))
   },
 
   routines: (input: { actor: Caller; agentId: string }): Promise<Routine[]> => routineService.list(input),
@@ -84,7 +86,7 @@ export const inboxService = {
     const to = target ? await originFor({ agentId: row.agent_id, target }) : undefined
     const place = to && await placeFor({ agentId: row.agent_id, origin: to })
     const next = await db.updateTable('inbox_source').set({ ...name && { name: name.trim() }, ...to && { origin: JSON.stringify({ ...to, place }) } }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
-    return webhookOf(next)
+    return webhookOf(next, (await lastPayloads([next.id])).get(next.id))
   },
 
   async updateRoutine({ actor, id, target, until }: { actor: Caller; id: string; target?: string; until?: string | null }): Promise<Routine> {
@@ -97,7 +99,7 @@ export const inboxService = {
     const row = await webhookRow({ actor, id })
     const next = await db.updateTable('inbox_source').set({ secret: seal(newToken('whsec')) }).where('id', '=', row.id).returningAll().executeTakeFirstOrThrow()
     emit({ name: 'inbox.secret_rotated', actor, target: { type: 'inbox_source', id, agentId: row.agent_id } })
-    return webhookOf(next)
+    return webhookOf(next, (await lastPayloads([next.id])).get(next.id))
   },
 
   async remove({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'webhook'>> {
@@ -262,10 +264,16 @@ function chatOf(origin: Origin & { place?: string }): Origin {
   return rest
 }
 
-function webhookOf(row: SourceRow): Webhook {
+async function lastPayloads(ids: string[]): Promise<Map<string, string>> {
+  if (!ids.length) return new Map()
+  const rows = await db.selectFrom('inbox_item').select(['source_id', 'text']).distinctOn('source_id').where('source_id', 'in', ids).orderBy('source_id').orderBy('created_at', 'desc').execute()
+  return new Map(rows.map((row) => [row.source_id, row.text.slice(row.text.indexOf('\n\n') + 2, row.text.indexOf('\n\n') + 2 + PREVIEW_MAX)]))
+}
+
+function webhookOf(row: SourceRow, lastPayload?: string): Webhook {
   const origin = originOf(row)
   return {
     id: row.id, object: 'webhook', agentId: row.agent_id, name: row.name, url: urlOf(row.id), secret: unseal(row.secret ?? ''), platform: origin.platform, target: targetOf(chatOf(origin)), place: origin.place ?? '',
-    lastAt: row.last_at ? new Date(row.last_at).toISOString() : null, createdAt: new Date(row.created_at).toISOString(),
+    lastAt: row.last_at ? new Date(row.last_at).toISOString() : null, lastPayload: lastPayload ?? null, createdAt: new Date(row.created_at).toISOString(),
   }
 }

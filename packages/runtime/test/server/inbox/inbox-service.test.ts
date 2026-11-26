@@ -160,3 +160,12 @@ test('a routine moves to another place the agent posts, and can run with no end 
   const webhook = await inboxService.createSource({ actor: owner, agentId: 'ag_hookpuls', name: 'Moves', target: targets[1].id })
   assert.equal(webhook.place, '#db-alerts')
 })
+
+test('the owner sees the last payload a webhook got', async () => {
+  const hook = await inboxService.createSource({ actor: owner, agentId: 'ag_hookpuls', name: 'Last call' })
+  assert.equal(hook.lastPayload, null)
+  await post({ id: hook.id, body: '{"n":1}', headers: { authorization: `Bearer ${hook.secret}` } })
+  await post({ id: hook.id, body: '{"n":2}', headers: { authorization: `Bearer ${hook.secret}` } })
+  const listed = (await inboxService.webhooks({ actor: owner, agentId: 'ag_hookpuls' })).find((each) => each.id === hook.id)
+  assert.equal(listed?.lastPayload, '{"n":2}')
+})

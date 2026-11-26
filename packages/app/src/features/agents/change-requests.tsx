@@ -114,7 +114,7 @@ function SettingsCard({ agent, change, busy, error, send }: CardProps) {
 }
 
 function Details({ agent, change }: { agent: Agent; change: ChangeRequest }) {
-  const shown = Object.entries(change.input).filter(([key]) => key !== 'botToken' && key !== 'id' && key !== 'connectionId' && key !== 'webhookId')
+  const shown = Object.entries(change.input).filter(([key]) => key !== 'botToken' && key !== 'id' && key !== 'connectionId' && key !== 'webhookId' && !(change.action === 'add_webhook' && key === 'name'))
   if (!shown.length) return null
   return <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 text-[13px]">{shown.map(([key, value]) => <div key={key} className="contents">
     <dt className="text-mute">{LABELS[key] ?? key}</dt>
