@@ -1,7 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@openhut/common/api.ts'
-import { Webhook, type CreateWebhook, type UpdateWebhook } from '@openhut/common/webhooks/webhook.ts'
+import * as z from 'zod/mini'
+import { Webhook as BaseWebhook, type CreateWebhook, type UpdateWebhook } from '@openhut/common/webhooks/webhook.ts'
+import { Place } from '@openhut/common/channels/channel.ts'
 import { request } from '@/lib/api-client'
+
+export const Webhook = z.extend(BaseWebhook, { channel: z.optional(z.union([z.literal('app'), Place])) })
+export type Webhook = z.infer<typeof Webhook>
 
 const WEBHOOK_LIST = List(Webhook)
 const DELETED_WEBHOOK = Deleted('webhook')
@@ -26,7 +31,7 @@ function useWebhookMutation<T>({ agentId, send }: { agentId: string; send: (inpu
 
 export const useCreateWebhook = (agentId: string) => useWebhookMutation({ agentId, send: (body: Omit<CreateWebhook, 'agentId'>) => request({ schema: Webhook, of: agentId, path: '/api/webhooks', method: 'POST', body: { ...body, agentId } }) })
 
-export const useUpdateWebhook = (agentId: string) => useWebhookMutation({ agentId, send: ({ id, ...body }: { id: string } & UpdateWebhook) => request({ schema: Webhook, of: agentId, path: `/api/webhooks/${encodeURIComponent(id)}`, method: 'PATCH', body }) })
+export const useUpdateWebhook = (agentId: string) => useWebhookMutation({ agentId, send: ({ id, ...body }: { id: string } & UpdateWebhook & { channel?: Place | 'app' }) => request({ schema: Webhook, of: agentId, path: `/api/webhooks/${encodeURIComponent(id)}`, method: 'PATCH', body }) })
 
 export const useRotateWebhook = (agentId: string) => useWebhookMutation({ agentId, send: (id: string) => request({ schema: Webhook, of: agentId, path: `/api/webhooks/${encodeURIComponent(id)}/rotations`, method: 'POST' }) })
 

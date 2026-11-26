@@ -1,0 +1,31 @@
+---
+title: Threads and Notify me
+description: Every conversation an agent has shows up in the web app, wherever it started. Tell the agent where to notify you in plain words.
+icon: ops
+---
+
+Each conversation an agent has is a **thread**, and every thread shows up in the web app, whether it started there, in Discord, from a webhook or from a routine.
+
+## Find a thread
+
+Open an agent in the sidebar to see its threads under it. Each one shows where it came from: **Web**, the Discord channel (**#agents-humans**), the webhook's name or the routine's name, and when it last moved.
+
+- Threads **waiting on you** come first and say so. The agent's row counts them ("1 waiting"). A webhook setup thread stops waiting once the webhook gets its first call, or when you press **Done** on its card.
+- The sidebar shows up to three threads per agent, plus every one waiting on you. **Show all** opens the full list, newest first, with search and a filter for Web, Discord, Webhook and Routine.
+
+## Reply from the web
+
+Open any thread and type. If the thread started in Discord, the header says **Started in Discord #channel ↗**, and your reply also goes there: it shows **Sent to #channel** under your message.
+
+- **Also posting to #channel** in the header means the agent's replies go there too.
+- **Paused posting to #channel · Resume**: replies stay in the web app until you press **Resume**.
+- A thread whose webhook runs in Discord continues there. The web app shows it but has no composer: **Open in Discord ↗** takes you to it.
+
+## Notify me
+
+**More › Notify me** on the agent's panel sets where the agent tells you about things it finds on its own:
+
+- **Usually in**: one of the agent's channels, or **Only here in the web app**.
+- **Rules**: plain words the agent follows, like "Post incidents and new Linear issues in #on-call. Everything else stays here."
+
+When the agent tells you somewhere else, the thread shows a quiet line: **Notified #on-call**.

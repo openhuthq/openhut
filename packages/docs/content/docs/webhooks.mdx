@@ -1,10 +1,10 @@
 ---
 title: Webhooks
-description: Give an agent an address other services call when something happens, like a DigitalOcean alert. Each call starts a chat with the agent.
+description: Give an agent an address other services call when something happens, like a DigitalOcean alert. Each call reaches the agent as a message.
 icon: ops
 ---
 
-A **webhook** is an address on your OpenHut that another service calls when something happens: an alert fires, a deploy finishes, a form is sent. Each call starts a new chat with the raw payload, and the agent does what its instructions say about it.
+A **webhook** is an address on your OpenHut that another service calls when something happens: an alert fires, a deploy finishes, a form is sent. Each call starts a thread in the web app (or in the Discord channel you pick), with the raw payload, and the agent does what its instructions say about it. See [Threads](/threads).
 
 ## Add one
 
@@ -14,7 +14,7 @@ Ask the agent:
 Watch our DigitalOcean Postgres and tell #db-alerts when an alert fires.
 ```
 
-It asks for a webhook, and a card shows up in the chat. **Approve** creates it. The agent then shows a setup card with the steps, the address and the secret, ready to copy. The agent never sees the secret. In Discord and other chats it sends the steps and the address; copy the secret from OpenHut.
+It asks for a webhook, and a card shows up in the chat. **Approve** creates it. The agent learns the address, never the secret. It then posts a setup card with the steps for the service, the **Address** with **Copy** and the secret with **Copy secret**, both read from the webhook itself, so they're always right. Press **Done** once it's set up. In Discord it sends the steps and the address instead; copy the secret from OpenHut.
 
 Or add one yourself: **More › Webhooks** on the agent's panel, type what calls it and **Add webhook**.
 
@@ -22,7 +22,7 @@ Each webhook shows:
 
 - **Address**: paste it into the service that calls it.
 - **Secret**: the service signs each call with it, or sends it as a token. **New secret** replaces it; calls signed with the old one stop working.
-- **Channel**: where each call runs. **OpenHut app**, the default: a new chat in the app that you can reply in. A Discord channel: the agent posts its answer there and starts a thread for people to reply in, and the chat in the app is read only. To also tell other channels, like incidents to #on-call, set the agent's **Notify** rules.
+- **Runs in**: **Here in the web app** (the default), where you can reply in each call's thread, or one of the agent's channels, like a Discord channel. A thread that runs in Discord continues there; the web app shows it with **Open in Discord ↗**.
 
 Delete a webhook with the trash icon. Calls to its address stop at once.
 
