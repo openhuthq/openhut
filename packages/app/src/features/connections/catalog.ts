@@ -36,7 +36,7 @@ export const SHELVES: { shelf: string; items: Integration[] }[] = [
     },
     {
       name: 'github', short: 'Code, commits and pull requests', safeLine: 'The bot reaches only the repositories you install it on.', warn: 'Agents can push commits and open pull requests in the repositories you pick, and clone them.', eta: 'One approval', title: 'GitHub', blurb: 'This server’s own GitHub App: agents commit and open pull requests as its bot.',
-      gets: ['Read files, commits and branches', 'Create branches, commit files and open pull requests, as the bot', 'Search code, read and file issues, review pull requests', 'git_credentials: clone, pull and push from the agent’s terminal, through OpenHut, which adds the key', "Whatever else GitHub adds to its MCP server"],
+      gets: ['Read files, commits and branches', 'Create branches, commit files and open pull requests, as the bot', 'Search code, read and file issues, review pull requests', 'Read code and push branches from the agent’s terminal, through OpenHut, which adds the key', "Whatever else GitHub adds to its MCP server"],
       safe: ['The bot is this server’s own GitHub App, set up once by an admin: it reaches only the repositories it is installed on.', 'Agents never see its private key or a token: git goes through OpenHut, which adds it.', 'Commits show as the bot, not as a person.'],
     },
     {

@@ -12,6 +12,7 @@ import { useAgentTools, useConnections, useResetToolPermissions, useSetToolPermi
 import { GROUPS, GroupIcon, PermissionPicker } from '@/features/connections/permissions'
 import { toolLabel } from '@/lib/tool-label'
 import { toastError } from '@/lib/toast'
+import { cn } from '@/lib/utils'
 
 const nameOf = (tool: AgentTool) => tool.description && tool.description.length <= 60 ? tool.description : toolLabel(tool.name)
 
@@ -20,6 +21,7 @@ export function ToolPermissionsDialog({ agent, connectionId, onClose }: { agent:
   const tools = useAgentTools({ agentId: agent.id, connectionId })
   const reset = useResetToolPermissions({ agentId: agent.id, connectionId })
   const changed = tools.data?.some((tool) => !tool.isDefault)
+  const marked = decodeURIComponent(location.hash.slice(1))
   const groups = ToolGroup.options.map((group) => ({ group, tools: tools.data?.filter((tool) => tool.group === group) ?? [] })).filter((each) => each.tools.length)
   return <DialogCard onClose={onClose} className="max-h-[min(720px,calc(100vh-48px))] w-[520px] gap-0 overflow-hidden p-0">
     <div className="flex items-center gap-3 px-6 pt-6 pb-4">
@@ -30,7 +32,7 @@ export function ToolPermissionsDialog({ agent, connectionId, onClose }: { agent:
     <div className="flex min-h-0 flex-1 flex-col overflow-auto px-6 pb-2">
       <ErrorNote message={tools.error?.message} />
       {!tools.data && !tools.error && <Loading />}
-      {tools.data && <div className="flex flex-col gap-1">{groups.map(({ group, tools: members }) => <GroupRow key={group} agent={agent} connectionId={connectionId} group={group} tools={members} />)}</div>}
+      {tools.data && <div className="flex flex-col gap-1">{groups.map(({ group, tools: members }) => <GroupRow key={group} agent={agent} connectionId={connectionId} group={group} tools={members} marked={marked} />)}</div>}
     </div>
     <div className="flex items-center gap-2 px-6 pt-4 pb-6">
       <Button type="button" variant="ghost" className="-ml-3" disabled={!changed || !agent.canEdit || reset.isPending} onClick={() => reset.mutate(undefined, { onError: toastError })}>Reset to defaults</Button>
@@ -39,7 +41,7 @@ export function ToolPermissionsDialog({ agent, connectionId, onClose }: { agent:
   </DialogCard>
 }
 
-function GroupRow({ agent, connectionId, group, tools }: { agent: Agent; connectionId: string; group: ToolGroup; tools: AgentTool[] }) {
+function GroupRow({ agent, connectionId, group, tools, marked }: { agent: Agent; connectionId: string; group: ToolGroup; tools: AgentTool[]; marked: string }) {
   const set = useSetToolPermission()
   const pick = (names: string[]) => (permission: Permission) => set.mutate({ agentId: agent.id, connectionId, tools: names, permission }, { onError: toastError })
   const whole = set.isPending && set.variables.tools.length === tools.length && tools.length > 1
@@ -52,7 +54,7 @@ function GroupRow({ agent, connectionId, group, tools }: { agent: Agent; connect
       <span className="min-w-0 flex-1 truncate text-[13.5px] text-ink" title={line}>{label}</span>
       <PermissionPicker value={mixed ? undefined : whole ? set.variables.permission : first.permission} label={label} disabled={!agent.canEdit} onPick={pick(tools.map((tool) => tool.name))} />
     </div>
-    <div className="pl-7"><Details label={`${tools.length} ${tools.length === 1 ? 'action' : 'actions'}`}>{tools.map((tool) => <div key={tool.name} className="flex min-w-0 items-center gap-2">
+    <div className="pl-7"><Details label={`${tools.length} ${tools.length === 1 ? 'action' : 'actions'}`} open={tools.some((tool) => tool.name === marked)}>{tools.map((tool) => <div key={tool.name} ref={tool.name === marked ? (row) => row?.scrollIntoView({ block: 'nearest' }) : undefined} className={cn('flex min-w-0 items-center gap-2', tool.name === marked && '-mx-1.5 rounded-md bg-soft px-1.5')} data-marked={tool.name === marked || undefined}>
       <span className="min-w-0 flex-1 truncate text-ink" title={`${tool.name}: ${tool.description}`}>{nameOf(tool)}</span>
       <PermissionPicker value={tool.permission} label={nameOf(tool)} disabled={!agent.canEdit} onPick={pick([tool.name])} />
     </div>)}</Details></div>

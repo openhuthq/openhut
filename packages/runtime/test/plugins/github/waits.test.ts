@@ -29,7 +29,7 @@ test('an install request waits for the owner, and the ask is approved once the n
     if (path.endsWith('/access_tokens')) return Response.json({ token: 'ghs_x' }, { status: 201 })
     return new Response('{}', { status: 500 })
   })
-  const said = await asks.create({ agentId: 'ag_ghwaitag', kind: 'connect_app', input: { app: 'github' }, why: 'PRs', origin: { platform: 'api_server', chat_id: 'openhut-msg_ghwait01' } })
+  const said = await asks.create({ agentId: 'ag_ghwaitag', kind: 'connect_app', input: { app: 'github' }, description: 'PRs', origin: { platform: 'api_server', chat_id: 'openhut-msg_ghwait01' } })
   const askId = /\((ask_[a-z0-9]+)\)/.exec(said)?.[1] ?? ''
   const started = await connectionAuthorizationService.create({ actor, kind: 'github', askId, permissions: { read: 'allow', create: 'ask' } })
   const back = await connectionAuthorizationService.finish({ state: started.id, setup_action: 'request' })

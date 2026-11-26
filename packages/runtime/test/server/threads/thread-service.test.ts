@@ -59,7 +59,7 @@ const hermes = createServer((req, res) => {
     if (seen.body?.messages.at(-1)?.content === 'model down') return res.end(`data: ${JSON.stringify({ error: { message: 'HTTP 401: Claude Code is installed but has no usable login' } })}\n\n`)
     const chunk = (content: string) => `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content } }] })}\n\n`
     if (seen.body?.messages.at(-1)?.content === 'rename yourself') {
-      await asks.create({ agentId: 'ag_chatcard', kind: 'update_self', input: { name: 'Card Bot' }, why: 'Asked to.', origin: { platform: 'api_server', chat_id: seen.session } })
+      await asks.create({ agentId: 'ag_chatcard', kind: 'update_self', input: { name: 'Card Bot' }, description: 'Asked to.', origin: { platform: 'api_server', chat_id: seen.session } })
       return res.end(`${chunk('Asked your owner.')}data: [DONE]\n\n`)
     }
     if (seen.body?.messages.at(-1)?.content === 'card') return res.end(`${['Deploy is ready.\n\n```spec\n{"op":"add","path":"/root","value":"c"}\n', '{"op":"add","path":"/elements/c","value":{"type":"Card","props":{"title":"Deploy"}}}\n', '```\n\nApprove?'].map(chunk).join('')}data: [DONE]\n\n`)

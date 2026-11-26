@@ -105,7 +105,7 @@ function Blocked({ agent, call }: { agent: Agent; call: ToolCall }) {
     <span className="min-w-0 flex-1 text-[13px] text-ink">{connectionId ? `${call.label} is set to Never` : call.error}</span>
     {connectionId && <span className="flex shrink-0 gap-1.5">
       {call.kind === 'read' && agent.canEdit && <AllowReads agent={agent} connectionId={connectionId} app={call.app ?? 'the app'} />}
-      <Button type="button" variant="ghost" className={PILL} onClick={() => navigate(agentPath({ agentId: agent.id, dialog: 'apps', detail: connectionId }))}>Change permission</Button>
+      <Button type="button" variant="ghost" className={PILL} onClick={() => navigate(`${agentPath({ agentId: agent.id, dialog: 'apps', detail: connectionId })}#${encodeURIComponent(call.tool)}`)}>Change permission</Button>
     </span>}
   </div>
 }

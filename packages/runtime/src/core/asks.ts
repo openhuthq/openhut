@@ -11,7 +11,7 @@ import { HttpError, messageOf } from '../server/platform/http-error.ts'
 import { IdParams, listOf } from '../server/platform/responses.ts'
 import { newId } from '../server/platform/secrets.ts'
 import { who, type Caller } from '../server/team/identity.ts'
-import { APP_PLATFORM, defineTool, type AskKind, type Plugin, type Tool } from './plugin.ts'
+import { APP_PLATFORM, AskDescription, defineTool, type AskKind, type Plugin, type Tool } from './plugin.ts'
 import { plugins } from './plugins.ts'
 import { wakes } from './wakes.ts'
 
@@ -24,7 +24,9 @@ type Row = Selectable<Database['ask']>
 type Kind = AskKind<z.ZodObject, z.ZodObject | undefined>
 
 export const asks = {
-  async create({ agentId, kind, input, why, origin, expires }: { agentId: string; kind: string; input: unknown; why: string; origin: unknown; expires?: Date }): Promise<string> {
+  async create({ agentId, kind, input, description, origin, expires }: { agentId: string; kind: string; input: unknown; description: string; origin: unknown; expires?: Date }): Promise<string> {
+    const said = AskDescription.safeParse(description)
+    if (!said.success) throw new HttpError(400, said.error.issues[0]?.message ?? 'Add a description.')
     const from = z.safeParse(Origin, origin)
     if (!from.success) throw new HttpError(400, 'You can only ask from a chat you\'re in.')
     const parsed = kindOf(kind).input.safeParse(input)
@@ -32,7 +34,7 @@ export const asks = {
     const same = JSON.stringify(parsed.data)
     const open = await db.selectFrom('ask').selectAll().where('agent_id', '=', agentId).where('kind', '=', kind).where('status', '=', 'open').where('input', '=', same).executeTakeFirst()
     const row = open ?? await db.insertInto('ask').values({
-      id: newId('ask'), agent_id: agentId, kind, input: same, title: await kindOf(kind).title({ agentId, input: parsed.data }), why, origin: JSON.stringify(from.data), expires_at: expires ?? null,
+      id: newId('ask'), agent_id: agentId, kind, input: same, title: await kindOf(kind).title({ agentId, input: parsed.data }), why: said.data, origin: JSON.stringify(from.data), expires_at: expires ?? null,
     }).returningAll().executeTakeFirstOrThrow()
     if (!open) emit({ name: 'ask.created', target: { type: 'ask', id: row.id, agentId, kind } })
     const expiry = row.expires_at ? ` If nobody answers in ${Math.round((new Date(row.expires_at).getTime() - Date.now()) / 60_000)} minutes it expires; carry on without it.` : ''
@@ -109,8 +111,8 @@ export function asksPlugin(list: Plugin[]): Plugin {
 function toolOf({ name, kind, description }: { name: string; kind: Kind; description: string }): Tool {
   return defineTool({
     description: `${description} Your owner approves it in OpenHut first: the call returns at once, and the answer comes back to you as a message.`,
-    input: { why: z.string().min(1).max(300).describe('One sentence for your owner: why, in plain words.'), ...kind.input.shape },
-    run: async ({ why, ...input }, { agent, origin }) => asks.create({ agentId: agent.id, kind: name, input, why: String(why), origin }),
+    input: { description: AskDescription, ...kind.input.shape },
+    run: async ({ description, ...input }, { agent, origin }) => asks.create({ agentId: agent.id, kind: name, input, description: String(description), origin }),
   })
 }
 
@@ -198,7 +200,7 @@ function pick({ from, keys }: { from: Record<string, unknown>; keys: string[] })
 }
 
 function askFor(row: Row) {
-  return { id: row.id, agentId: row.agent_id, input: JSON.parse(row.input) as Record<string, unknown>, why: row.why, origin: originOf(row) }
+  return { id: row.id, agentId: row.agent_id, input: JSON.parse(row.input) as Record<string, unknown>, description: row.why, origin: originOf(row) }
 }
 
 function inApp(row: Pick<Row, 'origin'>): boolean {
@@ -213,7 +215,7 @@ function askOf(row: Row): Ask {
   const answer = kinds()[row.kind]?.answer
   const form = answer && row.status === 'open' ? z.toJSONSchema(answer, { io: 'input' }) : undefined
   return {
-    id: row.id, object: 'ask', kind: row.kind, agentId: row.agent_id, title: row.title, why: row.why, input: JSON.parse(row.input) as Record<string, unknown>,
+    id: row.id, object: 'ask', kind: row.kind, agentId: row.agent_id, title: row.title, description: row.why, input: JSON.parse(row.input) as Record<string, unknown>,
     status: row.status, note: row.note, ...form && { form }, createdAt: row.created_at.toISOString(), answeredAt: row.answered_at ? new Date(row.answered_at).toISOString() : null,
   }
 }

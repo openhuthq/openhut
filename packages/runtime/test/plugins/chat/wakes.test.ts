@@ -47,14 +47,14 @@ test('an app routine run is picked, run once in the app chat however often it is
 })
 
 test('a decision asked from WhatsApp is left to the Hermes plugin; one asked in the app is delivered, and a failed turn is tried again', async (t) => {
-  const fromWhatsApp = /ask_[a-z0-9]+/.exec(await asks.create({ agentId: 'ag_appwagnt', kind: 'update_self', input: { name: 'Op' }, why: 'x', origin: whatsapp }))?.[0] ?? ''
+  const fromWhatsApp = /ask_[a-z0-9]+/.exec(await asks.create({ agentId: 'ag_appwagnt', kind: 'update_self', input: { name: 'Op' }, description: 'Needed for the job', origin: whatsapp }))?.[0] ?? ''
   await asks.decline({ actor: owner, id: fromWhatsApp })
   deliver('ag_appwagnt')
   await settled()
   assert.equal(told.length, 1)
   t.mock.timers.enable({ apis: ['setTimeout'] })
   fail = 1
-  const fromApp = /ask_[a-z0-9]+/.exec(await asks.create({ agentId: 'ag_appwagnt', kind: 'update_self', input: { name: 'Ops' }, why: 'x', origin: app }))?.[0] ?? ''
+  const fromApp = /ask_[a-z0-9]+/.exec(await asks.create({ agentId: 'ag_appwagnt', kind: 'update_self', input: { name: 'Ops' }, description: 'Needed for the job', origin: app }))?.[0] ?? ''
   await asks.decline({ actor: owner, id: fromApp })
   for (let i = 0; i < 50 && told.length < 3; i++) {
     await new Promise((resolve) => setImmediate(resolve))

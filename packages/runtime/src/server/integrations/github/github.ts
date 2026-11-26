@@ -18,11 +18,23 @@ const Owner = z.object({ login: z.string(), type: z.enum(['User', 'Organization'
 const Installation = z.object({ id: z.number(), account: Owner })
 const MAX_REPOS = 300
 const Repositories = z.object({ total_count: z.number(), repositories: z.array(z.object({ name: z.string() })) })
-const GIT: ToolSpec = {
-  name: 'git_credentials',
+const ONCE_MS = 10 * 60_000
+const GIT_READ: ToolSpec = {
+  name: 'git_read',
   description: 'Get the shell commands that let git clone, pull and push in your terminal as the bot. Run them once, then use plain https://github.com URLs: git goes through OpenHut, which adds the key.',
   schema: { type: 'object', properties: {} },
+  annotations: { title: 'Read code', readOnlyHint: true },
 }
+const GIT_PUSH: ToolSpec = {
+  name: 'git_push',
+  description: 'Ask to push a branch with git. Call it before you push when pushing waits for your owner, with the repository (owner/name) and branch; once approved, push within 10 minutes.',
+  schema: { type: 'object', properties: { repo: { type: 'string' }, branch: { type: 'string' } }, required: ['repo'] },
+  annotations: { title: 'Push branches', readOnlyHint: false, destructiveHint: false },
+  meta: { operation: 'create' },
+}
+export const GIT_SPECS = [GIT_READ, GIT_PUSH]
+export const GIT_TOOLS = GIT_SPECS.map((spec) => spec.name)
+const PushArgs = z.object({ repo: z.optional(z.string()), branch: z.optional(z.string()) })
 const tokens = new Map<string, { at: number; token: string }>()
 const remote = mcp.connector({ url: MCP_SERVERS.github, redirectUrl: () => '' })
 
@@ -89,25 +101,56 @@ export const github = {
   },
 
   connector: {
-    tools: async (ctx) => [GIT, ...await remote.tools(await asBot(ctx))],
+    tools: async (ctx) => [...GIT_SPECS, ...await remote.tools(await asBot(ctx))],
     call: async (ctx) => {
-      if (ctx.tool !== GIT.name) return remote.call({ ...await asBot(ctx), tool: ctx.tool, args: ctx.args })
+      if (!GIT_TOOLS.includes(ctx.tool)) return remote.call({ ...await asBot(ctx), tool: ctx.tool, args: ctx.args })
       configOf(ctx.config)
+      if (ctx.tool === GIT_PUSH.name) return { text: `You can push${pushTarget(ctx.args)} now. If it is only allowed once, push within 10 minutes.`, isError: false }
       return { text: gitSetup(serverApp()), isError: false }
     },
   } satisfies Connector,
 
-  async gitToken({ agentId, push = false }: { agentId: string; push?: boolean }): Promise<string> {
-    const row = await db.selectFrom('connection as c').innerJoin('connection_grant as g', 'g.connection_id', 'c.id').select(['c.id', 'c.config'])
+  askTitle({ tool, args }: { tool: string; args: Record<string, unknown> }): string | undefined {
+    if (tool === GIT_READ.name) return 'Read code on GitHub'
+    if (tool !== GIT_PUSH.name) return undefined
+    const { repo, branch } = z.safeParse(PushArgs, args).data ?? {}
+    return ['Push to GitHub', repo && `${repo}${branch ? ` (${branch})` : ''}`].filter(Boolean).join(' · ')
+  },
+
+  async gitToken({ agentId, push = false, repo, refused }: { agentId: string; push?: boolean; repo?: string; refused?: (call: { connectionId: string; app: string; spec: ToolSpec; error: string }) => Promise<void> }): Promise<string> {
+    const row = await db.selectFrom('connection as c').innerJoin('connection_grant as g', 'g.connection_id', 'c.id').select(['c.id', 'c.name', 'c.config'])
       .where('g.agent_id', '=', agentId).where('c.kind', '=', 'github').orderBy('c.created_at').executeTakeFirst()
     if (!row) throw new HttpError(403, 'No GitHub connection is granted to this agent. Ask for one with connect_app.')
-    const state = await permissions.decide({ agentId, connectionId: row.id, spec: GIT })
-    if (state === 'deny') throw new HttpError(403, 'git_credentials is set to Never for you, so git can\'t reach GitHub. Ask your owner to change it in OpenHut.')
-    if (push && state !== 'allow') throw new HttpError(403, 'Pushing needs git_credentials set to Always. Call call_tool git_credentials to ask your owner, and ask them to choose Always, then push again.')
+    const spec = push ? GIT_PUSH : GIT_READ
+    const state = await permissions.decide({ agentId, connectionId: row.id, spec })
+    const what = push ? `Pushing${repo ? ` to ${repo}` : ''}` : 'Reading code'
+    if (state === 'deny') {
+      const error = `${what} is set to Never for you on GitHub, so git can't do it. Ask your owner to change it in OpenHut.`
+      await refused?.({ connectionId: row.id, app: row.name, spec, error })
+      throw new HttpError(403, error)
+    }
+    if (state === 'ask' && !await approvedOnce({ agentId, connectionId: row.id, tool: spec.name, repo })) {
+      throw new HttpError(403, `${what} waits for your owner's OK. Call call_tool github_${spec.name}${push ? ` with repo ${repo ?? 'OWNER/REPO'} and the branch` : ''} to ask, then try again once it is approved.`)
+    }
     return fresh(configOf(JSON.parse(unseal(row.config))))
   },
 
+
   forgetTokens: (): void => tokens.clear(),
+}
+
+function pushTarget(args: Record<string, unknown>): string {
+  const { repo, branch } = z.safeParse(PushArgs, args).data ?? {}
+  return `${branch ? ` ${branch}` : ''}${repo ? ` to ${repo}` : ''}`
+}
+
+async function approvedOnce({ agentId, connectionId, tool, repo }: { agentId: string; connectionId: string; tool: string; repo?: string }): Promise<boolean> {
+  const rows = await db.selectFrom('ask').select('input').where('agent_id', '=', agentId).where('kind', '=', 'call_tool').where('status', '=', 'done').where('answered_at', '>', new Date(Date.now() - ONCE_MS)).execute()
+  return rows.some((row) => {
+    const input = JSON.parse(row.input) as { connectionId?: string; tool?: string; arguments?: Record<string, unknown> }
+    const asked = input.arguments?.repo
+    return input.connectionId === connectionId && input.tool === tool && (!repo || typeof asked !== 'string' || asked.toLowerCase() === repo.toLowerCase())
+  })
 }
 
 function serverApp(): GithubApp {

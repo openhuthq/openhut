@@ -1,4 +1,5 @@
 import { sql, type Selectable } from 'kysely'
+import * as z from 'zod'
 import type { Deleted } from '@openhut/common/api.ts'
 import { SIGN_IN_KINDS, type Connection, type ConnectionKind, type ConnectionStatus, type ConnectionTool, type CreateConnection } from '@openhut/common/connections/connection.ts'
 import { config } from '../platform/config.ts'
@@ -173,9 +174,15 @@ export const connectionService = {
       return { text: `Not allowed: your owner set ${action?.label ?? name} on ${connection.name} to Never. Don't try it again; tell the person if it matters.`, isError: true }
     }
     if (state === 'ask') {
+      const invalid = action && schemaError({ spec: action.spec, args: innerArgs({ spec, args }) })
+      if (invalid) {
+        await record({ agentId: agent.id, connectionId: connection.id, tool: name, reason, outcome: 'failed', app: connection.name, spec, action, args, error: invalid })
+        return { text: `Not asked: the arguments for ${action.spec.name} don't match its schema, so it would fail. ${invalid}\nFix them (check its schema) and call again.`, isError: true }
+      }
       const inner = action && { name: action.spec.name, label: action.label }
+      const destructive = permissions.undoable(action?.spec ?? spec)
       const expires = await routineService.inRun(agent.id) ? new Date(Date.now() + ASK_EXPIRES_MS) : undefined
-      const asked = await asks.create({ agentId: agent.id, kind: 'call_tool', input: { connectionId: connection.id, tool: spec.name, name, arguments: args, action: inner }, why: reason, origin, expires })
+      const asked = await asks.create({ agentId: agent.id, kind: 'call_tool', input: { connectionId: connection.id, tool: spec.name, name, arguments: args, action: inner, destructive }, description: reason, origin, expires })
       await record({ agentId: agent.id, connectionId: connection.id, tool: name, reason, outcome: 'asked', app: connection.name, spec, action, args })
       return { text: asked, isError: false }
     }
@@ -188,6 +195,10 @@ export const connectionService = {
     const action = await actionOf({ connection: granted.connection, spec: granted.spec, args })
     if (await permissions.decide({ agentId, connectionId, spec: action?.spec ?? granted.spec }) === 'deny') return { text: `Not run: ${granted.name} was set to Never before it was approved.`, isError: true }
     return run({ agentId, tool: granted, action, args, reason, approvedBy: actor.id })
+  },
+
+  refused({ agentId, connectionId, tool, app, spec, args, error }: { agentId: string; connectionId: string; tool: string; app: string; spec: ToolSpec; args: Record<string, unknown>; error: string }): Promise<void> {
+    return record({ agentId, connectionId, tool, reason: error, outcome: 'denied', app, spec, args, error })
   },
 
   callsSince({ agentId, since }: { agentId: string; since: number }): AppCall[] {
@@ -213,8 +224,8 @@ async function actionOf({ connection, spec, args }: { connection: ReachableConne
     log.warn({ event: 'connection.action_lookup_failed', connection: connection.id, error: messageOf(err) })
     return undefined
   })
-  if (found) known.set(name, found)
-  const action = found ?? { name, description: humanized(name), schema: {} }
+  const action = permissions.byVerb(found ?? { name, description: humanized(name), schema: {} })
+  known.set(name, action)
   return { spec: action, label: action.annotations?.title || (action.description.length <= 60 ? action.description : humanized(name)) }
 }
 
@@ -222,30 +233,52 @@ async function actionOf({ connection, spec, args }: { connection: ReachableConne
 async function lookUp({ connection, name }: { connection: ReachableConnection; name: string }): Promise<ToolSpec> {
   const lookups = (await toolsOf(connection)).filter((tool) => !permissions.isCatchAll(tool) && /schema|describe|find|search/i.test(tool.name))
     .sort((a, b) => Number(/schema|describe/i.test(b.name)) - Number(/schema|describe/i.test(a.name)))
+  let spec: ToolSpec = { name, description: humanized(name), schema: {} }
   for (const tool of lookups) {
     const arg = firstStringArg(tool.schema) ?? 'name'
     const result = await connectionService.execute({ connection, tool: tool.name, args: { [arg]: name } })
     const found = result.isError ? undefined : labeled({ value: parsed(result.text), name })
-    if (found) return found
+    if (found?.annotations && !spec.annotations) spec = { ...spec, annotations: found.annotations, meta: found.meta, description: found.description ?? spec.description }
+    if (found?.schema && !Object.keys(spec.schema).length) spec = { ...spec, schema: found.schema }
+    if (spec.annotations && Object.keys(spec.schema).length) break
   }
-  return { name, description: humanized(name), schema: {} }
+  return spec
 }
 
-function labeled({ value, name }: { value: unknown; name: string }): ToolSpec | undefined {
+function labeled({ value, name }: { value: unknown; name: string }): Partial<ToolSpec> | undefined {
   if (typeof value !== 'object' || value === null) return undefined
   const each = value as Record<string, unknown>
   const named = typeof each.name !== 'string' || each.name === name || name.endsWith(`/${each.name}`)
-  const annotations = each.annotations
-  if (named && typeof annotations === 'object' && annotations !== null) {
-    const description = typeof each.description === 'string' ? each.description : humanized(name)
-    const meta = typeof each._meta === 'object' && each._meta !== null ? each._meta as Record<string, unknown> : undefined
-    return { name, description, schema: {}, annotations: annotations as ToolSpec['annotations'], meta }
+  const annotations = objectOf(each.annotations)
+  const schema = objectOf(each.inputSchema ?? each.input_schema)
+  if (named && (annotations || schema)) {
+    return { description: typeof each.description === 'string' ? each.description : undefined, annotations: annotations as ToolSpec['annotations'], meta: objectOf(each._meta), schema }
   }
   for (const child of Object.values(each)) {
     const found = labeled({ value: child, name })
     if (found) return found
   }
   return undefined
+}
+
+function objectOf(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined
+}
+
+function innerArgs({ spec, args }: { spec: ToolSpec; args: Record<string, unknown> }): unknown {
+  const properties = (spec.schema.properties ?? {}) as Record<string, { type?: unknown }>
+  const key = Object.keys(properties).find((each) => /arg|param|input/i.test(each)) ?? Object.keys(properties).find((each) => properties[each]?.type === 'object')
+  return key ? args[key] ?? {} : undefined
+}
+
+function schemaError({ spec, args }: { spec: ToolSpec; args: unknown }): string | undefined {
+  if (args === undefined || (!spec.schema.properties && !spec.schema.required)) return undefined
+  try {
+    const result = z.fromJSONSchema(spec.schema as Parameters<typeof z.fromJSONSchema>[0]).safeParse(args)
+    return result.success ? undefined : z.prettifyError(result.error)
+  } catch {
+    return undefined
+  }
 }
 
 function firstStringArg(schema: Record<string, unknown>): string | undefined {

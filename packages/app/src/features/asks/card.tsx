@@ -6,11 +6,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { Key01Icon } from '@hugeicons/core-free-icons'
 import { Face } from '@/features/agents/face'
+import { AppIcon } from '@/features/connections/asks'
+import { connectionBrand } from '@/features/connections/catalog'
 import { RequestCard } from '@/features/agents/request-card'
 import { plainKey } from '@/lib/tool-label'
 import { cn } from '@/lib/utils'
-import { custom, extras } from '@/features/asks/custom'
+import { cards, custom, extras } from '@/features/asks/custom'
 import { useAnswer, useAsks } from '@/features/asks/api'
 
 const LONG = 1000
@@ -43,7 +46,10 @@ function AskList({ agent, asks }: { agent: Agent; asks: Ask[] }) {
       })}
       {!all && <p className="m-0 mt-1 border-t border-hair px-2 pt-2.5 pb-1 text-[12.5px] text-mute"><span className="text-ink">{done} of {rows.length} done</span> · {agent.name} continues when the rest are done</p>}
     </div>}
-    {asks.filter((each) => !custom[each.kind]).map((ask) => <AskCard key={ask.id} agent={agent} ask={ask} />)}
+    {asks.filter((each) => !custom[each.kind]).map((ask) => {
+      const Card = cards[ask.kind] ?? AskCard
+      return <Card key={ask.id} agent={agent} ask={ask} />
+    })}
   </>
 }
 
@@ -70,7 +76,7 @@ function AskCard({ agent, ask }: { agent: Agent; ask: Ask }) {
   }
   const formId = `ask-${ask.id}`
   const folded = fields.some(([, field]) => isLong(field))
-  return <RequestCard agent={agent} change={ask} error={answer.error?.message} icon={<Face agent={agent} size={28} />} title={ask.title}
+  return <RequestCard agent={agent} change={ask} error={answer.error?.message} icon={hostsOf(ask) ? <AppIcon brand={connectionBrand({ kind: 'mcp', account: hostsOf(ask) ?? '' })} size={28} fallback={Key01Icon} /> : <Face agent={agent} size={28} />} title={ask.title}
     actions={!declining && <>
       <Button type="submit" form={formId} variant="primary" size="sm" disabled={answer.isPending}>Approve</Button>
       {folded && !editing && <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(true)}>Edit</Button>}
@@ -97,6 +103,11 @@ function FormField({ name, field, value }: { name: string; field: Field; value: 
   if (field.type === 'boolean') return <label className="flex items-center gap-2 text-[13px] text-ink"><Switch name={name} defaultChecked={value === true} aria-label={label} />{label}</label>
   if (isLong(field)) return <label className="flex flex-col gap-1 text-[12.5px] text-mute">{label}<Textarea name={name} aria-label={label} defaultValue={given} maxLength={field.maxLength} className="min-h-40" /></label>
   return <label className="flex flex-col gap-1 text-[12.5px] text-mute">{label}<Input name={name} aria-label={label} type={field.secret ? 'password' : 'text'} autoComplete="off" defaultValue={field.secret ? undefined : given} maxLength={field.maxLength} placeholder={field.secret ? `Paste the ${label.toLowerCase()}` : undefined} /></label>
+}
+
+function hostsOf(ask: Ask): string | undefined {
+  const hosts = ask.input.hosts
+  return Array.isArray(hosts) && typeof hosts[0] === 'string' ? hosts[0] : undefined
 }
 
 function isLong(field: Field): boolean {
