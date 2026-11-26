@@ -6,6 +6,7 @@ import type { AddressInfo } from 'node:net'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { fakeAgentd, refresh, signIn } from '../agents/signed-in.ts'
+import { appWakes } from '../../plugins/chat/app-wakes.ts'
 
 const VALUE = 'sk_test_OBVIOUS_FAKE_VALUE_123'
 const written: string[] = []
@@ -39,8 +40,7 @@ signIn({ email: 'sec@example.com' })
 runSet.watch()
 await refresh()
 const owner = { id: 'usr_secowner', email: 'sec@example.com', role: 'owner' as const }
-const told: string[] = []
-changeRequestService.runDashboardWith(async ({ text }) => { told.push(text); return '' })
+const { told, settled } = appWakes()
 
 const gateway = gatewayServer.create().listen(0, '127.0.0.1')
 await once(gateway, 'listening')
@@ -70,8 +70,8 @@ test('add_secret waits for the owner, who pastes the value; it is stored sealed 
   assert.deepEqual((await secretService.held({ agentId: 'ag_secagent' }))[0].value, VALUE)
   const listed = await secretService.list({ actor: owner, agentId: 'ag_secagent' })
   assert.deepEqual(listed.map(({ name, hosts }) => ({ name, hosts })), [{ name: 'STRIPE_KEY', hosts: ['api.stripe.com'] }])
-  await new Promise((resolve) => setTimeout(resolve, 50))
-  assert.match(told.join('\n'), /Approved and done: Save a key, STRIPE_KEY/)
+  await settled()
+  assert.match(told.map(({ text }) => text).join('\n'), /Approved and done: Save a key, STRIPE_KEY/)
   const requests = await db.selectFrom('change_request').selectAll().execute()
   assert.ok(!JSON.stringify([requests, listed, told]).includes(VALUE))
 })

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import type { AddressInfo } from 'node:net'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { appWakes } from '../../plugins/chat/app-wakes.ts'
 import { gatewayServer } from '../../../src/server/gateway/gateway-server.ts'
 import { changeRequestService } from '../../../src/server/agents/change-request-service.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
@@ -23,8 +24,7 @@ signIn({ email: 'chg@example.com' })
 runSet.watch()
 await refresh()
 const owner = { id: 'usr_chgowner', email: 'chg@example.com', role: 'owner' as const }
-const told: { agentId: string; text: string }[] = []
-changeRequestService.runDashboardWith(async (input) => { told.push(input); return '' })
+const { told, deliver, settled } = appWakes()
 
 const server = gatewayServer.create().listen(0, '127.0.0.1')
 await new Promise((resolve) => server.once('listening', resolve))
@@ -56,25 +56,29 @@ test('a rename waits for approval, the owner edits it, and the decision goes bac
   assert.equal(approved.status, 'approved')
   assert.equal(approved.summary, 'Rename to Ops Bot')
   assert.equal((await db.selectFrom('agent').select('name').where('id', '=', 'ag_chgagent').executeTakeFirstOrThrow()).name, 'Ops Bot')
-  await new Promise((resolve) => setTimeout(resolve, 50))
+  await settled()
   assert.deepEqual(told.map((each) => each.agentId), ['ag_chgagent'])
-  assert.match(told[0].text, new RegExp(`^\\[OpenHut ${id}\\] Approved and done: Rename to Ops Bot\\.`))
+  assert.match(told[0].text, new RegExp(`^\\[OpenHut asks:${id}\\] Approved and done: Rename to Ops Bot\\.`))
   await assert.rejects(changeRequestService.approve({ actor: owner, id }), /already approved/)
 })
 
-test('a denied request from WhatsApp reaches the agent through its due feed, once', async () => {
+test('a denied request from WhatsApp reaches the agent through the plugin\'s wakes poll, once, and never through the app', async () => {
   const asked = textOf(await client.callTool({ name: 'update_channel', arguments: { why: 'Let the team in.', id: 'ch_chgwhats', open: true, origin: whatsapp } }))
   const id = idIn(asked)
   assert.match(asked, /Change who can message it on WhatsApp/)
   await changeRequestService.deny({ actor: owner, id, note: 'Not yet' })
+  const heard = told.length
+  deliver('ag_chgagent')
+  await settled()
+  assert.equal(told.length, heard, 'a WhatsApp wake is not the app\'s to deliver')
   assert.equal((await db.selectFrom('channel').select('open').where('id', '=', 'ch_chgwhats').executeTakeFirstOrThrow()).open, false)
   const headers = { authorization: `Agent ${token}`, 'content-type': 'application/json' }
-  const due = await (await fetch(`${base}/routines/due`, { headers })).json() as { data: { runId: string; text: string; origin: unknown }[] }
-  assert.deepEqual(due.data.map((run) => run.runId), [id])
+  const due = await (await fetch(`${base}/wakes`, { headers })).json() as { data: { id: string; text: string; origin: unknown }[] }
+  assert.deepEqual(due.data.map((wake) => wake.id), [`asks:${id}`])
   assert.match(due.data[0].text, /Not approved: Change who can message it on WhatsApp\. They said: "Not yet"/)
   assert.deepEqual(due.data[0].origin, whatsapp)
-  assert.equal((await fetch(`${base}/routines/runs/${id}`, { method: 'POST', headers, body: JSON.stringify({ picked: true }) })).status, 200)
-  assert.equal(((await (await fetch(`${base}/routines/due`, { headers })).json()) as { data: unknown[] }).data.length, 0)
+  assert.equal((await fetch(`${base}/wakes/asks:${id}`, { method: 'POST', headers, body: JSON.stringify({ picked: true }) })).status, 200)
+  assert.equal(((await (await fetch(`${base}/wakes`, { headers })).json()) as { data: unknown[] }).data.length, 0)
 })
 
 test('an agent can\'t ask about a channel that isn\'t its own, or add Slack', async () => {
@@ -96,17 +100,17 @@ test('an agent can ask for Discord with its bot token, and the token stays out o
   assert.notEqual(noChannels.isError, true, 'the owner picks its channels in OpenHut')
 })
 
-test('a decision the agent never heard about is sent again after a restart', async () => {
+test('a decision the agent never heard about is sent again by the chat plugin\'s next tick', async () => {
   const asked = textOf(await client.callTool({ name: 'update_self', arguments: { why: 'Shorter.', name: 'Op', origin: app } }))
   const id = idIn(asked)
   await changeRequestService.deny({ actor: owner, id })
-  await new Promise((resolve) => setTimeout(resolve, 50))
+  await settled()
   await db.updateTable('change_request').set({ told: false }).where('id', '=', id).execute()
   const before = told.length
-  await changeRequestService.resume()
-  await new Promise((resolve) => setTimeout(resolve, 50))
+  deliver('ag_chgagent')
+  await settled()
   assert.equal(told.length, before + 1)
-  assert.match(told.at(-1)?.text ?? '', new RegExp(`^\\[OpenHut ${id}\\] Not approved`))
+  assert.match(told.at(-1)?.text ?? '', new RegExp(`^\\[OpenHut asks:${id}\\] Not approved`))
   assert.equal((await db.selectFrom('change_request').select('told').where('id', '=', id).executeTakeFirstOrThrow()).told, true)
 })
 
@@ -158,11 +162,11 @@ test('a proposed connection the owner approves with a token becomes a granted co
   assert.ok(grants.some((grant) => grant.id === connection.id))
   const states = await permissions.list({ agentId: 'ag_chgagent', connectionId: connection.id, tools: DO_TOOLS })
   assert.deepEqual(states.map((each) => [each.name, each.permission]), [['db-cluster-get', 'allow'], ['db-cluster-resize', 'deny'], ['db-cluster-delete', 'deny']])
-  await new Promise((resolve) => setTimeout(resolve, 50))
+  await settled()
   const row = await db.selectFrom('change_request').select(['input', 'summary']).where('id', '=', id).executeTakeFirstOrThrow()
   const seen = [asked, await client.callTool({ name: 'get_self', arguments: {} })].map((each) => JSON.stringify(each.content))
   for (const text of [row.input, row.summary, JSON.stringify(approved), ...told.map((each) => each.text), ...seen]) assert.doesNotMatch(text, new RegExp(secret))
-  assert.match(told.at(-1)?.text ?? '', new RegExp(`^\\[OpenHut ${id}\\] Approved and done: Connect DigitalOcean\\.`))
+  assert.match(told.at(-1)?.text ?? '', new RegExp(`^\\[OpenHut asks:${id}\\] Approved and done: Connect DigitalOcean\\.`))
   mock.restoreAll()
 })
 
@@ -196,7 +200,7 @@ test('a bad token leaves no connection behind, and choosing to set it up themsel
   await assert.rejects(changeRequestService.approve({ actor: owner, id, token: 'wrong-token' }), /didn't answer as an MCP server/)
   assert.equal(await db.selectFrom('connection').select('id').where('name', '=', 'Fly').executeTakeFirst(), undefined)
   await changeRequestService.deny({ actor: owner, id, note: 'I’ll set it up myself' })
-  await new Promise((resolve) => setTimeout(resolve, 50))
+  await settled()
   assert.match(told.at(-1)?.text ?? '', /Not connected: Connect Fly\. They chose: "I’ll set it up myself"\..*numbered steps/)
   const twice = await client.callTool({ name: 'propose_connection', arguments: { ...DIGITALOCEAN, groups: [DIGITALOCEAN.groups[0], DIGITALOCEAN.groups[0]], origin: app } })
   assert.equal(twice.isError, true)

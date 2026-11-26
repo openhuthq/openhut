@@ -2,6 +2,7 @@ import * as z from 'zod'
 import { ASK_PROMPT, askCard, MCP_AUTH } from '@openhut/common/asks/ask.ts'
 import { ConnectionKind } from '@openhut/common/connections/connection.ts'
 import { definePlugin, defineTool } from '../../core/plugin.ts'
+import { changeRequestService } from '../../server/agents/change-request-service.ts'
 import { changeTool } from './change.ts'
 
 export const asks = definePlugin({
@@ -56,5 +57,9 @@ export const asks = definePlugin({
       },
     }),
     request_connection: changeTool({ action: 'request_connection', description: 'Ask for a connection that already exists in OpenHut (get_self lists them). For an app nobody connected yet, use ask_to_connect.', input: { connectionId: z.string().max(40) } }),
+  },
+  wakes: {
+    due: ({ agentId }) => changeRequestService.due({ agentId }),
+    picked: ({ agentId, id }) => changeRequestService.picked({ agentId, id }),
   },
 })

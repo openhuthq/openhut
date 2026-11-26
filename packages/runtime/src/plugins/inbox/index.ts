@@ -1,6 +1,7 @@
 import * as z from 'zod'
 import { definePlugin, defineTool } from '../../core/plugin.ts'
 import { routineService } from '../../server/inbox/routines.ts'
+import { inboxService } from '../../server/inbox/inbox-service.ts'
 import { changeTool } from '../asks/change.ts'
 
 export const inbox = definePlugin({
@@ -24,5 +25,10 @@ export const inbox = definePlugin({
       run: ({ id, reason }, { agent }) => routineService.cancel({ agentId: agent.id, id, reason }),
     }),
     add_webhook: changeTool({ action: 'add_webhook', description: 'Ask for a webhook: an address another service (like DigitalOcean alerts) calls when something happens. Each call comes to you as a message in this chat, with the raw payload. Once approved you get the address; your owner keeps the secret.', input: { name: z.string().min(1).max(60).describe('What calls it, in a few words: "DigitalOcean Postgres alerts".') } }),
+  },
+  wakes: {
+    due: ({ agentId }) => inboxService.due({ agentId }),
+    picked: ({ agentId, id }) => inboxService.picked({ agentId, id }),
+    said: async ({ agentId, id, reply }) => { if (id.startsWith('ru_')) await inboxService.report({ agentId, runId: id, said: reply }) },
   },
 })

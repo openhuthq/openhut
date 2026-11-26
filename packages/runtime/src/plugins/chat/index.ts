@@ -1,6 +1,7 @@
 import { definePlugin } from '../../core/plugin.ts'
 import { config } from '../../server/platform/config.ts'
 import { AGENT_API_PORT_BASE } from '../../agentd/sandbox/sandbox.ts'
+import { deliverAppWakes } from './wakes.ts'
 
 export const chat = definePlugin({
   name: 'chat',
@@ -11,4 +12,5 @@ export const chat = definePlugin({
       ...(config.agentHostNet ? { API_SERVER_HOST: '127.0.0.1', API_SERVER_PORT: String(AGENT_API_PORT_BASE + agent.net) } : { API_SERVER_HOST: '0.0.0.0', API_SERVER_PORT: '8642' }),
     },
   }),
+  start: deliverAppWakes,
 })

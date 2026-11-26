@@ -56,7 +56,7 @@ function replyTo({ last, callTool, shell, schedule, ask, names }: { last: { role
   const handed = last.role === 'tool' ? /```spec\\n((?:[^`\\]|\\.)*?)```/.exec(asText(last.content))?.[1] : undefined
   if (handed) return { content: `Here is what I need.\n\n\`\`\`spec\n${JSON.parse(`"${handed}"`)}\`\`\`` }
   if (last.role === 'tool') return { content: `TOOL RESULT: ${asText(last.content).slice(0, 20_000)}` }
-  const routine = /\[Routine rt_\w+ · run ru_\w+\] Time for "([^"]+)"/.exec(asText(last.content))?.[1]
+  const routine = /Routine rt_\w+: time for "([^"]+)"/.exec(asText(last.content))?.[1]
   if (routine) return { content: `ROUTINE RAN: ${routine}` }
   const wanted = /routine:\s*(\{[\s\S]+\})\s*$/i.exec(lastText(last.content))?.[1]
   if (wanted && schedule) return { tool: { name: schedule, args: wanted } }

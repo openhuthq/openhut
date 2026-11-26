@@ -12,6 +12,7 @@ import { agentToken, seal } from '../../../src/server/platform/secrets.ts'
 import { fakeAgentd, refresh, signIn } from '../agents/signed-in.ts'
 import { fakeDigitalOcean } from './fixtures/fake-digitalocean.ts'
 import { appCall } from '../../../src/server/threads/work.ts'
+import { appWakes } from '../../plugins/chat/app-wakes.ts'
 
 fakeAgentd()
 const digitalocean = await fakeDigitalOcean()
@@ -23,7 +24,7 @@ await db.insertInto('connection').values({ id: 'cn_dofake0001', kind: 'mcp', nam
 await db.insertInto('connection_grant').values({ id: 'gr_dofake0001', connection_id: 'cn_dofake0001', agent_id: 'ag_doagent', created_at: new Date() }).execute()
 signIn({ email: owner.email })
 await refresh()
-changeRequestService.runDashboardWith(async () => '')
+appWakes()
 
 const server = gatewayServer.create().listen(0, '127.0.0.1')
 await new Promise((resolve) => server.once('listening', resolve))

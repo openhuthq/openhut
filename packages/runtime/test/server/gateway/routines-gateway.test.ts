@@ -30,8 +30,8 @@ async function mcp() {
 
 const textOf = (result: Awaited<ReturnType<Client['callTool']>>) => (result.content as { text: string }[])[0].text
 
-test('the routines poll and MCP keepalives are not activity, so an idle Cloud computer can pause', async () => {
-  assert.equal((await fetch(`${base}/routines/due`, { headers })).status, 200)
+test('the wakes poll and MCP keepalives are not activity, so an idle Cloud computer can pause', async () => {
+  assert.equal((await fetch(`${base}/wakes`, { headers })).status, 200)
   await fetch(`${base}/api/v1/mcp`, { method: 'POST', headers: { ...headers, accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }) })
   assert.equal(activity.recent(60_000), false)
 })
@@ -46,7 +46,7 @@ test('the agent sees three routine tools, and origin is not in the schema it get
   await client.close()
 })
 
-test('a routine scheduled over MCP with the plugin\'s origin runs through due, picked and the report', async () => {
+test('a routine scheduled over MCP with the plugin\'s origin runs as a wake: listed, picked and reported', async () => {
   const client = await mcp()
   const refused = await client.callTool({ name: 'schedule_routine', arguments: { name: 'Remind Mo', plan: 'Board update.', at: new Date(Date.now() + 600_000).toISOString() } })
   assert.equal(refused.isError, true)
@@ -58,12 +58,14 @@ test('a routine scheduled over MCP with the plugin\'s origin runs through due, p
 
   await db.updateTable('inbox_source').set({ next_run_at: new Date(Date.now() - 60_000) }).where('id', '=', id).execute()
   await inboxService.tick()
-  const due = await (await fetch(`${base}/routines/due`, { headers })).json() as { data: { runId: string; text: string; origin: unknown }[] }
+  const due = await (await fetch(`${base}/wakes`, { headers })).json() as { data: { id: string; text: string; origin: unknown }[] }
   assert.equal(due.data.length, 1)
   assert.deepEqual(due.data[0].origin, origin)
-  assert.match(due.data[0].text, /^\[Routine rt_[a-z0-9]+ · run ru_[a-z0-9]+\] Time for "Remind Mo"/)
+  assert.match(due.data[0].id, /^inbox:ru_[a-z0-9]+$/)
+  assert.match(due.data[0].text, new RegExp(`^\\[OpenHut ${due.data[0].id}\\] Routine ${id}: time for "Remind Mo"`))
   assert.match(due.data[0].text, /then call cancel_routine\.$/)
-  const runUrl = `${base}/routines/runs/${due.data[0].runId}`
+  const runUrl = `${base}/wakes/${due.data[0].id}`
+  assert.equal((await fetch(`${base}/wakes/nope:ru_x`, { method: 'POST', headers, body: JSON.stringify({ picked: true }) })).status, 404)
   assert.equal((await fetch(runUrl, { method: 'POST', headers, body: JSON.stringify({}) })).status, 400)
   assert.equal((await fetch(runUrl, { method: 'POST', headers, body: JSON.stringify({ picked: true }) })).status, 200)
   assert.equal((await fetch(runUrl, { method: 'POST', headers: { ...headers, authorization: 'Agent nope' }, body: JSON.stringify({ said: 'x' }) })).status, 401)

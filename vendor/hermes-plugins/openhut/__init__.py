@@ -14,9 +14,9 @@ from gateway.session_context import get_session_env
 from .slack_transport import broker_slack
 
 OURS = "mcp__openhut__"
-ORIGIN_FIELDS = ("platform", "chat_id", "chat_type", "chat_name", "thread_id", "user_id", "user_name")
+ORIGIN_FIELDS = ("platform", "chat_id", "chat_type", "chat_name", "thread_id", "user_id", "user_name", "scope_id")
 LOCAL_TOOLSET = "openhut-local"
-RUN = re.compile(r"\[Routine rt_[a-z0-9]+ · run (ru_[a-z0-9]+)\]")
+WAKE = re.compile(r"\[OpenHut (\w+:\w+)\]")
 POLL_SECONDS = 15
 injected = set()
 
@@ -26,13 +26,13 @@ def register(ctx):
     for tool in ctx.get_config("tools", []) or []:
         ctx.register_tool(name=tool["name"], toolset=LOCAL_TOOLSET, schema=tool, handler=local(tool["name"]))
     ctx.register_hook("pre_tool_call", stamp)
-    ctx.register_hook("post_llm_call", reported)
+    ctx.register_hook("post_llm_call", said)
     for name in ctx.get_config("hooks", []) or []:
         ctx.register_hook(name, forward(name))
     for prefix in ctx.get_config("slack_actions", []) or []:
         ctx.register_slack_action_handler(re.compile("^" + re.escape(prefix)), lambda ack, body, action: clicked(ctx, ack, body, action))
     if os.environ.get("OPENHUT_GATEWAY"):
-        threading.Thread(target=poll, args=(ctx,), name="openhut-routines", daemon=True).start()
+        threading.Thread(target=poll, args=(ctx,), name="openhut-wakes", daemon=True).start()
 
 
 def origin():
@@ -97,23 +97,23 @@ async def clicked(ctx, ack, body, action):
 def poll(ctx):
     while True:
         try:
-            for run in gateway("/routines/due")["data"]:
-                if run["runId"] not in injected:
-                    if not ctx.inject_message(run["text"], origin=run["origin"]):
+            for wake in gateway("/wakes")["data"]:
+                if wake["id"] not in injected:
+                    if not ctx.inject_message(wake["text"], origin=wake["origin"]):
                         continue
-                    injected.add(run["runId"])
-                gateway("/routines/runs/" + run["runId"], {"picked": True})
+                    injected.add(wake["id"])
+                gateway("/wakes/" + wake["id"], {"picked": True})
         except Exception:
             pass
         time.sleep(POLL_SECONDS)
 
 
-def reported(user_message="", assistant_response="", **_):
-    match = RUN.search(str(user_message or ""))
+def said(user_message="", assistant_response="", **_):
+    match = WAKE.search(str(user_message or ""))
     if not match or match.group(1) not in injected:
         return
     try:
-        gateway("/routines/runs/" + match.group(1), {"said": str(assistant_response or "")})
+        gateway("/wakes/" + match.group(1), {"said": str(assistant_response or "")})
     except Exception:
         pass
 

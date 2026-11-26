@@ -8,6 +8,7 @@ import { inboxService } from '../../../src/server/inbox/inbox-service.ts'
 import { recordsService, type Held } from '../../../src/server/platform/records.ts'
 import { runSet } from '../../../src/server/agents/run-set.ts'
 import { fakeAgentd, HOME, refresh, signIn } from '../agents/signed-in.ts'
+import { appWakes } from '../../plugins/chat/app-wakes.ts'
 
 await migrate()
 await settings.setTimeZone('Europe/Berlin')
@@ -32,11 +33,7 @@ const slack = { platform: 'slack', chat_id: 'C0FINANCE1', chat_type: 'group', ch
 const minutes = (n: number) => new Date(Date.now() + n * 60_000)
 const idOf = (reply: string) => /Scheduled (rt_[a-z0-9]+)/.exec(reply)?.[1] ?? ''
 const rowOf = (id: string) => db.selectFrom('inbox_source').selectAll().where('id', '=', id).executeTakeFirst()
-const runs: { agentId: string; text: string }[] = []
-inboxService.runDashboardWith(async (input) => {
-  runs.push(input)
-  return 'Acme paid #4471.'
-})
+const { told: runs, settled } = appWakes({ reply: async () => 'Acme paid #4471.' })
 
 test('a routine needs a chat of the agent\'s own, and one of at or cron', async () => {
   await assert.rejects(routineService.schedule({ agentId: 'ag_rtnfirst', input: { name: 'x', plan: 'y', at: minutes(5).toISOString() } }), /chat you're in/)
@@ -67,9 +64,9 @@ test('a dashboard routine runs in its thread, says what it found, and a once rou
   const [listed] = await routineService.list({ actor: owner, agentId: 'ag_rtnfirst' })
   assert.deepEqual({ name: listed.name, place: listed.place, platform: listed.platform, stopped: listed.stopped, last: listed.last }, { name: 'Check Acme paid', place: 'the OpenHut app', platform: 'api_server', stopped: null, last: null })
   await inboxService.tick({ now: minutes(2) })
-  await new Promise((resolve) => setTimeout(resolve, 50))
+  await settled()
   assert.equal(runs.length, 1)
-  assert.match(runs[0].text, /^\[Routine rt_[a-z0-9]+ · run ru_[a-z0-9]+\] Time for "Check Acme paid"\. Your plan: Look at Stripe\./)
+  assert.match(runs[0].text, /^\[OpenHut inbox:ru_[a-z0-9]+\] Routine rt_[a-z0-9]+: time for "Check Acme paid"\. Your plan: Look at Stripe\./)
   assert.match(runs[0].text, /This runs once and ends by itself\.$/)
   assert.doesNotMatch(runs[0].text, /cancel_routine/)
   assert.equal(await rowOf(id), undefined)
@@ -83,16 +80,16 @@ test('a chat routine waits for the plugin, which marks it picked and reports wha
   await db.updateTable('inbox_source').set({ next_run_at: minutes(-1) }).where('id', '=', id).execute()
   await inboxService.tick()
   const [due] = await inboxService.due({ agentId: 'ag_rtnfirst' })
-  assert.match(due.text, new RegExp(`^\\[Routine ${id} `))
+  assert.match(due.text, new RegExp(`^Routine ${id}: `))
   assert.deepEqual(due.origin, whatsapp)
   assert.deepEqual(await inboxService.due({ agentId: 'ag_rtnother' }), [])
-  await assert.rejects(inboxService.report({ agentId: 'ag_rtnfirst', runId: due.runId, said: 'early' }), { status: 404 })
-  await assert.rejects(inboxService.picked({ agentId: 'ag_rtnother', id: due.runId }), { status: 404 })
-  await inboxService.picked({ agentId: 'ag_rtnfirst', id: due.runId })
+  await assert.rejects(inboxService.report({ agentId: 'ag_rtnfirst', runId: due.id, said: 'early' }), { status: 404 })
+  await assert.rejects(inboxService.picked({ agentId: 'ag_rtnother', id: due.id }), { status: 404 })
+  await inboxService.picked({ agentId: 'ag_rtnfirst', id: due.id })
   assert.deepEqual(await inboxService.due({ agentId: 'ag_rtnfirst' }), [])
   await assert.rejects(routineService.schedule({ agentId: 'ag_rtnfirst', input: { name: 'Copy me', plan: 'again', at: minutes(30).toISOString(), origin: slack } }), /can't set up another routine/)
-  await inboxService.report({ agentId: 'ag_rtnfirst', runId: due.runId, said: 'Acme asked for a PO number.' })
-  await assert.rejects(inboxService.report({ agentId: 'ag_rtnfirst', runId: due.runId, said: 'twice' }), { status: 404 })
+  await inboxService.report({ agentId: 'ag_rtnfirst', runId: due.id, said: 'Acme asked for a PO number.' })
+  await assert.rejects(inboxService.report({ agentId: 'ag_rtnfirst', runId: due.id, said: 'twice' }), { status: 404 })
   const after = (await routineService.list({ actor: owner, agentId: 'ag_rtnfirst' })).find((each) => each.id === id)
   assert.deepEqual({ status: after?.last?.status, text: after?.last?.text }, { status: 'told', text: 'Acme asked for a PO number.' })
   assert.ok(after?.nextRunAt && new Date(after.nextRunAt) > new Date())
@@ -110,8 +107,8 @@ test('a quiet run says nothing, and a stopped agent\'s routine waits until it ru
   await inboxService.tick()
   const [due] = await inboxService.due({ agentId: 'ag_rtnfirst' })
   assert.equal(due.origin.chat_name, 'finance')
-  await inboxService.picked({ agentId: 'ag_rtnfirst', id: due.runId })
-  await inboxService.report({ agentId: 'ag_rtnfirst', runId: due.runId, said: '[SILENT]' })
+  await inboxService.picked({ agentId: 'ag_rtnfirst', id: due.id })
+  await inboxService.report({ agentId: 'ag_rtnfirst', runId: due.id, said: '[SILENT]' })
   const row = await rowOf(id)
   assert.deepEqual({ status: row?.run_status, text: row?.run_text }, { status: 'quiet', text: null })
   await routineService.cancel({ agentId: 'ag_rtnfirst', id, reason: 'done' })

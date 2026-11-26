@@ -1,0 +1,67 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import type { AddressInfo } from 'node:net'
+import { wakes } from '../../src/core/wakes.ts'
+import { changeRequestService } from '../../src/server/agents/change-request-service.ts'
+import { gatewayServer } from '../../src/server/gateway/gateway-server.ts'
+import { inboxService } from '../../src/server/inbox/inbox-service.ts'
+import { routineService } from '../../src/server/inbox/routines.ts'
+import { db, migrate } from '../../src/server/platform/db.ts'
+import { agentToken, seal } from '../../src/server/platform/secrets.ts'
+import { fakeAgentd, refresh, signIn } from '../server/agents/signed-in.ts'
+
+await migrate()
+await db.insertInto('person').values({ id: 'usr_wakeownr', email: 'wakes@example.com', role: 'owner', removed_at: null }).execute()
+await db.insertInto('agent').values({ id: 'ag_wakeagnt', name: 'Dev', owner_id: 'usr_wakeownr', instructions: '#', model: 'claude:sonnet', net: 93, channel_key: seal('k'.repeat(48)), wanted: 'running' }).execute()
+await db.insertInto('channel').values({ id: 'ch_wakewhat', agent_id: 'ag_wakeagnt', kind: 'whatsapp', status: 'connected', account: null, owner_address: '15550004444', open: true, allowed: '', secrets: '' }).execute()
+fakeAgentd()
+signIn({ email: 'wakes@example.com' })
+await refresh()
+const owner = { id: 'usr_wakeownr', email: 'wakes@example.com', role: 'owner' as const }
+const whatsapp = { platform: 'whatsapp', chat_id: '15550004444@s.whatsapp.net', chat_type: 'dm' }
+const app = { platform: 'api_server', chat_id: 'openhut-msg_wakechat' }
+const nudged: string[] = []
+wakes.onNudge((agentId) => nudged.push(agentId))
+const server = gatewayServer.create().listen(0, '127.0.0.1')
+await new Promise((resolve) => server.once('listening', resolve))
+const headers = { authorization: `Agent ${agentToken({ id: 'ag_wakeagnt', epoch: 0 })}`, 'content-type': 'application/json' }
+const url = (path: string) => `http://127.0.0.1:${(server.address() as AddressInfo).port}${path}`
+test.after(() => server.close())
+
+test('every plugin\'s due wakes come back as one list, each named and prefixed [OpenHut <plugin>:<id>]', async () => {
+  const fromApp = /chg_[a-z0-9]+/.exec(await changeRequestService.ask({ agentId: 'ag_wakeagnt', action: 'update_self', input: { name: 'Ops' }, why: 'x', origin: app }))?.[0] ?? ''
+  const fromWhatsApp = /chg_[a-z0-9]+/.exec(await changeRequestService.ask({ agentId: 'ag_wakeagnt', action: 'update_self', input: { name: 'Op' }, why: 'x', origin: whatsapp }))?.[0] ?? ''
+  nudged.length = 0
+  await changeRequestService.deny({ actor: owner, id: fromApp })
+  await changeRequestService.deny({ actor: owner, id: fromWhatsApp })
+  assert.deepEqual(nudged, ['ag_wakeagnt'], 'only an app-origin decision nudges the app chat')
+  const routine = /rt_[a-z0-9]+/.exec(await routineService.schedule({ agentId: 'ag_wakeagnt', input: { name: 'Chase Acme', plan: 'Nudge.', cron: '0 9 * * *', origin: whatsapp } }))?.[0] ?? ''
+  await db.updateTable('inbox_source').set({ next_run_at: new Date(Date.now() - 60_000) }).where('id', '=', routine).execute()
+  await inboxService.tick()
+  const due = await wakes.due({ agentId: 'ag_wakeagnt' })
+  assert.deepEqual(due.map((wake) => wake.id.replace(/_[a-z0-9]+$/, '_*')).sort(), ['asks:chg_*', 'asks:chg_*', 'inbox:ru_*'])
+  for (const wake of due) assert.ok(wake.text.startsWith(`[OpenHut ${wake.id}] `), wake.text)
+  assert.ok(!due.some((wake) => /\[OpenHut chg_|\[Routine /.test(wake.text)), 'no second, older prefix')
+  assert.deepEqual(due.find((wake) => wake.id === `asks:${fromApp}`)?.origin, app)
+
+  const listed = await (await fetch(url('/wakes'), { headers })).json() as { data: { id: string }[] }
+  assert.deepEqual(listed.data.map((wake) => wake.id).sort(), due.filter((wake) => wake.origin.platform !== 'api_server').map((wake) => wake.id).sort(), 'the Hermes plugin never gets the app\'s wakes')
+})
+
+test('a report goes to the plugin named in the wake id', async () => {
+  const run = (await wakes.due({ agentId: 'ag_wakeagnt' })).find((wake) => wake.id.startsWith('inbox:'))
+  assert.ok(run)
+  const report = (body: unknown, id = run.id) => fetch(url(`/wakes/${id}`), { method: 'POST', headers, body: JSON.stringify(body) })
+  assert.equal((await report({})).status, 400)
+  assert.equal((await report({ picked: true }, 'nobody:ru_x')).status, 404)
+  assert.equal((await report({ picked: true }, 'inbox:ru_notreal')).status, 404)
+  assert.deepEqual(await (await report({ picked: true })).json(), { object: 'wake', id: run.id })
+  assert.equal((await report({ said: 'Chased.' })).status, 200)
+  const row = await db.selectFrom('inbox_source').select(['run_status', 'run_text']).where('run_id', '=', run.id.slice('inbox:'.length)).executeTakeFirstOrThrow()
+  assert.deepEqual(row, { run_status: 'told', run_text: 'Chased.' })
+  assert.ok(!(await wakes.due({ agentId: 'ag_wakeagnt' })).some((wake) => wake.id === run.id))
+  const decision = (await wakes.due({ agentId: 'ag_wakeagnt' })).find((wake) => wake.origin.platform === 'whatsapp')
+  assert.ok(decision)
+  await wakes.report({ agentId: 'ag_wakeagnt', id: decision.id, body: { picked: true, said: 'Told them.' } })
+  assert.ok(!(await wakes.due({ agentId: 'ag_wakeagnt' })).some((wake) => wake.id === decision.id), 'asks has no said; picked is enough')
+})
