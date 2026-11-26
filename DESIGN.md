@@ -124,6 +124,10 @@ Every variant and size is in `components/ui/button.tsx` (`buttonVariants` for li
 
 A dropdown trigger (Model, Computer) follows the secondary button: soft fill, no border, darker fill on hover and while open. Triggers stacked in one card share a minimum width (136px) so their edges line up, with the icon and label on the left and the chevron on the right. Every option has an icon in the same column, then its name and a one-line description, then the tick; the trigger shows the chosen option's icon. A menu of things to add (connections on an agent) follows the same shape: icon, name, and a greyed-out reason when an option can't be chosen.
 
+### Person avatars (owner, 2026-11-26)
+
+Every person, everywhere (People, the sidebar, chat, Access, New agent, Telegram), is `PersonFace` (`components/custom/person-face.tsx`), never a hand-made circle: soft initials, a pastel circle with the initials in a deep shade of the same colour (two letters from 28px, one below). The colour comes from the email (a name when there is none), from 8 pairs, so a person looks the same on every screen. No face and no ink outline: faces are for agents, so a person never looks like an agent. GitHub accounts keep their real pictures. Options compared on claude.ai/artifact/2TPbuaNZADqJaZiHb87GKS.
+
 ### Tabs and filters (owner, 2026-11-26)
 
 Tabs and filters use the line style by default (shadcn's `line` tabs, https://ui.shadcn.com/docs/components/base/tabs#line): words on no background, `--mute` at rest and `--ink` on hover and when picked, with a 2px ink line under the picked one. This is `ToggleGroup`'s default variant. The grey segmented control (`variant="segmented"`) is kept only for choosing a value inside a form (a person's role, how a connection signs in). A list that has a filter doesn't also get a search field unless it can grow past a few dozen rows.
