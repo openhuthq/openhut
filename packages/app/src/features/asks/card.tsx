@@ -4,6 +4,7 @@ import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { Ask } from '@openhut/common/asks/ask.ts'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Face } from '@/features/agents/face'
 import { RequestCard } from '@/features/agents/request-card'
@@ -14,7 +15,7 @@ import { useAnswer, useAsks } from '@/features/asks/api'
 
 const LONG = 1000
 const HIDDEN = new Set(['id', 'connectionId', 'botToken', 'tool', 'action'])
-const Field = z.object({ type: z.optional(z.string()), enum: z.optional(z.array(z.string())), maxLength: z.optional(z.number()), secret: z.optional(z.boolean()), description: z.optional(z.string()) })
+const Field = z.object({ type: z.optional(z.string()), maxLength: z.optional(z.number()), secret: z.optional(z.boolean()), description: z.optional(z.string()) })
 const Form = z.object({ properties: z._default(z.record(z.string(), Field), {}) })
 type Field = z.infer<typeof Field>
 
@@ -88,8 +89,7 @@ function AskCard({ agent, ask }: { agent: Agent; ask: Ask }) {
 function FormField({ name, field, value }: { name: string; field: Field; value: unknown }) {
   const label = field.description ?? plainKey(name)
   const given = typeof value === 'string' ? value : undefined
-  if (field.type === 'boolean') return <label className="flex items-center gap-2 text-[13px] text-ink"><input type="checkbox" name={name} defaultChecked={value === true} />{label}</label>
-  if (field.enum) return <label className="flex flex-col gap-1 text-[12.5px] text-mute">{label}<select name={name} defaultValue={given} className="h-8 rounded-lg border border-hair bg-card px-2 text-[13px] text-ink">{field.enum.map((each) => <option key={each}>{each}</option>)}</select></label>
+  if (field.type === 'boolean') return <label className="flex items-center gap-2 text-[13px] text-ink"><Switch name={name} defaultChecked={value === true} aria-label={label} />{label}</label>
   if ((field.maxLength ?? 0) > LONG) return <label className="flex flex-col gap-1 text-[12.5px] text-mute">{label}<Textarea name={name} aria-label={label} defaultValue={given} maxLength={field.maxLength} className="min-h-40" /></label>
   return <label className="flex flex-col gap-1 text-[12.5px] text-mute">{label}<Input name={name} aria-label={label} type={field.secret ? 'password' : 'text'} autoComplete="off" defaultValue={field.secret ? undefined : given} maxLength={field.maxLength} placeholder={field.secret ? `Paste the ${label.toLowerCase()}` : undefined} /></label>
 }
