@@ -8,7 +8,18 @@ import { keys } from '../plugins/keys/index.ts'
 import { browser } from '../plugins/browser/index.ts'
 import { onboarding } from '../plugins/onboarding/index.ts'
 import { asks } from '../plugins/asks/index.ts'
+import { inbox } from '../plugins/inbox/index.ts'
 import { cards } from '../plugins/cards/index.ts'
+import { HttpError } from '../server/platform/http-error.ts'
 import type { Plugin } from './plugin.ts'
 
-export const plugins: Plugin[] = [base, models, chat, channels, self, connections, keys, browser, onboarding, asks, cards]
+let list: Plugin[] | undefined
+
+export const plugins = (): Plugin[] => list ??= checked([base, models, chat, channels, self, connections, keys, browser, onboarding, asks, inbox, cards])
+
+export function checked(list: Plugin[]): Plugin[] {
+  const names = list.flatMap((plugin) => Object.keys(plugin.tools ?? {}))
+  const clash = names.find((name, index) => names.indexOf(name) !== index)
+  if (clash) throw new HttpError(500, `Two plugins define the tool ${clash}.`)
+  return list
+}

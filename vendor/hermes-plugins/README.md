@@ -34,5 +34,5 @@ It also registers the agent's `post_message` tool (toolset `openhut-post`): the 
 channel and chat are the agent's own and answers with the Hermes target, which goes to Hermes's own `send_message` helper,
 so a post uses the same adapters as a reply.
 Its `pre_tool_call` hook stamps every `mcp__openhut__*` call with the chat it came from (`origin`), with no list of tools to
-keep in sync. Every gateway tool takes `origin` and reads it in one place (`tool()` in `gateway-server.ts`); it is advice,
+keep in sync. Every gateway tool takes `origin` and reads it in one place (`core/mcp.ts`); it is advice,
 since the gateway checks the chat again before it posts there.

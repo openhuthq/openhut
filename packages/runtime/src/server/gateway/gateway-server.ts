@@ -1,25 +1,22 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import * as z from 'zod'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { config } from '../platform/config.ts'
 import { errorBody, HttpError, messageOf } from '../platform/http-error.ts'
 import { log } from '../platform/events.ts'
 import { serveMcp } from '../platform/mcp-transport.ts'
-import { agentService, type GatewayAgent } from '../agents/agent-service.ts'
+import { agentService } from '../agents/agent-service.ts'
+import { mcpOf } from '../../core/mcp.ts'
+import { plugins } from '../../core/plugins.ts'
 import { forward } from '../relay/forward.ts'
-import { connectionService, type AgentTool } from '../connections/connection-service.ts'
 import { testAnthropic, testModel } from './test-model.ts'
 import { brokerService, upstreams } from './broker.ts'
 import { activity } from './activity.ts'
 import { cardService } from '../cards/card-service.ts'
-import { routineService } from '../inbox/routines.ts'
 import { changeRequestService } from '../agents/change-request-service.ts'
 import { inboxService } from '../inbox/inbox-service.ts'
 import { channelService } from '../channels/channel-service.ts'
-import { db } from '../platform/db.ts'
-import type { ChangeAction } from '@openhut/common/agents/change-request.ts'
-import { askCard, MCP_AUTH } from '@openhut/common/asks/ask.ts'
-import { ConnectionKind } from '@openhut/common/connections/connection.ts'
+
+export { toolList } from '../../plugins/connections/index.ts'
 
 const PER_AGENT = 8
 // Background polls (Telegram's long poll, the plugin's routines poll every 15 s) aren't the agent at work, so they don't count toward its request limit.
@@ -33,6 +30,7 @@ const RenderCard = z.object({ text: z.string().max(200_000), channel: z.string()
 
 export const gatewayServer = {
   start({ port = config.gatewayPort }: { port?: number } = {}): Promise<void> {
+    plugins()
     return new Promise((resolve, reject) => {
       gatewayServer.create().once('error', reject).listen(port, config.agentGateway ? '127.0.0.1' : '0.0.0.0', () => {
         log.info({ event: 'gateway.listening', port })
@@ -66,7 +64,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const brokered = /^\/u\/([a-z]+)(\/.*)$/.exec(path)
   const upstream = brokered && upstreams.get(brokered[1])
   if (brokered && upstream) return brokerService.forward({ agent, upstream, path: brokered[2] + url.search, req, res })
-  if (path === '/api/v1/mcp') return serveMcp({ server: agentMcp(agent), req, res, body: mcp })
+  if (path === '/api/v1/mcp') return serveMcp({ server: mcpOf(agent), req, res, body: mcp })
   if (path === '/routines/due' && req.method === 'GET') return json(res, 200, { object: 'list', url: path, hasMore: false, data: [...await inboxService.due({ agentId: agent.id }), ...await changeRequestService.due({ agentId: agent.id })] })
   const run = /^\/routines\/runs\/((?:ru|chg|hd)_[a-z0-9]+)$/.exec(path)
   if (run && req.method === 'POST') return json(res, 200, await reportRun({ agentId: agent.id, runId: run[1], body: await readBody(req) }))
@@ -75,139 +73,6 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   if (path === '/cards/render' && req.method === 'POST') return json(res, 200, await cardService.render({ agent, ...renderRequest(await readBody(req)) }))
   if (path.startsWith('/test-llm/') && config.modelMode === 'test') return testModel({ path, body: await readBody(req), res })
   json(res, 404, errorBody({ status: 404, message: `No route ${path}.` }))
-}
-
-function agentMcp(agent: GatewayAgent): McpServer {
-  const server = new McpServer({ name: 'openhut', version: config.version })
-  const tool = <S extends z.ZodRawShape>({ name, description, shape, run }: { name: string; description: string; shape: S; run: (input: z.infer<z.ZodObject<S>>, origin: unknown) => Promise<ReturnType<typeof text>> }) =>
-    server.registerTool(name, { description, inputSchema: z.object(shape).passthrough() }, async ({ origin, ...input }: Record<string, unknown>) => run(input as z.infer<z.ZodObject<S>>, origin))
-  const reason = z.string().min(1).max(500).describe('Why you need this, in a few words. Shown in the audit.')
-  tool({ name: 'list_tools', description: 'List the tools you may call, one line each.', shape: { app: z.string().max(40).optional() }, run: async ({ app }) => text(toolList({ granted: await connectionService.tools({ agent }), app })) })
-  tool({ name: 'describe_tool', description: 'Show the input schema of one or more tools.', shape: { names: z.array(z.string().max(100)).min(1).max(20) }, run: async ({ names }) => {
-    const byName = new Map((await connectionService.tools({ agent })).map((each) => [each.name, each.spec]))
-    return text(JSON.stringify(names.map((name) => ({ name, schema: byName.get(name)?.schema ?? null, description: byName.get(name)?.description ?? 'Not available to this agent' }))))
-  } })
-  tool({
-    name: 'call_tool',
-    description: 'Run a tool from list_tools. Some tools wait for your owner\'s OK: then the call returns at once, and the result comes back to you as a message.',
-    shape: { reason, name: z.string().max(100), arguments: z.record(z.string(), z.unknown()).default({}), connectionId: z.string().max(100).optional() },
-    run: async ({ reason: why, name, arguments: args, connectionId }, origin) => {
-      const result = await connectionService.call({ agent, name, args, connectionId, reason: why, origin })
-      return text(result.text, result.isError)
-    },
-  })
-  tool({
-    name: 'ask_to_connect',
-    description: 'Ask the person to connect the apps you need and can\'t reach yet, all in one card. You get the card: put it in your reply.',
-    shape: {
-      why: z.string().min(1).max(300).describe('One or two sentences for the person: what the apps are for, and how to make the access if they need to (a read-only role, a token\'s scopes).'),
-      apps: z.array(z.object({
-        app: z.enum(ConnectionKind.options),
-        line: z.string().min(1).max(80).optional().describe('What you\'ll do with it, a few plain words: "open tickets for the SRE team".'),
-        url: z.url({ protocol: /^https$/ }).max(500).optional().describe('For app mcp: the server\'s URL.'),
-        name: z.string().min(1).max(60).optional().describe('For app mcp: what to call it, like Cloudflare.'),
-        auth: z.enum(MCP_AUTH).optional().describe('For app mcp: how the server lets you in. header for a token, sign_in for OAuth (Cloudflare\'s servers, like https://observability.mcp.cloudflare.com/mcp), public for none.'),
-      })).min(1).max(8),
-    },
-    run: async ({ why, apps }) => {
-      if (apps.some(({ app, url, name, auth }) => (url || name || auth) && app !== 'mcp')) return text('Only app mcp takes a url, a name or auth. Leave them out.', true)
-      if (apps.some(({ app, url }) => app === 'mcp' && !url)) return text('Send the MCP server\'s url with app mcp.', true)
-      return text(`Put this card in your reply, after a sentence on what you need:\n\n${askCard({ asks: apps.map((each) => ({ ...each, agentId: agent.id })), why })}`)
-    },
-  })
-  tool({
-    name: 'schedule_routine',
-    description: 'Use this whenever something needs a follow-up later: a promise you made, a reply you\'re waiting on, a date someone mentioned. Don\'t wait to be asked. Then tell the person in one line what you set up. Check list_routines first, and don\'t set up the same follow-up twice. Each run starts in the chat where you call this, with that chat\'s history.',
-    shape: {
-      name: z.string().min(1).max(80).describe('Starts with a verb, plain words: "Chase Acme on invoice #4471".'),
-      plan: z.string().min(1).max(2000).describe('Written to yourself: what to check, when to speak up, when to stop.'),
-      at: z.string().max(40).optional().describe('ISO time with an offset, for a one-time routine, like 2026-11-28T09:00:00+01:00.'),
-      cron: z.string().max(100).optional().describe('Minute hour day month weekday, in the owner\'s time zone, for a repeating one, like 0 10 * * 1-5. At most every 15 minutes.'),
-      until: z.string().max(40).optional().describe('ISO time; a repeating routine stops then. At most 90 days ahead, the default.'),
-    },
-    run: async (input, origin) => text(await routineService.schedule({ agentId: agent.id, input: { ...input, origin } })),
-  })
-  tool({ name: 'list_routines', description: 'List your routines, one line each.', shape: {}, run: async () => text(await routineService.listForAgent({ agentId: agent.id })) })
-  tool({
-    name: 'cancel_routine',
-    description: 'Use this when what you were following up on is done, or no longer needed. Tell the chat first: the routine leaves the owner\'s list.',
-    shape: { id: z.string().max(40), reason: z.string().max(200).describe('Short, past tense, for the log: "Paid on Nov 26".') },
-    run: async ({ id, reason: why }) => text(await routineService.cancel({ agentId: agent.id, id, reason: why })),
-  })
-  tool({ name: 'get_self', description: 'Your name, instructions and channels, where post_message can post (postTo), the connections you have, and the ones you can ask for. Read it before you ask to change any of them.', shape: {}, run: async () => text(await selfOf(agent)) })
-  const why = z.string().min(1).max(300).describe('One sentence for your owner: why this change, in plain words.')
-  const ask = ({ name, action, description, shape }: { name: string; action: ChangeAction; description: string; shape: z.ZodRawShape }) => tool({
-    name,
-    description: `${description} Your owner approves it in OpenHut first: the call returns at once, and the answer comes back to you as a message.`,
-    shape: { why, ...shape },
-    run: async ({ why: because, ...input }, origin) => text(await changeRequestService.ask({ agentId: agent.id, action, input, why: String(because), origin })),
-  })
-  ask({ name: 'update_self', action: 'update_self', description: 'Ask to change your own name or instructions. Send the whole new instructions, not a diff.', shape: { name: z.string().min(1).max(40).optional(), instructions: z.string().max(20_000).optional() } })
-  ask({
-    name: 'add_channel', action: 'add_channel', description: 'Ask to add WhatsApp, Telegram or Discord, so people can message you there. Slack needs a Slack app, so your owner adds it in OpenHut.',
-    shape: {
-      kind: z.enum(['whatsapp', 'telegram', 'discord']),
-      ownerAddress: z.string().max(40).optional().describe('WhatsApp and Telegram: your owner\'s WhatsApp number with country code (+15551234567), or their numeric Telegram user ID.'),
-      open: z.boolean().optional().describe('WhatsApp and Telegram: true lets anyone message you; false only your owner and allowed.'),
-      allowed: z.array(z.string().max(40)).max(50).default([]).describe('Other numbers or Telegram IDs that may message you. For Discord: the channel IDs to answer in.'),
-      botToken: z.string().max(200).optional().describe('For Telegram: the token BotFather gave, like 123456789:AAE…. For Discord: the bot token from the Developer Portal\'s Bot page.'),
-    },
-  })
-  ask({ name: 'update_channel', action: 'update_channel', description: 'Ask to change who can message you on one of your channels.', shape: { id: z.string().max(40), open: z.boolean().optional(), allowed: z.array(z.string().max(20)).max(50).optional().describe('The whole new list.') } })
-  ask({ name: 'remove_channel', action: 'remove_channel', description: 'Ask to remove one of your channels.', shape: { id: z.string().max(40) } })
-  ask({
-    name: 'propose_connection', action: 'propose_connection',
-    description: 'Propose connecting an app that isn\'t on ask_to_connect\'s list, through its official remote MCP server that takes a token. Your owner sees a card, makes the token with your guide and pastes it in OpenHut; you never see it. Say what each kind of tool may do.',
-    shape: {
-      name: z.string().min(1).max(60).describe('The app, like DigitalOcean.'),
-      line: z.string().max(120).optional().describe('What it is to the person, a few plain words: "where your database runs".'),
-      url: z.url({ protocol: /^https$/ }).max(500).describe('The official remote MCP server, like https://mcp.digitalocean.com/mcp.'),
-      token: z.object({
-        label: z.string().min(1).max(60).describe('What the token is called, like DigitalOcean token.'),
-        guide: z.string().min(1).max(300).describe('One or two plain sentences: where to make it and what access to give.'),
-        link: z.url({ protocol: /^https$/ }).max(500).describe('The page where they make it.'),
-        scopes: z.array(z.string().max(100)).max(30).optional().describe('The scopes it needs, as the app names them.'),
-      }),
-      groups: z.array(z.object({
-        group: z.enum(['read', 'create', 'update', 'delete', 'other']).describe('other: tools the app doesn\'t label, and one generic tool that runs any other tool (like mcp_invoke_tool), so it can do anything.'),
-        label: z.string().min(1).max(80).describe('What these tools do here, in plain words: "Read database info".'),
-        permission: z.enum(['allow', 'ask', 'deny']).describe('allow runs without asking, ask waits for their OK each time, deny never runs. Usually: read allow, create and update ask, delete deny.'),
-      })).min(1).max(5).describe('One entry per kind of tool the job needs.'),
-    },
-  })
-  ask({
-    name: 'add_secret', action: 'add_secret',
-    description: 'Ask your owner for an API key or token you need, like a Stripe key. They paste it in OpenHut; you never see it. Once saved, call the service through $OPENHUT_GATEWAY/x/<host>/<path> and OpenHut adds the key, only for the hosts you list. Never ask anyone to paste a key into a chat.',
-    shape: {
-      name: z.string().regex(/^[A-Z][A-Z0-9_]{1,39}$/).describe('Capitals, digits and _, like STRIPE_KEY. Your terminal gets $OPENHUT_SECRET_<name>, a stand-in, never the key.'),
-      hosts: z.array(z.string().max(253)).min(1).max(10).describe('The API hosts the key may go to, like api.stripe.com. No https://, no path.'),
-      header: z.string().max(200).optional().describe('How the service wants it, with {value} for the key. Default: Authorization: Bearer {value}. Stripe: Authorization: Bearer {value}; others: X-Api-Key: {value}.'),
-    },
-  })
-  ask({ name: 'add_webhook', action: 'add_webhook', description: 'Ask for a webhook: an address another service (like DigitalOcean alerts) calls when something happens. Each call comes to you as a message in this chat, with the raw payload. Once approved you get the address; your owner keeps the secret.', shape: { name: z.string().min(1).max(60).describe('What calls it, in a few words: "DigitalOcean Postgres alerts".') } })
-  ask({ name: 'request_connection', action: 'request_connection', description: 'Ask for a connection that already exists in OpenHut (get_self lists them). For an app nobody connected yet, use ask_to_connect.', shape: { connectionId: z.string().max(40) } })
-  return server
-}
-
-async function selfOf(agent: GatewayAgent): Promise<string> {
-  const [row, channels, connections, grants, postTo, hooks] = await Promise.all([
-    db.selectFrom('agent').select(['name', 'instructions']).where('id', '=', agent.id).executeTakeFirstOrThrow(),
-    channelService.list({ agentId: agent.id }),
-    db.selectFrom('connection').select(['id', 'name', 'kind']).orderBy('created_at').execute(),
-    db.selectFrom('connection_grant').select('connection_id').where('agent_id', '=', agent.id).execute(),
-    channelService.postTargets({ agentId: agent.id }),
-    inboxService.forAgent({ agentId: agent.id }),
-  ])
-  const have = new Set(grants.map((grant) => grant.connection_id))
-  return JSON.stringify({
-    name: row.name,
-    instructions: row.instructions,
-    channels: channels.map(({ id, kind, status, account, open, allowed }) => ({ id, kind, status, account, open, allowed })),
-    connections: connections.filter((each) => have.has(each.id)),
-    canAskFor: connections.filter((each) => !have.has(each.id)),
-    postTo: postTo.map(({ channel, chat, place }) => ({ channel, chat, place })),
-    webhooks: hooks,
-  }, null, 2)
 }
 
 async function reportRun({ agentId, runId, body }: { agentId: string; runId: string; body: unknown }): Promise<{ object: 'routine_run'; id: string }> {
@@ -219,14 +84,6 @@ async function reportRun({ agentId, runId, body }: { agentId: string; runId: str
   } else if (parsed.data.picked) await inboxService.picked({ agentId, id: runId })
   else await inboxService.report({ agentId, runId, said: parsed.data.said ?? '' })
   return { object: 'routine_run', id: runId }
-}
-
-export function toolList({ granted, app }: { granted: AgentTool[]; app: string | undefined }): string {
-  const wanted = app?.trim().toLowerCase()
-  const tools = granted.filter((tool) => !wanted || tool.connection.kind === wanted || tool.connection.name.toLowerCase() === wanted)
-  const lines = tools.map((tool) => `${tool.name} [${tool.connection.name}, ${tool.connection.id}]: ${tool.spec.description}`.slice(0, 140))
-  if (lines.length) return lines.slice(0, 100).join('\n')
-  return granted.length ? `No app named ${app}. Leave app out to list every tool.` : 'No tools: nobody has granted this agent a connection yet.'
 }
 
 async function messageTarget({ agentId, body }: { agentId: string; body: unknown }): Promise<{ object: 'message_target'; target: string; place: string }> {
@@ -273,4 +130,3 @@ function json(res: ServerResponse, status: number, body: unknown, close = false)
   res.writeHead(status, { 'content-type': 'application/json', ...(close && { connection: 'close' }) }).end(JSON.stringify(body))
 }
 
-const text = (content: string, isError = false) => ({ content: [{ type: 'text' as const, text: content }], isError })
