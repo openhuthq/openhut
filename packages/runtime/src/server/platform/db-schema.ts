@@ -41,6 +41,7 @@ export interface Database {
     run_text: string | null; failures: Generated<number>; secret: string | null; last_at: Timestamp | null
     threads: Generated<'group' | 'each'>; group_by: string | null; title_by: string | null; label_by: string | null
   }
+  inbox_thread: { source_id: string; group_key: string; thread_id: string }
   inbox_item: { id: string; source_id: string; agent_id: string; digest: string; text: string; group_key: string | null; told: Generated<boolean>; created_at: Generated<Date> }
   sign_in: {
     state: string; actor: string; actor_id: string; kind: string; name: string; existing_id: string | null; data: string

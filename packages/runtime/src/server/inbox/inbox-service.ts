@@ -164,8 +164,15 @@ export const inboxService = {
     if (row.kind === 'webhook') {
       const payload = payloadOf(bodyOf(row.text))
       const title = render({ template: row.title_by, payload }) ?? row.name
-      const key = row.threads === 'group' && channelOf(row) === 'app' ? `wh:${row.id}:${row.group_key ?? render({ template: row.group_by, payload }) ?? ''}` : undefined
-      return threadService.open({ agentId, key, title, origin: { platform: 'webhook', label: row.name }, mirrors: [] })
+      const open = () => threadService.open({ agentId, title, origin: { platform: 'webhook', label: row.name }, mirrors: [] })
+      if (row.threads === 'each') return open()
+      const group = row.group_key ?? render({ template: row.group_by, payload }) ?? ''
+      const held = await db.selectFrom('inbox_thread').innerJoin('chat_thread', 'chat_thread.id', 'inbox_thread.thread_id').select('chat_thread.id')
+        .where('inbox_thread.source_id', '=', row.id).where('inbox_thread.group_key', '=', group).where('chat_thread.agent_id', '=', agentId).executeTakeFirst()
+      if (held) return held.id
+      const id = await open()
+      await db.insertInto('inbox_thread').values({ source_id: row.id, group_key: group, thread_id: id }).onConflict((conflict) => conflict.columns(['source_id', 'group_key']).doUpdateSet({ thread_id: id })).execute()
+      return id
     }
     if (origin.platform === 'discord') return threadService.discordThread({ agentId, place: discordPlace(chatOf(origin)) })
     return threadService.bySession({ agentId, session: origin.chat_id })
@@ -197,7 +204,9 @@ export const inboxService = {
     const row = await db.selectFrom('inbox_item').innerJoin('inbox_source', 'inbox_source.id', 'inbox_item.source_id').select(['inbox_source.kind', 'inbox_source.name', 'inbox_source.origin'])
       .where('inbox_item.id', '=', id).where('inbox_item.agent_id', '=', agentId).executeTakeFirst()
     const channel = row?.kind === 'webhook' ? channelOf(row) : 'app'
-    if (channel !== 'app' && row) await threadService.startChannelThread({ id: threadId, place: channel, text: said, title: row.name })
+    if (channel === 'app') return
+    const thread = await db.selectFrom('chat_thread').select(['title', 'continue_url']).where('id', '=', threadId).executeTakeFirst()
+    if (thread && !thread.continue_url) await threadService.startChannelThread({ id: threadId, place: channel, text: said, title: thread.title })
   },
 
   async setup({ actor, agentId, id }: { actor: Caller; agentId: string; id: string }): Promise<{ object: 'webhook_setup'; address: string; secret: string }> {

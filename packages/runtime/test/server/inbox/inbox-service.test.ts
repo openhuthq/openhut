@@ -241,8 +241,8 @@ test('in group mode an alert and its recovery share a thread; a resend with the 
   assert.equal(triggered.threadId, recovered.threadId)
   assert.notEqual(told[first].threadId, triggered.threadId)
   assert.deepEqual({ author: recovered.metadata?.author, call: recovered.metadata?.call }, { author: 'DO alerts', call: { webhookId: hook.id, label: 'STATE_RECOVERED · 40.3%' } })
-  const thread = await db.selectFrom('chat_thread').select(['title', 'key']).where('id', '=', triggered.threadId ?? '').executeTakeFirstOrThrow()
-  assert.deepEqual(thread, { title: 'CPU high · pulse-db', key: `wh:${hook.id}:pulse-db/CPU high` })
+  const thread = await db.selectFrom('chat_thread').select('title').where('id', '=', triggered.threadId ?? '').executeTakeFirstOrThrow()
+  assert.equal(thread.title, 'CPU high · pulse-db')
 })
 
 test('X-Group-Key picks the thread, and each mode starts a new thread per call', async () => {
@@ -261,4 +261,32 @@ test('X-Group-Key picks the thread, and each mode starts a new thread per call',
   assert.equal(told.length - first, 4)
   assert.notEqual(told[first + 2].threadId, told[first + 3].threadId)
   assert.notEqual(told[first + 2].threadId, told[first].threadId)
+})
+
+test('a webhook that runs in Discord starts one Discord thread per group: the first call starts it, named by titleBy, and later calls reuse it', async () => {
+  const humans = { platform: 'discord', chat_id: '777', chat_name: '#agents-humans' }
+  const places = mock.method(channelService, 'places', async () => [humans])
+  let started = 900
+  const sent = mock.method(channelService, 'send', async () => ({ url: `https://discord.com/channels/1/${started}`, messageId: '9', threadId: String(started++) }))
+  const hook = await inboxService.createSource({ actor: owner, agentId: 'ag_hookpuls', name: 'DO in Discord', channel: humans })
+  await inboxService.setThreads({ agentId: 'ag_hookpuls', id: hook.id, groupBy: '{subject}/{data.alert_rule_name}', titleBy: '{data.alert_rule_name} · {data.resource_name}' })
+  const first = told.length
+  const one = (await doPost({ hook, body: doAlert({ id: 'd-1', state: 'STATE_TRIGGERED', value: 91, time: '2026-11-26T11:00:00Z' }) })).json().id
+  await settle()
+  const threadId = told[first].threadId ?? ''
+  await inboxService.answered({ agentId: 'ag_hookpuls', id: one, threadId, said: 'CPU is high.' })
+  const two = (await doPost({ hook, body: doAlert({ id: 'd-2', state: 'STATE_RECOVERED', value: 30, time: '2026-11-26T11:20:00Z' }) })).json().id
+  await settle()
+  assert.equal(told[first + 1].threadId, threadId)
+  await inboxService.answered({ agentId: 'ag_hookpuls', id: two, threadId, said: 'Recovered.' })
+  assert.deepEqual(sent.mock.calls.map((call) => call.arguments[0]), [{ agentId: 'ag_hookpuls', place: humans, text: 'CPU is high.', startThread: 'CPU high · pulse-db' }])
+  assert.equal((await db.selectFrom('chat_thread').select('continue_url').where('id', '=', threadId).executeTakeFirstOrThrow()).continue_url, 'https://discord.com/channels/1/900')
+  await inboxService.updateWebhook({ actor: owner, id: hook.id, threads: 'each' })
+  const three = (await doPost({ hook, body: doAlert({ id: 'd-3', state: 'STATE_TRIGGERED', value: 92, time: '2026-11-26T12:00:00Z' }) })).json().id
+  await settle()
+  assert.notEqual(told[first + 2].threadId, threadId)
+  await inboxService.answered({ agentId: 'ag_hookpuls', id: three, threadId: told[first + 2].threadId ?? '', said: 'High again.' })
+  assert.equal(sent.mock.calls.length, 2)
+  sent.mock.restore()
+  places.mock.restore()
 })
