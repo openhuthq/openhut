@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { asks } from '../../../src/core/asks.ts'
 import { connectionService, toolsShown, type AgentTool } from '../../../src/server/connections/connection-service.ts'
 import { permissions } from '../../../src/server/permissions/permissions.ts'
+import { postgres } from '../../../src/server/integrations/postgres/postgres.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { seal } from '../../../src/server/platform/secrets.ts'
 import { fakeAgentd, refresh, signIn } from '../agents/signed-in.ts'
@@ -115,7 +116,8 @@ test('an app\'s status follows its latest call, and apps list by name', async ()
   assert.equal((await connectionService.get({ actor: owner, id: 'cn_permlin0001' })).status, 'failing')
 })
 
-test('reconnect swaps the key in place: the same id, its grants and its tool permissions stay', async () => {
+test('reconnect swaps the key in place: the same id, its grants and its tool permissions stay', async (t) => {
+  t.mock.method(postgres, 'probe', async (dsn: string) => new URL(dsn).host.split(':')[0] + new URL(dsn).pathname)
   const made = await connectionService.create({ actor: owner, kind: 'postgres', name: 'Orders', dsn: 'postgres://reader:old@db-a:5432/orders' })
   await db.insertInto('connection_grant').values({ id: 'grt_recon01', connection_id: made.id, agent_id: agent.id, created_at: new Date().toISOString() }).execute()
   await db.insertInto('tool_permission').values({ agent_id: agent.id, connection_id: made.id, tool: 'postgres_query', state: 'allow', changed_by: owner.id }).execute()

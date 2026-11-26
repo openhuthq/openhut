@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { ToolGroup, type Connection, type ConnectionTool } from '@openhut/common/connections/connection.ts'
+import { KEYED_KINDS, ToolGroup, type Connection, type ConnectionTool } from '@openhut/common/connections/connection.ts'
 import type { OpenHutAgent } from '@/lib/openhut'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/empty-state'
@@ -91,6 +91,7 @@ function ManageSheet({ connection, agents }: { connection: Connection; agents: O
   const [keying, setKeying] = useState(false)
   const failing = connection.status === 'failing'
   const field = KEY_FIELDS[connection.kind]
+  const renewable = connection.signIn || KEYED_KINDS.some((kind) => kind === connection.kind)
   const returned = new URLSearchParams(location.search).get('error') ?? undefined
   const start = () => {
     if (connection.signIn) authorize.mutate({ connectionId: connection.id, tab: openSignInTab() }, { onSuccess: (done) => { if (done) toast(`${connection.name} is reconnected`) }, onError: toastError })
@@ -105,8 +106,8 @@ function ManageSheet({ connection, agents }: { connection: Connection; agents: O
     safe={`Added ${shortDate.format(new Date(connection.createdAt))}`}
     foot={<>
       <ConfirmButton variant="danger" disabled={!connection.canDelete} question={`Delete ${connection.name}?`} detail="Every agent stops being able to use it." action="Delete" onConfirm={() => remove.mutate(undefined, { onError: toastError })}>Delete</ConfirmButton>
-      <Button variant={failing ? 'primary' : 'secondary'} disabled={authorize.isPending || reconnect.isPending || keying} onClick={start}>{authorize.isPending ? 'Finish in your browser…' : 'Reconnect'}</Button>
-      <Button variant={failing || keying ? 'secondary' : 'primary'} onClick={close}>Done</Button>
+      {renewable && <Button variant={failing ? 'primary' : 'secondary'} disabled={authorize.isPending || reconnect.isPending || keying} onClick={start}>{authorize.isPending ? 'Finish in your browser…' : 'Reconnect'}</Button>}
+      <Button variant={renewable && (failing || keying) ? 'secondary' : 'primary'} onClick={close}>Done</Button>
     </>}>
     <ItemGroup className="rounded-lg">
       <Item size="sm"><ItemContent stacked><ItemTitle>Status</ItemTitle><ItemDescription className="text-xs">{statusNote(connection)}</ItemDescription></ItemContent><StatusBadge status={connection.status} /></Item>
