@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { WEBHOOK_SETUP_PROMPT } from '@openhut/common/webhooks/webhook.ts'
 import { CARD_PROMPT } from '@openhut/common/cards/card.ts'
 import { ASK_PROMPT, INTERVIEW_PROMPT, starterInstructions } from '@openhut/common/asks/ask.ts'
 import { TALK_PROMPT } from '../../src/plugins/base/index.ts'
@@ -192,9 +193,15 @@ test('Telegram open to anyone: everyone allowed', () => {
 })
 
 test('SOUL.md names the connected apps in one line, and adds only the ask and card guides when there are none', () => {
-  assert.equal(render([]).soul, `${TALK_PROMPT}\n\n# Dev\n${ASK_PROMPT}${CARD_PROMPT}`)
+  assert.equal(render([]).soul, `${TALK_PROMPT}\n\n# Dev\n${ASK_PROMPT}
+${WEBHOOK_SETUP_PROMPT}
+
+${CARD_PROMPT}`)
   const { soul } = files({ connections: [{ name: 'Excalidraw', kind: 'excalidraw' }, { name: 'Orders\nDB', kind: 'postgres' }] })
-  assert.equal(soul, `${TALK_PROMPT}\n\n# Dev\n\n## Connected apps\n\nThe openhut tools reach: Excalidraw, Orders DB (postgres). Call list_tools to see what each one does, and use it before doing the same work by hand.\n${ASK_PROMPT}${CARD_PROMPT}`)
+  assert.equal(soul, `${TALK_PROMPT}\n\n# Dev\n\n## Connected apps\n\nThe openhut tools reach: Excalidraw, Orders DB (postgres). Call list_tools to see what each one does, and use it before doing the same work by hand.\n${ASK_PROMPT}
+${WEBHOOK_SETUP_PROMPT}
+
+${CARD_PROMPT}`)
 })
 
 test('saved keys: a stand-in per key in the env, and how to call through the gateway in SOUL.md', () => {
@@ -206,7 +213,10 @@ test('saved keys: a stand-in per key in the env, and how to call through the gat
 
 test('a new agent with its starter instructions is told to interview the person in its first chat, and stops once it has a job', () => {
   const fresh = files({ agent: { ...agent, name: 'Pulse', instructions: starterInstructions('Pulse') } })
-  assert.equal(fresh.soul, `${TALK_PROMPT}\n\n${starterInstructions('Pulse')}\n${INTERVIEW_PROMPT}${ASK_PROMPT}${CARD_PROMPT}`)
+  assert.equal(fresh.soul, `${TALK_PROMPT}\n\n${starterInstructions('Pulse')}\n${INTERVIEW_PROMPT}${ASK_PROMPT}
+${WEBHOOK_SETUP_PROMPT}
+
+${CARD_PROMPT}`)
   assert.match(INTERVIEW_PROMPT, /update_self/)
   assert.match(INTERVIEW_PROMPT, /connect_app/)
   assert.doesNotMatch(render([]).soul, /Your first chat/)

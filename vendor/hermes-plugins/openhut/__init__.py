@@ -16,7 +16,8 @@ from gateway.session_context import get_session_env
 from .slack_transport import broker_slack
 
 OURS = "mcp__openhut__"
-ORIGIN_FIELDS = ("platform", "chat_id", "chat_type", "chat_name", "thread_id", "user_id", "user_name", "scope_id")
+ORIGIN_FIELDS = ("platform", "chat_id", "chat_type", "chat_name", "thread_id", "parent_chat_id", "user_id", "user_name", "scope_id")
+RECORDED = ("discord",)
 LOCAL_TOOLSET = "openhut-local"
 WAKE = re.compile(r"\[OpenHut (\w+:\w+)\]")
 POLL_SECONDS = 15
@@ -86,8 +87,8 @@ def notify():
         path, body = notices.get()
         try:
             gateway(path, body, timeout=NOTIFY_SECONDS)
-        except Exception:
-            pass
+        except Exception as err:
+            warn(path, describe(err))
 
 
 def dispatch(**kwargs):
@@ -139,14 +140,14 @@ def poll(ctx):
                 try:
                     if wake["id"] not in injected:
                         if not ctx.inject_message(wake["text"], origin=wake["origin"]):
-                            warn(wake["id"], "Hermes refused to start a turn at " + json.dumps(wake["origin"]) + "; its log says why")
+                            warn("wake " + wake["id"], "Hermes refused to start a turn at " + json.dumps(wake["origin"]) + "; its log says why")
                             continue
                         injected.add(wake["id"])
                     gateway("/wakes/" + wake["id"], {"picked": True})
                 except Exception as err:
-                    warn(wake["id"], describe(err))
+                    warn("wake " + wake["id"], describe(err))
         except Exception as err:
-            warn("/wakes", describe(err))
+            warn("wake poll", describe(err))
         time.sleep(POLL_SECONDS)
 
 
@@ -154,7 +155,7 @@ def warn(key, message):
     if warned.get(key) == message:
         return
     warned[key] = message
-    print("openhut: wake " + key + ": " + message, file=sys.stderr, flush=True)
+    print("openhut: " + key + ": " + message, file=sys.stderr, flush=True)
 
 
 def describe(err):
@@ -168,7 +169,12 @@ def describe(err):
 
 def said(user_message="", assistant_response="", **_):
     match = WAKE.search(str(user_message or ""))
-    if not match or match.group(1) not in injected:
+    if not match:
+        where = origin()
+        if where.get("platform") in RECORDED:
+            notices.put(("/turns", {"user": str(user_message or ""), "reply": str(assistant_response or ""), "origin": where}))
+        return
+    if match.group(1) not in injected:
         return
     try:
         gateway("/wakes/" + match.group(1), {"said": str(assistant_response or "")})

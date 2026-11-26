@@ -4,7 +4,7 @@ import type { Place } from '@openhut/common/channels/channel.ts'
 import { AgentNotify } from '@openhut/common/threads/thread.ts'
 import { defineTool } from '../../core/plugin.ts'
 import { agentService } from '../../server/agents/agent-service.ts'
-import { placeService } from '../../server/channels/place-service.ts'
+import { channelService } from '../../server/channels/channel-service.ts'
 import { db } from '../../server/platform/db.ts'
 import { emit, log } from '../../server/platform/events.ts'
 import { HttpError } from '../../server/platform/http-error.ts'
@@ -22,11 +22,11 @@ export const notifyTool = defineTool({
     place: z.string().max(200).optional().describe('A channel name like #alerts, or its id. Leave out for your default place.'),
   },
   run: async ({ text, place }, { agent }) => {
-    const places = await placeService.list({ agentId: agent.id })
+    const places = await channelService.places({ agentId: agent.id })
     const wanted = place?.replace(/^#/, '').trim().toLowerCase()
     const to = wanted ? places.find((each) => each.chat_id === wanted || each.chat_name.replace(/^#/, '').toLowerCase() === wanted) : notifyOf((await db.selectFrom('agent').select('notify').where('id', '=', agent.id).executeTakeFirst())?.notify ?? null).default
     if (!to) return { text: `${wanted ? `You can't post in ${place}.` : 'You have no default place to notify.'} ${places.length ? `Pass place as one of: ${places.map((each) => each.chat_name).join(', ')}.` : 'You aren\'t connected to any channel you can post in.'}`, isError: true }
-    await placeService.send({ agentId: agent.id, place: to, text })
+    await channelService.send({ agentId: agent.id, place: to, text })
     const kept = (sent.get(agent.id) ?? []).filter((each) => Date.now() - each.at < KEPT_MS)
     sent.set(agent.id, [...kept, { at: Date.now(), place: to, text }])
     log.info({ event: 'agent.notified', agent: agent.id, platform: to.platform })
@@ -61,7 +61,7 @@ export const notifyController: FastifyPluginAsyncZod = async (app) => {
     const actor = await who(req)
     await agentService.requireOwner({ actor, id: req.params.id })
     const place = req.body.default
-    if (place && !(await placeService.list({ agentId: req.params.id })).some((each) => each.platform === place.platform && each.chat_id === place.chat_id)) {
+    if (place && !(await channelService.places({ agentId: req.params.id })).some((each) => each.platform === place.platform && each.chat_id === place.chat_id)) {
       throw new HttpError(400, 'Pick a place from the list. The agent has to be in that channel.', { param: 'default' })
     }
     const value: AgentNotify = { default: place, rules: req.body.rules.trim() }

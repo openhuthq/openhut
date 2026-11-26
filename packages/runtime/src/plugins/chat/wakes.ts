@@ -49,6 +49,8 @@ async function run({ agentId, wake }: { agentId: string; wake: Wake }): Promise<
     try {
       const said = await threadService.runRoutine({ agentId, threadId, text: wake.text })
       await wakes.report({ agentId, id: wake.id, body: { said } })
+      if (wake.id.startsWith('inbox:')) await inboxService.answered({ agentId, id: wake.id.slice('inbox:'.length), threadId, said })
+        .catch((err: unknown) => log.warn({ event: 'wake.post_failed', agent: agentId, wake: wake.id, error: messageOf(err) }))
       return
     } catch (err) {
       log.warn({ event: 'wake.run_failed', agent: agentId, wake: wake.id, attempt, error: messageOf(err) })

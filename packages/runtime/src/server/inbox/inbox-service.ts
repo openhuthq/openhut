@@ -3,7 +3,7 @@ import type { IncomingHttpHeaders } from 'node:http'
 import type { Selectable } from 'kysely'
 import type { Deleted } from '@openhut/common/api.ts'
 import type { Routine } from '@openhut/common/routines/routine.ts'
-import type { DeliveryTarget, Webhook } from '@openhut/common/webhooks/webhook.ts'
+import type { DeliveryTarget, Webhook, WebhookChannel } from '@openhut/common/webhooks/webhook.ts'
 import { agentService } from '../agents/agent-service.ts'
 import { channelService, type PostTarget } from '../channels/channel-service.ts'
 import { publicAddress } from '../platform/address.ts'
@@ -18,9 +18,7 @@ import type { Caller } from '../team/identity.ts'
 import { APP_PLATFORM, type Wake } from '../../core/plugin.ts'
 import { wakes } from '../../core/wakes.ts'
 import { placeFor, routineService, targetOf, type Fired, type Origin } from './routines.ts'
-import type { Place } from '@openhut/common/channels/channel.ts'
-import { threadService } from '../threads/thread-service.ts'
-import { discordPlace } from '../../plugins/chat/turns.ts'
+import { discordPlace, threadService } from '../threads/thread-service.ts'
 
 export const BODY_MAX = 256 * 1024
 const REPEAT_MS = 10 * 60_000
@@ -48,7 +46,7 @@ export const inboxService = {
     if (!item) return { id: null, repeat: true }
     if (kind === 'webhook') await db.updateTable('inbox_source').set({ last_at: receivedAt }).where('id', '=', sourceId).execute()
     emit({ name: 'inbox.delivered', target: { type: 'inbox_source', id: sourceId, agentId }, properties: { item: id, kind, bytes: body.length } })
-    if (originOf(source).platform === APP_PLATFORM) wakes.nudge(agentId)
+    wakes.nudge(agentId)
     return { id, repeat: false }
   },
 
@@ -70,21 +68,19 @@ export const inboxService = {
 
   routines: (input: { actor: Caller; agentId: string }): Promise<Routine[]> => routineService.list(input),
 
-  async createSource({ actor, agentId, name, target, origin }: { actor: Caller; agentId: string; name: string; target?: string; origin?: Origin }): Promise<Webhook> {
+  async createSource({ actor, agentId, name, channel = 'app', target }: { actor: Caller; agentId: string; name: string; channel?: WebhookChannel; target?: string }): Promise<Webhook> {
     await agentService.requireOwner({ actor, id: agentId })
-    const to = origin ?? await originFor({ agentId, target })
-    const place = await placeFor({ agentId, origin: to })
-    const row = await db.insertInto('inbox_source').values({ id: newId('wh'), agent_id: agentId, kind: 'webhook', name: name.trim(), origin: JSON.stringify({ ...to, place }), secret: seal(newToken('whsec')) })
+    const origin = target ? await placed({ agentId, origin: await originFor({ agentId, target }) }) : await originOfChannel({ agentId, channel })
+    const row = await db.insertInto('inbox_source').values({ id: newId('wh'), agent_id: agentId, kind: 'webhook', name: name.trim(), origin: JSON.stringify(origin), secret: seal(newToken('whsec')) })
       .returningAll().executeTakeFirstOrThrow()
     emit({ name: 'inbox.source_created', actor, target: { type: 'inbox_source', id: row.id, agentId, kind: 'webhook' } })
     return webhookOf(row)
   },
 
-  async updateWebhook({ actor, id, name, target }: { actor: Caller; id: string; name?: string; target?: string | null }): Promise<Webhook> {
+  async updateWebhook({ actor, id, name, channel, target }: { actor: Caller; id: string; name?: string; channel?: WebhookChannel; target?: string }): Promise<Webhook> {
     const row = await webhookRow({ actor, id })
-    const to = target === undefined ? undefined : await originFor({ agentId: row.agent_id, target: target ?? undefined })
-    const place = to && await placeFor({ agentId: row.agent_id, origin: to })
-    const next = await db.updateTable('inbox_source').set({ ...name && { name: name.trim() }, ...to && { origin: JSON.stringify({ ...to, place }) } }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
+    const origin = target ? await placed({ agentId: row.agent_id, origin: await originFor({ agentId: row.agent_id, target }) }) : channel && await originOfChannel({ agentId: row.agent_id, channel })
+    const next = await db.updateTable('inbox_source').set({ ...name && { name: name.trim() }, ...origin && { origin: JSON.stringify(origin) } }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
     return webhookOf(next, (await lastPayloads([next.id])).get(next.id))
   },
 
@@ -157,9 +153,16 @@ export const inboxService = {
       .where('inbox_item.id', '=', id).where('inbox_item.agent_id', '=', agentId).executeTakeFirst()
     if (!row) throw new HttpError(404, `No open run ${id}.`)
     const origin = originOf(row)
-    if (row.kind === 'webhook') return threadService.open({ agentId, title: row.name, origin: { platform: 'webhook', label: row.name }, mirrors: postsIn(origin) ? [placeOf(origin)] : [] })
+    if (row.kind === 'webhook') return threadService.open({ agentId, title: row.name, origin: { platform: 'webhook', label: row.name }, mirrors: [] })
     if (origin.platform === 'discord') return threadService.discordThread({ agentId, place: discordPlace(chatOf(origin)) })
     return threadService.bySession({ agentId, session: origin.chat_id })
+  },
+
+  async answered({ agentId, id, threadId, said }: { agentId: string; id: string; threadId: string; said: string }): Promise<void> {
+    const row = await db.selectFrom('inbox_item').innerJoin('inbox_source', 'inbox_source.id', 'inbox_item.source_id').select(['inbox_source.kind', 'inbox_source.name', 'inbox_source.origin'])
+      .where('inbox_item.id', '=', id).where('inbox_item.agent_id', '=', agentId).executeTakeFirst()
+    const channel = row?.kind === 'webhook' ? channelOf(row) : 'app'
+    if (channel !== 'app' && row) await threadService.startChannelThread({ id: threadId, place: channel, text: said, title: row.name })
   },
 
   async setup({ actor, agentId, id }: { actor: Caller; agentId: string; id: string }): Promise<{ object: 'webhook_setup'; address: string; secret: string }> {
@@ -174,9 +177,9 @@ export const inboxService = {
     return { ...row, address: urlOf(row.id) }
   },
 
-  async forAgent({ agentId }: { agentId: string }): Promise<{ name: string; url: string; deliversTo: string }[]> {
+  async forAgent({ agentId }: { agentId: string }): Promise<{ id: string; name: string; url: string }[]> {
     const rows = await db.selectFrom('inbox_source').selectAll().where('agent_id', '=', agentId).where('kind', '=', 'webhook').orderBy('created_at').execute()
-    return rows.map((row) => ({ name: row.name, url: urlOf(row.id), deliversTo: originOf(row).place ?? '' }))
+    return rows.map((row) => ({ id: row.id, name: row.name, url: urlOf(row.id) }))
   },
 }
 
@@ -271,18 +274,24 @@ async function lastPayloads(ids: string[]): Promise<Map<string, string>> {
   return new Map(rows.map((row) => [row.source_id, row.text.slice(row.text.indexOf('\n\n') + 2, row.text.indexOf('\n\n') + 2 + PREVIEW_MAX)]))
 }
 
-const postsIn = (origin: Origin): boolean => origin.platform !== APP_PLATFORM
-
-function placeOf(origin: Origin & { place?: string }): Place {
+function channelOf(row: Pick<SourceRow, 'origin'>): WebhookChannel {
+  const origin = originOf(row)
+  if (origin.platform === APP_PLATFORM) return 'app'
   return { platform: origin.platform, chat_id: origin.chat_id, ...origin.thread_id && { thread_id: origin.thread_id }, chat_name: origin.place ?? origin.chat_name ?? '' }
 }
 
+const placed = async ({ agentId, origin }: { agentId: string; origin: Origin }): Promise<Origin & { place: string }> => ({ ...origin, place: await placeFor({ agentId, origin }) })
+
+async function originOfChannel({ agentId, channel }: { agentId: string; channel: WebhookChannel }): Promise<Origin & { place: string }> {
+  if (channel === 'app') return { ...APP, place: await placeFor({ agentId, origin: APP }) }
+  if (!(await channelService.places({ agentId })).some((each) => each.platform === channel.platform && each.chat_id === channel.chat_id)) throw new HttpError(400, 'Pick a channel from the list. The agent has to be in it.', { param: 'channel' })
+  return { platform: channel.platform, chat_id: channel.chat_id, chat_type: 'group', chat_name: channel.chat_name.replace(/^#/, ''), ...channel.thread_id && { thread_id: channel.thread_id }, place: channel.chat_name }
+}
+
 function webhookOf(row: SourceRow, lastPayload?: string): Webhook {
-  const origin = originOf(row)
-  const posts = postsIn(origin)
   return {
-    id: row.id, object: 'webhook', agentId: row.agent_id, name: row.name, url: urlOf(row.id), secret: unseal(row.secret ?? ''),
-    platform: posts ? origin.platform : null, target: posts ? targetOf(chatOf(origin)) : null, place: posts ? origin.place ?? '' : null,
+    id: row.id, object: 'webhook', agentId: row.agent_id, name: row.name, url: urlOf(row.id), secret: unseal(row.secret ?? ''), channel: channelOf(row),
+    platform: originOf(row).platform, target: targetOf(chatOf(originOf(row))), place: originOf(row).place ?? '',
     lastAt: row.last_at ? new Date(row.last_at).toISOString() : null, lastPayload: lastPayload ?? null, createdAt: new Date(row.created_at).toISOString(),
   }
 }

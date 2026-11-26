@@ -10,8 +10,6 @@ const shown = new Map<string, { at: number; card: SetupCard }>()
 
 type SetupCard = { webhookId: string; title: string; steps: string[]; openUrl?: string }
 
-export const SETUP_PROMPT = 'Whenever you ask a person to set up one of your webhooks in another service, call show_webhook_setup with the steps. Never type a webhook\'s address or secret into the chat yourself: the card shows the real ones.'
-
 export const showWebhookSetup = defineTool({
   description: 'Show a person how to set up one of your webhooks in another service, like a DigitalOcean alert. In the OpenHut app it shows a card with the real address and a copyable secret; elsewhere it gives you the text to send.',
   input: {

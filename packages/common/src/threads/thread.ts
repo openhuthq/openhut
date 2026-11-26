@@ -23,6 +23,10 @@ export const Thread = z.object({
   title: z.string(),
   origin: ThreadOrigin,
   mirrors: z.array(Place),
+  mirrorPaused: z.boolean(),
+  readOnly: z.boolean(),
+  continueUrl: z.nullable(z.string()),
+  waiting: z.boolean(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
 })
@@ -115,6 +119,9 @@ export function fileInHome(path: string): string | undefined {
   const segments = full.slice(AGENT_HOME.length + 1).split('/')
   return segments.length <= MAX_HOME_DEPTH && segments.every((segment) => segment && segment !== '.' && segment !== '..' && !segment.includes('\0')) ? segments.join('/') : undefined
 }
+
+export const MirrorThread = z.object({ paused: z.boolean() })
+export type MirrorThread = z.infer<typeof MirrorThread>
 
 export const NOTIFY_RULES_MAX = 2000
 

@@ -15,6 +15,7 @@ import { imageTypeOf, safeFileName, shownCall, threadService } from '../../../sr
 import { HERE } from '../../../src/server/team/home.ts'
 import { agentService } from '../../../src/server/agents/agent-service.ts'
 import { connectionService } from '../../../src/server/connections/connection-service.ts'
+import { channelService } from '../../../src/server/channels/channel-service.ts'
 import { asks } from '../../../src/core/asks.ts'
 import { useFakeRecords } from '../agents/records-fake.ts'
 import type { SendChat } from '@openhut/common/threads/thread.ts'
@@ -393,6 +394,64 @@ test('a card in a wake reply is saved as a card, like a live reply, never as raw
   assert.doesNotMatch(JSON.stringify(last?.parts.filter((part: { type: string }) => part.type === 'text')), /```spec|"op"/)
   assert.equal(last?.metadata?.wake, true)
   await assert.rejects(threadService.runRoutine({ agentId: 'ag_chatwake', text: 'model down' }), /isn't ready/)
+})
+
+test('a webhook turn runs in a thread of its own, listed with where it came from, and its reply is posted where the webhook posts', async () => {
+  await db.insertInto('agent').values({ id: 'ag_chathook', name: 'Hooker', owner_id: 'usr_chatownr', instructions: '# Hooker', model: 'sonnet', net: 28, channel_key: seal('k'.repeat(48)), wanted: 'running', workspace: WS }).execute()
+  const posted = mock.method(channelService, 'send', async () => undefined)
+  const place = { platform: 'discord', chat_id: '111', chat_name: '#alerts' }
+  const id = await threadService.open({ agentId: 'ag_chathook', title: 'DO alerts', origin: { platform: 'webhook', label: 'DO alerts' }, mirrors: [place] })
+  assert.equal(await threadService.runRoutine({ agentId: 'ag_chathook', threadId: id, text: 'Webhook called: cpu 99%' }), 'Let me check.214 orders.')
+  assert.deepEqual((await messagesOf(id)).map((message) => [message.role, message.parts.filter((part) => part.type === 'text').map((part) => part.text).join('')]), [['user', 'Webhook called: cpu 99%'], ['assistant', 'Let me check.214 orders.']])
+  assert.deepEqual(posted.mock.calls.map((call) => call.arguments[0]), [{ agentId: 'ag_chathook', place, text: 'Let me check.214 orders.' }])
+  const listed = (await app.inject({ method: 'GET', url: '/api/threads', headers: as() })).json().data as { id: string; agentId: string; origin: { platform: string }; mirrors: unknown[] }[]
+  assert.deepEqual(listed.filter((thread) => thread.agentId === 'ag_chathook').map((thread) => [thread.id, thread.origin.platform, thread.mirrors.length]), [[id, 'webhook', 1]])
+  assert.equal(await threadService.bySession({ agentId: 'ag_chathook', session: `openhut-${(await messagesOf(id))[0].id}` }), id, 'a routine set in this thread runs here again')
+  const session = seen.session
+  assert.equal((await say(id, 'is it still high?')).statusCode, 200)
+  assert.equal(seen.session, session, 'a web follow-up continues the webhook turn\'s Hermes session')
+  assert.equal(seen.body?.messages.at(-1)?.content, 'is it still high?')
+  assert.deepEqual((await messagesOf(id)).map((message) => message.role), ['user', 'assistant', 'user', 'assistant'])
+  posted.mock.restore()
+})
+
+test('a Discord conversation is kept in one web thread per channel thread, and a reply written on the web is posted back to Discord', async () => {
+  await db.insertInto('agent').values({ id: 'ag_chatdisc', name: 'Disco', owner_id: 'usr_chatownr', instructions: '# Disco', model: 'sonnet', net: 29, channel_key: seal('k'.repeat(48)), wanted: 'running', workspace: WS }).execute()
+  const posted = mock.method(channelService, 'send', async () => undefined)
+  const place = { platform: 'discord', chat_id: '222', thread_id: '333', chat_name: 'db-help' }
+  const first = await threadService.recordTurn({ agentId: 'ag_chatdisc', origin: place, user: 'is the db up?', author: 'ana', reply: 'Yes.' })
+  const second = await threadService.recordTurn({ agentId: 'ag_chatdisc', origin: place, user: 'thanks', author: 'ana', reply: 'NO_REPLY' })
+  assert.equal(first.id, second.id)
+  assert.deepEqual((await messagesOf(first.id)).map((message) => [message.role, message.metadata?.author ?? null]), [['user', 'ana'], ['assistant', null], ['user', 'ana']])
+  assert.equal(posted.mock.callCount(), 0, 'Hermes already answered in Discord')
+  assert.equal((await say(first.id, 'any errors?')).statusCode, 200)
+  assert.deepEqual(posted.mock.calls.map((call) => call.arguments[0]?.text), ['owner@example.com wrote in OpenHut:\nany errors?', 'Let me check.214 orders.'])
+  assert.deepEqual(posted.mock.calls.map((call) => call.arguments[0]?.place), [place, place])
+  assert.match(String(seen.body?.messages.at(-1)?.content), /^Earlier in this chat, before this computer ran you:\n\nana: is the db up\?\n\nYou: Yes\.\n\nNow:\n\nthanks\n\nany errors\?$/)
+  posted.mock.resetCalls()
+  await say(first.id, 'second')
+  await say(first.id, 'third')
+  const thread = async () => (await app.inject({ method: 'GET', url: `/api/threads/${first.id}`, headers: as() })).json() as { mirrorPaused: boolean }
+  assert.equal((await thread()).mirrorPaused, true)
+  assert.deepEqual(posted.mock.calls.map((call) => call.arguments[0]?.text.split('\n')[0]), ['owner@example.com wrote in OpenHut:', 'Let me check.214 orders.', `Continuing in OpenHut ↗ http://127.0.0.1:${config.port}/agents/ag_chatdisc/chats/${first.id}`])
+  await say(first.id, 'fourth')
+  assert.equal(posted.mock.callCount(), 3, 'nothing more is posted while paused')
+  await threadService.recordTurn({ agentId: 'ag_chatdisc', origin: place, user: 'back in discord', author: 'ana', reply: 'Hi.' })
+  assert.equal((await thread()).mirrorPaused, false, 'someone writing in Discord resumes it')
+  const paused = await app.inject({ method: 'POST', url: `/api/threads/${first.id}/mirror`, headers: as(), payload: { paused: true } })
+  assert.equal(paused.json().mirrorPaused, true)
+  assert.equal((await app.inject({ method: 'POST', url: `/api/threads/${first.id}/mirror`, headers: as(), payload: { paused: false } })).json().mirrorPaused, false)
+  posted.mock.restore()
+})
+
+test('a thread waits on someone while it shows a webhook setup card for a webhook not called since', async () => {
+  await db.insertInto('agent').values({ id: 'ag_chatwait', name: 'Waiter', owner_id: 'usr_chatownr', instructions: '# Waiter', model: 'sonnet', net: 30, channel_key: seal('k'.repeat(48)), wanted: 'running', workspace: WS }).execute()
+  await db.insertInto('inbox_source').values({ id: 'wh_chatwait', agent_id: 'ag_chatwait', kind: 'webhook', name: 'DO', origin: '{}' }).execute()
+  fake.write({ collection: 'message', id: 'msg_000000005a', parent: 'ag_chatwait', workspace: WS, value: { message: { id: 'msg_000000005a', role: 'assistant', parts: [{ type: 'data-webhook-setup', data: { webhookId: 'wh_chatwait', title: 'Set it up', steps: ['a'] } }] } } })
+  const waiting = async () => ((await app.inject({ method: 'GET', url: '/api/threads', headers: as() })).json().data as { id: string; waiting: boolean }[]).find((thread) => thread.id === 'ag_chatwait')?.waiting
+  assert.equal(await waiting(), true)
+  await db.updateTable('inbox_source').set({ last_at: new Date() }).where('id', '=', 'wh_chatwait').execute()
+  assert.equal(await waiting(), false)
 })
 
 test('on a just-booted computer (a woken Cloud computer) a message waits for its agent to come up, then gets the reply', async (t) => {

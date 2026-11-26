@@ -1,5 +1,9 @@
 import * as z from 'zod/mini'
 import { Timestamp } from '../api.ts'
+import { Place } from '../channels/channel.ts'
+
+export const WebhookChannel = z.union([z.literal('app'), Place])
+export type WebhookChannel = z.infer<typeof WebhookChannel>
 
 export const WEBHOOK_NAME_MAX = 60
 
@@ -10,9 +14,10 @@ export const Webhook = z.object({
   name: z.string(),
   url: z.string(),
   secret: z.string(),
-  platform: z.nullable(z.string()),
-  target: z.nullable(z.string()),
-  place: z.nullable(z.string()),
+  channel: WebhookChannel,
+  platform: z.string(),
+  target: z.string(),
+  place: z.string(),
   lastAt: z.nullable(Timestamp),
   lastPayload: z.nullable(z.string()),
   createdAt: Timestamp,
@@ -27,8 +32,10 @@ export const WebhookName = z.string().check(z.trim(), z.minLength(1), z.maxLengt
 export const ListWebhooks = z.object({ agentId: z.string().check(z.maxLength(40)) })
 export type ListWebhooks = z.infer<typeof ListWebhooks>
 
-export const CreateWebhook = z.object({ agentId: z.string().check(z.maxLength(40)), name: WebhookName, target: z.optional(z.string().check(z.maxLength(40))) })
+export const CreateWebhook = z.object({ agentId: z.string().check(z.maxLength(40)), name: WebhookName, channel: z.optional(WebhookChannel), target: z.optional(z.string().check(z.maxLength(40))) })
 export type CreateWebhook = z.infer<typeof CreateWebhook>
 
-export const UpdateWebhook = z.object({ name: z.optional(WebhookName), target: z.optional(z.nullable(z.string().check(z.maxLength(40)))) })
+export const UpdateWebhook = z.object({ name: z.optional(WebhookName), channel: z.optional(WebhookChannel), target: z.optional(z.string().check(z.maxLength(40))) })
 export type UpdateWebhook = z.infer<typeof UpdateWebhook>
+
+export const WEBHOOK_SETUP_PROMPT = 'Whenever you ask a person to set up one of your webhooks in another service, call show_webhook_setup with the steps. Never type a webhook\'s address or secret into the chat yourself: the card shows the real ones.'

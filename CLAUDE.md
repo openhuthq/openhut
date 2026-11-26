@@ -25,8 +25,11 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   buttons by prefix: the one Hermes plugin, `vendor/hermes-plugins/openhut`, registers what `core/hooks.ts`'s manifest
   lists and calls the gateway's `/tools/<name>`, `/hooks/<hook>` and `/slack-actions` for each (hooks whose answer Hermes ignores, everything but `pre_*` and `transform_*`, are sent from a background thread, so a slow gateway never holds the agent). `wakes` are turns the
   runtime wants the agent to take (routine runs and webhook calls from inbox, answered asks):
-  `core/wakes.ts` lists every plugin's due wakes as `[OpenHut <plugin>:<id>] <text>`; the Hermes plugin polls `/wakes`
-  for chat ones, the chat plugin runs the app's itself (`nudge(agentId)` runs them at once), and `start()` runs at boot.
+  `core/wakes.ts` lists every plugin's due wakes as `[OpenHut <plugin>:<id>] <text>`. The chat plugin runs on the server every app wake and every
+  inbox wake for the app or Discord (`runsOnServer`, `nudge(agentId)` runs them at once): a webhook call gets a new web thread, a routine runs in the thread it was set in
+  (a Discord channel thread has one, keyed by channel and thread), and a thread's `mirrors` get its replies through `channelService.send`. The Hermes plugin polls `/wakes`
+  only for the rest (asks answered in a channel, inbox wakes for Slack, Telegram or WhatsApp) and reports each Discord turn to `/turns`, so Discord conversations
+  show in the app. Threads besides an agent's own app chat (id = agent id) are `chat_thread` rows (`th_*`). `start()` runs at boot.
   A plugin also owns its tables (`migrate`, run by `platform/db.ts` after the core tables, in list order), its API
   (`routes: () => ({ '/api/<prefix>': controller })`, registered by `app.ts`; two plugins with one prefix fail at boot)
   and a part under the app chat's reply (`afterTurn`, like asks' `data-asks`). The subagents plugin keeps each agent's running sub-agents in memory from the `subagent_start`/`subagent_stop` hooks and serves them at `/api/agents/:id/subagents` for the sidebar.

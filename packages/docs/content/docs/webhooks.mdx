@@ -1,10 +1,10 @@
 ---
 title: Webhooks
-description: Give an agent an address other services call when something happens, like a DigitalOcean alert. Each call reaches the agent as a message.
+description: Give an agent an address other services call when something happens, like a DigitalOcean alert. Each call starts a chat with the agent.
 icon: ops
 ---
 
-A **webhook** is an address on your OpenHut that another service calls when something happens: an alert fires, a deploy finishes, a form is sent. Each call reaches the agent as a message in the chat you pick, with the raw payload, and the agent does what its instructions say about it.
+A **webhook** is an address on your OpenHut that another service calls when something happens: an alert fires, a deploy finishes, a form is sent. Each call starts a new chat in the OpenHut app with the raw payload, and the agent does what its instructions say about it. If you pick where it posts, the agent's reply is posted there too.
 
 ## Add one
 
@@ -14,7 +14,7 @@ Ask the agent:
 Watch our DigitalOcean Postgres and tell #db-alerts when an alert fires.
 ```
 
-It asks for a webhook, and a card shows up in the chat. **Approve** creates it; the calls go to the chat the agent asked in. The agent learns the address, never the secret: open **Get the address and secret** on the card to copy both.
+It asks for a webhook, and a card shows up in the chat. **Approve** creates it. The agent then shows a setup card with the steps, the address and the secret, ready to copy. The agent never sees the secret. In Discord and other chats it sends the steps and the address; copy the secret from OpenHut.
 
 Or add one yourself: **More › Webhooks** on the agent's panel, type what calls it and **Add webhook**.
 
@@ -22,7 +22,7 @@ Each webhook shows:
 
 - **Address**: paste it into the service that calls it.
 - **Secret**: the service signs each call with it, or sends it as a token. **New secret** replaces it; calls signed with the old one stop working.
-- **Posts in**: the OpenHut app or any chat on the agent's channels.
+- **Posts in**: optional. A chat on the agent's channels where its reply is posted too. Leave it empty and the agent tells people where its notify settings say.
 
 Delete a webhook with the trash icon. Calls to its address stop at once.
 

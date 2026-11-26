@@ -4,14 +4,15 @@ import { routineService } from '../../server/inbox/routines.ts'
 import { inboxService, urlOf } from '../../server/inbox/inbox-service.ts'
 import { deliveryTargetController, inboxReceiver, routineController, webhookController } from '../../server/inbox/inbox-controller.ts'
 import { createTables } from './tables.ts'
-import { SETUP_PROMPT, setupCard, setupController, showWebhookSetup } from './setup.ts'
+import { WEBHOOK_SETUP_PROMPT } from '@openhut/common/webhooks/webhook.ts'
+import { setupCard, setupController, showWebhookSetup } from './setup.ts'
 
 export const inbox = definePlugin({
   name: 'inbox',
   migrate: createTables,
   routes: () => ({ '/api/routines': routineController, '/api/webhooks': webhookController, '/api/delivery-targets': deliveryTargetController, '/inbox': inboxReceiver, '/api/agents/:id/webhooks': setupController }),
   start: () => inboxService.start(),
-  hermes: () => ({ prompt: SETUP_PROMPT }),
+  hermes: () => ({ prompt: WEBHOOK_SETUP_PROMPT }),
   afterTurn: async (input) => setupCard(input),
   tools: {
     show_webhook_setup: showWebhookSetup,
@@ -36,11 +37,11 @@ export const inbox = definePlugin({
   asks: {
     add_webhook: defineAsk({
       input: z.object({ name: z.string().trim().min(1).max(60).describe('What calls it, in a few words: "DigitalOcean Postgres alerts".') }),
-      tool: 'Ask for a webhook: an address another service (like DigitalOcean alerts) calls when something happens. Each call starts a new chat in OpenHut with the raw payload; if your owner sets where it posts, your reply goes there too. Once approved, call show_webhook_setup to show the person how to set it up.',
+      tool: 'Ask for a webhook: an address another service (like DigitalOcean alerts) calls when something happens. Each call starts a new chat in OpenHut with the raw payload; to tell people about it, use notify. Once approved, call show_webhook_setup to show the person how to set it up.',
       title: ({ input }) => `Add a webhook named ${input.name}`,
-      run: async ({ actor, ask: { agentId, input, origin } }) => {
-        const { id } = await inboxService.createSource({ actor, agentId, name: input.name, origin })
-        return `Webhook ${id} is ready at ${urlOf(id)}. Each call starts a new chat. Now call show_webhook_setup with ${id} so the person gets the address and secret to paste into the sender (DigitalOcean: a webhook notification channel signed with that secret).`
+      run: async ({ actor, ask: { agentId, input } }) => {
+        const { id } = await inboxService.createSource({ actor, agentId, name: input.name })
+        return `Its address is ${urlOf(id)}. Each call starts a new chat in OpenHut. Now call show_webhook_setup with ${id} so the person gets the address and secret to paste into the sender (DigitalOcean: a webhook notification channel signed with that secret).`
       },
     }),
   },
