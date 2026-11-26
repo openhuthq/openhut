@@ -1,4 +1,33 @@
+import * as z from 'zod/mini'
+import { Timestamp } from '../api.ts'
 import { CONNECTION_TITLES, ConnectionKind } from '../connections/connection.ts'
+
+export const AskStatus = z.enum(['open', 'done', 'declined', 'expired'])
+export type AskStatus = z.infer<typeof AskStatus>
+
+export const Ask = z.object({
+  id: z.string(),
+  object: z.literal('ask'),
+  kind: z.string(),
+  agentId: z.string(),
+  title: z.string(),
+  why: z.string(),
+  input: z.record(z.string(), z.unknown()),
+  status: AskStatus,
+  note: z.nullable(z.string()),
+  createdAt: Timestamp,
+  answeredAt: z.nullable(Timestamp),
+})
+export type Ask = z.infer<typeof Ask>
+
+export const ListAsks = z.object({ agentId: z.string().check(z.maxLength(40)) })
+export type ListAsks = z.infer<typeof ListAsks>
+
+export const ApproveAsk = z.object({ answer: z.optional(z.record(z.string(), z.unknown())) })
+export type ApproveAsk = z.infer<typeof ApproveAsk>
+
+export const DeclineAsk = z.object({ note: z.optional(z.string().check(z.maxLength(500))) })
+export type DeclineAsk = z.infer<typeof DeclineAsk>
 
 export const OPEN_PAGE = 'https://openhut.dev/open'
 export const MCP_AUTH = ['header', 'sign_in', 'public'] as const
@@ -6,9 +35,9 @@ export type McpAuth = typeof MCP_AUTH[number]
 const BRANDED_HOSTS = ['cloudflare', 'digitalocean']
 const ASKED = /^\/connections\/new\/([a-z_]+)\?([^#]*)$/
 
-export type Ask = { agentId: string; app: ConnectionKind; url?: string; name?: string; auth?: McpAuth }
+export type AppAsk = { agentId: string; app: ConnectionKind; url?: string; name?: string; auth?: McpAuth }
 
-export function askPath({ agentId, app, url, name, auth }: Ask): string {
+export function askPath({ agentId, app, url, name, auth }: AppAsk): string {
   return `/connections/new/${app}?${new URLSearchParams({ for: agentId, ...(url && { url }), ...(name && { name }), ...(auth && { auth }) })}`
 }
 
@@ -18,13 +47,13 @@ export function askedPath(link: string): string | undefined {
   return hash && ConnectionKind.safeParse(kind).success && !new URLSearchParams(query).has('error') ? hash : undefined
 }
 
-export function brandOf({ app, url }: Pick<Ask, 'app' | 'url'>): string {
+export function brandOf({ app, url }: Pick<AppAsk, 'app' | 'url'>): string {
   const host = url ? new URL(url).hostname : undefined
   return app === 'mcp' ? BRANDED_HOSTS.find((each) => host === `${each}.com` || host?.endsWith(`.${each}.com`)) ?? 'mcp' : app
 }
 
-export function askCard({ asks, why }: { asks: (Ask & { line?: string })[]; why: string }): string {
-  const titleOf = (ask: Ask) => ask.name ?? CONNECTION_TITLES[ask.app]
+export function askCard({ asks, why }: { asks: (AppAsk & { line?: string })[]; why: string }): string {
+  const titleOf = (ask: AppAsk) => ask.name ?? CONNECTION_TITLES[ask.app]
   const ids = asks.map((_, index) => `app${index}`)
   const patch = [
     { op: 'add', path: '/root', value: 'ask' },

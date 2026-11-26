@@ -7,7 +7,7 @@ import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { gatewayServer } from '../../../src/server/gateway/gateway-server.ts'
-import { changeRequestService } from '../../../src/server/agents/change-request-service.ts'
+import { asks } from '../../../src/core/asks.ts'
 import { inboxReceiver } from '../../../src/server/inbox/inbox-controller.ts'
 import { inboxService } from '../../../src/server/inbox/inbox-service.ts'
 import { routineService } from '../../../src/server/inbox/routines.ts'
@@ -116,15 +116,16 @@ test('add_webhook waits for approval; approving creates the webhook, tells the a
   const slack = { platform: 'slack', chat_id: 'C0ALERTS', chat_type: 'group', chat_name: 'db-alerts' }
   const asked = await client.callTool({ name: 'add_webhook', arguments: { why: 'React to Postgres alerts.', name: 'DO Postgres alerts', origin: slack } })
   const text = (asked.content as { text: string }[])[0].text
-  assert.match(text, /^Asked for approval \(chg_[a-z0-9]+\): Add a webhook named DO Postgres alerts\./)
-  const id = /chg_[a-z0-9]+/.exec(text)?.[0] ?? ''
+  assert.match(text, /^Asked for approval \(ask_[a-z0-9]+\): Add a webhook named DO Postgres alerts\./)
+  const id = /ask_[a-z0-9]+/.exec(text)?.[0] ?? ''
   const hooksBefore = await db.selectFrom('inbox_source').select('id').where('name', '=', 'DO Postgres alerts').where('origin', 'like', '%slack%').execute()
   assert.equal(hooksBefore.length, 0)
 
-  const approved = await changeRequestService.approve({ actor: owner, id })
-  assert.equal(approved.status, 'approved')
-  const hookId = String(approved.input.webhookId)
-  const hook = (await inboxService.webhooks({ actor: owner, agentId: 'ag_hookpuls' })).find((each) => each.id === hookId)
+  const known = new Set((await inboxService.webhooks({ actor: owner, agentId: 'ag_hookpuls' })).map((each) => each.id))
+  const approved = await asks.approve({ actor: owner, id })
+  assert.equal(approved.status, 'done')
+  const hook = (await inboxService.webhooks({ actor: owner, agentId: 'ag_hookpuls' })).find((each) => !known.has(each.id))
+  const hookId = hook?.id ?? ''
   assert.equal(hook?.place, '#db-alerts')
 
   const headers = { authorization: `Agent ${token}`, 'content-type': 'application/json' }
@@ -177,7 +178,7 @@ test('a member who can chat with a whole-team agent can\'t touch its webhooks or
   assert.equal((await agentService.requireUse({ actor: member, id: 'ag_hookpuls' })).id, 'ag_hookpuls')
   const hook = await inboxService.createSource({ actor: owner, agentId: 'ag_hookpuls', name: 'Owner only' })
   const routine = /rt_[a-z0-9]+/.exec(await routineService.schedule({ agentId: 'ag_hookpuls', input: { name: 'Nightly', plan: 'x', cron: '0 3 * * *', origin: { platform: 'slack', chat_id: 'C0ALERTS', chat_type: 'group', chat_name: 'db-alerts' } } }))?.[0] ?? ''
-  await db.insertInto('change_request').values({ id: 'chg_hookmmbr', agent_id: 'ag_hookpuls', action: 'add_webhook', input: JSON.stringify({ name: 'Sneaky' }), summary: 'Add a webhook named Sneaky', why: 'x', origin: JSON.stringify({ platform: 'slack', chat_id: 'C0ALERTS' }), expires_at: new Date(Date.now() + 60_000) }).execute()
+  await db.insertInto('ask').values({ id: 'chg_hookmmbr', agent_id: 'ag_hookpuls', kind: 'add_webhook', input: JSON.stringify({ name: 'Sneaky' }), title: 'Add a webhook named Sneaky', why: 'x', origin: JSON.stringify({ platform: 'slack', chat_id: 'C0ALERTS' }), expires_at: new Date(Date.now() + 60_000) }).execute()
   for (const attempt of [
     inboxService.webhooks({ actor: member, agentId: 'ag_hookpuls' }),
     inboxService.createSource({ actor: member, agentId: 'ag_hookpuls', name: 'Mine' }),
@@ -188,8 +189,8 @@ test('a member who can chat with a whole-team agent can\'t touch its webhooks or
     inboxService.updateRoutine({ actor: member, id: routine, target: 'app' }),
     inboxService.updateRoutine({ actor: member, id: routine, until: null }),
     inboxService.stopRoutine({ actor: member, id: routine }),
-    changeRequestService.approve({ actor: member, id: 'chg_hookmmbr' }),
+    asks.approve({ actor: member, id: 'chg_hookmmbr' }),
   ]) await assert.rejects(attempt, { status: 403 })
   assert.equal((await db.selectFrom('inbox_source').select('id').where('name', 'in', ['Mine', 'Sneaky', 'Renamed']).execute()).length, 0)
-  assert.equal((await changeRequestService.approve({ actor: owner, id: 'chg_hookmmbr' })).status, 'approved')
+  assert.equal((await asks.approve({ actor: owner, id: 'chg_hookmmbr' })).status, 'done')
 })
