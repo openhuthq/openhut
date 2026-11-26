@@ -28,6 +28,7 @@ On the agent, **Add** it under **Can use**. Or open the app and pick the agents 
 Each is an official MCP server, run with your own credentials:
 
 - **GitHub:** a GitHub App of your own. You approve it twice; agents commit as its bot. Your key stays on your server: an agent's `git clone` and `git push` go through OpenHut, which adds the token on the way to GitHub, so it never lands in the agent's terminal or its git config. Each push and fetch shows in the agent's activity.
+  Agents sign their work: a pull request, an issue and an agent's first comment in a thread end with one line, "Opened by <agent>, an AI agent · Made with OpenHut", with the agent's face. The line links only to openhut.dev, never to your server; inline review comments never get it. Agents also end their commits with an `OpenHut-Agent: <name>` trailer.
 - **Google:** Gmail (drafts only, no sending), Drive, Docs, Sheets, Slides, Calendar, Chat and Contacts. Needs a Google OAuth client, set once by an admin (below).
 - **Linear** and **PostHog:** sign in.
 - **Convex:** a deploy key.

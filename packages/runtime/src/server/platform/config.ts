@@ -39,6 +39,9 @@ export const config = {
   anthropicApi: TEST_MODEL ? `http://127.0.0.1:${GATEWAY_PORT}/test-anthropic` : 'https://api.anthropic.com',
   openrouterApi: process.env.OPENHUT_OPENROUTER_API || 'https://openrouter.ai/api', // a local fake in tests
   openaiApi: 'https://api.openai.com',
+  githubApi: env.get('OPENHUT_GITHUB_API').default('https://api.github.com').asString(), // a local fake in tests
+  githubMcp: env.get('OPENHUT_GITHUB_MCP').default('https://api.githubcopilot.com/mcp/').asString(), // a local fake in tests
+  facesUrl: env.get('OPENHUT_FACES_URL').default('https://openhut.dev/api/faces').asString(), // where agents' faces for GitHub footers are uploaded
   codexApi: 'https://chatgpt.com/backend-api/codex',
   codexAuthApi: 'https://auth.openai.com',
   agentdSocket: AGENTD_SOCK ?? '/run/agentd/agentd.sock',

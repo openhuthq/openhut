@@ -33,10 +33,10 @@ function parsed(text: string | null | undefined): Look | null {
   }
 }
 
-export async function slackIcon(agent: Faced): Promise<string> {
+export async function slackIcon(agent: Faced, size = 512): Promise<string> {
   const photo = photoOf(agent.face)
-  if (!photo) return avatarPng(lookOf(agent))
-  return (await squarePicture({ source: photo, size: 512, type: 'image/png' })).split(',')[1]
+  if (!photo) return avatarPng(lookOf(agent), size === 512 ? 1024 : size)
+  return (await squarePicture({ source: photo, size, type: 'image/png' })).split(',')[1]
 }
 
 export function Face({ agent, size, tile, label, className }: { agent: Faced; size: number; tile?: boolean; label?: string; className?: string }) {
