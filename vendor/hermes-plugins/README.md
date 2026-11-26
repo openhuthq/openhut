@@ -42,7 +42,7 @@ Lines we added are marked `OpenHut`. To offer upstream: the same setting, withou
   the button's text and its thread, which goes back in through `inject_message` as the person's reply. `core/hermes.ts`
   allows `allow_gateway_injection`.
 
-Its `pre_tool_call` hook stamps every `mcp__openhut__*` call with the chat it came from (`origin`), with no list of tools to
+Its `pre_tool_call` hook stamps every `mcp__openhut__*` call with the chat it came from (`origin`, with Slack's workspace as `scope_id`, which Hermes needs to inject a turn back into that chat), with no list of tools to
 keep in sync. Every gateway tool takes `origin` and reads it in one place (`core/mcp.ts`); it is advice,
 since the gateway checks the chat again before it posts there. Every 15 s it polls the gateway's `GET /wakes` for turns the
 runtime wants the agent to take in a chat (a routine run, a webhook call, an answered change request), starts each once

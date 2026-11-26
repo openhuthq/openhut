@@ -14,7 +14,7 @@ from gateway.session_context import get_session_env
 from .slack_transport import broker_slack
 
 OURS = "mcp__openhut__"
-ORIGIN_FIELDS = ("platform", "chat_id", "chat_type", "chat_name", "thread_id", "user_id", "user_name")
+ORIGIN_FIELDS = ("platform", "chat_id", "chat_type", "chat_name", "thread_id", "user_id", "user_name", "scope_id")
 LOCAL_TOOLSET = "openhut-local"
 WAKE = re.compile(r"\[OpenHut (\w+:\w+)\]")
 POLL_SECONDS = 15
