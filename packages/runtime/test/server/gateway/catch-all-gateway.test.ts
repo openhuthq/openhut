@@ -30,8 +30,8 @@ const server = gatewayServer.create().listen(0, '127.0.0.1')
 await new Promise((resolve) => server.once('listening', resolve))
 const client = new Client({ name: 'hermes', version: '1' })
 await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/v1/mcp`), { requestInit: { headers: { authorization: `Agent ${agentToken({ id: 'ag_doagent', epoch: 0 })}` } } }))
-const invoke = async (name: string) => {
-  const result = await client.callTool({ name: 'call_tool', arguments: { reason: 'Check the cluster', name: 'mcp_mcp_invoke_tool', arguments: { name, arguments: {} }, origin: { platform: 'api_server', chat_id: 'openhut-dosession' } } }) as { content: { text: string }[]; isError?: boolean }
+const invoke = async (name: string, args: Record<string, unknown> = {}) => {
+  const result = await client.callTool({ name: 'call_tool', arguments: { description: 'Check the cluster', name: 'mcp_mcp_invoke_tool', arguments: { name, arguments: args }, origin: { platform: 'api_server', chat_id: 'openhut-dosession' } } }) as { content: { text: string }[]; isError?: boolean }
   return { text: result.content[0].text, isError: result.isError === true }
 }
 const skip = digitalocean ? false : 'no non-loopback address to serve the fake MCP server on'
@@ -47,17 +47,19 @@ test('each call through a catch-all tool follows the permission of the action it
 
   await permissions.set({ actor: owner, agentId: 'ag_doagent', connectionId: 'cn_dofake0001', tools: ['*delete'], state: 'ask' })
   const asked = await invoke('databases/db-cluster-delete')
-  assert.match(asked.text, /^Asked for approval \(ask_[a-z0-9]+\): DigitalOcean: Delete a database\./)
+  assert.match(asked.text, /^Asked for approval \(ask_[a-z0-9]+\): Delete a database in DigitalOcean\./)
 
   const unknown = await invoke('apps/app-mystery')
-  assert.match(unknown.text, /: DigitalOcean: App mystery\./)
+  assert.match(unknown.text, /: Use DigitalOcean app mystery\./)
   assert.deepEqual(fake.invoked, ['databases/db-cluster-list'])
 
-  const unnamed = await client.callTool({ name: 'call_tool', arguments: { reason: 'Sneaky', name: 'mcp_mcp_invoke_tool', arguments: { name: '*read' }, origin: { platform: 'api_server', chat_id: 'openhut-dosession' } } }) as { content: { text: string }[] }
+  const unnamed = await client.callTool({ name: 'call_tool', arguments: { description: 'Sneaky', name: 'mcp_mcp_invoke_tool', arguments: { name: '*read' }, origin: { platform: 'api_server', chat_id: 'openhut-dosession' } } }) as { content: { text: string }[] }
   assert.match(unnamed.content[0].text, /^Asked for approval/)
 
   const id = /ask_[a-z0-9]+/.exec(asked.text)?.[0] ?? ''
-  await asks.approve({ actor: owner, id, answer: { always: true } })
+  assert.equal((await asks.get({ actor: owner, id })).input.destructive, true)
+  await assert.rejects(asks.approve({ actor: owner, id, answer: { always: true } }), /can only be allowed once/)
+  await asks.approve({ actor: owner, id, answer: { always: false } })
   assert.deepEqual(fake.invoked, ['databases/db-cluster-list', 'databases/db-cluster-delete'])
   assert.equal(fake.lookups.filter((each) => each.endsWith('databases/db-cluster-delete')).length, 2)
 
@@ -65,7 +67,7 @@ test('each call through a catch-all tool follows the permission of the action it
   assert.ok(!listed.some((each) => each.name === 'mcp_invoke_tool'))
   assert.deepEqual(listed.filter((each) => each.name.includes('/')).map((each) => [each.name, each.group, each.permission]), [
     ['databases/db-cluster-list', 'read', 'allow'],
-    ['databases/db-cluster-delete', 'delete', 'allow'],
+    ['databases/db-cluster-delete', 'delete', 'deny'],
     ['apps/app-mystery', 'other', 'ask'],
   ])
 })
@@ -82,4 +84,22 @@ test('the chat names a catch-all call by the action it ran, with that action\'s 
   ])
   assert.equal(calls[1].error, 'Set to Never in DigitalOcean.')
   assert.equal(calls[0].output, '{"ran":"databases/db-cluster-list"}')
+})
+
+test('an unlabeled read runs with no ask, and a call that doesn\'t match the action\'s schema goes back to the agent instead of the owner', { skip }, async () => {
+  const fake = digitalocean!
+  const open = async () => (await db.selectFrom('ask').select('id').where('agent_id', '=', 'ag_doagent').where('status', '=', 'open').execute()).length
+  const before = await open()
+  assert.deepEqual(await invoke('insights/insights-alert-rule-list'), { text: '{"ran":"insights/insights-alert-rule-list"}', isError: false })
+
+  const bad = await invoke('databases/db-cluster-create', { Region: 'fra1' })
+  assert.equal(bad.isError, true)
+  assert.match(bad.text, /^Not asked: the arguments for databases\/db-cluster-create don't match its schema/)
+  assert.match(bad.text, /Label/)
+  assert.equal(await open(), before)
+
+  const good = await invoke('databases/db-cluster-create', { Region: 'fra1', Label: 'staging' })
+  assert.match(good.text, /^Asked for approval/)
+  assert.equal(await open(), before + 1)
+  assert.ok(!fake.invoked.includes('databases/db-cluster-create'))
 })

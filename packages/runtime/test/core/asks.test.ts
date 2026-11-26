@@ -60,10 +60,23 @@ test('get_self shows the agent its name, instructions and channels', async () =>
   assert.deepEqual(self.channels.map((channel: { id: string }) => channel.id), ['ch_chgwhats'])
 })
 
+test('every ask needs a short description for the owner: missing or too long is an error the agent can fix, and the ask carries it', async () => {
+  const missing = await client.callTool({ name: 'update_self', arguments: { name: 'Ops', origin: app } })
+  assert.equal(missing.isError, true)
+  assert.match(textOf(missing), /description/)
+  const long = await client.callTool({ name: 'update_self', arguments: { description: 'x'.repeat(121), name: 'Ops', origin: app } })
+  assert.equal(long.isError, true)
+  assert.match(textOf(long), /under 120 characters/)
+  await assert.rejects(asks.create({ agentId: 'ag_chgagent', kind: 'update_self', input: { name: 'Ops' }, description: '', origin: app }), /Add a description/)
+  const id = idIn(textOf(await client.callTool({ name: 'update_self', arguments: { description: 'Give it a clearer name', name: 'Opsy', origin: app } })))
+  assert.equal((await asks.get({ actor: owner, id })).description, 'Give it a clearer name')
+  await db.deleteFrom('ask').where('id', '=', id).execute()
+})
+
 test('a rename waits for approval, the owner edits it, and the decision goes back to the chat it came from', async () => {
-  const refused = await client.callTool({ name: 'update_self', arguments: { why: 'Clearer name.', name: 'Ops' } })
+  const refused = await client.callTool({ name: 'update_self', arguments: { description: 'Clearer name.', name: 'Ops' } })
   assert.equal(refused.isError, true)
-  const asked = textOf(await client.callTool({ name: 'update_self', arguments: { why: 'Clearer name.', name: 'Ops', origin: app } }))
+  const asked = textOf(await client.callTool({ name: 'update_self', arguments: { description: 'Clearer name.', name: 'Ops', origin: app } }))
   assert.match(asked, /^Asked for approval \(ask_[a-z0-9]+\): Rename to Ops\. Nothing has changed yet\./)
   const id = idIn(asked)
   assert.equal((await db.selectFrom('agent').select('name').where('id', '=', 'ag_chgagent').executeTakeFirstOrThrow()).name, 'Dev')
@@ -80,7 +93,7 @@ test('a rename waits for approval, the owner edits it, and the decision goes bac
 })
 
 test('a denied request from WhatsApp reaches the agent through the plugin\'s wakes poll, once, and never through the app', async () => {
-  const asked = textOf(await client.callTool({ name: 'update_channel', arguments: { why: 'Let the team in.', id: 'ch_chgwhats', open: true, origin: whatsapp } }))
+  const asked = textOf(await client.callTool({ name: 'update_channel', arguments: { description: 'Let the team in.', id: 'ch_chgwhats', open: true, origin: whatsapp } }))
   const id = idIn(asked)
   assert.match(asked, /Change who can message it on WhatsApp/)
   await asks.decline({ actor: owner, id, note: 'Not yet' })
@@ -100,26 +113,26 @@ test('a denied request from WhatsApp reaches the agent through the plugin\'s wak
 })
 
 test('an agent can\'t ask about a channel that isn\'t its own, or add Slack', async () => {
-  const other = await client.callTool({ name: 'remove_channel', arguments: { why: 'x', id: 'ch_notmine1', origin: app } })
+  const other = await client.callTool({ name: 'remove_channel', arguments: { description: 'Needed for the job', id: 'ch_notmine1', origin: app } })
   assert.equal(other.isError, true)
   assert.match(textOf(other), /You have no channel ch_notmine1/)
-  const slack = await client.callTool({ name: 'add_channel', arguments: { why: 'x', kind: 'slack', ownerAddress: 'x', open: false, origin: app } })
+  const slack = await client.callTool({ name: 'add_channel', arguments: { description: 'Needed for the job', kind: 'slack', ownerAddress: 'x', open: false, origin: app } })
   assert.equal(slack.isError, true)
 })
 
 test('an agent can ask for Discord with its bot token, and the token stays out of the summary', async () => {
   const token = 'fake-discord-bot-token-aaaa.bbbbbb.fake-discord-bot-token-cccc'
-  const asked = await client.callTool({ name: 'add_channel', arguments: { why: 'The team lives on Discord', kind: 'discord', botToken: token, allowed: ['123456789012345678'], origin: app } })
+  const asked = await client.callTool({ name: 'add_channel', arguments: { description: 'The team lives on Discord', kind: 'discord', botToken: token, allowed: ['123456789012345678'], origin: app } })
   assert.notEqual(asked.isError, true)
   const row = await db.selectFrom('ask').select(['title', 'input']).where('kind', '=', 'add_channel').orderBy('created_at', 'desc').executeTakeFirstOrThrow()
   assert.equal(row.title, 'Add Discord')
   assert.doesNotMatch(row.title, /fake-discord/)
-  const noChannels = await client.callTool({ name: 'add_channel', arguments: { why: 'x', kind: 'discord', botToken: token, origin: app } })
+  const noChannels = await client.callTool({ name: 'add_channel', arguments: { description: 'Needed for the job', kind: 'discord', botToken: token, origin: app } })
   assert.notEqual(noChannels.isError, true, 'the owner picks its channels in OpenHut')
 })
 
 test('a decision the agent never heard about is sent again by the chat plugin\'s next tick', async () => {
-  const asked = textOf(await client.callTool({ name: 'update_self', arguments: { why: 'Shorter.', name: 'Op', origin: app } }))
+  const asked = textOf(await client.callTool({ name: 'update_self', arguments: { description: 'Shorter.', name: 'Op', origin: app } }))
   const id = idIn(asked)
   await asks.decline({ actor: owner, id })
   await settled()
@@ -133,16 +146,16 @@ test('a decision the agent never heard about is sent again by the chat plugin\'s
 })
 
 test('approving again after a crash is safe: a channel already removed counts as done, and the agent can\'t ask to add one it has', async () => {
-  const twice = await client.callTool({ name: 'add_channel', arguments: { why: 'x', kind: 'whatsapp', ownerAddress: '+15550002222', open: false, origin: app } })
+  const twice = await client.callTool({ name: 'add_channel', arguments: { description: 'Needed for the job', kind: 'whatsapp', ownerAddress: '+15550002222', open: false, origin: app } })
   assert.equal(twice.isError, true)
   assert.match(textOf(twice), /already have WhatsApp/)
-  const asked = textOf(await client.callTool({ name: 'remove_channel', arguments: { why: 'Not used.', id: 'ch_chgwhats', origin: app } }))
+  const asked = textOf(await client.callTool({ name: 'remove_channel', arguments: { description: 'Not used.', id: 'ch_chgwhats', origin: app } }))
   const id = idIn(asked)
   await db.deleteFrom('channel').where('id', '=', 'ch_chgwhats').execute()
   assert.equal((await asks.approve({ actor: owner, id })).status, 'done')
 })
 
-const DIGITALOCEAN = { why: 'To watch prod-db.', app: 'mcp', name: 'DigitalOcean', url: 'https://mcp.digitalocean.com/mcp', token: 'DigitalOcean token', guide: 'Make a read and write token.', link: 'https://cloud.digitalocean.com/account/api/tokens', permissions: { read: 'allow', update: 'ask', delete: 'deny' } }
+const DIGITALOCEAN = { description: 'To watch prod-db.', app: 'mcp', name: 'DigitalOcean', url: 'https://mcp.digitalocean.com/mcp', token: 'DigitalOcean token', guide: 'Make a read and write token.', link: 'https://cloud.digitalocean.com/account/api/tokens', permissions: { read: 'allow', update: 'ask', delete: 'deny' } }
 const DO_TOOLS = [
   { name: 'db-cluster-get', description: 'Get a cluster', schema: {}, annotations: { readOnlyHint: true } },
   { name: 'db-cluster-resize', description: 'Resize a cluster', schema: {}, annotations: { readOnlyHint: false } },
@@ -183,7 +196,7 @@ test('connect_app with a connection that already exists grants it without a seco
     { id: 'cn_existpg1', kind: 'postgres', name: 'Prod DB', owner_id: 'usr_chgowner', config: seal('{}') },
     { id: 'cn_existln1', kind: 'linear', name: 'Linear', owner_id: 'usr_chgowner', config: seal('{}') },
   ]).execute()
-  const id = idIn(textOf(await client.callTool({ name: 'connect_app', arguments: { why: 'To watch slow queries.', app: 'postgres', origin: app } })))
+  const id = idIn(textOf(await client.callTool({ name: 'connect_app', arguments: { description: 'To watch slow queries.', app: 'postgres', origin: app } })))
   await assert.rejects(asks.approve({ actor: owner, id, answer: { connectionId: 'cn_existln1' } }), /Linear isn't a Postgres connection/)
   assert.equal((await asks.approve({ actor: owner, id, answer: { connectionId: 'cn_existpg1', permissions: { read: 'allow' } } })).status, 'done')
   assert.ok((await agentService.listGrants({ agentId: 'ag_chgagent' })).some((grant) => grant.connectionId === 'cn_existpg1'))
@@ -194,8 +207,8 @@ test('connect_app by sign-in: the callback approves the ask for the owner, so th
   mock.method(mcp, 'finishSignIn', async () => ({ tokens: { access_token: 'at', token_type: 'Bearer' } }))
   mock.method(connectionService, 'listTools', async () => [])
   mock.method(connectionService, 'specs', async () => DO_TOOLS)
-  const id = idIn(textOf(await client.callTool({ name: 'connect_app', arguments: { why: 'To file issues.', app: 'mcp', name: 'Tracker', url: 'https://tracker.example.com/mcp', origin: app } })))
-  await assert.rejects(connectionAuthorizationService.create({ actor: owner, kind: 'mcp', url: 'https://tracker.example.com/mcp', askId: idIn(textOf(await client.callTool({ name: 'update_self', arguments: { why: 'x', name: 'Not a connect', origin: app } }))) }), /isn't for connecting an app/)
+  const id = idIn(textOf(await client.callTool({ name: 'connect_app', arguments: { description: 'To file issues.', app: 'mcp', name: 'Tracker', url: 'https://tracker.example.com/mcp', origin: app } })))
+  await assert.rejects(connectionAuthorizationService.create({ actor: owner, kind: 'mcp', url: 'https://tracker.example.com/mcp', askId: idIn(textOf(await client.callTool({ name: 'update_self', arguments: { description: 'Needed for the job', name: 'Not a connect', origin: app } }))) }), /isn't for connecting an app/)
   const started = await connectionAuthorizationService.create({ actor: owner, kind: 'mcp', name: 'Tracker', url: 'https://tracker.example.com/mcp', askId: id, permissions: { read: 'allow', update: 'deny' } })
   assert.equal((await asks.get({ actor: owner, id })).status, 'open')
   const done = await connectionAuthorizationService.finish({ state: started.id, code: 'good' })
@@ -209,10 +222,10 @@ test('connect_app by sign-in: the callback approves the ask for the owner, so th
 })
 
 test('connect_app takes a url, a name or a token only for app mcp, and app mcp needs its url', async () => {
-  const wrong = await client.callTool({ name: 'connect_app', arguments: { why: 'x', app: 'linear', url: 'https://mcp.linear.app/mcp', origin: app } })
+  const wrong = await client.callTool({ name: 'connect_app', arguments: { description: 'Needed for the job', app: 'linear', url: 'https://mcp.linear.app/mcp', origin: app } })
   assert.equal(wrong.isError, true)
   assert.match(textOf(wrong), /Only app mcp takes a url/)
-  const missing = await client.callTool({ name: 'connect_app', arguments: { why: 'x', app: 'mcp', name: 'Thing', origin: app } })
+  const missing = await client.callTool({ name: 'connect_app', arguments: { description: 'Needed for the job', app: 'mcp', name: 'Thing', origin: app } })
   assert.equal(missing.isError, true)
   assert.match(textOf(missing), /Send the MCP server's url/)
   assert.deepEqual((await client.listTools()).tools.map((tool) => tool.name).filter((name) => /connect|propose|request_connection/.test(name)), ['connect_app'])
@@ -227,8 +240,8 @@ test('asks list newest first, and ones made at the same moment keep one order', 
 
 test('asks answered in one chat reach the agent as one wake, once nothing in that chat is open', async () => {
   const chat = { platform: 'api_server', chat_id: 'openhut-batch' }
-  const first = idIn(await asks.create({ agentId: 'ag_chgagent', kind: 'add_webhook', input: { name: 'Batch one' }, why: 'x', origin: chat }))
-  const second = idIn(await asks.create({ agentId: 'ag_chgagent', kind: 'add_webhook', input: { name: 'Batch two' }, why: 'x', origin: chat }))
+  const first = idIn(await asks.create({ agentId: 'ag_chgagent', kind: 'add_webhook', input: { name: 'Batch one' }, description: 'Needed for the job', origin: chat }))
+  const second = idIn(await asks.create({ agentId: 'ag_chgagent', kind: 'add_webhook', input: { name: 'Batch two' }, description: 'Needed for the job', origin: chat }))
   const before = told.length
   await asks.decline({ actor: owner, id: first, note: 'Later' })
   await settled()
@@ -245,8 +258,8 @@ test('asks answered in one chat reach the agent as one wake, once nothing in tha
 
 test('an answer waits at most 30 seconds for the chat\'s other asks, then goes alone and says what is still open', async () => {
   const chat = { platform: 'api_server', chat_id: 'openhut-slow' }
-  const first = idIn(await asks.create({ agentId: 'ag_chgagent', kind: 'add_webhook', input: { name: 'Slow one' }, why: 'x', origin: chat }))
-  idIn(await asks.create({ agentId: 'ag_chgagent', kind: 'add_webhook', input: { name: 'Slow two' }, why: 'x', origin: chat }))
+  const first = idIn(await asks.create({ agentId: 'ag_chgagent', kind: 'add_webhook', input: { name: 'Slow one' }, description: 'Needed for the job', origin: chat }))
+  idIn(await asks.create({ agentId: 'ag_chgagent', kind: 'add_webhook', input: { name: 'Slow two' }, description: 'Needed for the job', origin: chat }))
   await asks.decline({ actor: owner, id: first })
   assert.deepEqual((await wakes.due({ agentId: 'ag_chgagent' })).filter((wake) => wake.origin.chat_id === 'openhut-slow'), [])
   await db.updateTable('ask').set({ answered_at: new Date(Date.now() - 31_000) }).where('id', '=', first).execute()
@@ -255,7 +268,7 @@ test('an answer waits at most 30 seconds for the chat\'s other asks, then goes a
 })
 
 test('a wake waits for the restart its answer needs, and the restart waits for the agent to go quiet', async () => {
-  const id = idIn(await asks.create({ agentId: 'ag_chgagent', kind: 'update_self', input: { instructions: '# Quiet\nNew.' }, why: 'x', origin: app }))
+  const id = idIn(await asks.create({ agentId: 'ag_chgagent', kind: 'update_self', input: { instructions: '# Quiet\nNew.' }, description: 'Needed for the job', origin: app }))
   activity.started('ag_chgagent')
   const applies = agentd.applies.length
   const before = told.length
@@ -288,8 +301,8 @@ test('a grant made in the app waits for the agent to go quiet before it restarts
 })
 
 test('asking for the same thing twice while it is open gives back the first ask', async () => {
-  const first = idIn(textOf(await client.callTool({ name: 'update_self', arguments: { why: 'Same.', name: 'Twin', origin: app } })))
-  const again = idIn(textOf(await client.callTool({ name: 'update_self', arguments: { why: 'Same again.', name: 'Twin', origin: app } })))
+  const first = idIn(textOf(await client.callTool({ name: 'update_self', arguments: { description: 'Same.', name: 'Twin', origin: app } })))
+  const again = idIn(textOf(await client.callTool({ name: 'update_self', arguments: { description: 'Same again.', name: 'Twin', origin: app } })))
   assert.equal(again, first)
   await asks.decline({ actor: owner, id: first })
 })
@@ -302,12 +315,12 @@ test('an ask whose kind no plugin defines any more expires with a standard note'
   assert.match(row.reply ?? '', /Do a gone thing didn't happen: OpenHut can't do this kind of ask any more\./)
 })
 
-test('two plugins can\'t define one ask kind, and a kind with a tool becomes an MCP tool with why', async () => {
+test('two plugins can\'t define one ask kind, and a kind with a tool becomes an MCP tool with a description', async () => {
   const kind = defineAsk({ input: z.object({ x: z.string() }), tool: 'Do x.', title: () => 'X', run: async () => undefined })
   assert.throws(() => asksPlugin([{ name: 'a', asks: { do_x: kind } }, { name: 'b', asks: { do_x: kind } }]), /Two plugins define the ask do_x/)
   const plugin = asksPlugin([{ name: 'a', asks: { do_x: kind } }])
   assert.deepEqual(Object.keys(plugin.tools ?? {}), ['do_x'])
-  assert.deepEqual(Object.keys(plugin.tools?.do_x.input ?? {}), ['why', 'x'])
+  assert.deepEqual(Object.keys(plugin.tools?.do_x.input ?? {}), ['description', 'x'])
 })
 
 test('change requests from before the upgrade become asks with the same ids, and a pending one can still be approved', async () => {

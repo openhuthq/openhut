@@ -23,6 +23,10 @@ test('defaults come from the tool labels, and risky tools never default to Alway
     ['catch-all marked read-only', { name: 'invoke_tool', annotations: { readOnlyHint: true } }, 'read', 'allow'],
     ['named like one but labeled delete', { name: 'run_tool', meta: { operation: 'delete' } }, 'delete', 'deny'],
     ['a tool that only looks tools up', { name: 'mcp_find_tools', annotations: { readOnlyHint: true } }, 'read', 'allow'],
+    ['tool lookup with no labels', { name: 'mcp_find_tools' }, 'read', 'allow'],
+    ['schema lookup with no labels', { name: 'retrieve_tool_schema' }, 'read', 'allow'],
+    ['describe with no labels', { name: 'describeTools' }, 'read', 'allow'],
+    ['a top-level tool named like a read keeps its labels', { name: 'apps/app-list' }, 'other', 'ask'],
   ]
   for (const [label, extra, group, permission] of table) {
     assert.equal(permissions.groupOf(spec(extra)), group, label)
@@ -59,4 +63,41 @@ test('an inner action takes its own setting, else its group\'s, else its default
   await permissions.set({ actor, ...at, tools: [read.name], state: 'allow' })
   assert.equal(await decide(read), 'allow')
   await db.deleteFrom('tool_permission').where('agent_id', '=', at.agentId).execute()
+})
+
+test('an inner action with no labels is a read by its verb, and only then', () => {
+  const table: [string, Partial<ToolSpec>, string, string][] = [
+    ['get', { name: 'databases/db-cluster-get' }, 'read', 'allow'],
+    ['list', { name: 'apps/app-list' }, 'read', 'allow'],
+    ['camel case fetch', { name: 'fetchInvoices' }, 'read', 'allow'],
+    ['a read and a write', { name: 'get_or_create_project' }, 'other', 'ask'],
+    ['a write', { name: 'apps/app-restart' }, 'other', 'ask'],
+    ['a query is not a listed verb', { name: 'insights/insights-query' }, 'other', 'ask'],
+    ['labeled not read-only', { name: 'get_report', annotations: { readOnlyHint: false } }, 'update', 'ask'],
+    ['labeled destructive', { name: 'fetch_and_purge', annotations: { destructiveHint: true } }, 'delete', 'deny'],
+    ['labeled by operation', { name: 'list_and_wipe', meta: { operation: 'delete' } }, 'delete', 'deny'],
+  ]
+  for (const [label, extra, group, permission] of table) {
+    assert.equal(permissions.groupOf(permissions.byVerb(spec(extra))), group, label)
+    assert.equal(permissions.defaultOf(permissions.byVerb(spec(extra))), permission, label)
+  }
+})
+
+test('a DigitalOcean health check asks nothing: discovery and unlabeled reads run', () => {
+  const discovery = ['mcp_find_tools', 'retrieve_tool_schema', 'describeTools'].filter((name) => permissions.defaultOf(spec({ name })) !== 'allow')
+  const reads = ['databases/db-cluster-list', 'databases/db-cluster-get', 'apps/app-list', 'apps/app-get-logs', 'droplets/droplet-list', 'monitoring/get-droplet-cpu-metrics']
+    .filter((name) => permissions.defaultOf(permissions.byVerb(spec({ name }))) !== 'allow')
+  assert.deepEqual([...discovery, ...reads], [])
+})
+
+test('a call can\'t be undone when it is labeled destructive, or is an unlabeled delete by its verb', () => {
+  const table: [Partial<ToolSpec>, boolean][] = [
+    [{ name: 'databases/db-cluster-delete' }, true],
+    [{ name: 'removeMember' }, true],
+    [{ name: 'update_page', annotations: { destructiveHint: true } }, true],
+    [{ name: 'run', meta: { operation: 'delete' } }, true],
+    [{ name: 'delete_draft', annotations: { readOnlyHint: false, destructiveHint: false } }, false],
+    [{ name: 'apps/app-list' }, false],
+  ]
+  for (const [extra, undoable] of table) assert.equal(permissions.undoable(spec(extra)), undoable, String(extra.name))
 })

@@ -114,7 +114,7 @@ test('add_webhook waits for approval; approving creates the webhook, tells the a
   const client = new Client({ name: 'hermes', version: '1' })
   await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/api/v1/mcp`), { requestInit: { headers: { authorization: `Agent ${token}` } } }))
   const slack = { platform: 'slack', chat_id: 'C0ALERTS', chat_type: 'group', chat_name: 'db-alerts' }
-  const asked = await client.callTool({ name: 'add_webhook', arguments: { why: 'React to Postgres alerts.', name: 'DO Postgres alerts', origin: slack } })
+  const asked = await client.callTool({ name: 'add_webhook', arguments: { description: 'React to Postgres alerts.', name: 'DO Postgres alerts', origin: slack } })
   const text = (asked.content as { text: string }[])[0].text
   assert.match(text, /^Asked for approval \(ask_[a-z0-9]+\): Add a webhook named DO Postgres alerts\./)
   const id = /ask_[a-z0-9]+/.exec(text)?.[0] ?? ''

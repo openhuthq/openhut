@@ -10,6 +10,8 @@ export const ACTIONS = [
   { name: 'databases/db-cluster-resize', description: 'Resize a database cluster.', annotations: { title: 'Resize a database', readOnlyHint: false, destructiveHint: false } },
   { name: 'databases/db-cluster-delete', description: 'Delete a database cluster.', annotations: { title: 'Delete a database', destructiveHint: true } },
   { name: 'apps/app-mystery', description: 'Does something.' },
+  { name: 'insights/insights-alert-rule-list', description: 'List the alert rules.' },
+  { name: 'databases/db-cluster-create', description: 'Create a database cluster.', inputSchema: { type: 'object', properties: { Region: { type: 'string' }, Label: { type: 'string' } }, required: ['Region', 'Label'] } },
 ]
 
 export type FakeDigitalOcean = { url: string; invoked: string[]; lookups: string[]; close: () => void }
@@ -24,11 +26,11 @@ export async function fakeDigitalOcean(): Promise<FakeDigitalOcean | undefined> 
     const server = new McpServer({ name: 'fake-digitalocean', version: '1' })
     server.registerTool('mcp_find_tools', { description: 'Find tools.', inputSchema: { query: z.string(), limit: z.number().optional() }, annotations: { readOnlyHint: true } }, async ({ query }) => {
       lookups.push(`find ${query}`)
-      return text({ tools: ACTIONS.filter((each) => each.name.includes(query) || each.description.toLowerCase().includes(query.toLowerCase())) })
+      return text({ tools: ACTIONS.filter((each) => each.name.includes(query) || each.description.toLowerCase().includes(query.toLowerCase())).map(({ inputSchema: _, ...each }) => each) })
     })
     server.registerTool('mcp_retrieve_schema', { description: 'Get a tool\'s schema.', inputSchema: { name: z.string() }, annotations: { readOnlyHint: true } }, async ({ name }) => {
       lookups.push(`schema ${name}`)
-      return text({ name, inputSchema: { type: 'object', properties: {} } })
+      return text({ name, inputSchema: ACTIONS.find((each) => each.name === name)?.inputSchema ?? { type: 'object', properties: {} } })
     })
     server.registerTool('mcp_invoke_tool', { description: 'Invoke a DigitalOcean tool.', inputSchema: { name: z.string(), arguments: z.record(z.string(), z.unknown()).optional() }, annotations: { readOnlyHint: false, destructiveHint: true } }, async ({ name }) => {
       invoked.push(name)

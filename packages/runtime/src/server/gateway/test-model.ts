@@ -66,7 +66,7 @@ function replyTo({ last, callTool, shell, schedule, names }: { last: { role?: st
   const named = direct && names.find((name) => name.endsWith(direct.tool))
   if (direct && named) return { tool: { name: named, args: JSON.stringify(direct.args ?? {}) } }
   const sql = /sql:\s*([\s\S]+?)\s*$/i.exec(asText(last.content))?.[1]
-  if (sql && callTool) return { tool: { name: callTool, args: JSON.stringify({ reason: 'The user asked for data', name: 'postgres_query', arguments: { sql } }) } }
+  if (sql && callTool) return { tool: { name: callTool, args: JSON.stringify({ description: 'Look up the data the user asked for', name: 'postgres_query', arguments: { sql } }) } }
   const command = /browser:\s*([a-z][a-z -]*(?:\s+[^\s'"`$;&|<>\\]+)*)\s*"?\s*$/i.exec(lastText(last.content))?.[1]
   if (command && shell) return { tool: { name: shell, args: JSON.stringify({ command: `agent-browser ${command}`, description: 'Use the browser' }) } }
   const said = asText(last.content)

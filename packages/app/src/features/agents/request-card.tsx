@@ -31,7 +31,7 @@ export function RequestCard({ agent, change, icon, action, title, decided = DEFA
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="text-[14px]/[20px] font-medium text-ink [&_b]:font-semibold">{title}</span>
-        <span className="text-[13px] text-mute">{change.why}</span>
+        <span className="text-[13px] text-mute">{change.description}</span>
       </div>
     </div>
     {children}
@@ -47,8 +47,8 @@ function Outcome({ decided }: { decided: Decided }) {
   return <span className="inline-flex items-center gap-1.5 text-[13px] text-ink"><I icon={CheckmarkCircle02Icon} size={16} className="animate-[pop_.45s_cubic-bezier(.2,.8,.2,1)] text-hue-green" />{decided.label}</span>
 }
 
-export function Details({ label = 'Details', children }: { label?: string; children: ReactNode }) {
-  return <Collapsible className="flex flex-col gap-2 text-[12.5px]">
+export function Details({ label = 'Details', open, children }: { label?: string; open?: boolean; children: ReactNode }) {
+  return <Collapsible defaultOpen={open} className="flex flex-col gap-2 text-[12.5px]">
     <CollapsibleTrigger className="group/details -ml-1 inline-flex w-fit cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1 py-0.5 text-mute hover:text-ink">{label}<span className="[transition:transform_.15s] group-data-panel-open/details:rotate-90">›</span></CollapsibleTrigger>
     <CollapsibleContent><div className="flex flex-col gap-1.5 pl-1 text-[12.5px]/[1.5] text-body [overflow-wrap:anywhere]">{children}</div></CollapsibleContent>
   </Collapsible>

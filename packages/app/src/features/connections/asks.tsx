@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Add01Icon, CheckmarkCircle02Icon, LinkSquare02Icon } from '@hugeicons/core-free-icons'
+import { Add01Icon, AlertCircleIcon, CheckmarkCircle02Icon, LinkSquare02Icon, Wrench01Icon } from '@hugeicons/core-free-icons'
+import type { IconSvgElement } from '@hugeicons/react'
 import * as z from 'zod/mini'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { Ask } from '@openhut/common/asks/ask.ts'
@@ -11,7 +12,9 @@ import { Glyph } from '@/components/glyph'
 import { isBrand, type BrandName } from '@/components/brand-icons'
 import { I, PILL, SetupSheet } from '@/components/kit'
 import { useAnswer } from '@/features/asks/api'
-import type { AskRow } from '@/features/asks/custom'
+import type { AskExtra, AskRow } from '@/features/asks/custom'
+import { toolAnswer, toolChoices, toolDetails, toolOutcome, undoable, type ToolChoice } from '@/features/asks/extras'
+import { Details, RequestCard } from '@/features/agents/request-card'
 import { useGrants } from '@/features/agents/api'
 import { openSignInTab, useAuthorizeConnection, useConnections } from '@/features/connections/api'
 import { connectionBrand, titleOf } from '@/features/connections/catalog'
@@ -49,8 +52,9 @@ const ConnectRow: AskRow = ({ agent, ask, compact }) => {
   return <>
     <div className={cn('flex min-w-0 items-center gap-3', compact ? 'h-7' : 'min-h-11 rounded-lg px-2')} data-ask={ask.id}>
       <span className="grid size-6 shrink-0 place-items-center"><Glyph name={brandOf(wanted)} size={compact ? 16 : 20} /></span>
-      <span className={cn('flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap', compact ? 'text-[13px]' : 'text-[13.5px]')}>
-        <span className="shrink-0 text-ink">{nameOf(wanted)}</span>{detail && <><span className="text-mute">·</span><span className="truncate text-mute">{detail}</span></>}
+      <span className={cn('flex min-w-0 flex-1 flex-col', compact ? 'text-[13px]' : 'text-[13.5px]')}>
+        <span className="flex min-w-0 items-center gap-1 whitespace-nowrap"><span className="shrink-0 text-ink">{nameOf(wanted)}</span>{(compact ? ask.description : detail) && <><span className="text-mute">·</span><span className="truncate text-mute">{compact ? ask.description : detail}</span></>}</span>
+        {!compact && <span className="truncate text-[12.5px] text-mute">{ask.description}</span>}
       </span>
       {done && <span className={cn('inline-flex items-center gap-1.5 text-ink', compact ? 'text-[12.5px]' : 'h-7 text-[13px]')}><I icon={CheckmarkCircle02Icon} size={compact ? 14 : 16} className="animate-[pop_.45s_cubic-bezier(.2,.8,.2,1)] text-hue-green" />{!compact && 'Connected'}</span>}
       {ask.status === 'declined' && <span className="text-[13px] text-mute">Not now</span>}
@@ -65,11 +69,46 @@ const ConnectRow: AskRow = ({ agent, ask, compact }) => {
 
 export const rows = { connect_app: ConnectRow }
 
+const LABEL: Record<ToolChoice, string> = { always: 'Always allow', once: 'Allow', decline: 'Not now' }
+
+const ToolAsk: AskExtra = ({ agent, ask }) => {
+  const answer = useAnswer(agent.id)
+  const connection = useConnections().data?.find((each) => each.id === ask.input.connectionId)
+  const brand = connection && connectionBrand(connection)
+  const outcome = toolOutcome(ask)
+  if (outcome) return <div className="flex max-w-[560px] min-w-0 items-center gap-2.5 rounded-xl bg-sidebar px-4 py-2.5 text-[13px]" data-ask-answered>
+    <AppIcon brand={brand} size={18} />
+    <span className="min-w-0 flex-1 truncate"><span className="text-ink">{ask.title}</span><span className="text-mute"> · {ask.description}</span></span>
+    <span className={cn('inline-flex shrink-0 items-center gap-1.5', ask.status === 'done' ? 'text-ink' : 'text-mute')}>{ask.status === 'done' && <I icon={CheckmarkCircle02Icon} size={14} className="animate-[pop_.45s_cubic-bezier(.2,.8,.2,1)] text-hue-green" />}{outcome}</span>
+  </div>
+  const lines = toolDetails(ask)
+  const choices = toolChoices(ask)
+  return <RequestCard agent={agent} change={ask} error={answer.error?.message} icon={<AppIcon brand={brand} size={28} />} title={ask.title}
+    actions={choices.map((choice, index) => <Button key={choice} type="button" variant={variantOf({ choice, index })} size="sm" autoFocus={index === 0} disabled={answer.isPending} onClick={() => answer.mutate({ id: ask.id, ...toolAnswer(choice) })}>{LABEL[choice]}</Button>)}>
+    {undoable(ask) && <span className="inline-flex items-center gap-1.5 text-[13px] text-ink"><I icon={AlertCircleIcon} size={14} className="text-hue-red" />This can't be undone.</span>}
+    <Details>
+      <pre className="m-0 overflow-hidden rounded-lg bg-canvas px-2.5 py-2 font-mono text-[11.5px]/[1.55] [overflow-wrap:anywhere] whitespace-pre-wrap text-body">{lines.slice(0, 5).join('\n')}{lines.length > 5 && <span className="block text-mute-2">+{lines.length - 5} more lines</span>}</pre>
+    </Details>
+  </RequestCard>
+}
+
+export const cards = { call_tool: ToolAsk }
+
+function variantOf({ choice, index }: { choice: ToolChoice; index: number }): 'primary' | 'secondary' | 'ghost' {
+  if (choice === 'decline') return 'ghost'
+  return index === 0 ? 'primary' : 'secondary'
+}
+
+export function AppIcon({ brand, size, fallback = Wrench01Icon }: { brand: BrandName | undefined; size: 18 | 28; fallback?: IconSvgElement }) {
+  if (brand && brand !== 'mcp') return <Glyph name={brand} size={size} />
+  return <span className={cn('grid shrink-0 place-items-center rounded-lg bg-soft text-mute', size === 28 ? 'size-7' : 'size-[18px] rounded-md')}><I icon={fallback} size={size === 28 ? 16 : 12} /></span>
+}
+
 function ConnectDialog({ agent, ask, wanted, onClose }: { agent: Agent; ask: Ask; wanted: Wanted; onClose: () => void }) {
   const answer = useAnswer(agent.id)
   const authorize = useAuthorizeConnection({ stay: true })
   const existing = (useConnections().data ?? []).filter((connection) => matches({ connection, wanted }))
-  const [permissions, setPermissions] = useState<Record<ToolGroup, Permission>>({ ...SUGGESTED, ...wanted.permissions })
+  const [permissions, setPermissions] = useState<Record<ToolGroup, Permission>>({ ...SUGGESTED, ...wanted.permissions, read: 'allow' })
   const name = nameOf(wanted)
   const brand = brandOf(wanted)
   const signIn = isSignIn(wanted)

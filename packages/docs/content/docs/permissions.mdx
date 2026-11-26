@@ -27,28 +27,33 @@ OpenHut reads the labels the app puts on each action:
 | A write, or no label | Ask first |
 | Destructive, a delete, or high risk | Never |
 
-Nothing destructive or high risk starts as Always allow. When you connect an app an agent asked for, each kind of action gets the setting you picked in that dialog. Postgres runs read-only, so its actions start as Always allow.
+Nothing destructive or high risk starts as Always allow. Reads never ask to start with: tools that only look up other tools or their details (find tools, get a schema, describe) are Always allow too, and the connect dialog starts **Look things up** at Always allow whatever the agent suggested. When you connect an app an agent asked for, each kind of action gets the setting you picked in that dialog. Postgres runs read-only, so its actions start as Always allow.
 
 ## Apps with one tool that runs any other
 
-Some apps, like DigitalOcean, give the agent one tool that runs any of their actions, plus tools to look those actions up. That tool isn't on the list. Each call through it follows the setting of the action it actually runs: OpenHut asks the app what the action does, then applies **Look things up**, **Change things** or **Delete or overwrite**. An action the app doesn't label asks first.
+Some apps, like DigitalOcean, give the agent one tool that runs any of their actions, plus tools to look those actions up. That tool isn't on the list. Each call through it follows the setting of the action it actually runs: OpenHut asks the app what the action does, then applies **Look things up**, **Change things** or **Delete or overwrite**. An action the app doesn't label counts as a lookup when its name says it only reads (list, get, read, search, describe or fetch, with no word that changes anything), so it runs without asking; any other unlabeled action asks first. If the arguments don't match the action's schema, the call goes back to the agent with what's wrong instead of asking you to approve a call that would fail.
 
-Actions the agent has run appear under their group, so you can set one on its own. Each group also has **Any other lookup**, **Any other change**, **Any other delete or overwrite** and **Any action the app doesn't label**, for the actions it hasn't run yet. The approval card names the action: *Database wants to run “Delete a database” in DigitalOcean*.
+Actions the agent has run appear under their group, so you can set one on its own. Each group also has **Any other lookup**, **Any other change**, **Any other delete or overwrite** and **Any action the app doesn't label**, for the actions it hasn't run yet. The approval card names the action: *Delete a database in DigitalOcean*.
 
 ## When it asks
 
-An action set to **Ask first** doesn't run. The agent says it waits for your OK, and a card appears in its chat:
+An action set to **Ask first** doesn't run. The agent says it waits for your OK, and a card appears in its chat with the app's logo, the action, like *Delete a database in DigitalOcean*, and one short line from the agent saying what it's for. **Details** shows the tool and its arguments.
 
-- **Approve** runs it now, on your main install, and sends the result back to the agent. Turn on **Always allow this from now on** first to set the action to Always allow.
+- **Always allow** runs it and sets the action to Always allow, so next time it runs without asking. It comes first and has the focus.
+- **Allow** runs it once, on your main install, and sends the result back to the agent.
 - **Not now** tells the agent no; nothing runs.
 
-An action that deletes or removes something says *This can't be undone.* on the card.
+An action that deletes or removes something says *This can't be undone.* on the card and has no **Always allow**, so **Allow** comes first. To let it run without asking, set it to Always allow in the app's permissions. Once you answer, the card folds to one line: *Allowed once*, *Always allowed* or *Declined*.
+
+GitHub's git access is split the same way: **Read code** and **Push branches** are separate entries (see [Apps](/apps)).
+
+Requests from Slack, Telegram and WhatsApp are answered on the same card in OpenHut; those chats have no buttons for them.
 
 A request from a scheduled routine expires after 30 minutes if nobody answers, and the agent carries on without it.
 
 ## When it's blocked
 
-An action set to **Never** doesn't run. The chat shows a card naming the app and the action, like *List databases in DigitalOcean is set to Never*, with **Allow reads** (for a read action: sets every read action of that app to Always allow) and **Change permission** (opens that app's settings for the agent). Then ask the agent again.
+An action set to **Never** doesn't run. The chat shows a card naming the app and the action, like *List databases in DigitalOcean is set to Never*, with **Allow reads** (for a read action: sets every read action of that app to Always allow) and **Change permission** (opens that app's settings for the agent, with that action highlighted). Then ask the agent again.
 
 ## Activity
 

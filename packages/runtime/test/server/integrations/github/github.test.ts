@@ -29,15 +29,15 @@ test('the manifest code becomes the stored app, with its owner and bot', async (
   assert.deepEqual(await github.created('code1'), APP)
 })
 
-test('git_credentials routes git through the gateway as the server app\'s bot; connections from the old app-per-connect say to reconnect', async () => {
+test('git_read routes git through the gateway as the server app\'s bot; connections from the old app-per-connect say to reconnect', async () => {
   await settings.setGithubApp(APP)
-  const result = await github.connector.call({ config: { installationId: 7 }, refresh: async () => ({}), tool: 'git_credentials', args: {} })
+  const result = await github.connector.call({ config: { installationId: 7 }, refresh: async () => ({}), tool: 'git_read', args: {} })
   assert.match(result.text, /url\."\$OPENHUT_GATEWAY\/u\/github\/"\.insteadOf https:\/\/github\.com\//)
   assert.match(result.text, /user\.email '99\+acme-openhut\[bot\]@users\.noreply\.github\.com'/)
   assert.doesNotMatch(result.text, /password|ghs_|x-access-token/)
-  await assert.rejects(github.connector.call({ config: { appId: 1, slug: 'old', pem: 'x', installationId: 7, botId: 1 }, refresh: async () => ({}), tool: 'git_credentials', args: {} }), /Reconnect it/)
+  await assert.rejects(github.connector.call({ config: { appId: 1, slug: 'old', pem: 'x', installationId: 7, botId: 1 }, refresh: async () => ({}), tool: 'git_read', args: {} }), /Reconnect it/)
   await settings.setGithubApp(null)
-  await assert.rejects(github.connector.call({ config: { installationId: 7 }, refresh: async () => ({}), tool: 'git_credentials', args: {} }), /Settings › Admin › GitHub/)
+  await assert.rejects(github.connector.call({ config: { installationId: 7 }, refresh: async () => ({}), tool: 'git_read', args: {} }), /Settings › Admin › GitHub/)
 })
 
 test('the gateway\'s token is minted as the server app, then cached', async (t) => {
