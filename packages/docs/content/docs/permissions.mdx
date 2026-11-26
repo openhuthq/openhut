@@ -45,6 +45,10 @@ An action set to **Ask first** doesn't run. The agent says it waits for your OK,
 
 A request from a scheduled routine expires after 30 minutes if nobody answers, and the agent carries on without it.
 
+## When it's blocked
+
+An action set to **Never** doesn't run. The chat shows a card naming the app and the action, like *List databases in DigitalOcean is set to Never*, with **Allow reads** (for a read action: sets every read action of that app to Always allow) and **Change permission** (opens that app's settings for the agent). Then ask the agent again.
+
 ## Activity
 
 **More › Activity** on the agent lists what it did in its apps: what ran, what waited for an OK, who said yes or no, and what was blocked.

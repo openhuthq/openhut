@@ -13,9 +13,8 @@ import { useJsonRenderMessage } from '@json-render/react'
 import { ArrowLeft01Icon, ArrowUp02Icon, Attachment01Icon, Cancel01Icon, Copy01Icon, EraserIcon, File01Icon, Image01Icon, PlayIcon } from '@hugeicons/core-free-icons'
 import { openhut, type OpenHutAgent } from '@/lib/openhut'
 import type { Agent } from '@openhut/common/agents/agent.ts'
-import { ChatCall, fileInHome, MAX_FILE_BYTES, MAX_FILES, ToolProgress, type ChatFile, type ChatMessage, type ThreadWithMessages } from '@openhut/common/threads/thread.ts'
+import { ChatCall, fileInHome, MAX_FILE_BYTES, MAX_FILES, ToolProgress, Work, type ChatFile, type ChatMessage, type ThreadWithMessages } from '@openhut/common/threads/thread.ts'
 import { Alert } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { DropdownMenuItem, LongPressMenu } from '@/components/ui/dropdown-menu'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -23,7 +22,6 @@ import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { ErrorNote } from '@/components/error-note'
-import { STEP_ICONS } from '@/components/icons'
 import { Dots, I, ICON_BUTTON } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { useOwner } from '@/features/people/api'
@@ -36,11 +34,8 @@ import { Face } from '@/features/agents/face'
 import { deleteUpload, saveFile, threadPath, uploadFile, useAgentThread, useClearChat, useHomeFiles, useThumb, useTouchThread } from '@/features/threads/api'
 import { homePathsIn, linkHomeFiles, RASTER } from '@/features/threads/files'
 import { ConfirmIcon } from '@/components/confirm-button'
-import { Glyph } from '@/components/glyph'
-import { useConnections } from '@/features/connections/api'
-import { connectionBrand } from '@/features/connections/catalog'
-import { toolLabel, toolSentence } from '@/lib/tool-label'
-import { attachCalls, kindOf, stepsOf, type Step } from '@/features/threads/steps'
+import { legacyWork, noReplyOf } from '@/features/threads/steps'
+import { RetryButton, WorkLine } from '@/features/threads/work'
 import { CardReply, MessageCard } from '@/features/threads/card'
 import { ChangeCards, PendingElsewhere } from '@/features/agents/change-requests'
 import { copyText } from '@/lib/clipboard'
@@ -49,7 +44,7 @@ import { usePhoneBack } from '@/app/phone-page'
 import { TOUCH, useMedia } from '@/lib/media'
 import { cn } from '@/lib/utils'
 
-type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; spec: SpecDataPart; changes: string[] }>
+type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; work: Work; spec: SpecDataPart; changes: string[] }>
 type AgentPart = AgentMessage['parts'][number]
 type Attachment = { key: string; name: string; image: boolean; thumb?: string; file?: ChatFile }
 
@@ -100,12 +95,12 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
   return <ChatFiles value={files}><CardReply value={(text) => { if (!busy) send(text) }}><ChatFrame agent={agent} tools={<>{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={<Composer agent={agent} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void chat.stop()} />}>
     {shown.length ? <>
       <Day iso={thread.updatedAt} />
-      {shown.map((message) => <Message key={message.id} agent={agent} message={message} live={busy && message === last} />)}
+      {shown.map((message) => <Message key={message.id} agent={agent} message={message} live={busy && message === last} onRetry={!busy && message === last ? () => void chat.regenerate() : undefined} />)}
     </> : <ChatEmpty agent={agent} />}
     {chat.status === 'submitted' && last?.role === 'user' && <Message agent={agent} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
     <PendingElsewhere agent={agent} shown={new Set(chat.messages.flatMap(changesOf))} />
     {!agent.runsHere && chat.status !== 'submitted' && last?.role === 'user' && !troubleOf(agent) && <p className="m-0 text-right text-[12.5px] text-mute">{agent.runsNowhere ? `No computer runs ${agent.name} now. ${agent.canManage ? 'Run it here to get an answer.' : `Ask an admin to run ${agent.name} on their computer.`}` : `Sent to ${agent.runsOnName ?? 'your other computer'}. ${agent.name} answers when it’s on.`}</p>}
-    {chat.error && <Alert variant="error-outline" role="alert"><span>{plainError(chat.error.message)}</span><Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={() => void chat.regenerate()}>Try again</Button></Alert>}
+    {chat.error && !(last && workOf(last)?.error) && <Alert variant="error-outline" role="alert"><span>{plainError(chat.error.message)}</span><Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={() => void chat.regenerate()}>Try again</Button></Alert>}
   </ChatFrame></CardReply></ChatFiles>
 }
 
@@ -286,13 +281,14 @@ function useOffline(agent: Agent) {
   return home && !home.online
 }
 
-function Message({ agent, message, live }: { agent: Agent; message: AgentMessage; live: boolean }) {
-  return message.role === 'user' ? <UserMessage message={message} /> : <AgentReply agent={agent} message={message} live={live} />
+function Message({ agent, message, live, onRetry }: { agent: Agent; message: AgentMessage; live: boolean; onRetry?: () => void }) {
+  return message.role === 'user' ? <UserMessage message={message} /> : <AgentReply agent={agent} message={message} live={live} onRetry={onRetry} />
 }
 
-function AgentReply({ agent, message, live }: { agent: Agent; message: AgentMessage; live: boolean }) {
+function AgentReply({ agent, message, live, onRetry }: { agent: Agent; message: AgentMessage; live: boolean; onRetry?: () => void }) {
   const { agentId, threadId } = useContext(ChatFiles)
   const blocks = blocksOf(message)
+  const work = workOf(message)
   const { spec, hasSpec } = useJsonRenderMessage(message.parts)
   const paths = live ? [] : homePathsIn(blocks.flatMap((block) => block.type === 'text' ? [block.text] : []).join('\n'))
   const found = useHomeFiles({ agentId, threadId, paths })
@@ -300,14 +296,13 @@ function AgentReply({ agent, message, live }: { agent: Agent; message: AgentMess
   return <div className="grid animate-grow grid-cols-[34px_minmax(0,1fr)] gap-3">
     <span className={live ? 'talking' : undefined}><Face agent={agent} size={34} /></span>
     <CopyMenu text={textOf(message)}><div className="flex min-w-0 flex-col gap-2 pt-1.5 pointer-coarse:select-none">
-      {blocks.map((block, index) => {
-        if (block.type === 'text') return <div key={index} className="msg-t"><Markdown remarkPlugins={plugins} components={{ a: ChatLink, code: FileCode }}>{block.text}</Markdown></div>
-        if (block.type === 'card') return hasSpec && <MessageCard key={index} spec={spec} loading={live} />
-        return <Steps key={index} steps={block.steps} live={live && index === blocks.length - 1} />
-      })}
+      {work && <WorkLine agent={agent} work={work} live={live} answered={blocks.length > 0} onRetry={onRetry} />}
+      {blocks.map((block, index) => block.type === 'text'
+        ? <div key={index} className="msg-t"><Markdown remarkPlugins={plugins} components={{ a: ChatLink, code: FileCode }}>{block.text}</Markdown></div>
+        : hasSpec && <MessageCard key={index} spec={spec} loading={live} />)}
       {changesOf(message).length > 0 && <ChangeCards agent={agent} ids={changesOf(message)} />}
-      {live && !blocks.length && <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>}
-      {!live && !blocks.length && <span className="text-[13.5px] text-mute-2 italic">No reply.</span>}
+      {live && !blocks.length && !work?.calls.some((call) => call.status === 'running') && <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>}
+      {!live && !blocks.length && <span className="flex flex-wrap items-center gap-2 text-[13.5px] text-mute-2 italic">{work ? noReplyOf(work) : 'No reply.'}{work?.error !== undefined && onRetry && <RetryButton onRetry={onRetry} />}</span>}
     </div></CopyMenu>
   </div>
 }
@@ -368,86 +363,21 @@ function nameOf(path: string) {
   return path.slice(path.lastIndexOf('/') + 1)
 }
 
-type Block = { type: 'text'; text: string } | { type: 'steps'; steps: Step[] } | { type: 'card' }
+type Block = { type: 'text'; text: string } | { type: 'card' }
 
 function blocksOf(message: AgentMessage): Block[] {
   const blocks: Block[] = []
-  let events: ToolProgress[] = []
-  const flush = () => {
-    const steps = stepsOf(events)
-    if (steps.length) blocks.push({ type: 'steps', steps })
-    events = []
-  }
   for (const part of message.parts) {
-    if (part.type === 'data-tool') events.push(part.data)
-    if (part.type === 'data-spec' && !blocks.some((block) => block.type === 'card')) {
-      flush()
-      blocks.push({ type: 'card' })
-    }
-    if (part.type === 'text' && part.text) {
-      flush()
-      blocks.push({ type: 'text', text: part.text })
-    }
+    if (part.type === 'data-spec' && !blocks.some((block) => block.type === 'card')) blocks.push({ type: 'card' })
+    if (part.type === 'text' && part.text) blocks.push({ type: 'text', text: part.text })
   }
-  flush()
-  const steps = blocks.flatMap((block) => block.type === 'steps' ? block.steps : [])
-  const calls = message.parts.flatMap((part) => part.type === 'data-calls' ? part.data : [])
-  const left = attachCalls({ steps, calls }).map((call, index): Step => ({ key: `call${index}`, tool: call.tool, title: call.tool, count: 1, done: true, call }))
-  if (left.length) blocks.push({ type: 'steps', steps: left })
   return blocks
 }
 
-function Steps({ steps, live }: { steps: Step[]; live: boolean }) {
-  const running = live ? steps.filter((step) => !step.done).at(-1) : undefined
-  const blocked = steps.filter(failed).length
-  const connection = steps.find((step) => step.call?.connectionName)?.call?.connectionName
-  const brand = useConnections().data?.find((each) => each.name === connection)
-  const summary = steps.length === 1 ? <span className="text-ink">{toolSentence(steps[0].title)}</span> : <>Used {steps.length} tools</>
-  return <Collapsible className="text-[12.5px] text-mute">
-    <CollapsibleTrigger className="group/steps -ml-1 flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-2 rounded-lg border-0 bg-transparent py-[3px] pr-2 pl-1 text-left text-inherit hover:bg-tint">
-      {brand && !running ? <Glyph name={connectionBrand(brand)} size={15} /> : <span className="flex shrink-0 gap-[3px]">{steps.slice(-6).map((step) => <StepTile key={step.key} step={step} running={step === running} />)}</span>}
-      {running
-        ? <span className="animate-[shimmer_1.4s_linear_infinite] bg-[linear-gradient(90deg,var(--mute)_30%,var(--ink)_50%,var(--mute)_70%)] bg-size-[200%_100%] bg-clip-text whitespace-nowrap text-transparent motion-reduce:animate-none motion-reduce:bg-none motion-reduce:text-mute">{toolLabel(running.title)}…</span>
-        : <span className="truncate">{brand && steps.length > 1 ? <><span className="text-ink">Checked {connection}</span> · {steps.length} steps</> : <>{summary}{connection && <> on <span className="text-ink">{connection}</span></>}</>}</span>}
-      {blocked > 0 && <Badge variant="destructive">{blocked} blocked</Badge>}
-      <span className="text-mute-2 [transition:transform_.15s] group-data-panel-open/steps:rotate-90">›</span>
-    </CollapsibleTrigger>
-    <CollapsibleContent><ul className="mt-1.5 mr-0 mb-0.5 ml-3.5 flex list-none flex-col gap-2 border-l-[1.5px] border-hair py-0.5 pr-0 pl-3.5">{steps.map((step) => <li className="flex min-w-0 flex-col gap-1.5" key={step.key}>
-      <div className="flex min-w-0 items-center gap-2">
-        <StepTile step={step} running={step === running} />
-        <span className="text-[12.5px] text-ink">{toolLabel(step.title)}</span><span className="font-mono text-[11px] text-mute-2">{step.title}</span>
-        {step.count > 1 && <span className="font-mono text-xs text-mute">×{step.count}</span>}
-        {step.call?.connectionName && <span className="truncate text-mute">{step.call.connectionName}</span>}
-        {step.call && <span className="inline-flex items-center gap-1.5 text-[12px] text-mute" title={step.call.reason}><i className={cn('size-1.5 rounded-full', DOT[step.call.outcome])} />{OUTCOME[step.call.outcome]}</span>}
-        {step.call && <span className="ml-auto font-mono text-xs text-mute">{step.call.ms} ms</span>}
-      </div>
-      {step.call && failed(step) && <p className="m-0 text-[12.5px] text-body">{step.call.reason}</p>}
-      {step.detail && <pre className="m-0 max-h-[9.5em] overflow-auto rounded-lg bg-sidebar px-2.5 py-2 font-mono text-[11.5px]/[1.55] [overflow-wrap:anywhere] whitespace-pre-wrap text-body">{step.detail}</pre>}
-    </li>)}</ul></CollapsibleContent>
-  </Collapsible>
-}
-
-const OUTCOME = { allowed: 'Allowed', asked: 'Waiting for your OK', denied: 'Blocked', failed: 'Failed' }
-const DOT = { allowed: 'bg-hue-green', asked: 'bg-hue-amber', denied: 'bg-hue-red', failed: 'bg-hue-red' }
-const TILE = {
-  code: '[--k:#8a6ae0]',
-  web: '[--k:oklch(54%_.12_233)]',
-  find: '[--k:oklch(52%_.1_200)]',
-  app: '[--k:#3d8fdc]',
-  file: '[--k:#8a6ae0]',
-  memory: '[--k:oklch(52%_.16_305)]',
-  bad: '[--k:var(--fail)]',
-  other: '[--k:var(--mute)]',
-}
-
-function StepTile({ step, running }: { step: Step; running: boolean }) {
-  const kind = kindOf(step.call ? 'call_tool' : step.tool)
-  const bad = failed(step)
-  return <span className={cn('grid size-[18px] shrink-0 animate-[tilein_.26s_cubic-bezier(.22,1,.36,1)] place-items-center text-(--k)', TILE[bad ? 'bad' : kind], running && 'animate-[tilepulse_1.2s_ease-in-out_infinite]')} title={toolLabel(step.title)}>{STEP_ICONS[bad ? 'blocked' : kind]}</span>
-}
-
-function failed(step: Step) {
-  return step.call?.outcome === 'denied' || step.call?.outcome === 'failed'
+function workOf(message: AgentMessage): Work | undefined {
+  const work = message.parts.filter((part) => part.type === 'data-work').at(-1)
+  if (work) return work.data
+  return legacyWork({ events: message.parts.flatMap((part) => part.type === 'data-tool' ? [part.data] : []), calls: message.parts.flatMap((part) => part.type === 'data-calls' ? part.data : []) })
 }
 
 export function ChatLink({ href, children }: { href?: string; children?: ReactNode }) {
@@ -515,6 +445,7 @@ function uiMessageOf(message: ChatMessage): AgentMessage {
   return { id: message.id, role: message.role, metadata: message.metadata, parts: message.parts.flatMap((part): AgentPart[] => {
     if (part.type === 'text' && typeof part.text === 'string') return [{ type: 'text', text: part.text }]
     if (part.type === 'data-tool') return [{ type: 'data-tool', data: z.safeParse(ToolProgress, part.data).data ?? {} }]
+    if (part.type === 'data-work') return z.safeParse(Work, part.data).data ? [{ type: 'data-work', id: 'work', data: z.parse(Work, part.data) }] : []
     if (part.type === 'data-calls') return [{ type: 'data-calls', data: z.safeParse(z.array(ChatCall), part.data).data ?? [] }]
     if (part.type === 'data-changes') return [{ type: 'data-changes', data: z.safeParse(z.array(z.string()), part.data).data ?? [] }]
     if (part.type === 'data-spec') return [{ type: 'data-spec', data: part.data as SpecDataPart }]

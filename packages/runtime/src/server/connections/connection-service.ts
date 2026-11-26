@@ -32,6 +32,9 @@ const running = new Map<string, number>()
 const queues = new Map<string, Promise<unknown>>()
 const toolCache = new Map<string, { at: number; tools: ToolSpec[] }>()
 const actionCache = new Map<string, Map<string, ToolSpec>>()
+const JOURNAL = 100
+const JOURNAL_TEXT = 4000
+const journal = new Map<string, AppCall[]>()
 const redirectUrl = () => `${callbackBase()}/api/connection-authorizations/callback`
 export const callbackBase = (): string => publicAddress()
 const CONNECTORS: Record<ConnectionKind, Connector> = {
@@ -152,27 +155,27 @@ export const connectionService = {
   async call({ agent, name, args, connectionId, reason, origin }: { agent: { id: string; owner_id: string }; name: string; args: Record<string, unknown>; connectionId?: string; reason: string; origin?: unknown }): Promise<{ text: string; isError: boolean }> {
     const matches = (await connectionService.tools({ agent })).filter((tool) => tool.name === name && (!connectionId || tool.connection.id === connectionId))
     if (!matches.length) {
-      await record({ agentId: agent.id, connectionId: connectionId ?? null, tool: name, reason, outcome: 'denied' })
+      await record({ agentId: agent.id, connectionId: connectionId ?? null, tool: name, reason, outcome: 'denied', args, error: `This agent has no app with ${name}.` })
       return { text: `Denied: no connection grants ${name} to this agent.`, isError: true }
     }
     if (matches.length > 1) {
-      await record({ agentId: agent.id, connectionId: null, tool: name, reason, outcome: 'failed' })
+      await record({ agentId: agent.id, connectionId: null, tool: name, reason, outcome: 'failed', args, error: `More than one app has ${name}.` })
       return { text: `More than one connection has ${name}; pass connectionId (${matches.map((m) => m.connection.id).join(', ')}).`, isError: true }
     }
     const [{ connection, spec }] = matches
     const action = await actionOf({ connection, spec, args })
     const state = await permissions.decide({ agentId: agent.id, connectionId: connection.id, spec: action?.spec ?? spec })
     if (state === 'deny') {
-      await record({ agentId: agent.id, connectionId: connection.id, tool: name, reason, outcome: 'denied' })
+      await record({ agentId: agent.id, connectionId: connection.id, tool: name, reason, outcome: 'denied', app: connection.name, spec, action, args, error: `Set to Never in ${connection.name}.` })
       return { text: `Not allowed: your owner set ${action?.label ?? name} on ${connection.name} to Never. Don't try it again; tell the person if it matters.`, isError: true }
     }
     if (state === 'ask') {
       const inner = action && { name: action.spec.name, label: action.label }
       const asked = await changeRequestService.ask({ agentId: agent.id, action: 'call_tool', input: { connectionId: connection.id, tool: spec.name, name, arguments: args, action: inner }, why: reason, origin })
-      await record({ agentId: agent.id, connectionId: connection.id, tool: name, reason, outcome: 'asked' })
+      await record({ agentId: agent.id, connectionId: connection.id, tool: name, reason, outcome: 'asked', app: connection.name, spec, action, args })
       return { text: asked, isError: false }
     }
-    return run({ agentId: agent.id, tool: { name, connection, spec }, args, reason, approvedBy: null })
+    return run({ agentId: agent.id, tool: { name, connection, spec }, action, args, reason, approvedBy: null })
   },
 
   async callApproved({ actor, agentId, connectionId, tool, args, reason }: { actor: Caller; agentId: string; connectionId: string; tool: string; args: Record<string, unknown>; reason: string }): Promise<{ text: string; isError: boolean }> {
@@ -180,7 +183,11 @@ export const connectionService = {
     if (!granted) return { text: `Not run: ${tool} isn't on a connection this agent can use any more.`, isError: true }
     const action = await actionOf({ connection: granted.connection, spec: granted.spec, args })
     if (await permissions.decide({ agentId, connectionId, spec: action?.spec ?? granted.spec }) === 'deny') return { text: `Not run: ${granted.name} was set to Never before it was approved.`, isError: true }
-    return run({ agentId, tool: granted, args, reason, approvedBy: actor.id })
+    return run({ agentId, tool: granted, action, args, reason, approvedBy: actor.id })
+  },
+
+  callsSince({ agentId, since }: { agentId: string; since: number }): AppCall[] {
+    return (journal.get(agentId) ?? []).filter((call) => call.at >= since)
   },
 
   execute({ connection, tool, args }: { connection: ReachableConnection; tool: string; args: Record<string, unknown> }): Promise<{ text: string; isError: boolean }> {
@@ -250,30 +257,33 @@ function humanized(name: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
-async function run({ agentId, tool: { name, connection, spec }, args, reason, approvedBy }: { agentId: string; tool: AgentTool; args: Record<string, unknown>; reason: string; approvedBy: string | null }): Promise<{ text: string; isError: boolean }> {
+async function run({ agentId, tool: { name, connection, spec }, action, args, reason, approvedBy }: { agentId: string; tool: AgentTool; action?: Action; args: Record<string, unknown>; reason: string; approvedBy: string | null }): Promise<{ text: string; isError: boolean }> {
   const started = Date.now()
-  const done = (outcome: 'allowed' | 'failed') => record({ agentId, connectionId: connection.id, tool: name, reason, outcome, ms: Date.now() - started, approvedBy })
+  const done = (outcome: 'allowed' | 'failed', output: string) => record({ agentId, connectionId: connection.id, tool: name, reason, outcome, ms: Date.now() - started, approvedBy, app: connection.name, spec, action, args, ...outcome === 'failed' ? { error: output } : { output } })
   const key = `${agentId}:${connection.id}`
   const inFlight = running.get(key) ?? 0
   if (inFlight >= PER_AGENT_CONNECTION) {
-    await done('failed')
+    await done('failed', 'Too many calls to this app at once.')
     return { text: `Busy: ${inFlight} calls to this connection are already running for this agent. Wait for them to finish.`, isError: true }
   }
   running.set(key, inFlight + 1)
   try {
     const result = await connectionService.execute({ connection, tool: spec.name, args })
     if (result.text.length > MAX_REPLY) throw new Error(`Result too large for the agent (${Math.round(result.text.length / 1024)} KB, the limit is 64 KB). Ask for less.`)
-    await done(result.isError ? 'failed' : 'allowed')
+    await done(result.isError ? 'failed' : 'allowed', redact(result.text))
     return { text: redact(result.text), isError: result.isError }
   } catch (err) {
-    await done('failed')
+    await done('failed', redact(messageOf(err)))
     return { text: redact(`Failed: ${messageOf(err)}`).slice(0, 2000), isError: true }
   } finally {
     running.set(key, (running.get(key) ?? 1) - 1)
   }
 }
 
-async function record({ agentId, connectionId, tool, reason, outcome, ms = 0, approvedBy = null }: { agentId: string; connectionId: string | null; tool: string; reason: string; outcome: 'allowed' | 'asked' | 'denied' | 'failed'; ms?: number; approvedBy?: string | null }): Promise<void> {
+async function record({ agentId, connectionId, tool, reason, outcome, ms = 0, approvedBy = null, app, spec, action, args, output, error }: { agentId: string; connectionId: string | null; tool: string; reason: string; outcome: Outcome; ms?: number; approvedBy?: string | null; app?: string; spec?: ToolSpec; action?: Action; args: Record<string, unknown>; output?: string; error?: string }): Promise<void> {
+  const calls = journal.get(agentId) ?? []
+  calls.push({ at: Date.now(), name: tool, connectionId, app: app ?? null, spec, action, args, outcome, ms, output: output?.slice(0, JOURNAL_TEXT), error: error?.slice(0, JOURNAL_TEXT) })
+  journal.set(agentId, calls.slice(-JOURNAL))
   await db.insertInto('connection_event').values({ agent_id: agentId, connection_id: connectionId, tool, reason: reason.slice(0, 500), outcome, ms, approved_by: approvedBy }).execute()
 }
 
@@ -354,6 +364,9 @@ function statusOf({ success, failure }: { success?: Date | string | null; failur
 const isSignIn = (kind: ConnectionKind): boolean => (SIGN_IN_KINDS as readonly string[]).includes(kind)
 
 export type ReachableConnection = { id: string; kind: ConnectionKind; name: string }
+export type AppCall = { at: number; name: string; connectionId: string | null; app: string | null; spec?: ToolSpec; action?: Action; args: Record<string, unknown>; outcome: Outcome; ms: number; output?: string; error?: string }
+type Outcome = 'allowed' | 'asked' | 'denied' | 'failed'
+type Action = { spec: ToolSpec; label: string }
 export type AgentTool = { name: string; connection: ReachableConnection; spec: ToolSpec }
 
 type Row = Pick<Selectable<Database['connection']>, (typeof COLUMNS)[number]>

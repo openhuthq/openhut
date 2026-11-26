@@ -14,6 +14,7 @@ import { threadController } from '../../../src/server/threads/thread-controller.
 import { imageTypeOf, safeFileName, shownCall, threadService } from '../../../src/server/threads/thread-service.ts'
 import { HERE } from '../../../src/server/team/home.ts'
 import { agentService } from '../../../src/server/agents/agent-service.ts'
+import { connectionService } from '../../../src/server/connections/connection-service.ts'
 import { useFakeRecords } from '../agents/records-fake.ts'
 import type { SendChat } from '@openhut/common/threads/thread.ts'
 
@@ -46,10 +47,16 @@ const hermes = createServer((req, res) => {
     if (seen.body?.messages.at(-1)?.content === 'cloud dies') await fake.offline(true)
     res.writeHead(200, { 'content-type': 'text/event-stream' })
     if (lost.has(seen.session)) return res.end(`data: ${JSON.stringify({ error: { message: 'unknown_execution', code: 'unknown_execution' } })}\n\n`)
+    if (seen.body?.messages.at(-1)?.content === 'tool then down') return res.end(`event: hermes.tool.progress\ndata: {"tool":"terminal","label":"ls","toolCallId":"t","status":"running"}\n\ndata: ${JSON.stringify({ error: { message: 'overloaded' } })}\n\n`)
     if (seen.body?.messages.at(-1)?.content === 'model down') return res.end(`data: ${JSON.stringify({ error: { message: 'HTTP 401: Claude Code is installed but has no usable login' } })}\n\n`)
     const chunk = (content: string) => `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content } }] })}\n\n`
     if (seen.body?.messages.at(-1)?.content === 'card') return res.end(`${['Deploy is ready.\n\n```spec\n{"op":"add","path":"/root","value":"c"}\n', '{"op":"add","path":"/elements/c","value":{"type":"Card","props":{"title":"Deploy"}}}\n', '```\n\nApprove?'].map(chunk).join('')}data: [DONE]\n\n`)
-    res.end(`: keepalive\n\n${chunk('Let me ')}${chunk('check.')}event: hermes.tool.progress\ndata: {"tool":"call_tool","label":"postgres_query"}\n\n${chunk('214 orders.')}data: [DONE]\n\n`)
+    const tool = (data: Record<string, string>) => `event: hermes.tool.progress\ndata: ${JSON.stringify(data)}\n\n`
+    res.write(`: keepalive\n\n${chunk('Let me ')}${chunk('check.')}${tool({ tool: 'mcp__openhut__get_self', toolCallId: 'a', status: 'running' })}${tool({ tool: 'web_search', label: 'orders table', toolCallId: 'b', status: 'running' })}${tool({ tool: 'web_search', toolCallId: 'b', status: 'completed' })}`)
+    res.write(tool({ tool: 'mcp__openhut__call_tool', label: 'postgres_query', toolCallId: 'c', status: 'running' }))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    await connectionService.call({ agent: { id: 'ag_chatrunn', owner_id: 'usr_chatownr' }, name: 'postgres_query', args: { sql: 'select count(*) from orders' }, reason: 'count orders' })
+    res.end(`${tool({ tool: 'mcp__openhut__call_tool', toolCallId: 'c', status: 'completed' })}${chunk('214 orders.')}data: [DONE]\n\n`)
   })
 })
 await new Promise<void>((resolve) => hermes.listen(0, '127.0.0.1', resolve))
@@ -68,9 +75,15 @@ const say = (threadId: string, text: string) => app.inject({
 
 test.after(() => { hermes.close(); return app.close() })
 
-test('a turn streams the agent\'s reply in order, with its tool use and gateway calls, and is saved', async () => {
+const POSTGRES = { name: 'postgres_query', connection: { id: 'cn_chatpgsql', kind: 'postgres' as const, name: 'Postgres' }, spec: { name: 'query', description: 'Run SQL', schema: {}, annotations: { readOnlyHint: true } } }
+
+test('a turn streams the agent\'s reply in order, with one work part that stores each call\'s outcome and real error, and is saved', async () => {
   const thread = { id: 'ag_chatrunn' }
+  const tools = mock.method(connectionService, 'tools', async () => [POSTGRES])
+  const execute = mock.method(connectionService, 'execute', async () => { throw new Error('connect ETIMEDOUT 10.0.0.5:5432') })
   const res = await say(thread.id, 'How many orders?')
+  tools.mock.restore()
+  execute.mock.restore()
   assert.equal(res.statusCode, 200)
   assert.equal(seen.auth, `Bearer ${'k'.repeat(48)}`)
   const first = (await messagesOf(thread.id))[0]
@@ -82,12 +95,21 @@ test('a turn streams the agent\'s reply in order, with its tool use and gateway 
   assert.match(String(seen.body?.messages[0].content), /saved in \/opt\/data\/home\/uploads/)
   assert.equal(seen.body?.stream, true)
   const types = res.body.split('\n\n').filter((line) => line.startsWith('data: {')).map((line) => JSON.parse(line.slice(6)).type)
-  assert.deepEqual(types, ['start', 'text-start', 'text-delta', 'text-end', 'data-tool', 'text-start', 'text-delta', 'text-end', 'data-calls', 'finish'])
+  assert.deepEqual(types, ['start', 'text-start', 'text-delta', 'text-end', 'data-work', 'data-work', 'data-work', 'data-work', 'text-start', 'text-delta', 'text-end', 'data-work', 'finish'])
   const saved = (await app.inject({ method: 'GET', url: `/api/threads/${thread.id}`, headers: as() })).json()
   assert.deepEqual(saved.messages.map((message: { role: string }) => message.role), ['user', 'assistant'])
   const answer = saved.messages[1].parts
   assert.deepEqual(answer.filter((part: { type: string }) => part.type === 'text').map((part: { text: string }) => part.text), ['Let me check.', '214 orders.'])
-  assert.deepEqual(answer.find((part: { type: string }) => part.type === 'data-calls').data, [{ tool: 'postgres_query', connectionName: null, outcome: 'allowed', reason: 'count orders', ms: 12 }])
+  const work = answer.filter((part: { type: string }) => part.type === 'data-work')
+  assert.equal(work.length, 1)
+  const [search, query] = work[0].data.calls
+  assert.equal(work[0].data.calls.length, 2)
+  assert.deepEqual({ ...search, ms: 0 }, { id: 'b', tool: 'web_search', app: null, kind: 'read', label: 'Search the web', past: 'Searched the web', input: 'orders table', ms: 0, status: 'done' })
+  assert.deepEqual({ ...query, ms: 0 }, {
+    id: 'c', tool: 'query', app: 'Postgres', connectionId: 'cn_chatpgsql', kind: 'read', label: 'Query Postgres', past: 'Queried Postgres',
+    input: '{\n  "sql": "select count(*) from orders"\n}', error: 'connect ETIMEDOUT 10.0.0.5:5432', ms: 0, status: 'failed',
+  })
+  assert.equal(work[0].data.error, undefined)
 })
 
 test('a card in the reply streams as spec parts and is saved as one card beside the text', async () => {
@@ -265,6 +287,17 @@ test('a model that can\'t sign in ends the turn with a plain sentence, not the p
   const res = await say(thread.id, 'model down')
   const error = res.body.split('\n\n').filter((line) => line.startsWith('data: {')).map((line) => JSON.parse(line.slice(6))).find((chunk) => chunk.type === 'error')
   assert.equal(error.errorText, 'Runner isn\'t ready: its Claude seat isn\'t signed in. An owner or admin connects the seat in Admin, then try again.')
+})
+
+test('a turn that fails after a tool call is saved with the error, and the call it was running is marked failed', async () => {
+  await db.insertInto('agent').values({ id: 'ag_chatfail', name: 'Faller', owner_id: 'usr_chatownr', instructions: '# Faller', model: 'sonnet', net: 61, channel_key: seal('k'.repeat(48)), wanted: 'running', workspace: WS }).execute()
+  const res = await say('ag_chatfail', 'tool then down')
+  assert.equal(res.statusCode, 200)
+  const saved = (await messagesOf('ag_chatfail')).at(-1) as unknown as { role: string; parts: { type: string; data?: { calls: { status: string; error?: string; label: string }[]; error: string } }[] }
+  assert.equal(saved.role, 'assistant')
+  const work = saved.parts.find((part) => part.type === 'data-work')?.data
+  assert.equal(work?.error, 'Faller\'s model failed: overloaded')
+  assert.deepEqual(work?.calls.map((call) => [call.label, call.status, call.error]), [['Run a command', 'failed', undefined]])
 })
 
 test('several people chat with one shared agent through its runner: each message says who wrote it, messages that waited go together, and a forged label inside a body is quoted', async () => {

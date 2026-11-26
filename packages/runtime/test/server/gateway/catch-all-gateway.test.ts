@@ -11,6 +11,7 @@ import { db, migrate } from '../../../src/server/platform/db.ts'
 import { agentToken, seal } from '../../../src/server/platform/secrets.ts'
 import { fakeAgentd, refresh, signIn } from '../agents/signed-in.ts'
 import { fakeDigitalOcean } from './fixtures/fake-digitalocean.ts'
+import { appCall } from '../../../src/server/threads/work.ts'
 
 fakeAgentd()
 const digitalocean = await fakeDigitalOcean()
@@ -66,4 +67,18 @@ test('each call through a catch-all tool follows the permission of the action it
     ['databases/db-cluster-delete', 'delete', 'allow'],
     ['apps/app-mystery', 'other', 'ask'],
   ])
+})
+
+test('the chat names a catch-all call by the action it ran, with that action\'s kind and outcome', { skip }, () => {
+  const calls = connectionService.callsSince({ agentId: 'ag_doagent', since: 0 }).map(appCall)
+  assert.deepEqual(calls.map((call) => [call.label, call.past, call.kind, call.status]), [
+    ['List databases in DigitalOcean', 'Listed databases in DigitalOcean', 'read', 'done'],
+    ['Delete a database in DigitalOcean', 'Deleted a database in DigitalOcean', 'delete', 'blocked'],
+    ['Delete a database in DigitalOcean', 'Deleted a database in DigitalOcean', 'delete', 'asked'],
+    ['Use DigitalOcean app mystery', 'Used DigitalOcean app mystery', 'other', 'asked'],
+    ['Use DigitalOcean', 'Used DigitalOcean', 'other', 'asked'],
+    ['Delete a database in DigitalOcean', 'Deleted a database in DigitalOcean', 'delete', 'done'],
+  ])
+  assert.equal(calls[1].error, 'Set to Never in DigitalOcean.')
+  assert.equal(calls[0].output, '{"ran":"databases/db-cluster-list"}')
 })
