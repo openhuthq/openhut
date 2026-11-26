@@ -1,4 +1,4 @@
-import type { Connection, ConnectionKind, ConnectionStatus } from '@openhut/common/connections/connection.ts'
+import type { Connection, ConnectionKind } from '@openhut/common/connections/connection.ts'
 import type { BrandName } from '@/components/brand-icons'
 
 export type CatalogName = ConnectionKind
@@ -96,25 +96,18 @@ export function uniqueName({ title, taken }: { title: string; taken: string[] })
   return `${title} ${n}`
 }
 
-export type AppRow = { key: string; brand: BrandName; title: string; note: string; item?: Integration; connections: Connection[] }
+export type AppRow = { key: string; brand: BrandName; title: string; note: string; item?: Integration; connection?: Connection }
 
 export function appRows({ items, connections }: { items: Integration[]; connections: Connection[] }): AppRow[] {
-  const mcp = connections.filter((connection) => connection.kind === 'mcp')
   const rows = [
-    ...items.map((item) => ({ key: item.name, brand: item.name, title: item.title, note: item.short, item, connections: item.name === 'mcp' ? [] : connections.filter((connection) => connection.kind === item.name) })),
-    ...mcp.map((connection) => ({ key: connection.id, brand: connectionBrand(connection), title: connection.name, note: kindNote(connection), connections: [connection] })),
+    ...items.filter((item) => item.name === 'mcp' || !connections.some((connection) => connection.kind === item.name)).map((item) => ({ key: item.name, brand: item.name, title: item.title, note: item.short, item })),
+    ...connections.map((connection) => ({ key: connection.id, brand: connectionBrand(connection), title: connection.name, note: kindNote(connection), connection })),
   ]
   return byName(rows, (row) => row.title)
 }
 
 export function byName<T>(list: T[], name: (each: T) => string): T[] {
   return [...list].sort((a, b) => name(a).localeCompare(name(b), undefined, { sensitivity: 'base' }))
-}
-
-export function appStatus(connections: Pick<Connection, 'status'>[]): ConnectionStatus | undefined {
-  if (!connections.length) return undefined
-  if (connections.some((connection) => connection.status === 'failing')) return 'failing'
-  return connections.some((connection) => connection.status === 'connected') ? 'connected' : 'no_calls'
 }
 
 export function kindNote(connection: Pick<Connection, 'kind' | 'name' | 'account'>): string {
