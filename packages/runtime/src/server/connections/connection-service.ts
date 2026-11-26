@@ -201,9 +201,8 @@ async function actionOf({ connection, spec, args }: { connection: ReachableConne
     return undefined
   })
   if (found) known.set(name, found)
-  const action = found ?? { name, description: name, schema: {} }
-  const title = action.annotations?.title || (action.description.length <= 60 && action.description !== name ? action.description : '')
-  return { spec: action, label: title || humanized(name) }
+  const action = found ?? { name, description: humanized(name), schema: {} }
+  return { spec: action, label: action.annotations?.title || (action.description.length <= 60 ? action.description : humanized(name)) }
 }
 
 // ponytail: the action list lives in memory, so a restart forgets which inner actions were seen (their saved settings stay).
@@ -216,7 +215,7 @@ async function lookUp({ connection, name }: { connection: ReachableConnection; n
     const found = result.isError ? undefined : labeled({ value: parsed(result.text), name })
     if (found) return found
   }
-  return { name, description: name, schema: {} }
+  return { name, description: humanized(name), schema: {} }
 }
 
 function labeled({ value, name }: { value: unknown; name: string }): ToolSpec | undefined {
@@ -225,7 +224,7 @@ function labeled({ value, name }: { value: unknown; name: string }): ToolSpec | 
   const named = typeof each.name !== 'string' || each.name === name || name.endsWith(`/${each.name}`)
   const annotations = each.annotations
   if (named && typeof annotations === 'object' && annotations !== null) {
-    const description = typeof each.description === 'string' ? each.description : name
+    const description = typeof each.description === 'string' ? each.description : humanized(name)
     const meta = typeof each._meta === 'object' && each._meta !== null ? each._meta as Record<string, unknown> : undefined
     return { name, description, schema: {}, annotations: annotations as ToolSpec['annotations'], meta }
   }
