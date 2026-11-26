@@ -86,6 +86,8 @@ export const settings = {
   setAddress: (origin: string) => write('address', origin),
   usageData: (): boolean => rows.get('usage_data') === 'on',
   setUsageData: (on: boolean) => write('usage_data', on ? 'on' : 'off'),
+  githubFooter: (): boolean => rows.get('github_footer') !== 'off',
+  setGithubFooter: (on: boolean) => write('github_footer', on ? 'on' : 'off'),
   async installId(): Promise<string> {
     if (!rows.get('install_id')) await write('install_id', randomUUID())
     return rows.get('install_id') ?? ''

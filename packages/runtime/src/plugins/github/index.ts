@@ -2,6 +2,7 @@ import { definePlugin } from '../../core/plugin.ts'
 import { connectionService } from '../../server/connections/connection-service.ts'
 import { db } from '../../server/platform/db.ts'
 import { log } from '../../server/platform/events.ts'
+import { settings } from '../../server/platform/settings.ts'
 import { messageOf } from '../../server/platform/http-error.ts'
 import { faceController, faceService } from './faces.ts'
 import { serverAppController } from './server-app.ts'
@@ -15,7 +16,7 @@ export const github = definePlugin({
   routes: () => ({ '/api/agent-faces': faceController, '/api/github-app': serverAppController }),
   hermes: ({ agent, connections }) => ({ prompt: connections.some(({ kind }) => kind === 'github') ? trailerNote(agent.name) : '' }),
   connectorCall: async ({ agentId, kind, tool, args }) => {
-    if (kind !== 'github') return args
+    if (kind !== 'github' || !settings.githubFooter()) return args
     const signing = signingOf({ tool, args })
     if (signing === 'leave') return args
     if (signing === 'first_comment') {

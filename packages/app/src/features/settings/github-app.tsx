@@ -53,14 +53,15 @@ export function GitHubRow() {
   </Row>
 }
 
-export function GitHubDialogs({ opened }: { opened: string | null }) {
+export function GitHubDialogs({ opened, extra }: { opened: string | null; extra?: ReactNode }) {
   const info = useGithubApp().data
   if (!info || opened !== 'github') return null
-  return <GitHubDialog onClose={() => open()} />
+  return <GitHubDialog onClose={() => open()} extra={info.app ? extra : undefined} />
 }
 
-function GitHubDialog({ onClose }: { onClose: () => void }) {
-  return <SetupSheet modal brand="github" className={STEADY} onClose={onClose} {...useGithubSetup({ onClose }).sheet} />
+function GitHubDialog({ onClose, extra }: { onClose: () => void; extra?: ReactNode }) {
+  const { sheet } = useGithubSetup({ onClose })
+  return <SetupSheet modal brand="github" className={STEADY} onClose={onClose} {...sheet}>{sheet.children}{extra}</SetupSheet>
 }
 
 function repos(count: number | null, before: string): string {
