@@ -38,9 +38,9 @@ export interface Database {
     run_text: string | null; failures: Generated<number>; secret: string | null; last_at: Timestamp | null
   }
   inbox_item: { id: string; source_id: string; agent_id: string; digest: string; text: string; told: Generated<boolean>; created_at: Generated<Date> }
-  change_request: {
-    id: string; agent_id: string; action: string; input: string; summary: string; why: string; origin: string
-    status: Generated<'pending' | 'approved' | 'denied' | 'expired'>; note: string | null; told: Generated<boolean>; created_at: Generated<Date>; decided_at: Timestamp | null
-    expires_at: Timestamp | null; result: Generated<string | null>
+  ask: {
+    id: string; agent_id: string; kind: string; input: string; title: string; why: string; origin: string
+    status: Generated<'open' | 'done' | 'declined' | 'expired'>; note: string | null; reply: string | null; told: Generated<boolean>; created_at: Generated<Date>
+    answered_at: Timestamp | null; expires_at: Timestamp | null
   }
 }

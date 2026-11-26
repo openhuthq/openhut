@@ -25,7 +25,7 @@ test('migrate makes the core tables, then each plugin\'s, in list order', async 
   await migrate()
   await migrate()
   const tables = (await sql<{ name: string }>`select table_name as name from information_schema.tables where table_schema = 'public'`.execute(db)).rows.map((row) => row.name)
-  for (const table of ['person', 'agent', 'record', 'channel', 'telegram_code', 'connection', 'connection_grant', 'connection_event', 'tool_permission', 'agent_secret', 'change_request', 'inbox_source', 'inbox_item', 'github_face', 'github_thread']) assert.ok(tables.includes(table), table)
+  for (const table of ['person', 'agent', 'record', 'channel', 'telegram_code', 'connection', 'connection_grant', 'connection_event', 'tool_permission', 'agent_secret', 'ask', 'inbox_source', 'inbox_item', 'github_face', 'github_thread']) assert.ok(tables.includes(table), table)
   const owners = plugins().filter((plugin) => plugin.migrate).map((plugin) => plugin.name)
   assert.deepEqual(owners, ['channels', 'connections', 'keys', 'asks', 'inbox', 'github'])
 })

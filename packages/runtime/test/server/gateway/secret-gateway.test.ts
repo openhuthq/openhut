@@ -26,7 +26,7 @@ const { db, migrate } = await import('../../../src/server/platform/db.ts')
 const { agentToken, seal } = await import('../../../src/server/platform/secrets.ts')
 const { gatewayServer } = await import('../../../src/server/gateway/gateway-server.ts')
 const { keyedRoute } = await import('../../../src/server/gateway/broker.ts')
-const { changeRequestService } = await import('../../../src/server/agents/change-request-service.ts')
+const { asks } = await import('../../../src/core/asks.ts')
 const { secretService } = await import('../../../src/server/agents/secret-service.ts')
 const { hermesFiles } = await import('../../../src/core/hermes.ts')
 const { runSet } = await import('../../../src/server/agents/run-set.ts')
@@ -58,11 +58,11 @@ after(() => {
 
 test('add_secret waits for the owner, who pastes the value; it is stored sealed and the agent hears only that it was saved', async () => {
   const asked = textOf(await client.callTool({ name: 'add_secret', arguments: { why: 'To check failed payments.', name: 'STRIPE_KEY', hosts: ['api.stripe.com'], origin: { platform: 'api_server', chat_id: 'openhut-sec' } } }))
-  const id = /chg_[a-z0-9]+/.exec(asked)?.[0] ?? ''
+  const id = /ask_[a-z0-9]+/.exec(asked)?.[0] ?? ''
   assert.match(asked, /Save a key, STRIPE_KEY, sent only to api\.stripe\.com/)
-  await assert.rejects(changeRequestService.approve({ actor: owner, id }), /Paste the key/)
-  const approved = await changeRequestService.approve({ actor: owner, id, input: { hosts: ['evil.example.com'] }, token: VALUE })
-  assert.equal(approved.status, 'approved')
+  await assert.rejects(asks.approve({ actor: owner, id }), /Paste the key/)
+  const approved = await asks.approve({ actor: owner, id, answer: { hosts: ['evil.example.com'], value: VALUE } })
+  assert.equal(approved.status, 'done')
   assert.deepEqual(approved.input, { name: 'STRIPE_KEY', hosts: ['api.stripe.com'], header: 'Authorization: Bearer {value}' })
   const row = await db.selectFrom('agent_secret').selectAll().where('agent_id', '=', 'ag_secagent').executeTakeFirstOrThrow()
   assert.equal(row.name, 'STRIPE_KEY')
@@ -72,7 +72,7 @@ test('add_secret waits for the owner, who pastes the value; it is stored sealed 
   assert.deepEqual(listed.map(({ name, hosts }) => ({ name, hosts })), [{ name: 'STRIPE_KEY', hosts: ['api.stripe.com'] }])
   await settled()
   assert.match(told.map(({ text }) => text).join('\n'), /Approved and done: Save a key, STRIPE_KEY/)
-  const requests = await db.selectFrom('change_request').selectAll().execute()
+  const requests = await db.selectFrom('ask').selectAll().execute()
   assert.ok(!JSON.stringify([requests, listed, told]).includes(VALUE))
 })
 
