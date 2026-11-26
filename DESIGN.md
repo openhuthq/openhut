@@ -199,7 +199,7 @@ Owner, 2026-11-17, after a fully coloured pass read as too much.
 | Radius | 6px small (chips, inline buttons), 8px rows, cards, buttons, inputs, selects, alerts and tiles, 12px dialogs and chat bubbles. Nothing rounder, except circles for avatars, dots and switches, and the pill actions inside dialogs. | `rounded-md`, `rounded-lg`, `rounded-xl` |
 | Text | Text is ink by default; muted only for timestamps, counts, hints, labels and placeholders. Secondary copy that stays is `--body` or the darker `--mute`. | `--mute` 45%, `--mute-2` 56% lightness |
 | Status chips | A coloured dot and ink text ("Running", "Up to date", "Signed in"), never coloured text. | `Status` in `kit.tsx` |
-| Scrollbars | Thin, no track, shown on hover. Dialog panes hide theirs (`no-scrollbar`) and fade 16px at the bottom (`fade-b`); the chat fades 24px under its header (`fade-t`). The right panel keeps `scrollbar-gutter: stable` so its edge never moves. | global rule and utilities in `index.css` |
+| Scrollbars | Thin, no track, shown on hover. Dialog panes hide theirs (`no-scrollbar`) and fade 16px at the bottom (`fade-b`). The right panel keeps `scrollbar-gutter: stable` so its edge never moves. | global rule and utilities in `index.css` |
 | Focus | Rings only for keyboard (`:focus-visible`), never with a pointer, and none on anything behind an open dialog. | `index.css` |
 | Motion | The sidebar slides with DuskBot's spring (240ms width, content fades and moves 8px in 160ms); everything stops under reduced motion. | `--ease-spring` in `index.css` |
 
