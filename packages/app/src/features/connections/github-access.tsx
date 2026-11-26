@@ -76,7 +76,7 @@ export function GitHubAskRow({ agent, ask, compact }: { agent: Agent; ask: Ask; 
 }
 
 function RowAction({ agent, askId, admin, app, asked, waiting, installUrl, onAsk }: { agent: Agent; askId: string; admin: boolean; app: boolean; asked: boolean; waiting: boolean; installUrl?: string; onAsk: () => void }) {
-  if (!app && admin) return <Button type="button" variant="secondary" className={PILL} onClick={() => open(`connect:${askId}`)}>Set up</Button>
+  if (!app && admin) return <Button type="button" variant="secondary" className={PILL} onClick={() => open(`connect:${askId}`)}>Connect</Button>
   if (!app) return asked ? <Button type="button" variant="ghost" className={cn(PILL, 'text-mute')} disabled>Asked</Button> : <Button type="button" variant="ghost" className={PILL} onClick={onAsk}>Ask an admin</Button>
   if (!agent.canEdit) return <span className="text-[12.5px] text-mute">Waiting for {agent.name}'s owner</span>
   if (waiting && installUrl) return <Button type="button" variant="ghost" className={PILL} onClick={() => void copyText(installUrl).then(() => toast('Link copied', 'Send it to the owner of the account on GitHub.'))}>Copy link</Button>
