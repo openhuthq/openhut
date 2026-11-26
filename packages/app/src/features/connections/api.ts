@@ -3,8 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@openhut/common/api.ts'
 import { AgentTool, Connection, ConnectionAuthorization, ConnectionEvent, ConnectionTool, type UpdateAgentTools, type CreateConnection, type CreateConnectionAuthorization } from '@openhut/common/connections/connection.ts'
 import { request, RequestError } from '@/lib/api-client'
-import { AGENTS_KEY, CONNECTIONS_KEY, GRANTS_KEY } from '@/lib/query-keys'
-import { asked } from '@/features/connections/asked'
+import { CONNECTIONS_KEY, GRANTS_KEY } from '@/lib/query-keys'
 import { navigate } from '@/lib/router'
 
 const CONNECTION_LIST = List(Connection)
@@ -49,7 +48,7 @@ export function openSignInTab(): Window | null {
 }
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-export function useAuthorizeConnection() {
+export function useAuthorizeConnection({ stay = false }: { stay?: boolean } = {}) {
   const client = useQueryClient()
   const live = useRef(true)
   const [url, setUrl] = useState<string>()
@@ -83,6 +82,7 @@ export function useAuthorizeConnection() {
     onSuccess: (done) => {
       if (!done?.connectionId) return
       void client.invalidateQueries({ queryKey: CONNECTIONS_KEY })
+      if (stay) return
       navigate(`/connections/${done.connectionId}?connected=1`, true)
     },
   })
@@ -107,15 +107,6 @@ export function useDeleteConnection(connection: Connection) {
       void client.invalidateQueries({ queryKey: GRANTS_KEY })
     },
   })
-}
-
-export function useBackToAsker() {
-  const client = useQueryClient()
-  return async ({ agentId, name }: { agentId: string; name: string }) => {
-    asked.done({ agentId, line: `Connected ${name}.` })
-    await client.invalidateQueries({ queryKey: AGENTS_KEY })
-    navigate(`/agents/${encodeURIComponent(agentId)}`)
-  }
 }
 
 const agentToolsKey = ({ agentId, connectionId }: { agentId: string; connectionId: string }) => ['agent-tools', agentId, connectionId]

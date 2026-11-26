@@ -56,6 +56,10 @@ export const asks = {
     return answered({ actor, row, status: 'declined', set: { note: said, reply } })
   },
 
+  async get({ actor, id }: { actor: Caller; id: string }): Promise<Ask> {
+    return askOf(await owned({ actor, id }))
+  },
+
   async list({ agentId }: { agentId: string }): Promise<Ask[]> {
     await sweep()
     const rows = await db.selectFrom('ask').selectAll().where('agent_id', '=', agentId).orderBy('created_at', 'desc').orderBy('id', 'desc').limit(50).execute()
@@ -206,9 +210,11 @@ function originOf(row: Pick<Row, 'origin'>): Origin {
 }
 
 function askOf(row: Row): Ask {
+  const answer = kinds()[row.kind]?.answer
+  const form = answer && row.status === 'open' ? z.toJSONSchema(answer, { io: 'input' }) : undefined
   return {
     id: row.id, object: 'ask', kind: row.kind, agentId: row.agent_id, title: row.title, why: row.why, input: JSON.parse(row.input) as Record<string, unknown>,
-    status: row.status, note: row.note, createdAt: row.created_at.toISOString(), answeredAt: row.answered_at ? new Date(row.answered_at).toISOString() : null,
+    status: row.status, note: row.note, ...form && { form }, createdAt: row.created_at.toISOString(), answeredAt: row.answered_at ? new Date(row.answered_at).toISOString() : null,
   }
 }
 

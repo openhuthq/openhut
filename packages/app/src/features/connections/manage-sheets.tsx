@@ -10,8 +10,7 @@ import { Loaded } from '@/components/loaded'
 import { StatusBadge } from '@/components/status-badge'
 import { useAgents, useCreateGrant, useDeleteGrant, useGrants } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
-import { openSignInTab, useAuthorizeConnection, useBackToAsker, useConnectionEvents, useConnections, useConnectionTools, useDeleteConnection } from '@/features/connections/api'
-import { asked } from '@/features/connections/asked'
+import { openSignInTab, useAuthorizeConnection, useConnectionEvents, useConnections, useConnectionTools, useDeleteConnection } from '@/features/connections/api'
 import { connectionBrand, integration, kindNote } from '@/features/connections/catalog'
 import { Section, SetupSheet } from '@/components/kit'
 import { Success } from '@/features/connections/sheet'
@@ -48,12 +47,9 @@ export function ConnectionSheet({ connectionId, connected }: { connectionId: str
 function AccessSheet({ connection, agents }: { connection: Connection; agents: OpenHutAgent[] }) {
   const createGrant = useCreateGrant()
   const editable = agents.filter((agent) => agent.canEdit)
-  const askedBy = editable.find((agent) => agent.id === asked.by(connection.kind))
-  const [picked, setPicked] = useState<string[]>(askedBy ? [askedBy.id] : editable.slice(0, 1).map((agent) => agent.id))
+  const [picked, setPicked] = useState<string[]>(editable.slice(0, 1).map((agent) => agent.id))
   const item = integration(connection.kind)
-  const toAsker = useBackToAsker()
-  const back = () => askedBy && picked.includes(askedBy.id) ? toAsker({ agentId: askedBy.id, name: connection.name }) : close()
-  const done = () => Promise.all(picked.map((agentId) => createGrant.mutateAsync({ agentId, connectionId: connection.id }))).then(back, toastError)
+  const done = () => Promise.all(picked.map((agentId) => createGrant.mutateAsync({ agentId, connectionId: connection.id }))).then(close, toastError)
   return <SetupSheet brand={connectionBrand(connection)} title={`Who can use ${connection.name}`} blurb={item?.short ?? ''} onClose={close}
     foot={<Button variant="primary" disabled={createGrant.isPending} onClick={() => void done()}>Done</Button>}>
     <Success>{successLine(connection)}</Success>

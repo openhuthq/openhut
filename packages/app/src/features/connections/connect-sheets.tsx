@@ -1,10 +1,10 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { GOOGLE_KINDS, SIGN_IN_KINDS } from '@openhut/common/connections/connection.ts'
 import type { Me } from '@openhut/common/team/team.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { openSignInTab, useAuthorizeConnection, useBackToAsker, useConnections, useCreateConnection } from '@/features/connections/api'
+import { openSignInTab, useAuthorizeConnection, useConnections, useCreateConnection } from '@/features/connections/api'
 import { uniqueName, type Integration } from '@/features/connections/catalog'
 import { Field } from '@/features/connections/sheet'
 import { GoogleClientGuide } from '@/features/connections/google-client'
@@ -12,11 +12,6 @@ import { useInstallSettings, useUpdateInstallSettings } from '@/features/setting
 import { useIsAdmin } from '@/features/people/api'
 import { useAskForGithub, useGithubApp } from '@/features/settings/github-app'
 import { CopyButton } from '@/components/copy-button'
-import { useAgents, useCreateGrant } from '@/features/agents/api'
-import { Face } from '@/features/agents/face'
-import { askOf, asked } from '@/features/connections/asked'
-import type { Connection } from '@openhut/common/connections/connection.ts'
-import type { OpenHutAgent } from '@/lib/openhut'
 import { Busy, PILL, SetupSheet } from '@/components/kit'
 import { fieldError, formError } from '@/lib/api-client'
 import { formValues } from '@/lib/form'
@@ -27,25 +22,12 @@ import { cn } from '@/lib/utils'
 const ROLE_SQL = `create role openhut_reader login password 'choose-a-password';
 grant pg_read_all_data to openhut_reader;`
 
-type Ask = { url?: string; name?: string; auth?: string; line?: ReactNode }
-type FlowProps = { me: Me; item: Integration; close: () => void; returned: string | undefined; ask: Ask }
+type FlowProps = { me: Me; item: Integration; close: () => void; returned: string | undefined }
 
 export function ConnectSheet({ me, item }: { me: Me; item: Integration }) {
   const returned = new URLSearchParams(location.search).get('error') ?? undefined
-  const wanted = askOf(location.search)
-  const agents = useAgents()
-  const connections = useConnections()
-  const asker = agents.data?.find((agent) => agent.id === wanted.agentId)
-  useEffect(() => {
-    if (asker) asked.remember({ agentId: asker.id, kind: item.name })
-    else if (!wanted.agentId) asked.forget()
-  }, [asker?.id, wanted.agentId, item.name])
-  if (wanted.agentId && !agents.data) return null
-  const host = asker && wanted.url && URL.canParse(wanted.url) ? new URL(wanted.url).host : undefined
-  const existing = asker ? (connections.data ?? []).filter((connection) => connection.kind === item.name && (item.name !== 'mcp' || connection.account.split(' · ')[0] === host)) : []
-  const ask = asker ? { url: wanted.url, name: wanted.name, auth: wanted.auth, line: <AskedLine asker={asker} host={host} existing={existing} /> } : {}
-  const close = () => { asked.forget(); navigate('/connections') }
-  const props = { me, item, returned, ask, close }
+  const close = () => navigate('/connections')
+  const props = { me, item, returned, close }
   if (GOOGLE_KINDS.some((kind) => kind === item.name)) return <GoogleSheet {...props} />
   switch (item.name) {
     case 'postgres': return <PostgresSheet {...props} />
@@ -56,28 +38,16 @@ export function ConnectSheet({ me, item }: { me: Me; item: Integration }) {
   }
 }
 
-function AskedLine({ asker, host, existing }: { asker: OpenHutAgent; host: string | undefined; existing: Connection[] }) {
-  const grant = useCreateGrant()
-  const back = useBackToAsker()
-  const give = (connection: Connection) => grant.mutateAsync({ agentId: asker.id, connectionId: connection.id })
-    .then(() => back({ agentId: asker.id, name: connection.name }), toastError)
-  return <div className="flex flex-col gap-2">
-    <span className="flex items-center gap-2 text-[13px] text-body"><Face agent={asker} size={20} />{asker.name} asked for this{host && <code className="text-[12.5px] text-ink">{host}</code>}</span>
-    {existing.map((connection) => <span key={connection.id} className="flex items-center gap-2 text-[13px] text-body">Already connected: {connection.name}
-      <Button type="button" variant="secondary" size="sm" disabled={grant.isPending} onClick={() => void give(connection)}>Give {asker.name} access</Button></span>)}
-  </div>
-}
-
 function sheetOf(item: Integration) {
   return { brand: item.name, title: `Connect ${item.title}`, blurb: item.short }
 }
 
 const FOOT = (close: () => void, busy: boolean, label: string) => <><Button type="button" variant="secondary" onClick={close}>Cancel</Button>{busy ? <Busy label="Connecting…" /> : <Button type="submit" variant="primary">{label}</Button>}</>
 
-function PostgresSheet({ item, close, returned, ask }: FlowProps) {
+function PostgresSheet({ item, close, returned }: FlowProps) {
   const create = useCreateConnection()
   const [mode, setMode] = useState('dsn')
-  const name = useNameField(item, ask)
+  const name = useNameField(item)
   return <SetupSheet {...sheetOf(item)} onClose={close} error={formError(create.error, ['dsn', 'name']) ?? returned}
     onSubmit={(event) => {
       const field = formValues(event)
@@ -85,7 +55,6 @@ function PostgresSheet({ item, close, returned, ask }: FlowProps) {
       create.mutate({ kind: 'postgres', name: field('name').trim(), dsn })
     }}
     foot={FOOT(close, create.isPending, 'Test and connect')}>
-    {ask.line}
     {name(fieldError(create.error, 'name'))}
     <ToggleGroup aria-label="How to enter it" className="w-fit" value={mode} onPick={setMode}>
       <ToggleGroupItem className="text-[13px]" value="dsn">Connection string</ToggleGroupItem>
@@ -106,27 +75,26 @@ function PostgresSheet({ item, close, returned, ask }: FlowProps) {
   </SetupSheet>
 }
 
-function ConvexSheet({ item, close, returned, ask }: FlowProps) {
+function ConvexSheet({ item, close, returned }: FlowProps) {
   const create = useCreateConnection()
-  const name = useNameField(item, ask)
+  const name = useNameField(item)
   return <SetupSheet {...sheetOf(item)} onClose={close} error={formError(create.error, ['deployKey', 'name']) ?? returned}
     onSubmit={(event) => {
       const field = formValues(event)
       create.mutate({ kind: 'convex', name: field('name').trim(), deployKey: field('deployKey') })
     }}
     foot={FOOT(close, create.isPending, 'Test and connect')}>
-    {ask.line}
     {name(fieldError(create.error, 'name'))}
     <Field label="Deploy key" error={fieldError(create.error, 'deployKey')}><Input mono name="deployKey" type="password" required placeholder="prod:happy-otter-123|eyJ…" autoComplete="off" /></Field>
     <span className="flex items-center gap-2 text-[12px] text-mute">From Settings › Deploy keys. Convex’s official MCP server runs on this computer with it.<a className={cn(buttonVariants({ variant: 'secondary' }), PILL)} href="https://dashboard.convex.dev" target="_blank" rel="noreferrer">Open Convex</a></span>
   </SetupSheet>
 }
 
-function McpSheet({ item, close, returned, ask }: FlowProps) {
+function McpSheet({ item, close, returned }: FlowProps) {
   const create = useCreateConnection()
   const authorize = useAuthorizeConnection()
-  const [auth, setAuth] = useState({ sign_in: 'oauth', public: 'none' }[ask.auth ?? ''] ?? 'header')
-  const name = useNameField(item, ask)
+  const [auth, setAuth] = useState('header')
+  const name = useNameField(item)
   const error = create.error ?? authorize.error
   return <SetupSheet {...sheetOf(item)} onClose={close} error={formError(error, ['url', 'header', 'name']) ?? returned}
     onSubmit={(event) => {
@@ -136,9 +104,8 @@ function McpSheet({ item, close, returned, ask }: FlowProps) {
       create.mutate({ kind: 'mcp', ...server, header: auth === 'header' ? `${field('headerName')}: ${field('headerValue')}` : undefined })
     }}
     foot={FOOT(close, create.isPending || authorize.isPending, 'Connect')}>
-    {ask.line}
     {name(fieldError(error, 'name'))}
-    <Field label="URL" error={fieldError(error, 'url')}><Input mono name="url" type="url" required defaultValue={ask.url} placeholder="https://mcp.example.com/mcp" autoComplete="off" /></Field>
+    <Field label="URL" error={fieldError(error, 'url')}><Input mono name="url" type="url" required placeholder="https://mcp.example.com/mcp" autoComplete="off" /></Field>
     <ToggleGroup aria-label="How it signs in" className="w-fit" value={auth} onPick={setAuth}>
       <ToggleGroupItem className="text-[13px]" value="none">Public</ToggleGroupItem>
       <ToggleGroupItem className="text-[13px]" value="header">Header</ToggleGroupItem>
@@ -152,7 +119,7 @@ function McpSheet({ item, close, returned, ask }: FlowProps) {
 }
 
 function GoogleSheet(props: FlowProps) {
-  const { item, close, returned, ask } = props
+  const { item, close, returned } = props
   const admin = useIsAdmin()
   const settings = useInstallSettings(admin)
   const google = settings.data?.google
@@ -168,13 +135,12 @@ function GoogleSheet(props: FlowProps) {
       save.mutate({ googleClientId: field('clientId').trim(), googleClientSecret: field('clientSecret').trim() }, { onSuccess: () => quick.connect(item, tab), onError: () => tab?.close() })
     }}
     foot={FOOT(close, save.isPending || quick.pending, 'Save and connect')}>
-    {ask.line}
     <GoogleClientGuide redirectUris={[google.connectionsRedirectUri, google.signInRedirectUri]} error={save.error} apis />
   </SetupSheet>
 }
 
 function GitHubSheet(props: FlowProps) {
-  const { item, close, ask } = props
+  const { item, close } = props
   const admin = useIsAdmin()
   const info = useGithubApp().data
   const askAdmin = useAskForGithub()
@@ -184,15 +150,15 @@ function GitHubSheet(props: FlowProps) {
     foot={<><Button type="button" variant="secondary" onClick={close}>Cancel</Button>
       {admin ? <Button type="button" variant="primary" onClick={() => navigate('/settings/admin?open=github')}>Set up GitHub</Button>
         : info.asked ? <span className="inline-flex h-8 items-center gap-1.5 px-1 text-[13px] text-mute"><i className="size-1.5 rounded-full bg-amber" />Asked. Waiting for an admin to set up GitHub</span>
-          : <Button type="button" variant="primary" disabled={askAdmin.isPending} onClick={() => askAdmin.mutate(undefined)}>Ask an admin</Button>}</>}>{ask.line}</SetupSheet>
+          : <Button type="button" variant="primary" disabled={askAdmin.isPending} onClick={() => askAdmin.mutate(undefined)}>Ask an admin</Button>}</>} />
 }
 
-function QuickSheet({ item, close, returned, ask }: FlowProps) {
+function QuickSheet({ item, close, returned }: FlowProps) {
   const quick = useQuickConnect()
   const again = quick.error || returned ? 'Try again' : 'Connect'
   return <SetupSheet {...sheetOf(item)} onClose={close} error={formError(quick.error, []) ?? returned}
     foot={<><Button type="button" variant="secondary" onClick={close}>Cancel</Button>
-      <Button type="button" variant="primary" disabled={quick.pending} onClick={() => quick.connect(item)}>{quick.pending ? 'Connecting…' : again}</Button></>}>{ask.line}</SetupSheet>
+      <Button type="button" variant="primary" disabled={quick.pending} onClick={() => quick.connect(item)}>{quick.pending ? 'Connecting…' : again}</Button></>} />
 }
 
 export function useQuickConnect() {
@@ -212,7 +178,7 @@ export function useQuickConnect() {
 
 const QUICK = new Set(['posthog', 'linear', 'github', 'excalidraw'])
 
-function useNameField(item: Integration, ask: Ask) {
+function useNameField(item: Integration) {
   const taken = (useConnections().data ?? []).map((connection) => connection.name)
-  return (error: string | undefined) => <Field label="Name" error={error}><Input name="name" required defaultValue={ask.name ?? uniqueName({ title: item.title, taken })} maxLength={60} autoComplete="off" /></Field>
+  return (error: string | undefined) => <Field label="Name" error={error}><Input name="name" required defaultValue={uniqueName({ title: item.title, taken })} maxLength={60} autoComplete="off" /></Field>
 }

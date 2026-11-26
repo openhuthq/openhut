@@ -1,10 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent, type ReactElement, type ReactNode } from 'react'
 import * as z from 'zod/mini'
 import { useChat } from '@ai-sdk/react'
-import { useQueryClient } from '@tanstack/react-query'
-import { asked } from '@/features/connections/asked'
-import { AGENTS_KEY } from '@/lib/query-keys'
-import { usePath } from '@/lib/router'
 import { DefaultChatTransport, type UIMessage } from 'ai'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -37,7 +33,7 @@ import { ConfirmIcon } from '@/components/confirm-button'
 import { legacyWork, noReplyOf } from '@/features/threads/steps'
 import { RetryButton, WorkLine } from '@/features/threads/work'
 import { CardReply, MessageCard } from '@/features/threads/card'
-import { ChangeCards, PendingElsewhere } from '@/features/agents/change-requests'
+import { AskCards, PendingAsks } from '@/features/asks/card'
 import { copyText } from '@/lib/clipboard'
 import { plainError, toast, toastError, toastFailed } from '@/lib/toast'
 import { usePhoneBack } from '@/app/phone-page'
@@ -76,19 +72,6 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
     void chat.sendMessage(files.length ? { text, files } : { text })
     attachments.clear()
   }
-  const path = usePath()
-  const client = useQueryClient()
-  useEffect(() => {
-    const line = asked.said(agent.id)
-    if (!line || busy) return
-    if (agent.health !== 'answering') {
-      const timer = setTimeout(() => void client.invalidateQueries({ queryKey: AGENTS_KEY }), 1_500)
-      return () => clearTimeout(timer)
-    }
-    asked.sent(agent.id)
-    touch(thread)
-    void chat.sendMessage({ text: line })
-  }, [agent.id, agent.health, busy, path])
   const shown = agent.runsHere ? chat.messages : chat.messages.filter((message) => message.role === 'user' || message.parts.some((part) => part.type !== 'step-start'))
   const last = shown.at(-1)
   const clear = agent.canEdit && chat.messages.length > 0 && !busy && !attachments.uploading && <ClearChat agent={agent} threadId={thread.id} attachments={attachments} />
@@ -98,7 +81,7 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
       {shown.map((message) => <Message key={message.id} agent={agent} message={message} live={busy && message === last} onRetry={!busy && message === last ? () => void chat.regenerate() : undefined} />)}
     </> : <ChatEmpty agent={agent} />}
     {chat.status === 'submitted' && last?.role === 'user' && <Message agent={agent} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
-    <PendingElsewhere agent={agent} shown={new Set(chat.messages.flatMap(changesOf))} />
+    <PendingAsks agent={agent} shown={new Set(chat.messages.flatMap(changesOf))} />
     {!agent.runsHere && chat.status !== 'submitted' && last?.role === 'user' && !troubleOf(agent) && <p className="m-0 text-right text-[12.5px] text-mute">{agent.runsNowhere ? `No computer runs ${agent.name} now. ${agent.canManage ? 'Run it here to get an answer.' : `Ask an admin to run ${agent.name} on their computer.`}` : `Sent to ${agent.runsOnName ?? 'your other computer'}. ${agent.name} answers when it’s on.`}</p>}
     {chat.error && !(last && workOf(last)?.error) && <Alert variant="error-outline" role="alert"><span>{plainError(chat.error.message)}</span><Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={() => void chat.regenerate()}>Try again</Button></Alert>}
   </ChatFrame></CardReply></ChatFiles>
@@ -300,7 +283,7 @@ function AgentReply({ agent, message, live, onRetry }: { agent: Agent; message: 
       {blocks.map((block, index) => block.type === 'text'
         ? <div key={index} className="msg-t"><Markdown remarkPlugins={plugins} components={{ a: ChatLink, code: FileCode }}>{block.text}</Markdown></div>
         : hasSpec && <MessageCard key={index} spec={spec} loading={live} />)}
-      {changesOf(message).length > 0 && <ChangeCards agent={agent} ids={changesOf(message)} />}
+      {changesOf(message).length > 0 && <AskCards agent={agent} ids={changesOf(message)} />}
       {live && !blocks.length && !work?.calls.some((call) => call.status === 'running') && <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>}
       {!live && !blocks.length && <span className="flex flex-wrap items-center gap-2 text-[13.5px] text-mute-2 italic">{work ? noReplyOf(work) : 'No reply.'}{work?.error !== undefined && onRetry && <RetryButton onRetry={onRetry} />}</span>}
     </div></CopyMenu>

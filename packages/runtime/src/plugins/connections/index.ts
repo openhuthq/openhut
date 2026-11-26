@@ -1,12 +1,10 @@
 import * as z from 'zod'
-import * as mini from 'zod/mini'
-import { askCard, MCP_AUTH } from '@openhut/common/asks/ask.ts'
-import { ConnectionKind, ProposedConnection } from '@openhut/common/connections/connection.ts'
+import { CONNECTION_TITLES, ConnectionKind, type CreateConnection } from '@openhut/common/connections/connection.ts'
 import { defineAsk, definePlugin, defineTool } from '../../core/plugin.ts'
 import { agentService } from '../../server/agents/agent-service.ts'
 import { permissions } from '../../server/permissions/permissions.ts'
 import { db } from '../../server/platform/db.ts'
-import { describeIssues, HttpError } from '../../server/platform/http-error.ts'
+import { HttpError } from '../../server/platform/http-error.ts'
 import type { Caller } from '../../server/team/identity.ts'
 import { connectionService, type AgentTool } from '../../server/connections/connection-service.ts'
 import { connectionAuthorizationController, connectionController, connectionEventController, connectionToolController } from '../../server/connections/connection-controller.ts'
@@ -14,11 +12,19 @@ import { grantController } from '../../server/agents/agent-controller.ts'
 import { permissionController } from '../../server/permissions/permission-controller.ts'
 import { createTables } from './tables.ts'
 
-const GROUPS = z.array(z.object({
-  group: z.enum(['read', 'create', 'update', 'delete', 'other']).describe('other: tools the app doesn\'t label, and one generic tool that runs any other tool (like mcp_invoke_tool), so it can do anything.'),
-  label: z.string().min(1).max(80).describe('What these tools do here, in plain words: "Read database info".'),
-  permission: z.enum(['allow', 'ask', 'deny']).describe('allow runs without asking, ask waits for their OK each time, deny never runs. Usually: read allow, create and update ask, delete deny.'),
-})).min(1).max(5)
+const STATE = z.enum(['allow', 'ask', 'deny'])
+const PERMISSIONS = z.object({ read: STATE.optional(), create: STATE.optional(), update: STATE.optional(), delete: STATE.optional(), other: STATE.optional() })
+
+const ConnectApp = z.object({
+  app: z.enum(ConnectionKind.options),
+  url: z.url({ protocol: /^https?$/ }).max(500).optional().describe('For app mcp: the official remote MCP server, like https://mcp.digitalocean.com/mcp.'),
+  name: z.string().min(1).max(60).optional().describe('For app mcp: what the app is called, like DigitalOcean.'),
+  token: z.string().min(1).max(60).optional().describe('For app mcp without a sign-in: what the token is called, like DigitalOcean token.'),
+  guide: z.string().min(1).max(300).optional().describe('For a token: one or two plain sentences, where to make it and what access to give.'),
+  link: z.url({ protocol: /^https$/ }).max(500).optional().describe('For a token: the page where they make it.'),
+  permissions: PERMISSIONS.optional().describe('What you suggest it may do on its own for each kind of tool. Usually read allow, create and update ask, delete deny.'),
+}).refine((input) => input.app === 'mcp' || (input.url ?? input.name ?? input.token) === undefined, 'Only app mcp takes a url, a name or a token.')
+  .refine((input) => input.app !== 'mcp' || input.url !== undefined, 'Send the MCP server\'s url with app mcp.')
 
 export const connections = definePlugin({
   name: 'connections',
@@ -33,24 +39,6 @@ export const connections = definePlugin({
   }),
   hermes: ({ connections: list }) => ({ prompt: connectedApps(list) }),
   tools: {
-    ask_to_connect: defineTool({
-      description: 'Ask the person to connect the apps you need and can\'t reach yet, all in one card. You get the card: put it in your reply.',
-      input: {
-        why: z.string().min(1).max(300).describe('One or two sentences for the person: what the apps are for, and how to make the access if they need to (a read-only role, a token\'s scopes).'),
-        apps: z.array(z.object({
-          app: z.enum(ConnectionKind.options),
-          line: z.string().min(1).max(80).optional().describe('What you\'ll do with it, a few plain words: "open tickets for the SRE team".'),
-          url: z.url({ protocol: /^https$/ }).max(500).optional().describe('For app mcp: the server\'s URL.'),
-          name: z.string().min(1).max(60).optional().describe('For app mcp: what to call it, like Cloudflare.'),
-          auth: z.enum(MCP_AUTH).optional().describe('For app mcp: how the server lets you in. header for a token, sign_in for OAuth (Cloudflare\'s servers, like https://observability.mcp.cloudflare.com/mcp), public for none.'),
-        })).min(1).max(8),
-      },
-      run: async ({ why, apps }, { agent }) => {
-        if (apps.some(({ app, url, name, auth }) => (url || name || auth) && app !== 'mcp')) return { text: 'Only app mcp takes a url, a name or auth. Leave them out.', isError: true }
-        if (apps.some(({ app, url }) => app === 'mcp' && !url)) return { text: 'Send the MCP server\'s url with app mcp.', isError: true }
-        return `Put this card in your reply, after a sentence on what you need:\n\n${askCard({ asks: apps.map((each) => ({ ...each, agentId: agent.id })), why })}`
-      },
-    }),
     list_tools: defineTool({
       description: 'List the tools you may call, one line each.',
       input: { app: z.string().max(40).optional() },
@@ -76,38 +64,25 @@ export const connections = definePlugin({
     }),
   },
   asks: {
-    request_connection: defineAsk({
-      input: z.object({ connectionId: z.string().max(40) }),
-      tool: 'Ask for a connection that already exists in OpenHut (get_self lists them). For an app nobody connected yet, use ask_to_connect.',
-      title: async ({ input }) => {
-        const connection = await db.selectFrom('connection').select('name').where('id', '=', input.connectionId).executeTakeFirst()
-        if (!connection) throw new HttpError(404, `There's no connection ${input.connectionId}. Call get_self to see the ones you can ask for.`)
-        return `Use ${connection.name}`
-      },
-      run: async ({ actor, ask: { agentId, input } }) => {
-        await agentService.createGrant({ actor, agentId, connectionId: input.connectionId })
-        return 'You have already restarted with it.'
-      },
-    }),
-    propose_connection: defineAsk({
-      input: z.object({
-        name: z.string().min(1).max(60).describe('The app, like DigitalOcean.'),
-        line: z.string().max(120).optional().describe('What it is to the person, a few plain words: "where your database runs".'),
-        url: z.url({ protocol: /^https$/ }).max(500).describe('The official remote MCP server, like https://mcp.digitalocean.com/mcp.'),
-        token: z.object({
-          label: z.string().min(1).max(60).describe('What the token is called, like DigitalOcean token.'),
-          guide: z.string().min(1).max(300).describe('One or two plain sentences: where to make it and what access to give.'),
-          link: z.url({ protocol: /^https$/ }).max(500).describe('The page where they make it.'),
-          scopes: z.array(z.string().max(100)).max(30).optional().describe('The scopes it needs, as the app names them.'),
-        }),
-        groups: GROUPS.describe('One entry per kind of tool the job needs.'),
-      }),
-      answer: z.object({ groups: GROUPS.optional(), key: z.string().max(4000).optional().meta({ secret: true }) }),
-      tool: 'Propose connecting an app that isn\'t on ask_to_connect\'s list, through its official remote MCP server that takes a token. Your owner sees a card, makes the token with your guide and pastes it in OpenHut; you never see it. Say what each kind of tool may do. If they decline and chose the browser, do this one job in your browser and don\'t keep the login; if they\'ll set it up themselves, give them short numbered steps: where to make the token, then Apps in OpenHut to add it, then to give you access.',
-      title: ({ input }) => `Connect ${proposalOf(input).name}`,
+    connect_app: defineAsk({
+      input: ConnectApp,
+      answer: z.object({
+        connectionId: z.string().max(40).optional(),
+        fields: z.record(z.string(), z.string().max(4000)).optional(),
+        permissions: PERMISSIONS.optional(),
+      }).refine((answer) => answer.connectionId !== undefined || answer.fields !== undefined, 'Pick a connection or fill in its fields.'),
+      tool: 'Ask your owner to connect an app you need and can\'t reach yet: one call per app, all in the same turn, then stop. They connect it in OpenHut (sign in, a key or a connection they already have) and you get access with the permissions they pick; you never see a key. For an app with an official remote MCP server, send app mcp with its url, name and the token\'s label and guide. The answer comes back as a message. If they decline and chose the browser, do this one job in your browser and don\'t keep the login; if they\'ll set it up themselves, give them short numbered steps.',
+      title: ({ input }) => `Connect ${appName(input)}`,
       run: async ({ actor, ask: { agentId, input }, answer }) => {
-        await connectProposed({ actor, agentId, proposal: proposalOf(input), token: answer.key })
-        return 'You have already restarted with it.'
+        const connection = answer.connectionId ? await connectionService.get({ actor, id: answer.connectionId }) : await connectionService.create({ actor, ...keyed({ input, fields: answer.fields ?? {} }) })
+        if (connection.kind !== input.app) throw new HttpError(400, `${connection.name} isn't a ${CONNECTION_TITLES[input.app]} connection.`)
+        const specs = answer.permissions ? await connectionService.specs({ actor, connectionId: connection.id }).catch(() => []) : []
+        for (const [group, state] of Object.entries(answer.permissions ?? {})) {
+          const tools = specs.filter((spec) => permissions.groupOf(spec) === group).map((spec) => spec.name)
+          if (tools.length) await permissions.set({ actor, agentId, connectionId: connection.id, tools, state })
+        }
+        await agentService.createGrant({ actor, agentId, connectionId: connection.id })
+        return `You can use ${connection.name} now (${connection.id}). Call list_tools to see its tools.`
       },
     }),
     call_tool: defineAsk({
@@ -132,28 +107,21 @@ export const connections = definePlugin({
   },
 })
 
-function proposalOf(input: object): ProposedConnection {
-  const parsed = mini.safeParse(ProposedConnection, input)
-  if (!parsed.success) throw new HttpError(400, `That proposal isn't valid. ${describeIssues(parsed.error.issues)}`)
-  return parsed.data
+function appName(input: z.infer<typeof ConnectApp>): string {
+  return input.name ?? CONNECTION_TITLES[input.app]
 }
 
-async function connectProposed({ actor, agentId, proposal, token }: { actor: Caller; agentId: string; proposal: ProposedConnection; token?: string }): Promise<void> {
-  const key = token?.trim()
-  if (!key) throw new HttpError(400, `Paste the ${proposal.token.label}.`, { param: 'token' })
-  if (/\s/.test(key)) throw new HttpError(400, `Paste the ${proposal.token.label} as it is, with no spaces.`, { param: 'token' })
-  const connection = await connectionService.create({ actor, kind: 'mcp', name: proposal.name, url: proposal.url, header: `Authorization: Bearer ${key}` })
-  try {
-    const specs = await connectionService.specs({ actor, connectionId: connection.id })
-    for (const { group, permission } of proposal.groups) {
-      const tools = specs.filter((spec) => permissions.groupOf(spec) === group).map((spec) => spec.name)
-      if (tools.length) await permissions.set({ actor, agentId, connectionId: connection.id, tools, state: permission })
-    }
-    await agentService.createGrant({ actor, agentId, connectionId: connection.id })
-  } catch (err) {
-    await connectionService.delete({ actor, id: connection.id })
-    throw err
+function keyed({ input, fields }: { input: z.infer<typeof ConnectApp>; fields: Record<string, string> }): CreateConnection {
+  const name = appName(input)
+  if (input.app === 'mcp') {
+    const token = fields.token?.trim()
+    if (token !== undefined && (!token || /\s/.test(token))) throw new HttpError(400, `Paste the ${input.token ?? 'token'} as it is, with no spaces.`, { param: 'token' })
+    return { kind: 'mcp', name, url: input.url, header: token ? `Authorization: Bearer ${token}` : fields.header }
   }
+  if (input.app === 'postgres') return { kind: 'postgres', name, dsn: fields.dsn }
+  if (input.app === 'convex') return { kind: 'convex', name, deployKey: fields.deployKey }
+  if (input.app === 'excalidraw') return { kind: 'excalidraw', name }
+  throw new HttpError(400, `${CONNECTION_TITLES[input.app]} connects by signing in, not with fields.`)
 }
 
 export function toolList({ granted, app }: { granted: AgentTool[]; app: string | undefined }): string {

@@ -23,7 +23,7 @@ export function testModel({ path, body, res }: { path: string; body: unknown; re
   const toolNames = (request.tools ?? []).map((tool) => tool.function?.name ?? tool.name).filter((name) => name !== undefined)
   const callTool = toolNames.find((name) => name.endsWith('call_tool'))
   log.info({ event: 'test_llm.request', messages: messages.length, lastRole: last.role, tools: toolNames.length, callTool })
-  const reply = replyTo({ last, callTool, shell: toolNames.find((name) => name === 'terminal' || name === 'Bash'), schedule: toolNames.find((name) => name.endsWith('schedule_routine')), ask: toolNames.find((name) => name.endsWith('ask_to_connect')), names: toolNames })
+  const reply = replyTo({ last, callTool, shell: toolNames.find((name) => name === 'terminal' || name === 'Bash'), schedule: toolNames.find((name) => name.endsWith('schedule_routine')), names: toolNames })
   const base = { id: `cmpl-${Date.now()}`, created: Math.floor(Date.now() / 1000), model: request.model ?? 'openhut-test' }
   const calls = reply.tools ?? (reply.tool ? [reply.tool] : [])
   const toolCalls = calls.length ? calls.map((tool, index) => ({ id: `call_${Date.now()}_${index}`, type: 'function', function: { name: tool.name, arguments: tool.args } })) : undefined
@@ -53,9 +53,7 @@ export function testAnthropic({ req, body, res }: { req: IncomingMessage; body: 
     .end(JSON.stringify({ id: `msg_${Date.now()}`, type: 'message', role: 'assistant', model: request.model ?? 'openhut-test', content: [{ type: 'text', text }], stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 } }))
 }
 
-function replyTo({ last, callTool, shell, schedule, ask, names }: { last: { role?: string; content?: unknown }; callTool: string | undefined; shell: string | undefined; schedule: string | undefined; ask: string | undefined; names: string[] }): { content?: string; tool?: { name: string; args: string }; tools?: { name: string; args: string }[] } {
-  const handed = last.role === 'tool' ? /```spec\\n((?:[^`\\]|\\.)*?)```/.exec(asText(last.content))?.[1] : undefined
-  if (handed) return { content: `Here is what I need.\n\n\`\`\`spec\n${JSON.parse(`"${handed}"`)}\`\`\`` }
+function replyTo({ last, callTool, shell, schedule, names }: { last: { role?: string; content?: unknown }; callTool: string | undefined; shell: string | undefined; schedule: string | undefined; names: string[] }): { content?: string; tool?: { name: string; args: string }; tools?: { name: string; args: string }[] } {
   if (last.role === 'tool') return { content: `TOOL RESULT: ${asText(last.content).slice(0, 20_000)}` }
   const routine = /Routine rt_\w+: time for "([^"]+)"/.exec(asText(last.content))?.[1]
   if (routine) return { content: `ROUTINE RAN: ${routine}` }
@@ -67,8 +65,6 @@ function replyTo({ last, callTool, shell, schedule, ask, names }: { last: { role
   const direct = DirectCall.safeParse(jsonOf(/call:\s*(\{[\s\S]+\})\s*$/i.exec(lastText(last.content))?.[1])).data
   const named = direct && names.find((name) => name.endsWith(direct.tool))
   if (direct && named) return { tool: { name: named, args: JSON.stringify(direct.args ?? {}) } }
-  const asked = /ask:\s*(\{[\s\S]+\})\s*$/i.exec(lastText(last.content))?.[1]
-  if (asked && ask) return { tool: { name: ask, args: asked } }
   const sql = /sql:\s*([\s\S]+?)\s*$/i.exec(asText(last.content))?.[1]
   if (sql && callTool) return { tool: { name: callTool, args: JSON.stringify({ reason: 'The user asked for data', name: 'postgres_query', arguments: { sql } }) } }
   const command = /browser:\s*([a-z][a-z -]*(?:\s+[^\s'"`$;&|<>\\]+)*)\s*"?\s*$/i.exec(lastText(last.content))?.[1]
