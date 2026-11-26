@@ -51,7 +51,7 @@ export const ToolCall = z.object({
   output: z.optional(z.string()),
   error: z.optional(z.string()),
   ms: z.number(),
-  status: z.enum(['running', 'done', 'failed', 'blocked', 'asked', 'declined']),
+  status: z.enum(['running', 'done', 'failed', 'blocked', 'asked']),
 })
 export type ToolCall = z.infer<typeof ToolCall>
 

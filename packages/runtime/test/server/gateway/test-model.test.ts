@@ -20,3 +20,11 @@ test('the test model echoes an asks wake in full, so the e2e can read every answ
   const wake = `[OpenHut asks:wk_abcdefgh] Your owner answered 2 of your asks:\n- ${'x'.repeat(300)}\n- Last.`
   assert.equal(reply(`Note: ${wake}`).content, `ECHO: ${wake}`)
 })
+
+test('the test model answers card: with a reply that holds a card, in a chat or in an answered ask', () => {
+  for (const said of ['card: Droplet', '[OpenHut asks:wk_abcdefgh] Your owner answered your ask:\n- You can use card: Droplet now (cn_x).']) {
+    const content: string = reply(said).content
+    assert.match(content, /^Here it is\.\n\n```spec\n/)
+    assert.match(content, /"title":"Droplet"/)
+  }
+})

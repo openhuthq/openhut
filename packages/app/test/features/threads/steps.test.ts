@@ -1,8 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import type { Ask } from '@openhut/common/asks/ask.ts'
 import type { ToolCall } from '@openhut/common/threads/thread.ts'
-import { attachCalls, durationOf, kindOf, legacyWork, noReplyOf, settleAsks, stepsOf, summaryOf, troubleOf } from '../../../src/features/threads/steps.ts'
+import { attachCalls, durationOf, errorUnder, kindOf, legacyWork, splitLive, withoutCards, stepsOf, summaryOf, troubleOf } from '../../../src/features/threads/steps.ts'
 
 test('pairs Hermes start and finish events, merges repeats and names call_tool by its app tool', () => {
   const steps = stepsOf([
@@ -60,13 +59,9 @@ test('the summary is past tense, grouped, changes first, at most two clauses and
 test('failed and blocked calls are counted apart and left out of the sentence; a turn of only those says what it tried', () => {
   const work = { calls: [call('Listed projects in DigitalOcean'), call('Listed droplets in DigitalOcean', { status: 'blocked', label: 'List droplets in DigitalOcean', error: 'Set to Never in DigitalOcean.' }), call('Queried Postgres', { status: 'failed', error: 'connect ETIMEDOUT' })], ms: 0 }
   assert.equal(summaryOf(work), 'Listed projects in DigitalOcean')
-  assert.deepEqual(troubleOf(work), { failed: 1, blocked: 1, asked: 0, declined: 0 })
+  assert.deepEqual(troubleOf(work), { failed: 1, blocked: 1 })
   const tried = { calls: [call('Queried Postgres', { status: 'failed', error: 'connect ETIMEDOUT' })], ms: 0 }
   assert.equal(summaryOf(tried), 'Tried to query Postgres')
-  assert.equal(noReplyOf(tried), 'No reply — connect ETIMEDOUT')
-  assert.equal(noReplyOf({ ...tried, error: 'Database\'s model failed: overloaded' }), 'No reply — Database\'s model failed: overloaded')
-  assert.equal(noReplyOf({ calls: [call('Queried Postgres')], ms: 0 }), 'No reply — it stopped without an answer.')
-  assert.deepEqual(troubleOf({ calls: [call('Asked to add a channel', { status: 'asked' })], ms: 0 }), { failed: 0, blocked: 0, asked: 1, declined: 0 })
 })
 
 test('durations read as seconds or minutes', () => {
@@ -87,11 +82,31 @@ test('older replies (tool chips plus gateway calls) become the same work, one ca
   assert.equal(legacyWork({ events: [{ tool: 'get_self' }], calls: [] }), undefined)
 })
 
-test('an asked call follows its ask: done once answered, declined when declined or expired, waiting while open', () => {
-  const call = (id: string, tool: string, app: string | null = null): ToolCall => ({ id, tool, app, kind: 'other', label: 'Connect an app', past: 'Connected an app', ms: 1, status: 'asked' })
-  const ask = (id: string, kind: string, status: Ask['status'], input: Record<string, unknown> = {}): Ask => ({ id, object: 'ask', kind, agentId: 'ag', title: '', why: '', input, status, note: null, createdAt: '2026-11-26T00:00:00Z', answeredAt: null })
-  const work = { ms: 1, calls: [call('a', 'connect_app'), call('b', 'connect_app'), call('c', 'delete_item', 'Items'), call('d', 'update_self')] }
-  const settled = settleAsks({ work, asks: [ask('k1', 'connect_app', 'done'), ask('k2', 'connect_app', 'declined'), ask('k3', 'call_tool', 'expired', { tool: 'delete_item' })] })
-  assert.deepEqual(settled.calls.map((each) => each.status), ['done', 'declined', 'declined', 'asked'])
-  assert.deepEqual(troubleOf(settled), { failed: 0, blocked: 0, asked: 1, declined: 2 })
+test('a call whose ask shows as its own card is left out of the work line; a turn of only those has no line', () => {
+  const call = (id: string, status: ToolCall['status']): ToolCall => ({ id, tool: id, app: null, kind: 'other', label: id, past: id, ms: 1, status })
+  const work = { ms: 1, calls: [call('connect_app', 'asked'), call('terminal', 'done'), call('call_tool', 'asked')] }
+  assert.deepEqual(withoutCards(work)?.calls.map((each) => each.tool), ['terminal'])
+  assert.equal(summaryOf(withoutCards(work) ?? work), 'terminal')
+  assert.equal(withoutCards({ ms: 1, calls: [call('connect_app', 'asked'), call('update_self', 'asked')] }), undefined)
+  assert.equal(withoutCards({ ms: 1, calls: [call('connect_app', 'asked')], error: 'Model failed' })?.error, 'Model failed')
+})
+
+test('while the turn runs, the finished calls stay folded and only the newest running call is the live line', () => {
+  const call = (id: string, status: ToolCall['status']): ToolCall => ({ id, tool: 'terminal', app: null, kind: 'other', label: `Run ${id}`, past: `Ran ${id}`, ms: 1, status })
+  const work = { ms: 1, calls: [call('a', 'done'), call('b', 'running'), call('c', 'running')] }
+  const during = splitLive({ work, live: true })
+  assert.equal(during.running?.id, 'c')
+  assert.deepEqual(during.finished.calls.map((each) => each.id), ['a'])
+  const after = splitLive({ work, live: false })
+  assert.equal(after.running, undefined)
+  assert.equal(after.finished, work)
+})
+
+test('a turn with nothing to say shows no "No reply" line; a failed turn shows its error under the reply unless the work line already holds it', () => {
+  const ran: ToolCall = { id: 'a', tool: 'terminal', app: null, kind: 'other', label: 'Run a command', past: 'Ran a command', ms: 1, status: 'done' }
+  assert.equal(errorUnder({ work: undefined, answered: false }), undefined)
+  assert.equal(errorUnder({ work: { ms: 1, calls: [ran] }, answered: false }), undefined)
+  assert.equal(errorUnder({ work: { ms: 1, calls: [ran], error: 'Overloaded' }, answered: false }), 'Overloaded')
+  assert.equal(errorUnder({ work: { ms: 1, calls: [ran], error: 'Overloaded' }, answered: true }), undefined)
+  assert.equal(errorUnder({ work: { ms: 1, calls: [], error: 'Overloaded' }, answered: true }), 'Overloaded')
 })

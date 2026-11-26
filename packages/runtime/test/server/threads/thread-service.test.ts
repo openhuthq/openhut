@@ -79,7 +79,7 @@ answerErrors(app)
 app.setValidatorCompiler(validatorCompiler)
 await app.register(threadController, { prefix: '/api/threads' })
 const as = () => ({ authorization: 'Bearer test-key' })
-const messagesOf = async (id: string) => (await app.inject({ method: 'GET', url: `/api/threads/${id}`, headers: as() })).json().messages as { id: string; role: string; parts: { type: string; text?: string }[]; metadata?: { author: string } }[]
+const messagesOf = async (id: string) => (await app.inject({ method: 'GET', url: `/api/threads/${id}`, headers: as() })).json().messages as { id: string; role: string; parts: { type: string; text?: string; data?: { calls?: { past: string }[] } }[]; metadata?: { author?: string; wake?: boolean } }[]
 const say = (threadId: string, text: string) => app.inject({
   method: 'POST', url: `/api/threads/${threadId}/chat`, headers: as(),
   payload: { trigger: 'submit-message', message: { id: `m${Date.now()}`, role: 'user', parts: [{ type: 'text', text }] } },
@@ -377,12 +377,23 @@ test('messages sort by their ids, and a routine\'s output becomes a message', as
   const before = await updatedAt()
   assert.equal(await threadService.runRoutine({ agentId: 'ag_chatsort', text: 'Daily summary' }), 'Let me check.214 orders.')
   const last = (await messagesOf('ag_chatsort')).at(-1)
-  assert.deepEqual([last?.role, last?.parts[0].text], ['assistant', 'Let me check.214 orders.'])
+  assert.deepEqual([last?.role, last?.parts.filter((part: { type: string }) => part.type === 'text').map((part) => part.text).join('')], ['assistant', 'Let me check.214 orders.'])
+  assert.equal(last?.parts.find((part: { type: string }) => part.type === 'data-work')?.data?.calls?.[0].past, 'Searched the web')
   assert.equal(await updatedAt(), before, 'a reply to a hidden wake doesn\'t move the agent up the sidebar')
   await say('ag_chatsort', 'a person writes')
   assert.notEqual(await updatedAt(), before)
 })
 
+test('a card in a wake reply is saved as a card, like a live reply, never as raw JSON', async () => {
+  await db.insertInto('agent').values({ id: 'ag_chatwake', name: 'Waker', owner_id: 'usr_chatownr', instructions: '# Waker', model: 'sonnet', net: 27, channel_key: seal('k'.repeat(48)), wanted: 'running', workspace: WS }).execute()
+  assert.match(await threadService.runRoutine({ agentId: 'ag_chatwake', text: 'card' }), /^Deploy is ready\.\s+Approve\?$/)
+  const last = (await messagesOf('ag_chatwake')).at(-1)
+  assert.deepEqual(last?.parts.map((part: { type: string }) => part.type), ['text', 'data-spec', 'text'])
+  assert.deepEqual(last?.parts[1].data, { type: 'flat', spec: { root: 'c', elements: { c: { type: 'Card', props: { title: 'Deploy' } } } } })
+  assert.doesNotMatch(JSON.stringify(last?.parts.filter((part: { type: string }) => part.type === 'text')), /```spec|"op"/)
+  assert.equal(last?.metadata?.wake, true)
+  await assert.rejects(threadService.runRoutine({ agentId: 'ag_chatwake', text: 'model down' }), /isn't ready/)
+})
 
 test('on a just-booted computer (a woken Cloud computer) a message waits for its agent to come up, then gets the reply', async (t) => {
   const port = (hermes.address() as AddressInfo).port

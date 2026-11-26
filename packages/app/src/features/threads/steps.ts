@@ -1,4 +1,3 @@
-import type { Ask } from '@openhut/common/asks/ask.ts'
 import type { ChatCall, ToolCall, ToolProgress, Work } from '@openhut/common/threads/thread.ts'
 import { toolLabel } from '../../lib/tool-label.ts'
 
@@ -76,7 +75,7 @@ function shortName(tool: string) {
 }
 
 const ORDER: Record<ToolCall['kind'], number> = { delete: 0, change: 1, other: 2, read: 3 }
-const SHOWN = new Set<ToolCall['status']>(['done', 'running', 'asked'])
+const SHOWN = new Set<ToolCall['status']>(['done', 'running'])
 
 export function summaryOf(work: Work): string {
   const groups = new Map<string, ToolCall[]>()
@@ -93,26 +92,21 @@ export function summaryOf(work: Work): string {
 
 export function troubleOf(work: Work) {
   const count = (status: ToolCall['status']) => work.calls.filter((call) => call.status === status).length
-  return { failed: count('failed'), blocked: count('blocked'), asked: count('asked'), declined: count('declined') }
+  return { failed: count('failed'), blocked: count('blocked') }
 }
 
-const ANSWERED = { open: 'asked', done: 'done', declined: 'declined', expired: 'declined' } as const
-
-export function settleAsks({ work, asks }: { work: Work; asks: Ask[] }): Work {
-  const left = [...asks]
-  const calls = work.calls.map((call) => {
-    if (call.status !== 'asked') return call
-    const index = left.findIndex((ask) => ask.kind === call.tool || (ask.kind === 'call_tool' && ask.input.tool === call.tool))
-    if (index < 0) return call
-    const [ask] = left.splice(index, 1)
-    return { ...call, status: ANSWERED[ask.status] }
-  })
-  return { ...work, calls }
+export function splitLive({ work, live }: { work: Work; live: boolean }): { finished: Work; running: ToolCall | undefined } {
+  const running = live ? work.calls.filter((call) => call.status === 'running').at(-1) : undefined
+  return { finished: running ? { ...work, calls: work.calls.filter((call) => call.status !== 'running') } : work, running }
 }
 
-export function noReplyOf(work: Work): string {
-  const trouble = work.calls.find((call) => call.status === 'failed' || call.status === 'blocked')
-  return `No reply — ${work.error ?? trouble?.error ?? 'it stopped without an answer.'}`
+export function withoutCards(work: Work): Work | undefined {
+  const calls = work.calls.filter((call) => call.status !== 'asked')
+  return calls.length || work.error !== undefined ? { ...work, calls } : undefined
+}
+
+export function errorUnder({ work, answered }: { work: Work | undefined; answered: boolean }): string | undefined {
+  return answered && work?.calls.length ? undefined : work?.error
 }
 
 export function durationOf(ms: number): string {

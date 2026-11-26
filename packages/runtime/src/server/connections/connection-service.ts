@@ -1,7 +1,7 @@
 import { sql, type Selectable } from 'kysely'
 import * as z from 'zod'
 import type { Deleted } from '@openhut/common/api.ts'
-import { SIGN_IN_KINDS, type Connection, type ConnectionKind, type ConnectionStatus, type ConnectionTool, type CreateConnection } from '@openhut/common/connections/connection.ts'
+import { KEYED_KINDS, SIGN_IN_KINDS, type Connection, type ConnectionKind, type ConnectionStatus, type ConnectionTool, type CreateConnection, type ReconnectConnection } from '@openhut/common/connections/connection.ts'
 import { config } from '../platform/config.ts'
 import { publicAddress } from '../platform/address.ts'
 import { db } from '../platform/db.ts'
@@ -26,6 +26,7 @@ import { permissions } from '../permissions/permissions.ts'
 import { asks } from '../../core/asks.ts'
 import { routineService } from '../inbox/routines.ts'
 import { plugins } from '../../core/plugins.ts'
+import { labelOf } from '../threads/work.ts'
 
 const COLUMNS = ['id', 'kind', 'name', 'account', 'sign_in', 'owner_id', 'created_at'] as const
 const MAX_REPLY = 64_000
@@ -33,6 +34,7 @@ const PER_AGENT_CONNECTION = 2
 const TOOLS_FRESH_MS = 5 * 60_000
 const running = new Map<string, number>()
 const queues = new Map<string, Promise<unknown>>()
+const DISCOVERY = /schema|describe|find|search/i
 const toolCache = new Map<string, { at: number; tools: ToolSpec[] }>()
 const actionCache = new Map<string, Map<string, ToolSpec>>()
 const JOURNAL = 100
@@ -87,6 +89,18 @@ export const connectionService = {
     return connectionService.save({ actor, kind, name, config, account, signIn: false })
   },
 
+  async reconnect({ actor, id, dsn, deployKey, token }: { actor: Caller; id: string } & ReconnectConnection): Promise<Connection> {
+    const row = await connectionService.owned({ id })
+    const kind = KEYED_KINDS.find((each) => each === row.kind)
+    if (row.sign_in || !kind) throw new HttpError(400, `${row.name} connects by signing in. Sign in again instead.`)
+    const before = connectionService.unsealed(row.config)
+    const url = typeof before.url === 'string' ? before.url : undefined
+    const clean = token?.trim()
+    if (clean !== undefined && /\s/.test(clean)) throw new HttpError(400, 'Paste the token as it is, with no spaces.', { param: 'token' })
+    const { config, account } = await keyedConfig({ kind, dsn, deployKey, url, header: clean ? `Authorization: Bearer ${clean}` : undefined })
+    return connectionService.save({ actor, kind, name: row.name, config, account, signIn: false, id })
+  },
+
   async save({ actor, kind, name, config, account, signIn, id }: { actor: Caller; kind: ConnectionKind; name: string; config: Secret; account: string; signIn: boolean; id?: string }): Promise<Connection> {
     if (id) {
       await connectionRecords.edit({ id, change: ({ value }) => ({ value: { ...value, account }, secret: config }) })
@@ -133,7 +147,7 @@ export const connectionService = {
     const tools = await toolsOf({ id: connection.id, kind: connection.kind }).catch((err: unknown) => {
       throw new HttpError(502, `${connection.name} didn't list its tools: ${messageOf(err)}`)
     })
-    return tools.map((tool) => ({ object: 'connection_tool', name: `${connection.kind}_${tool.name}`, description: tool.description }))
+    return toolsShown({ connection, tools, discovered: [...actionCache.get(connection.id)?.values() ?? []] })
   },
 
   async tools({ agent }: { agent: { id: string; owner_id: string } }): Promise<AgentTool[]> {
@@ -226,12 +240,24 @@ async function actionOf({ connection, spec, args }: { connection: ReachableConne
   })
   const action = permissions.byVerb(found ?? { name, description: humanized(name), schema: {} })
   known.set(name, action)
-  return { spec: action, label: action.annotations?.title || (action.description.length <= 60 ? action.description : humanized(name)) }
+  return { spec: action, label: actionLabel(action) }
+}
+
+export function toolsShown({ connection, tools, discovered }: { connection: { kind: string; name: string }; tools: ToolSpec[]; discovered: ToolSpec[] }): ConnectionTool[] {
+  const catchAll = tools.find(permissions.isCatchAll)
+  const shown = ({ tool, kind, label }: { tool: ToolSpec; kind: ConnectionTool['kind']; label: string }): ConnectionTool => ({ object: 'connection_tool', name: `${connection.kind}_${tool.name}`, label, description: tool.description, group: permissions.groupOf(tool), kind })
+  const plain = tools.filter((tool) => !permissions.isCatchAll(tool) && !(catchAll && DISCOVERY.test(tool.name))).map((tool) => shown({ tool, kind: 'tool', label: labelOf({ name: tool.name, title: tool.annotations?.title }).label }))
+  if (!catchAll) return plain
+  return [...plain, shown({ tool: catchAll, kind: 'catch_all', label: `Any ${connection.name} action` }), ...discovered.map((tool) => shown({ tool, kind: 'action', label: actionLabel(tool) }))]
+}
+
+function actionLabel(action: ToolSpec): string {
+  return action.annotations?.title || (action.description.length <= 60 ? action.description : humanized(action.name))
 }
 
 // ponytail: the action list lives in memory, so a restart forgets which inner actions were seen (their saved settings stay).
 async function lookUp({ connection, name }: { connection: ReachableConnection; name: string }): Promise<ToolSpec> {
-  const lookups = (await toolsOf(connection)).filter((tool) => !permissions.isCatchAll(tool) && /schema|describe|find|search/i.test(tool.name))
+  const lookups = (await toolsOf(connection)).filter((tool) => !permissions.isCatchAll(tool) && DISCOVERY.test(tool.name))
     .sort((a, b) => Number(/schema|describe/i.test(b.name)) - Number(/schema|describe/i.test(a.name)))
   let spec: ToolSpec = { name, description: humanized(name), schema: {} }
   for (const tool of lookups) {
