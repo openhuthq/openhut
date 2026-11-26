@@ -14,6 +14,7 @@ const Value = z.object({
   account: z._default(z.string(), ''),
   signIn: z._default(z.boolean(), false),
   createdAt: z.optional(z.string()),
+  reconnectedAt: z.optional(z.string()),
   models: z.optional(z.object({ at: z.string(), models: z.array(ProviderModel) })),
 })
 const Config = z.record(z.string(), z.unknown())
@@ -59,7 +60,7 @@ async function current(id: string): Promise<{ value: ConnectionValue; secret: Se
   }
   const row = await db.selectFrom('connection').selectAll().where('id', '=', id).executeTakeFirst()
   if (!row) throw new HttpError(404, 'That connection doesn\'t exist. It may have been deleted.')
-  return { value: { kind: row.kind, name: row.name, account: row.account, signIn: row.sign_in, createdAt: new Date(row.created_at).toISOString() }, secret: z.parse(Config, JSON.parse(unseal(row.config))) }
+  return { value: { kind: row.kind, name: row.name, account: row.account, signIn: row.sign_in, createdAt: new Date(row.created_at).toISOString(), ...row.reconnected_at && { reconnectedAt: new Date(row.reconnected_at).toISOString() } }, secret: z.parse(Config, JSON.parse(unseal(row.config))) }
 }
 
 function providerOf(id: string): ProviderId | undefined {
@@ -77,7 +78,7 @@ function providerSecret(id: ProviderId): Secret | null {
 
 async function apply({ id, value, secret }: { id: string; value: z.infer<typeof Value>; secret: Secret }): Promise<void> {
   if (value.kind === 'provider') return applyProvider({ id: z.parse(ProviderId, value.name), secret, models: value.models })
-  const fields = { kind: value.kind, name: value.name, account: value.account, sign_in: value.signIn, config: seal(JSON.stringify(secret)) }
+  const fields = { kind: value.kind, name: value.name, account: value.account, sign_in: value.signIn, reconnected_at: value.reconnectedAt ?? null, config: seal(JSON.stringify(secret)) }
   await db.insertInto('connection').values({ id, owner_id: await ownerId(), created_at: value.createdAt ?? new Date(), ...fields })
     .onConflict((oc) => oc.column('id').doUpdateSet(fields)).execute()
   emit({ name: 'connection.synced', target: { type: 'connection', id } })

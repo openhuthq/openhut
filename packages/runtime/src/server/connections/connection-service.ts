@@ -28,7 +28,10 @@ import { routineService } from '../inbox/routines.ts'
 import { plugins } from '../../core/plugins.ts'
 import { labelOf } from '../threads/work.ts'
 
-const COLUMNS = ['id', 'kind', 'name', 'account', 'sign_in', 'owner_id', 'created_at'] as const
+const COLUMNS = ['id', 'kind', 'name', 'account', 'sign_in', 'owner_id', 'created_at', 'reconnected_at'] as const
+const REPEATED = 3
+const RECENT_MS = 24 * 60 * 60_000
+const SIGNED_OUT = /expired|revoked|signed (you )?out|sign in again|reconnect|invalid_grant|unauthori[sz]ed|\b401\b|authentication failed|bad credentials|invalid (api )?(key|token)|login rejected/i
 const MAX_REPLY = 64_000
 const PER_AGENT_CONNECTION = 2
 const TOOLS_FRESH_MS = 5 * 60_000
@@ -91,6 +94,10 @@ export const connectionService = {
 
   async reconnect({ actor, id, dsn, deployKey, token }: { actor: Caller; id: string } & ReconnectConnection): Promise<Connection> {
     const row = await connectionService.owned({ id })
+    if (row.kind === 'github') {
+      const { config, account } = await github.recheck(connectionService.unsealed(row.config))
+      return connectionService.save({ actor, kind: row.kind, name: row.name, config, account, signIn: false, id })
+    }
     const kind = KEYED_KINDS.find((each) => each === row.kind)
     if (row.sign_in || !kind) throw new HttpError(400, `${row.name} connects by signing in. Sign in again instead.`)
     const before = connectionService.unsealed(row.config)
@@ -103,7 +110,7 @@ export const connectionService = {
 
   async save({ actor, kind, name, config, account, signIn, id }: { actor: Caller; kind: ConnectionKind; name: string; config: Secret; account: string; signIn: boolean; id?: string }): Promise<Connection> {
     if (id) {
-      await connectionRecords.edit({ id, change: ({ value }) => ({ value: { ...value, account }, secret: config }) })
+      await connectionRecords.edit({ id, change: ({ value }) => ({ value: { ...value, account, reconnectedAt: new Date().toISOString() }, secret: config }) })
       emit({ name: 'connection.reconnected', actor, target: { type: 'connection', id, kind } })
       return connectionService.get({ actor, id })
     }
@@ -246,7 +253,7 @@ async function actionOf({ connection, spec, args }: { connection: ReachableConne
 export function toolsShown({ connection, tools, discovered }: { connection: { kind: string; name: string }; tools: ToolSpec[]; discovered: ToolSpec[] }): ConnectionTool[] {
   const catchAll = tools.find(permissions.isCatchAll)
   const shown = ({ tool, kind, label }: { tool: ToolSpec; kind: ConnectionTool['kind']; label: string }): ConnectionTool => ({ object: 'connection_tool', name: `${connection.kind}_${tool.name}`, label, description: tool.description, group: permissions.groupOf(tool), kind })
-  const plain = tools.filter((tool) => !permissions.isCatchAll(tool) && !(catchAll && DISCOVERY.test(tool.name))).map((tool) => shown({ tool, kind: 'tool', label: labelOf({ name: tool.name, title: tool.annotations?.title }).label }))
+  const plain = tools.filter((tool) => !permissions.isCatchAll(tool) && !(catchAll && DISCOVERY.test(tool.name))).map((tool) => shown({ tool, kind: 'tool', label: tool.annotations?.title?.trim() || labelOf({ name: tool.name }).label }))
   if (!catchAll) return plain
   return [...plain, shown({ tool: catchAll, kind: 'catch_all', label: `Any ${connection.name} action` }), ...discovered.map((tool) => shown({ tool, kind: 'action', label: actionLabel(tool) }))]
 }
@@ -356,7 +363,7 @@ async function record({ agentId, connectionId, tool, reason, outcome, ms = 0, ap
   const calls = journal.get(agentId) ?? []
   calls.push({ at: Date.now(), name: tool, connectionId, app: app ?? null, spec, action, args, outcome, ms, output: output?.slice(0, JOURNAL_TEXT), error: error?.slice(0, JOURNAL_TEXT) })
   journal.set(agentId, calls.slice(-JOURNAL))
-  await db.insertInto('connection_event').values({ agent_id: agentId, connection_id: connectionId, tool, reason: reason.slice(0, 500), outcome, ms, approved_by: approvedBy }).execute()
+  await db.insertInto('connection_event').values({ agent_id: agentId, connection_id: connectionId, tool, reason: reason.slice(0, 500), outcome, ms, approved_by: approvedBy, problem: outcome === 'failed' ? problemOf(error) : null }).execute()
 }
 
 async function keyedConfig({ kind, dsn, deployKey, url, header }: Omit<CreateConnection, 'name'>): Promise<{ config: Secret; account: string }> {
@@ -405,33 +412,39 @@ async function rowOf(id: string): Promise<Row> {
 async function connectionsOf({ rows }: { rows: Row[] }): Promise<Connection[]> {
   if (!rows.length) return []
   const ids = rows.map((row) => row.id)
-  const [owners, counts, successes, failures] = await Promise.all([
+  const [owners, counts, successes, recent] = await Promise.all([
     db.selectFrom('person').select(['id', 'email']).where('id', 'in', rows.map((row) => row.owner_id)).execute(),
     db.selectFrom('connection_grant').select((eb) => ['connection_id', eb.fn.countAll<string>().as('n')]).where('connection_id', 'in', ids).groupBy('connection_id').execute(),
     db.selectFrom('connection_event').select((eb) => ['connection_id', eb.fn.max('at').as('at')]).where('connection_id', 'in', ids).where('outcome', '=', 'allowed').groupBy('connection_id').execute(),
-    db.selectFrom('connection_event').select((eb) => ['connection_id', eb.fn.max('at').as('at')]).where('connection_id', 'in', ids).where('outcome', '=', 'failed').groupBy('connection_id').execute(),
+    db.selectFrom((eb) => eb.selectFrom('connection_event as e').innerJoin('connection as c', 'c.id', 'e.connection_id')
+      .select(['e.connection_id', 'e.at', 'e.outcome', 'e.problem', sql<number>`row_number() over (partition by e.connection_id order by e.id desc)`.as('n')])
+      .where('e.connection_id', 'in', ids).where('e.outcome', 'in', ['allowed', 'failed']).where(sql<boolean>`(c.reconnected_at is null or e.at > c.reconnected_at)`).as('r'))
+      .selectAll().where('n', '<=', REPEATED).orderBy('n').execute(),
   ])
   const ownerName = new Map(owners.map((owner) => [owner.id, owner.email]))
   const agents = new Map(counts.map((count) => [count.connection_id, Number(count.n)]))
   const lastSuccess = new Map(successes.map((success) => [success.connection_id, success.at]))
-  const lastFailure = new Map(failures.map((failure) => [failure.connection_id, failure.at]))
   return rows.map((row) => {
     const success = lastSuccess.get(row.id)
     return {
       id: row.id, object: 'connection', kind: row.kind, name: row.name, account: row.account, signIn: row.sign_in,
       ownerId: row.owner_id, ownerName: ownerName.get(row.owner_id) ?? 'someone',
       canDelete: true, agents: agents.get(row.id) ?? 0,
-      status: statusOf({ success, failure: lastFailure.get(row.id) }), lastSuccessAt: success ? new Date(success).toISOString() : null,
+      status: statusOf({ signIn: row.sign_in, calls: recent.filter((call) => call.connection_id === row.id), now: Date.now() }), lastSuccessAt: success ? new Date(success).toISOString() : null,
       createdAt: new Date(row.created_at).toISOString(),
     }
   })
 }
 
-function statusOf({ success, failure }: { success?: Date | string | null; failure?: Date | string | null }): ConnectionStatus {
-  if (failure && (!success || new Date(failure) > new Date(success))) return 'failing'
-  if (success) return 'connected'
-  return 'no_calls'
+export function statusOf({ signIn, calls, now }: { signIn: boolean; calls: { at: Date | string; outcome: string; problem: string | null }[]; now: number }): ConnectionStatus {
+  const [latest] = calls
+  if (latest?.outcome === 'failed' && latest.problem === 'auth') return signIn ? 'signed_out' : 'rejected'
+  const repeated = calls.length >= REPEATED && calls.slice(0, REPEATED).every((call) => call.outcome === 'failed')
+  if (repeated && now - new Date(latest.at).getTime() < RECENT_MS) return 'failing'
+  return 'connected'
 }
+
+export const problemOf = (error?: string): 'auth' | null => error && SIGNED_OUT.test(error) ? 'auth' : null
 
 const isSignIn = (kind: ConnectionKind): boolean => (SIGN_IN_KINDS as readonly string[]).includes(kind)
 
