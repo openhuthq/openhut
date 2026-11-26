@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
-import { ArrowRight01Icon, Cancel01Icon, Delete02Icon, RefreshIcon, WebhookIcon } from '@hugeicons/core-free-icons'
+import { ArrowRight01Icon, Cancel01Icon, Delete02Icon, RefreshIcon, Tick02Icon, UnfoldMoreIcon, WebhookIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { DialogTitle } from '@/components/ui/dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Tooltip } from '@/components/ui/tooltip'
 import { CopyButton } from '@/components/copy-button'
@@ -12,6 +13,7 @@ import { DialogCard, I, Loading, ROW, ROW_VALUE, TINY_ICON } from '@/components/
 import { agentPath } from '@/app/routes'
 import { Details, Quiet } from '@/features/agents/request-card'
 import { PlacePicker } from '@/features/agents/notify'
+import { SOFT_TRIGGER } from '@/features/models/model-picker'
 import { useCreateWebhook, useDeleteWebhook, useRotateWebhook, useUpdateWebhook, useWebhooks, type Webhook } from '@/features/webhooks/api'
 import { ago } from '@/lib/format'
 import { formValues } from '@/lib/form'
@@ -71,6 +73,8 @@ function WebhookItem({ agent, webhook }: { agent: Agent; webhook: Webhook }) {
       <Button type="button" variant="ghost" size="sm" disabled={rotate.isPending} onClick={() => rotate.mutate(webhook.id, { onError: toastError })}><I icon={RefreshIcon} size={13} className="text-hue-amber" />New secret</Button>
     </Field>
     <Field label="Runs in"><PlacePicker agentId={agent.id} value={webhook.channel === 'app' ? null : webhook.channel ?? null} none="Here in the web app" label="Runs in" className="w-[260px]" disabled={update.isPending} onPick={(place) => update.mutate({ id: webhook.id, channel: place ?? 'app' }, { onError: toastError })} /></Field>
+    <Field label="Threads"><ThreadsPicker value={webhook.threads} disabled={update.isPending} onPick={(threads) => update.mutate({ id: webhook.id, threads }, { onError: toastError })} /></Field>
+    <p className="-mt-1.5 mb-0 pl-[72px] text-[12.5px] text-mute">{THREADS[webhook.threads].hint}</p>
     {webhook.lastPayload !== null && <Details label="Last call"><pre className="m-0 max-h-56 overflow-auto font-mono text-[11.5px]/[1.5] whitespace-pre-wrap text-ink">{pretty(webhook.lastPayload)}</pre></Details>}
     {confirming && <div className="flex items-center gap-2 text-[13px]">
       <span>Calls to this address stop reaching {agent.name}.</span>
@@ -78,6 +82,28 @@ function WebhookItem({ agent, webhook }: { agent: Agent; webhook: Webhook }) {
         <Button type="button" variant="danger" size="sm" disabled={remove.isPending} onClick={() => remove.mutate(webhook.id, { onError: toastError })}>Delete</Button></span>
     </div>}
   </section>
+}
+
+type Threads = Webhook['threads']
+
+const THREADS: Record<Threads, { name: string; note: string; hint: string }> = {
+  group: { name: 'Keep related together', note: 'An alert and its recovery share a thread', hint: 'Calls about the same alert share one thread.' },
+  each: { name: 'New thread each call', note: 'For forms, orders, signups', hint: 'Every call starts its own thread.' },
+}
+
+function ThreadsPicker({ value, disabled, onPick }: { value: Threads; disabled: boolean; onPick: (threads: Threads) => void }) {
+  return <DropdownMenu>
+    <DropdownMenuTrigger className={cn(SOFT_TRIGGER, 'w-[260px] gap-2')} disabled={disabled} aria-label={`Threads: ${THREADS[value].name}`}>
+      <span className="min-w-0 flex-1 truncate text-left">{THREADS[value].name}</span>
+      <I icon={UnfoldMoreIcon} size={12} className="text-mute" />
+    </DropdownMenuTrigger>
+    <DropdownMenuContent>
+      {(['group', 'each'] as const).map((each) => <DropdownMenuItem key={each} size="tall" className="items-start py-2 pr-4 text-[13px]" onClick={() => each !== value && onPick(each)}>
+        <span className="grid h-[18px] w-3.5 shrink-0 place-items-center">{each === value && <I icon={Tick02Icon} size={14} className="text-ink" />}</span>
+        <span className="grid min-w-0 gap-px"><span className="truncate text-ink">{THREADS[each].name}</span><span className="truncate text-[12px] text-mute">{THREADS[each].note}</span></span>
+      </DropdownMenuItem>)}
+    </DropdownMenuContent>
+  </DropdownMenu>
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {

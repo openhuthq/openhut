@@ -4,7 +4,7 @@ description: Give an agent an address other services call when something happens
 icon: ops
 ---
 
-A **webhook** is an address on your OpenHut that another service calls when something happens: an alert fires, a deploy finishes, a form is sent. Each call reaches the agent in a thread in the web app (or in the Discord channel you pick), and the agent does what its instructions say about it. Related calls, like an alert and its recovery, share one thread. See [Threads](/threads).
+A **webhook** is an address on your OpenHut that another service calls when something happens: an alert fires, a deploy finishes, a form is sent. Each call reaches the agent in a thread in the web app (or in the Discord channel you pick), and the agent does what its instructions say about it. Related calls, like an alert and its recovery, share one thread. Each call shows as a short line of what happened, like **Triggered · 80%**, with the raw payload under **Show payload**. See [Threads](/threads).
 
 ## Add one
 

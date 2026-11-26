@@ -1,16 +1,28 @@
+import { useState } from 'react'
 import * as z from 'zod/mini'
 import { ArrowDown01Icon, ArrowUpRight01Icon, WebhookIcon } from '@hugeicons/core-free-icons'
 import { summarizeWebhook, type WebhookSeverity } from '@openhut/common/webhooks/summary.ts'
-import { buttonVariants } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { I } from '@/components/kit'
 import { cn } from '@/lib/utils'
+import { payloadOf } from '@/features/webhooks/call'
 
 export const WebhookSource = z.object({ source: z.object({ kind: z.literal('webhook'), id: z.string(), name: z.string() }), payload: z.optional(z.unknown()) })
 export type WebhookSource = z.infer<typeof WebhookSource>
 
 export function webhookOf(metadata: unknown): WebhookSource | undefined {
   return z.safeParse(WebhookSource, metadata).data
+}
+
+export function CallText({ label, text }: { label?: string; text: string }) {
+  const [open, setOpen] = useState(false)
+  return <>
+    <span className="flex flex-wrap items-baseline gap-x-2"><span>{label || 'Webhook call'}</span>
+      <Button type="button" variant="bare" className="h-auto cursor-pointer p-0 text-[13.5px] text-mute underline underline-offset-2 hover:text-ink" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Hide payload' : 'Show payload'}</Button>
+    </span>
+    {open && <span className="mt-2 block">{payloadOf(text)}</span>}
+  </>
 }
 
 export function sizeOf(text: string): string {
