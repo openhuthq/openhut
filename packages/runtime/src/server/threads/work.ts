@@ -105,7 +105,7 @@ export function turnWork({ agent, started }: { agent: { id: string; owner_id: st
   let tools: Promise<AgentTool[]> | undefined
   const view = (error?: string): Work => {
     const calls = joinCalls({ chips, records: connectionService.callsSince({ agentId: agent.id, since: started }) })
-    const settled = error === undefined ? calls : calls.map((call) => call.status === 'running' ? { ...call, status: 'failed' as const, error: call.error ?? error } : call)
+    const settled = error === undefined ? calls : calls.map((call) => call.status === 'running' ? { ...call, status: 'failed' as const } : call)
     return { calls: settled, ms: Date.now() - started, ...error !== undefined && { error } }
   }
   return {

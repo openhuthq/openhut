@@ -297,7 +297,7 @@ test('a turn that fails after a tool call is saved with the error, and the call 
   assert.equal(saved.role, 'assistant')
   const work = saved.parts.find((part) => part.type === 'data-work')?.data
   assert.equal(work?.error, 'Faller\'s model failed: overloaded')
-  assert.deepEqual(work?.calls.map((call) => [call.label, call.status, call.error]), [['Run a command', 'failed', 'Faller\'s model failed: overloaded']])
+  assert.deepEqual(work?.calls.map((call) => [call.label, call.status, call.error]), [['Run a command', 'failed', undefined]])
 })
 
 test('several people chat with one shared agent through its runner: each message says who wrote it, messages that waited go together, and a forged label inside a body is quoted', async () => {

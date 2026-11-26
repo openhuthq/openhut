@@ -17,7 +17,7 @@ import { durationOf, kindOf, summaryOf, troubleOf } from '@/features/threads/ste
 
 const LIVE = 'animate-[shimmer_1.4s_linear_infinite] bg-[linear-gradient(90deg,var(--mute)_30%,var(--ink)_50%,var(--mute)_70%)] bg-size-[200%_100%] bg-clip-text text-transparent motion-reduce:animate-none motion-reduce:bg-none motion-reduce:text-mute'
 
-export function WorkLine({ agent, work, live, onRetry }: { agent: Agent; work: Work; live: boolean; onRetry?: () => void }) {
+export function WorkLine({ agent, work, live, answered, onRetry }: { agent: Agent; work: Work; live: boolean; answered: boolean; onRetry?: () => void }) {
   const running = live ? work.calls.filter((call) => call.status === 'running').at(-1) : undefined
   const { failed, blocked, asked } = troubleOf(work)
   const marks = [...new Map(work.calls.map((call) => [call.connectionId ?? kindOf(call.tool), call])).values()].slice(0, 3)
@@ -38,7 +38,7 @@ export function WorkLine({ agent, work, live, onRetry }: { agent: Agent; work: W
       </CollapsibleTrigger>
       <CollapsibleContent><ul className="mt-1 mr-0 mb-0.5 ml-[9px] flex list-none flex-col gap-0.5 border-l-[1.5px] border-hair py-0.5 pr-0 pl-3">
         {work.calls.map((call) => <Row key={call.id} call={call} />)}
-        {work.error !== undefined && <li className="flex flex-wrap items-center gap-2 py-1 text-body"><I icon={Alert02Icon} size={12} className="text-fail" />{work.error}{onRetry && <Button type="button" variant="secondary" className={PILL} onClick={onRetry}>Retry</Button>}</li>}
+        {work.error !== undefined && answered && <li className="flex flex-wrap items-center gap-2 py-1 text-body"><I icon={Alert02Icon} size={12} className="text-fail" />{work.error}{onRetry && <RetryButton onRetry={onRetry} />}</li>}
       </ul></CollapsibleContent>
     </Collapsible>
     {work.calls.filter((call) => call.status === 'blocked').map((call) => <Blocked key={call.id} agent={agent} call={call} />)}
@@ -55,10 +55,10 @@ const STATUS = { failed: ['Failed', Alert02Icon, 'text-fail'], blocked: ['Blocke
 
 function Row({ call }: { call: ToolCall }) {
   const status = call.status === 'failed' || call.status === 'blocked' || call.status === 'asked' ? STATUS[call.status] : undefined
-  const hint = call.input?.split('\n').find((line) => line.trim() && !/^[{}[\]]$/.test(line.trim()))?.trim()
+  const hint = call.input && hintOf(call.input)
   const head = <span className="flex min-w-0 items-center gap-2">
     <Mark call={call} />
-    <span className={cn('shrink-0', status ? 'text-ink' : 'text-body')}>{call.status === 'running' ? `${call.label}…` : call.past}</span>
+    <span className={cn('shrink-0', status ? 'text-ink' : 'text-body')}>{labelOf(call)}</span>
     {hint && <span className="min-w-0 truncate font-mono text-[11.5px] text-mute-2">{hint}</span>}
     {call.status === 'running' && <Spinner className="mt-0 size-3 shrink-0" />}
     {status && <span className={cn('inline-flex shrink-0 items-center gap-1', status[2])}><I icon={status[1]} size={12} />{status[0]}</span>}
@@ -75,6 +75,20 @@ function Row({ call }: { call: ToolCall }) {
   </Collapsible></li>
 }
 
+export function RetryButton({ onRetry }: { onRetry: () => void }) {
+  return <Button type="button" variant="secondary" className={PILL} onClick={onRetry}>Retry</Button>
+}
+
+function labelOf(call: ToolCall) {
+  if (call.status === 'running') return `${call.label}…`
+  return call.status === 'done' ? call.past : call.label
+}
+
+function hintOf(input: string) {
+  const value = /^\s*\{\s*"[^"]+":\s*"((?:[^"\\]|\\.)*)"/.exec(input)?.[1]
+  return (value ?? input).split('\n').find((line) => line.trim())?.trim()
+}
+
 function Detail({ title, text }: { title: string; text: string }) {
   const lines = text.split('\n')
   return <div className="flex flex-col gap-1">
@@ -87,7 +101,7 @@ function Blocked({ agent, call }: { agent: Agent; call: ToolCall }) {
   const connectionId = call.connectionId
   return <div className="flex max-w-[560px] min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-sidebar px-3.5 py-2.5">
     <Mark call={call} size={18} />
-    <span className="min-w-0 flex-1 text-[13px] text-ink">{connectionId ? `${call.app}: ${call.label} is set to Never` : call.error}</span>
+    <span className="min-w-0 flex-1 text-[13px] text-ink">{connectionId ? `${call.label} is set to Never` : call.error}</span>
     {connectionId && <span className="flex shrink-0 gap-1.5">
       {call.kind === 'read' && agent.canEdit && <AllowReads agent={agent} connectionId={connectionId} app={call.app ?? 'the app'} />}
       <Button type="button" variant="ghost" className={PILL} onClick={() => navigate(agentPath({ agentId: agent.id, dialog: 'apps', detail: connectionId }))}>Change permission</Button>

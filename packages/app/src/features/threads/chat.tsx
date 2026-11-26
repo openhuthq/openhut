@@ -35,7 +35,7 @@ import { deleteUpload, saveFile, threadPath, uploadFile, useAgentThread, useClea
 import { homePathsIn, linkHomeFiles, RASTER } from '@/features/threads/files'
 import { ConfirmIcon } from '@/components/confirm-button'
 import { legacyWork, noReplyOf } from '@/features/threads/steps'
-import { WorkLine } from '@/features/threads/work'
+import { RetryButton, WorkLine } from '@/features/threads/work'
 import { CardReply, MessageCard } from '@/features/threads/card'
 import { ChangeCards, PendingElsewhere } from '@/features/agents/change-requests'
 import { copyText } from '@/lib/clipboard'
@@ -296,13 +296,13 @@ function AgentReply({ agent, message, live, onRetry }: { agent: Agent; message: 
   return <div className="grid animate-grow grid-cols-[34px_minmax(0,1fr)] gap-3">
     <span className={live ? 'talking' : undefined}><Face agent={agent} size={34} /></span>
     <CopyMenu text={textOf(message)}><div className="flex min-w-0 flex-col gap-2 pt-1.5 pointer-coarse:select-none">
-      {work && <WorkLine agent={agent} work={work} live={live} onRetry={onRetry} />}
+      {work && <WorkLine agent={agent} work={work} live={live} answered={blocks.length > 0} onRetry={onRetry} />}
       {blocks.map((block, index) => block.type === 'text'
         ? <div key={index} className="msg-t"><Markdown remarkPlugins={plugins} components={{ a: ChatLink, code: FileCode }}>{block.text}</Markdown></div>
         : hasSpec && <MessageCard key={index} spec={spec} loading={live} />)}
       {changesOf(message).length > 0 && <ChangeCards agent={agent} ids={changesOf(message)} />}
       {live && !blocks.length && !work?.calls.some((call) => call.status === 'running') && <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>}
-      {!live && !blocks.length && <span className="text-[13.5px] text-mute-2 italic">{work ? noReplyOf(work) : 'No reply.'}</span>}
+      {!live && !blocks.length && <span className="flex flex-wrap items-center gap-2 text-[13.5px] text-mute-2 italic">{work ? noReplyOf(work) : 'No reply.'}{work?.error !== undefined && onRetry && <RetryButton onRetry={onRetry} />}</span>}
     </div></CopyMenu>
   </div>
 }
