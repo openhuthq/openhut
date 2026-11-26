@@ -10,7 +10,6 @@ import { request } from '@/lib/api-client'
 import { AGENTS_KEY, CONNECTIONS_KEY, GRANTS_KEY, grantsKey } from '@/lib/query-keys'
 import { navigate } from '@/lib/router'
 import { localFace } from '@/features/agents/face'
-import { grantToggle } from '@/features/agents/grant-toggle'
 
 const GRANT_LIST = List(Grant)
 const CHANNEL_LIST = List(Channel)
@@ -125,12 +124,18 @@ export function useConnectionGrants(connection: { computers: { id: string }[] })
 
 export function useCreateGrant() {
   const client = useQueryClient()
-  return useMutation(grantToggle({ client, on: true, mutationFn: (body: { agentId: string; connectionId: string }) => openhut.connections.grant({ agent: body.agentId, connection: body.connectionId }) }))
+  return useMutation({
+    mutationFn: (body: { agentId: string; connectionId: string }) => openhut.connections.grant({ agent: body.agentId, connection: body.connectionId }),
+    onSuccess: (grant) => writeGrant(client, grant, (grants) => [...grants.filter((each) => each.id !== grant.id), grant]),
+  })
 }
 
 export function useDeleteGrant() {
   const client = useQueryClient()
-  return useMutation(grantToggle({ client, on: false, mutationFn: (grant: Grant) => request({ schema: DELETED_GRANT, of: grant.agentId, path: `/api/grants/${encodeURIComponent(grant.id)}`, method: 'DELETE' }) }))
+  return useMutation({
+    mutationFn: (grant: Grant) => request({ schema: DELETED_GRANT, of: grant.agentId, path: `/api/grants/${encodeURIComponent(grant.id)}`, method: 'DELETE' }),
+    onSuccess: (_, grant) => writeGrant(client, grant, (grants) => grants.filter((each) => each.id !== grant.id)),
+  })
 }
 
 export function useChannels(agentId: string) {
@@ -260,6 +265,12 @@ function channelsKey(agentId: string) {
 
 function settling(agent: Agent | undefined) {
   return !!agent && ((agent.wanted === 'running') !== (agent.status === 'running') || agent.health === 'starting')
+}
+
+function writeGrant(client: QueryClient, grant: Grant, change: (grants: Grant[]) => Grant[]) {
+  client.setQueryData<Grant[]>(grantsKey({ agentId: grant.agentId }), (grants) => grants && change(grants))
+  client.setQueryData<Grant[]>(grantsKey({ connectionId: grant.connectionId }), (grants) => grants && change(grants))
+  void client.invalidateQueries({ queryKey: CONNECTIONS_KEY })
 }
 
 function writeChannel(client: QueryClient, channel: Channel) {

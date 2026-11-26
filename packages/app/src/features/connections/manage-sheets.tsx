@@ -35,11 +35,12 @@ export function AgentGrants({ connection, agents }: { connection: Connection; ag
   const grants = useGrants({ connectionId: connection.id })
   const createGrant = useCreateGrant()
   const deleteGrant = useDeleteGrant()
+  const saving = (agentId: string) => (createGrant.isPending && createGrant.variables.agentId === agentId) || (deleteGrant.isPending && deleteGrant.variables.agentId === agentId)
   if (!agents.length) return <EmptyState inline line="No agents yet." />
   return <>{agents.map((agent) => {
     const grant = grants.data?.find((each) => each.agentId === agent.id)
     return <div key={agent.id} className="flex items-center gap-2 pr-1">
-      <div className="min-w-0 flex-1"><AgentCheck agent={agent} checked={!!grant} disabled={!grants.data || !agent.canEdit}
+      <div className="min-w-0 flex-1"><AgentCheck agent={agent} checked={!!grant} disabled={!grants.data || !agent.canEdit || saving(agent.id)}
         onChange={() => grant ? deleteGrant.mutate(grant, { onError: toastError }) : createGrant.mutate({ agentId: agent.id, connectionId: connection.id }, { onError: toastError })} /></div>
       {grant && <a href={agentPath({ agentId: agent.id, dialog: 'apps', detail: connection.id })} className={cn(buttonVariants({ variant: 'ghost' }), PILL)} title={`What ${agent.name} may do in ${connection.name}`}>Permissions</a>}
     </div>
