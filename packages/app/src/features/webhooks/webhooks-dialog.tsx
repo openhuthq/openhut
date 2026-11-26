@@ -98,7 +98,7 @@ function ThreadsPicker({ value, disabled, onPick }: { value: Threads; disabled: 
       <I icon={UnfoldMoreIcon} size={12} className="text-mute" />
     </DropdownMenuTrigger>
     <DropdownMenuContent>
-      {(['group', 'each'] as const).map((each) => <DropdownMenuItem key={each} className="items-start gap-2 py-1.5 text-[13px]" onClick={() => each !== value && onPick(each)}>
+      {(['group', 'each'] as const).map((each) => <DropdownMenuItem key={each} size="tall" className="items-start py-2 pr-4 text-[13px]" onClick={() => each !== value && onPick(each)}>
         <span className="grid h-[18px] w-3.5 shrink-0 place-items-center">{each === value && <I icon={Tick02Icon} size={14} className="text-ink" />}</span>
         <span className="grid min-w-0 gap-px"><span className="truncate text-ink">{THREADS[each].name}</span><span className="truncate text-[12px] text-mute">{THREADS[each].note}</span></span>
       </DropdownMenuItem>)}
