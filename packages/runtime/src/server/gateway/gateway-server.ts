@@ -27,6 +27,7 @@ const MAX_BODY = 1 << 20
 const LIMITS = { requestTimeout: 600_000, headersTimeout: 10_000, connectionsCheckingInterval: 2_000 }
 const RunReport = z.object({ picked: z.literal(true).optional(), said: z.string().max(200_000).optional() })
 const TelegramJoin = z.object({ code: z.string().max(64), userId: z.string().regex(/^[1-9]\d{4,14}$/), name: z.string().max(100).default('there'), chatId: z.number() })
+const MessageTarget = z.object({ channel: z.string().max(40), chat: z.string().max(200).optional() })
 const RenderCard = z.object({ text: z.string().max(200_000), channel: z.string().max(40), chatId: z.string().max(200).optional(), threadId: z.string().max(200).optional() })
 
 export const gatewayServer = {
@@ -66,6 +67,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   if (path === '/routines/due' && req.method === 'GET') return json(res, 200, { object: 'list', url: path, hasMore: false, data: [...await routineService.due({ agentId: agent.id }), ...await changeRequestService.due({ agentId: agent.id })] })
   const run = /^\/routines\/runs\/((?:ru|chg)_[a-z0-9]+)$/.exec(path)
   if (run && req.method === 'POST') return json(res, 200, await reportRun({ agentId: agent.id, runId: run[1], body: await readBody(req) }))
+  if (path === '/messages/target' && req.method === 'POST') return json(res, 200, await messageTarget({ agentId: agent.id, body: await readBody(req) }))
   if (path === '/telegram/joins' && req.method === 'POST') return json(res, 200, await telegramJoin({ agentId: agent.id, body: await readBody(req) }))
   if (path === '/cards/render' && req.method === 'POST') return json(res, 200, await cardService.render({ agent, ...renderRequest(await readBody(req)) }))
   if (path.startsWith('/test-llm/') && config.modelMode === 'test') return testModel({ path, body: await readBody(req), res })
@@ -118,7 +120,7 @@ function agentMcp(agent: GatewayAgent): McpServer {
     description: 'Use this when what you were following up on is done, or no longer needed. Tell the chat first: the routine leaves the owner\'s list.',
     inputSchema: { id: z.string().max(40), reason: z.string().max(200).describe('Short, past tense, for the log: "Paid on Nov 26".') },
   }, async ({ id, reason }) => text(await routineService.cancel({ agentId: agent.id, id, reason })))
-  server.registerTool('get_self', { description: 'Your name, instructions and channels, the connections you have, and the ones you can ask for. Read it before you ask to change any of them.' }, async () => text(await selfOf(agent)))
+  server.registerTool('get_self', { description: 'Your name, instructions and channels, where post_message can post (postTo), the connections you have, and the ones you can ask for. Read it before you ask to change any of them.' }, async () => text(await selfOf(agent)))
   const why = z.string().min(1).max(300).describe('One sentence for your owner: why this change, in plain words.')
   const ask = ({ name, action, description, shape }: { name: string; action: ChangeAction; description: string; shape: z.ZodRawShape }) => server.registerTool(name, {
     description: `${description} Your owner approves it in OpenHut first: the call returns at once, and the answer comes back to you as a message.`,
@@ -142,11 +144,12 @@ function agentMcp(agent: GatewayAgent): McpServer {
 }
 
 async function selfOf(agent: GatewayAgent): Promise<string> {
-  const [row, channels, connections, grants] = await Promise.all([
+  const [row, channels, connections, grants, postTo] = await Promise.all([
     db.selectFrom('agent').select(['name', 'instructions']).where('id', '=', agent.id).executeTakeFirstOrThrow(),
     channelService.list({ agentId: agent.id }),
     db.selectFrom('connection').select(['id', 'name', 'kind']).orderBy('created_at').execute(),
     db.selectFrom('connection_grant').select('connection_id').where('agent_id', '=', agent.id).execute(),
+    channelService.postTargets({ agentId: agent.id }),
   ])
   const have = new Set(grants.map((grant) => grant.connection_id))
   return JSON.stringify({
@@ -155,6 +158,7 @@ async function selfOf(agent: GatewayAgent): Promise<string> {
     channels: channels.map(({ id, kind, status, account, open, allowed }) => ({ id, kind, status, account, open, allowed })),
     connections: connections.filter((each) => have.has(each.id)),
     canAskFor: connections.filter((each) => !have.has(each.id)),
+    postTo: postTo.map(({ channel, chat, place }) => ({ channel, chat, place })),
   }, null, 2)
 }
 
@@ -175,6 +179,14 @@ export function toolList({ granted, app }: { granted: AgentTool[]; app: string |
   const lines = tools.map((tool) => `${tool.name} [${tool.connection.name}, ${tool.connection.id}]: ${tool.spec.description}`.slice(0, 140))
   if (lines.length) return lines.slice(0, 100).join('\n')
   return granted.length ? `No app named ${app}. Leave app out to list every tool.` : 'No tools: nobody has granted this agent a connection yet.'
+}
+
+async function messageTarget({ agentId, body }: { agentId: string; body: unknown }): Promise<{ object: 'message_target'; target: string; place: string }> {
+  const parsed = MessageTarget.safeParse(body)
+  if (!parsed.success) throw new HttpError(400, 'Send the channel id from get_self, and the chat if it has more than one.')
+  const found = await channelService.postTarget({ agentId, ...parsed.data })
+  log.info({ event: 'message.posted', agent: agentId, channel: found.channel })
+  return { object: 'message_target', target: found.target, place: found.place }
 }
 
 async function telegramJoin({ agentId, body }: { agentId: string; body: unknown }) {

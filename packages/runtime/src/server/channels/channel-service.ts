@@ -133,6 +133,35 @@ export const channelService = {
     return app ? secrets.appToken : secrets.botToken
   },
 
+  async postTargets({ agentId }: { agentId: string }): Promise<PostTarget[]> {
+    const rows = await db.selectFrom('channel').selectAll().where('agent_id', '=', agentId).where('status', '=', 'connected').orderBy('created_at').orderBy('id').execute()
+    const targets: PostTarget[] = []
+    for (const row of rows) {
+      if (row.kind === 'slack' || row.kind === 'discord') {
+        const names = await namesOf(row)
+        for (const chat of row.allowed.split(',').filter(Boolean)) {
+          const name = names.get(chat)
+          targets.push({ channel: row.id, chat, place: name ? `#${name}` : `${LABEL[row.kind]} channel ${chat}`, target: `${row.kind}:${chat}` })
+        }
+        continue
+      }
+      const chats = [...new Set([row.owner_address, ...(row.open ? [] : row.allowed.split(','))].filter(Boolean))]
+      for (const chat of chats) {
+        const address = row.kind === 'whatsapp' ? `${chat.replace(/\D/g, '')}@s.whatsapp.net` : chat
+        targets.push({ channel: row.id, chat, place: chat === row.owner_address ? `your ${LABEL[row.kind]}` : `${LABEL[row.kind]} chat ${chat}`, target: `${row.kind}:${address}` })
+      }
+    }
+    return targets
+  },
+
+  async postTarget({ agentId, channel, chat }: { agentId: string; channel: string; chat?: string }): Promise<PostTarget> {
+    const targets = await channelService.postTargets({ agentId })
+    const found = targets.find((each) => each.channel === channel && (!chat || each.chat === chat))
+    if (found) return found
+    if (!targets.length) throw new HttpError(400, 'You have no channels to post in. Ask your owner to add one.')
+    throw new HttpError(400, `You can only post in your own channels: ${targets.map((each) => `${each.channel} ${each.chat} (${each.place})`).join(', ')}.`)
+  },
+
   async conversations({ id }: { actor: Caller; id: string }): Promise<Conversation[]> {
     const held = await recordOf(id)
     const kind = ChannelRecord.parse(held.value).kind
@@ -290,3 +319,14 @@ function rowChannel({ row, qr }: { row: Row; qr: string | null }): Channel {
 }
 
 type Row = Selectable<Database['channel']>
+export type PostTarget = { channel: string; chat: string; place: string; target: string }
+
+async function namesOf(row: Row): Promise<Map<string, string>> {
+  try {
+    const botToken = ChannelSecrets.parse(JSON.parse(unseal(row.secrets))).botToken ?? ''
+    const found = row.kind === 'slack' ? await slack.conversations({ botToken }) : await discord.conversations({ botToken })
+    return new Map(found.map((each) => [each.id, each.name.replace(/^#/, '')]))
+  } catch {
+    return new Map()
+  }
+}

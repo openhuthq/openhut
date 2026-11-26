@@ -47,7 +47,7 @@ export function renderFiles({ agent, ownerName, token, channelKey, channels, con
     'terminal:\n  backend: local',
     `agent:\n  api_max_retries: 30\n  disabled_toolsets: [${disabled.join(', ')}]`,
     'approvals:\n  mode: "off"',
-    'platform_toolsets:\n  api_server: [hermes-api-server, openhut]',
+    'platform_toolsets:\n  api_server: [hermes-api-server, openhut, openhut-post]',
     'tools:\n  tool_search:\n    enabled: "off"',
     pluginsYaml(setups),
     `mcp_servers:\n  openhut:\n    url: ${gateway}/api/v1/mcp\n    headers:\n      Authorization: "Agent ${token}"`,

@@ -4,6 +4,7 @@ import re
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 
 from gateway.session_context import get_session_env
@@ -17,10 +18,25 @@ POLL_SECONDS = 15
 ORIGIN_FIELDS = ("platform", "chat_id", "chat_type", "chat_name", "thread_id", "user_id", "user_name")
 STAMPED = ("schedule_routine", "update_self", "add_channel", "update_channel", "remove_channel", "request_connection", "call_tool")
 injected = set()
+POST_TOOLSET = "openhut-post"
+POST_SCHEMA = {
+    "name": "post_message",
+    "description": "Post a message in one of your own channels without being asked there first, like a report for the team. get_self's postTo lists where you can post. You can't post anywhere else.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "channel": {"type": "string", "description": "The channel id from postTo."},
+            "chat": {"type": "string", "description": "The chat from postTo. Leave out for the channel's first one."},
+            "message": {"type": "string", "description": "What to post, in plain words."},
+        },
+        "required": ["channel", "message"],
+    },
+}
 
 
 def register(ctx):
     broker_slack()
+    ctx.register_tool(name="post_message", toolset=POST_TOOLSET, schema=POST_SCHEMA, handler=post_message)
     ctx.register_hook("transform_llm_output", render)
     ctx.register_hook("pre_tool_call", stamp)
     ctx.register_hook("post_llm_call", reported)
@@ -104,6 +120,21 @@ def stamp(tool_name="", **_):
         return None
     origin = {field: get_session_env("HERMES_SESSION_" + field.upper()) for field in ORIGIN_FIELDS}
     return {"action": "modify", "args": {"origin": {key: value for key, value in origin.items() if value}}}
+
+
+def post_message(args, **_):
+    message = str(args.get("message") or "").strip()
+    if not message:
+        return json.dumps({"error": "Send the message to post."})
+    body = {"channel": str(args.get("channel") or "")}
+    if args.get("chat"):
+        body["chat"] = str(args["chat"])
+    try:
+        found = gateway("/messages/target", body)
+    except urllib.error.HTTPError as err:
+        return json.dumps({"error": json.load(err).get("error", {}).get("message", "OpenHut refused that channel.")})
+    from tools.send_message_tool import send_message_tool
+    return send_message_tool({"action": "send", "target": found["target"], "message": message})
 
 
 def invited(event=None, **_):
