@@ -9,7 +9,7 @@ import { validatorCompiler } from 'fastify-type-provider-zod'
 import { answerErrors } from '../../../src/server/platform/http-error.ts'
 import { sha } from '../../../src/server/platform/secrets.ts'
 import { permissionController } from '../../../src/server/permissions/permission-controller.ts'
-import { changeRequestService } from '../../../src/server/agents/change-request-service.ts'
+import { asks } from '../../../src/core/asks.ts'
 import { secretService } from '../../../src/server/agents/secret-service.ts'
 import { fakeAgentd, refresh, signIn } from './signed-in.ts'
 
@@ -69,10 +69,10 @@ test('a picked member can chat, but only the owner changes its tools, keys and t
   assert.equal((await app.inject({ method: 'DELETE', url: `/api/agent-tools?agentId=${ID}&connectionId=cn_anything`, headers: { cookie } })).statusCode, 403)
   await app.close()
   const origin = JSON.stringify({ platform: 'slack', chat_id: 'c1' })
-  await db.insertInto('change_request').values({ id: 'chg_accesst1', agent_id: ID, action: 'update_self', input: JSON.stringify({ name: 'Salt' }), summary: 'Rename to Salt', why: 'x', origin, expires_at: new Date(Date.now() + 60_000) }).execute()
-  await assert.rejects(changeRequestService.approve({ actor: picked, id: 'chg_accesst1' }), { status: 403 })
-  await assert.rejects(changeRequestService.deny({ actor: picked, id: 'chg_accesst1' }), { status: 403 })
-  assert.equal((await changeRequestService.deny({ actor: owner, id: 'chg_accesst1' })).status, 'denied')
+  await db.insertInto('ask').values({ id: 'chg_accesst1', agent_id: ID, kind: 'update_self', input: JSON.stringify({ name: 'Salt' }), title: 'Rename to Salt', why: 'x', origin, expires_at: new Date(Date.now() + 60_000) }).execute()
+  await assert.rejects(asks.approve({ actor: picked, id: 'chg_accesst1' }), { status: 403 })
+  await assert.rejects(asks.decline({ actor: picked, id: 'chg_accesst1' }), { status: 403 })
+  assert.equal((await asks.decline({ actor: owner, id: 'chg_accesst1' })).status, 'declined')
   await secretService.save({ agentId: ID, input: { name: 'STRIPE_KEY', hosts: ['api.stripe.com'], header: 'Authorization: Bearer {value}' }, value: 'sk_test_x' })
   const [key] = await secretService.list({ actor: picked, agentId: ID })
   await assert.rejects(secretService.replace({ actor: picked, id: key.id, value: 'sk_test_y' }), { status: 403 })

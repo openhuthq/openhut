@@ -1,6 +1,6 @@
 import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
-import { changeRequestService } from '../../../src/server/agents/change-request-service.ts'
+import { asks } from '../../../src/core/asks.ts'
 import { connectionService, type AgentTool } from '../../../src/server/connections/connection-service.ts'
 import { permissions } from '../../../src/server/permissions/permissions.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
@@ -31,7 +31,7 @@ mock.method(connectionService, 'execute', async ({ tool: name, args }: { tool: s
 const chat = appWakes()
 const told = { at: (index: number) => chat.told.at(index)?.text }
 const settle = () => chat.settled()
-const idIn = (text: string) => /chg_[a-z0-9]+/.exec(text)?.[0] ?? ''
+const idIn = (text: string) => /ask_[a-z0-9]+/.exec(text)?.[0] ?? ''
 const events = () => db.selectFrom('connection_event').select(['tool', 'outcome', 'approved_by']).where('agent_id', '=', agent.id).orderBy('id').execute()
 
 test('a read runs at once and its secrets are hidden', async () => {
@@ -44,13 +44,13 @@ test('a read runs at once and its secrets are hidden', async () => {
 test('a write waits for the OK, runs on approval and the result reaches the agent', async () => {
   const before = ran.length
   const asked = await connectionService.call({ agent, name: 'mcp_db-cluster-resize', args: { size: 'db-s-2vcpu' }, reason: 'Queries are waiting', origin: app })
-  assert.match(asked.text, /^Waiting for your owner's OK \(chg_[a-z0-9]+\): Run db-cluster-resize on DigitalOcean\./)
+  assert.match(asked.text, /^Asked for approval \(ask_[a-z0-9]+\): Run db-cluster-resize on DigitalOcean\./)
   assert.equal(ran.length, before)
-  const approved = await changeRequestService.approve({ actor: owner, id: idIn(asked.text) })
-  assert.equal(approved.status, 'approved')
+  const approved = await asks.approve({ actor: owner, id: idIn(asked.text) })
+  assert.equal(approved.status, 'done')
   assert.deepEqual(ran.at(-1), { tool: 'db-cluster-resize', args: { size: 'db-s-2vcpu' } })
   await settle()
-  assert.match(told.at(-1) ?? '', /Your owner allowed it: Run db-cluster-resize on DigitalOcean\. The result:\n\n\{"ran":"db-cluster-resize","password":"\[hidden\]"\}/)
+  assert.match(told.at(-1) ?? '', /Approved and done: Run db-cluster-resize on DigitalOcean\. The result:\n\n\{"ran":"db-cluster-resize","password":"\[hidden\]"\}/)
   assert.deepEqual((await events()).slice(-2), [
     { tool: 'mcp_db-cluster-resize', outcome: 'asked', approved_by: null },
     { tool: 'mcp_db-cluster-resize', outcome: 'allowed', approved_by: 'usr_permowner' },
@@ -59,7 +59,7 @@ test('a write waits for the OK, runs on approval and the result reaches the agen
 
 test('Always allow saves the override, so the next call runs without asking', async () => {
   const asked = await connectionService.call({ agent, name: 'mcp_db-cluster-resize', args: {}, reason: 'Again', origin: app })
-  await changeRequestService.approve({ actor: owner, id: idIn(asked.text), always: true })
+  await asks.approve({ actor: owner, id: idIn(asked.text), answer: { always: true } })
   const listed = await permissions.list({ agentId: agent.id, connectionId: connection.id, tools: TOOLS.map((each) => each.spec) })
   assert.deepEqual(listed.map((each) => [each.name, each.permission, each.isDefault]), [['db-cluster-get', 'allow', true], ['db-cluster-resize', 'allow', false], ['db-cluster-delete', 'deny', true]])
   const direct = await connectionService.call({ agent, name: 'mcp_db-cluster-resize', args: {}, reason: 'Third time', origin: app })
@@ -71,7 +71,7 @@ test('Always allow saves the override, so the next call runs without asking', as
 test('Don\'t allow tells the agent and nothing runs; Never refuses outright', async () => {
   const before = ran.length
   const asked = await connectionService.call({ agent, name: 'mcp_db-cluster-resize', args: {}, reason: 'Bigger', origin: app })
-  await changeRequestService.deny({ actor: owner, id: idIn(asked.text) })
+  await asks.decline({ actor: owner, id: idIn(asked.text) })
   await settle()
   assert.match(told.at(-1) ?? '', /Not approved: Run db-cluster-resize on DigitalOcean\./)
   const never = await connectionService.call({ agent, name: 'mcp_db-cluster-delete', args: {}, reason: 'Clean up', origin: app })
@@ -84,16 +84,16 @@ test('Don\'t allow tells the agent and nothing runs; Never refuses outright', as
 test('two clicks on Allow once run the call once', async () => {
   const asked = await connectionService.call({ agent, name: 'mcp_db-cluster-resize', args: {}, reason: 'Twice', origin: app })
   const before = ran.length
-  const results = await Promise.allSettled([changeRequestService.approve({ actor: owner, id: idIn(asked.text) }), changeRequestService.approve({ actor: owner, id: idIn(asked.text) })])
-  assert.deepEqual(results.map((each) => each.status).sort(), ['fulfilled', 'rejected'])
+  const results = await Promise.all([asks.approve({ actor: owner, id: idIn(asked.text) }), asks.approve({ actor: owner, id: idIn(asked.text) })])
+  assert.deepEqual(results.map((each) => each.status), ['done', 'done'], 'the second click waits for the first and gets the same answer')
   assert.equal(ran.length, before + 1)
 })
 
 test('a request nobody answers expires and the agent hears about it', async () => {
   const asked = await connectionService.call({ agent, name: 'mcp_db-cluster-resize', args: {}, reason: 'Night run', origin: app })
   const id = idIn(asked.text)
-  await db.updateTable('change_request').set({ expires_at: new Date(Date.now() - 1000) }).where('id', '=', id).execute()
-  await assert.rejects(changeRequestService.approve({ actor: owner, id }), /already expired/)
+  await db.updateTable('ask').set({ expires_at: new Date(Date.now() - 1000) }).where('id', '=', id).execute()
+  assert.equal((await asks.approve({ actor: owner, id })).status, 'expired')
   await settle()
   assert.match(told.at(-1) ?? '', new RegExp(`\\[OpenHut asks:${id}\\] Nobody answered in time`))
 })

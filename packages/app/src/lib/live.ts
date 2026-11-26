@@ -13,7 +13,7 @@ const FILTERS: Record<string, QueryFilters[]> = {
   skill: [{ queryKey: ['skills'] }, { queryKey: ['skill'] }],
   memory: [{ queryKey: ['memory'] }],
   routine: [{ queryKey: ['routines'] }],
-  change_request: [{ queryKey: ['change-requests'] }],
+  ask: [{ queryKey: ['asks'] }],
   provider: [{ queryKey: PROVIDERS_KEY }],
   admin: [{ queryKey: COMPUTERS_KEY }],
 }

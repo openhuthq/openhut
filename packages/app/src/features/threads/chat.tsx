@@ -44,7 +44,7 @@ import { usePhoneBack } from '@/app/phone-page'
 import { TOUCH, useMedia } from '@/lib/media'
 import { cn } from '@/lib/utils'
 
-type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; work: Work; spec: SpecDataPart; changes: string[] }>
+type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; work: Work; spec: SpecDataPart; asks: string[] }>
 type AgentPart = AgentMessage['parts'][number]
 type Attachment = { key: string; name: string; image: boolean; thumb?: string; file?: ChatFile }
 
@@ -438,7 +438,7 @@ function Details({ text }: { text: string }) {
 }
 
 function changesOf(message: AgentMessage): string[] {
-  return message.parts.flatMap((part) => part.type === 'data-changes' ? part.data : [])
+  return message.parts.flatMap((part) => part.type === 'data-asks' ? part.data : [])
 }
 
 function uiMessageOf(message: ChatMessage): AgentMessage {
@@ -447,7 +447,7 @@ function uiMessageOf(message: ChatMessage): AgentMessage {
     if (part.type === 'data-tool') return [{ type: 'data-tool', data: z.safeParse(ToolProgress, part.data).data ?? {} }]
     if (part.type === 'data-work') return z.safeParse(Work, part.data).data ? [{ type: 'data-work', id: 'work', data: z.parse(Work, part.data) }] : []
     if (part.type === 'data-calls') return [{ type: 'data-calls', data: z.safeParse(z.array(ChatCall), part.data).data ?? [] }]
-    if (part.type === 'data-changes') return [{ type: 'data-changes', data: z.safeParse(z.array(z.string()), part.data).data ?? [] }]
+    if (part.type === 'data-asks' || part.type === 'data-changes') return [{ type: 'data-asks', data: z.safeParse(z.array(z.string()), part.data).data ?? [] }]
     if (part.type === 'data-spec') return [{ type: 'data-spec', data: part.data as SpecDataPart }]
     if (part.type === 'file' && typeof part.url === 'string' && typeof part.mediaType === 'string') return [{ type: 'file', url: part.url, mediaType: part.mediaType, filename: typeof part.filename === 'string' ? part.filename : undefined }]
     return []

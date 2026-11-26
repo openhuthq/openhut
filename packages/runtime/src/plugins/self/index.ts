@@ -1,10 +1,13 @@
 import * as z from 'zod'
-import { definePlugin, defineTool } from '../../core/plugin.ts'
+import { defineAsk, definePlugin, defineTool } from '../../core/plugin.ts'
+import { agentService } from '../../server/agents/agent-service.ts'
 import type { GatewayAgent } from '../../server/agents/agent-service.ts'
 import { channelService } from '../../server/channels/channel-service.ts'
 import { inboxService } from '../../server/inbox/inbox-service.ts'
 import { db } from '../../server/platform/db.ts'
-import { changeTool } from '../asks/change.ts'
+
+const SelfChange = z.object({ name: z.string().min(1).max(40).optional(), instructions: z.string().max(20_000).optional() })
+  .refine((change) => change.name !== undefined || change.instructions !== undefined, 'Send a new name, new instructions, or both.')
 
 export const self = definePlugin({
   name: 'self',
@@ -15,7 +18,18 @@ export const self = definePlugin({
       input: {},
       run: async (_, { agent }) => selfOf(agent),
     }),
-    update_self: changeTool({ action: 'update_self', description: 'Ask to change your own name or instructions. Send the whole new instructions, not a diff.', input: { name: z.string().min(1).max(40).optional(), instructions: z.string().max(20_000).optional() } }),
+  },
+  asks: {
+    update_self: defineAsk({
+      input: SelfChange,
+      answer: SelfChange,
+      tool: 'Ask to change your own name or instructions. Send the whole new instructions, not a diff.',
+      title: ({ input }) => [input.name !== undefined && `Rename to ${input.name}`, input.instructions !== undefined && 'Change its instructions'].filter(Boolean).join(' and '),
+      run: async ({ actor, ask, answer }) => {
+        await agentService.update({ actor, id: ask.agentId, patch: answer })
+        return answer.instructions === undefined ? undefined : 'You restart to pick it up right after this reply.'
+      },
+    }),
   },
 })
 
