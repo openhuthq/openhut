@@ -57,7 +57,7 @@ function PostgresSheet({ item, close, returned }: FlowProps) {
     }}
     foot={FOOT(close, create.isPending, 'Test and connect')}>
     {name(fieldError(create.error, 'name'))}
-    <ToggleGroup aria-label="How to enter it" className="w-fit" value={mode} onPick={setMode}>
+    <ToggleGroup variant="segmented" aria-label="How to enter it" className="w-fit" value={mode} onPick={setMode}>
       <ToggleGroupItem className="text-[13px]" value="dsn">Connection string</ToggleGroupItem>
       <ToggleGroupItem className="text-[13px]" value="fields">Host and port</ToggleGroupItem>
     </ToggleGroup>
@@ -107,7 +107,7 @@ function McpSheet({ item, close, returned }: FlowProps) {
     foot={FOOT(close, create.isPending || authorize.isPending, 'Connect')}>
     {name(fieldError(error, 'name'))}
     <Field label="URL" error={fieldError(error, 'url')}><Input mono name="url" type="url" required placeholder="https://mcp.example.com/mcp" autoComplete="off" /></Field>
-    <ToggleGroup aria-label="How it signs in" className="w-fit" value={auth} onPick={setAuth}>
+    <ToggleGroup variant="segmented" aria-label="How it signs in" className="w-fit" value={auth} onPick={setAuth}>
       <ToggleGroupItem className="text-[13px]" value="none">Public</ToggleGroupItem>
       <ToggleGroupItem className="text-[13px]" value="header">Header</ToggleGroupItem>
       <ToggleGroupItem className="text-[13px]" value="oauth">Sign in</ToggleGroupItem>
