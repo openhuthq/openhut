@@ -208,7 +208,7 @@ export const agentService = {
       log.info({ event: 'agent.stray_removed', agent: id, computer })
     }
     for (const row of await db.selectFrom('agent').selectAll().execute()) {
-      if (!await here(row.id)) continue
+      if (held.has(row.id) || !await here(row.id)) continue
       await applied(row, agentd.apply({ id: row.id, on: computer, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running' }))
         .catch((err: unknown) => log.warn({ event: 'agent.sync_failed', agent: row.id, computer, error: messageOf(err) }))
     }
@@ -476,6 +476,7 @@ function renderedChannel(channel: Selectable<Database['channel']>): RenderedChan
 }
 
 async function keepRunning({ row }: { row: AgentRow }): Promise<void> {
+  if (held.has(row.id)) return
   const { change } = await applied(row, agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: true }))
   if (change !== 'none') log.info({ event: `reconcile.${change}`, agent: row.id })
 }

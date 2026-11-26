@@ -19,6 +19,7 @@ import { permissions } from '../../src/server/permissions/permissions.ts'
 import { activity } from '../../src/server/gateway/activity.ts'
 import { agentService } from '../../src/server/agents/agent-service.ts'
 import { wakes } from '../../src/core/wakes.ts'
+import { HERE } from '../../src/server/team/home.ts'
 
 const agentd = fakeAgentd()
 await migrate()
@@ -265,6 +266,7 @@ test('a wake waits for the restart its answer needs, and the restart waits for t
   await asks.approve({ actor: owner, id })
   await new Promise((resolve) => setTimeout(resolve, 1500))
   assert.equal(agentService.restartPending('ag_chgagent'), true)
+  await agentService.sync({ computer: HERE })
   assert.equal(agentd.applies.length, applies, 'no restart while a call is open')
   assert.deepEqual(await wakes.due({ agentId: 'ag_chgagent' }), [], 'no wake before the restart')
   const ended = Date.now()
