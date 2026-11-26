@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type { AgentFiles } from '../server/platform/agentd.ts'
 import { config } from '../server/platform/config.ts'
 import { HttpError } from '../server/platform/http-error.ts'
@@ -17,11 +18,13 @@ export function hermesFiles(input: Omit<HermesCtx, 'gateway'>): AgentFiles {
     plugins: { enabled: [PYTHON_PLUGIN], entries: { [PYTHON_PLUGIN]: { allow_gateway_injection: true, settings: manifest() } } },
   }])
   const env = Object.assign({ OPENHUT_GATEWAY: ctx.gateway, OPENHUT_AGENT_TOKEN: ctx.token }, ...parts.map((part) => part.env))
+  const restart = createHash('sha256').update(JSON.stringify([config.version, ctx.gateway, ctx.token, ...parts.map((part) => 'restart' in part ? part.restart : [part.config, part.env, part.auth])])).digest('hex')
   return {
     'config.yaml': `${JSON.stringify(merged, null, 2)}\n`,
     '.env': `${Object.entries(env).map(([key, value]) => `${key}=${value}`).join('\n')}\n`,
     'SOUL.md': `${parts.flatMap((part) => part.prompt?.trim() || []).join('\n\n')}\n`,
     'auth.json': `${JSON.stringify(parts.find((part) => part.auth)?.auth ?? EMPTY_AUTH)}\n`,
+    'restart.key': `${restart}\n`,
   }
 }
 

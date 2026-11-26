@@ -8,7 +8,7 @@ import type { Database } from '../platform/db-schema.ts'
 import { config } from '../platform/config.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { agentToken, newId, sameSecret, unseal } from '../platform/secrets.ts'
-import { agentd, containerStates, features, type AgentFiles } from '../platform/agentd.ts'
+import { agentd, containerStates, features, type AgentFiles, type Change } from '../platform/agentd.ts'
 import { forward } from '../relay/forward.ts'
 import { log, emit } from '../platform/events.ts'
 import { liveService } from '../platform/live-service.ts'
@@ -36,8 +36,7 @@ let bootedAt = 0
 const PORT_TAKEN = 'Another program answers on this agent’s port, likely another OpenHut on this computer. Quit it, then stop and start this agent.'
 const DEFAULT_MODEL = 'claude:sonnet'
 const CHILDREN = ['channel', 'routine', 'skill'] as const
-const held = new Map<string, { count: number; due: boolean }>()
-const applying = new Set<string>()
+const restarting = new Set<string>()
 const moving = new Set<string>()
 
 export const agentService = {
@@ -101,8 +100,7 @@ export const agentService = {
   },
 
   update({ actor, id, patch }: { actor: Caller; id: string; patch: UpdateAgent }): Promise<Agent> {
-    const now = patch.wanted !== undefined || patch.runsOn !== undefined || patch.runsHere !== undefined
-    return now ? updated({ actor, id, patch }) : agentService.quietly({ id, change: () => updated({ actor, id, patch }) })
+    return updated({ actor, id, patch })
   },
 
   async delete({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'agent'>> {
@@ -123,30 +121,12 @@ export const agentService = {
     await db.deleteFrom('agent').execute()
   },
 
-  async quietly<T>({ id, change }: { id: string; change: () => Promise<T> }): Promise<T> {
-    const hold = held.get(id) ?? { count: 0, due: false }
-    hold.count++
-    held.set(id, hold)
-    try {
-      return await change()
-    } finally {
-      void activity.quiet({ agentId: id, ms: config.quietMs }).then(() => release(id))
-        .catch((err: unknown) => log.warn({ event: 'agent.reapply_failed', agent: id, error: messageOf(err) }))
-    }
-  },
-
   restartPending(id: string): boolean {
-    return held.has(id) || applying.has(id)
+    return restarting.has(id)
   },
 
   async reapply({ id }: { id: string }): Promise<void> {
-    const hold = held.get(id)
-    if (hold) {
-      hold.due = true
-      return
-    }
-    const row = await rowOf(id)
-    await applied(row, agentd.apply({ id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running' }))
+    await put({ row: await rowOf(id) })
     probes.delete(id)
   },
 
@@ -188,11 +168,11 @@ export const agentService = {
   },
 
   createGrant({ actor, agentId, connectionId }: { actor: Caller; agentId: string; connectionId: string }): Promise<Grant> {
-    return agentService.quietly({ id: agentId, change: () => granted({ actor, agentId, connectionId }) })
+    return granted({ actor, agentId, connectionId })
   },
 
   deleteGrant({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'grant'>> {
-    return agentService.quietly({ id: id.split('~')[0] ?? '', change: () => ungranted({ actor, id }) })
+    return ungranted({ actor, id })
   },
 
   async sync({ computer }: { computer: string }): Promise<void> {
@@ -207,8 +187,8 @@ export const agentService = {
       log.info({ event: 'agent.stray_removed', agent: id, computer })
     }
     for (const row of await db.selectFrom('agent').selectAll().execute()) {
-      if (held.has(row.id) || !await here(row.id)) continue
-      await applied(row, agentd.apply({ id: row.id, on: computer, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running' }))
+      if (!await here(row.id)) continue
+      await put({ row, on: computer })
         .catch((err: unknown) => log.warn({ event: 'agent.sync_failed', agent: row.id, computer, error: messageOf(err) }))
     }
   },
@@ -289,17 +269,26 @@ async function updated({ actor, id, patch }: { actor: Caller; id: string; patch:
   return agentService.get({ actor, id })
 }
 
-async function release(id: string): Promise<void> {
-  const hold = held.get(id)
-  if (!hold || --hold.count > 0) return
-  held.delete(id)
-  applying.add(id)
-  try {
-    if (hold.due) await agentService.reapply({ id })
-  } finally {
-    applying.delete(id)
-  }
-  wakes.nudge(id)
+async function put({ row, on }: { row: AgentRow; on?: string }): Promise<Change> {
+  const { change } = await applied(row, agentd.apply({ id: row.id, on, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running', restart: false }))
+  if (change === 'pending') restartWhenQuiet(row.id)
+  return change
+}
+
+function restartWhenQuiet(id: string): void {
+  if (restarting.has(id)) return
+  restarting.add(id)
+  void activity.quiet({ agentId: id, ms: config.quietMs })
+    .then(async () => {
+      const row = await rowOf(id)
+      await applied(row, agentd.apply({ id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running' }))
+    })
+    .catch((err: unknown) => log.warn({ event: 'agent.restart_failed', agent: id, error: messageOf(err) }))
+    .finally(() => {
+      restarting.delete(id)
+      probes.delete(id)
+      wakes.nudge(id)
+    })
 }
 
 async function requireOwner({ actor, id }: { actor: Caller; id: string }): Promise<AgentFacts> {
@@ -333,6 +322,7 @@ async function move({ facts, from, to }: { facts: AgentFacts; from: string; to: 
   await requireComputer(to)
   if (!forward.online(from)) throw new HttpError(409, `The computer ${facts.value.name} runs on is offline, so its memory and files can’t be copied. Start it, then move ${facts.value.name}.`, { param: 'runsOn' })
   const place = (runsOn: string) => editControl({ facts, change: (value) => ({ ...value, runsOn }) })
+  await activity.quiet({ agentId: facts.id, ms: config.quietMs })
   if (moving.has(facts.id)) throw new HttpError(409, `${facts.value.name} is already moving. Wait for it to finish.`, { param: 'runsOn' })
   moving.add(facts.id)
   try {
@@ -475,8 +465,7 @@ function renderedChannel(channel: Selectable<Database['channel']>): RenderedChan
 }
 
 async function keepRunning({ row }: { row: AgentRow }): Promise<void> {
-  if (held.has(row.id)) return
-  const { change } = await applied(row, agentd.apply({ id: row.id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: true }))
+  const change = await put({ row })
   if (change !== 'none') log.info({ event: `reconcile.${change}`, agent: row.id })
 }
 

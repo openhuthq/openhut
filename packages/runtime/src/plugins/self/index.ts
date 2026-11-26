@@ -27,7 +27,7 @@ export const self = definePlugin({
       title: ({ input }) => [input.name !== undefined && `Rename to ${input.name}`, input.instructions !== undefined && 'Change its instructions'].filter(Boolean).join(' and '),
       run: async ({ actor, ask, answer }) => {
         await agentService.update({ actor, id: ask.agentId, patch: answer })
-        return answer.instructions === undefined ? undefined : 'You have already restarted with it.'
+        return answer.instructions === undefined ? undefined : 'Your new instructions are already in effect.'
       },
     }),
   },

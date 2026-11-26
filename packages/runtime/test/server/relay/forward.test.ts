@@ -9,7 +9,7 @@ import { fakeComputer } from './fake-computer.ts'
 await migrate()
 await db.insertInto('person').values({ id: 'usr_fwdowner', email: 'fwd@example.com', role: 'owner', removed_at: null }).execute()
 await db.insertInto('agent').values({ id: 'ag_onbuild1', name: 'Builder', owner_id: 'usr_fwdowner', instructions: '# B', model: 'claude:sonnet', net: 3, channel_key: seal('k'.repeat(32)), runs_on: 'cm_buildbox' }).execute()
-const FILES = { 'config.yaml': 'a', '.env': 'b', 'SOUL.md': 'c', 'auth.json': 'd' }
+const FILES = { 'config.yaml': 'a', '.env': 'b', 'SOUL.md': 'c', 'auth.json': 'd', 'restart.key': 'e' }
 
 test('a call for an agent goes to the computer that runs it, and only there', async () => {
   const build = fakeComputer({ id: 'cm_buildbox' })

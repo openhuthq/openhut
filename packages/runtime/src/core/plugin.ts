@@ -23,6 +23,7 @@ export type HermesPart = {
   config?: Record<string, unknown>
   env?: Record<string, string>
   auth?: object
+  restart?: unknown
 }
 
 export type ToolResult = string | { text: string; isError: boolean } | { send: { target: string; message: string } }

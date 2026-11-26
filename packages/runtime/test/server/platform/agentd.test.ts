@@ -13,7 +13,7 @@ const { config } = await import('../../../src/server/platform/config.ts')
 await (await import('../../../src/server/platform/db.ts')).migrate()
 after(() => rmSync(data, { recursive: true, force: true }))
 
-const FILES = { 'config.yaml': 'a', '.env': 'b', 'SOUL.md': 'c', 'auth.json': 'd' }
+const FILES = { 'config.yaml': 'a', '.env': 'b', 'SOUL.md': 'c', 'auth.json': 'd', 'restart.key': 'e' }
 
 test('with a sandbox and no agentd socket, the server runs agentd in its own process', async () => {
   assert.equal(config.agentdInProcess, true)
