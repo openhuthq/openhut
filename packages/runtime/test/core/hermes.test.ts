@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { CARD_PROMPT } from '@openhut/common/cards/card.ts'
 import { ASK_PROMPT, INTERVIEW_PROMPT, starterInstructions } from '@openhut/common/asks/ask.ts'
+import { TALK_PROMPT } from '../../src/plugins/base/index.ts'
 import { hermesFiles, merge } from '../../src/core/hermes.ts'
 import { manifest } from '../../src/core/hooks.ts'
 import type { HermesCtx } from '../../src/core/plugin.ts'
@@ -191,9 +192,9 @@ test('Telegram open to anyone: everyone allowed', () => {
 })
 
 test('SOUL.md names the connected apps in one line, and adds only the ask and card guides when there are none', () => {
-  assert.equal(render([]).soul, `# Dev\n${ASK_PROMPT}${CARD_PROMPT}`)
+  assert.equal(render([]).soul, `${TALK_PROMPT}\n\n# Dev\n${ASK_PROMPT}${CARD_PROMPT}`)
   const { soul } = files({ connections: [{ name: 'Excalidraw', kind: 'excalidraw' }, { name: 'Orders\nDB', kind: 'postgres' }] })
-  assert.equal(soul, `# Dev\n\n## Connected apps\n\nThe openhut tools reach: Excalidraw, Orders DB (postgres). Call list_tools to see what each one does, and use it before doing the same work by hand.\n${ASK_PROMPT}${CARD_PROMPT}`)
+  assert.equal(soul, `${TALK_PROMPT}\n\n# Dev\n\n## Connected apps\n\nThe openhut tools reach: Excalidraw, Orders DB (postgres). Call list_tools to see what each one does, and use it before doing the same work by hand.\n${ASK_PROMPT}${CARD_PROMPT}`)
 })
 
 test('saved keys: a stand-in per key in the env, and how to call through the gateway in SOUL.md', () => {
@@ -205,7 +206,7 @@ test('saved keys: a stand-in per key in the env, and how to call through the gat
 
 test('a new agent with its starter instructions is told to interview the person in its first chat, and stops once it has a job', () => {
   const fresh = files({ agent: { ...agent, name: 'Pulse', instructions: starterInstructions('Pulse') } })
-  assert.equal(fresh.soul, `${starterInstructions('Pulse')}\n${INTERVIEW_PROMPT}${ASK_PROMPT}${CARD_PROMPT}`)
+  assert.equal(fresh.soul, `${TALK_PROMPT}\n\n${starterInstructions('Pulse')}\n${INTERVIEW_PROMPT}${ASK_PROMPT}${CARD_PROMPT}`)
   assert.match(INTERVIEW_PROMPT, /update_self/)
   assert.match(INTERVIEW_PROMPT, /connect_app/)
   assert.doesNotMatch(render([]).soul, /Your first chat/)
@@ -225,4 +226,21 @@ test('plugins\' config merges deeply, lists add up, and two different values for
   assert.deepEqual(merge([{ a: { b: 1, list: [1] } }, { a: { c: 2, list: [2] } }]), { a: { b: 1, c: 2, list: [1, 2] } })
   assert.deepEqual(merge([{ a: 1 }, { a: 1 }]), { a: 1 })
   assert.throws(() => merge([{ a: { b: 1 } }, { a: { b: 2 } }]), /Two plugins set b/)
+})
+
+test('SOUL.md opens with how the agent talks, before and overridden by the owner\'s instructions', () => {
+  const { soul } = render([])
+  assert.equal(soul.indexOf(TALK_PROMPT), 0)
+  assert.ok(soul.indexOf('# Dev') > TALK_PROMPT.length)
+  assert.equal(TALK_PROMPT, `## How you talk
+
+Your owner's instructions below override this section.
+
+- Answer first. Don't restate the question or open with a preamble.
+- Keep it short and match the length to the ask. Don't end with offers like "let me know if you need anything".
+- Use plain words.
+- Use markdown only when it helps: a numbered list for steps, "-" bullets for items, a table to compare, a code block for code. No decorative headers or emoji, and never "•" bullets.
+- In Slack, Telegram and WhatsApp, follow that channel's own formatting.
+- When you report work, say what happened and what you need next.`)
+  assert.doesNotMatch(TALK_PROMPT, /Claude|GPT|Hermes/)
 })

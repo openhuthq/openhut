@@ -33,6 +33,8 @@ import { ConfirmIcon } from '@/components/confirm-button'
 import { legacyWork, noReplyOf } from '@/features/threads/steps'
 import { RetryButton, WorkLine } from '@/features/threads/work'
 import { CardReply, MessageCard } from '@/features/threads/card'
+import { CodeBlock } from '@/features/threads/code'
+import { bullets, settled } from '@/features/threads/markdown'
 import { AskCards, PendingAsks } from '@/features/asks/card'
 import { copyText } from '@/lib/clipboard'
 import { plainError, toast, toastError, toastFailed } from '@/lib/toast'
@@ -281,7 +283,7 @@ function AgentReply({ agent, message, live, onRetry }: { agent: Agent; message: 
     <CopyMenu text={textOf(message)}><div className="flex min-w-0 flex-col gap-2 pt-1.5 pointer-coarse:select-none">
       {work && <WorkLine agent={agent} work={work} live={live} answered={blocks.length > 0} onRetry={onRetry} />}
       {blocks.map((block, index) => block.type === 'text'
-        ? <div key={index} className="msg-t"><Markdown remarkPlugins={plugins} components={{ a: ChatLink, code: FileCode }}>{block.text}</Markdown></div>
+        ? <div key={index} className="msg-t"><Markdown remarkPlugins={plugins} components={{ a: ChatLink, code: FileCode, pre: CodeBlock }}>{live ? settled(bullets(block.text)) : bullets(block.text)}</Markdown></div>
         : hasSpec && <MessageCard key={index} spec={spec} loading={live} />)}
       {changesOf(message).length > 0 && <AskCards agent={agent} ids={changesOf(message)} />}
       {live && !blocks.length && !work?.calls.some((call) => call.status === 'running') && <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>}

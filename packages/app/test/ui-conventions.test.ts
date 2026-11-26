@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 
 const SCREENS = ['features', 'app'].map((dir) => new URL(`../src/${dir}/`, import.meta.url))
 const RAW_CONTROL = /<(button|input|select|textarea|dialog)\b/
-const DYNAMIC_STYLES = new Set(['background', 'borderColor', 'flexGrow', 'rotate', 'translate', 'left', 'top', "'--i'", "'--sx'", "'--sy'", "'--pw'", "'--ar'"])
+const DYNAMIC_STYLES = new Set(['background', 'borderColor', 'color', 'flexGrow', 'rotate', 'translate', 'left', 'top', "'--i'", "'--sx'", "'--sy'", "'--pw'", "'--ar'"])
 
 function screens() {
   return SCREENS.flatMap((dir) => readdirSync(dir, { recursive: true, encoding: 'utf8' })
