@@ -79,24 +79,27 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
 function agentMcp(agent: GatewayAgent): McpServer {
   const server = new McpServer({ name: 'openhut', version: config.version })
+  const tool = <S extends z.ZodRawShape>({ name, description, shape, run }: { name: string; description: string; shape: S; run: (input: z.infer<z.ZodObject<S>>, origin: unknown) => Promise<ReturnType<typeof text>> }) =>
+    server.registerTool(name, { description, inputSchema: z.object(shape).passthrough() }, async ({ origin, ...input }: Record<string, unknown>) => run(input as z.infer<z.ZodObject<S>>, origin))
   const reason = z.string().min(1).max(500).describe('Why you need this, in a few words. Shown in the audit.')
-  server.registerTool('list_tools', { description: 'List the tools you may call, one line each.', inputSchema: { app: z.string().max(40).optional() } }, async ({ app }) => {
-    return text(toolList({ granted: await connectionService.tools({ agent }), app }))
-  })
-  server.registerTool('describe_tool', { description: 'Show the input schema of one or more tools.', inputSchema: { names: z.array(z.string().max(100)).min(1).max(20) } }, async ({ names }) => {
-    const byName = new Map((await connectionService.tools({ agent })).map((tool) => [tool.name, tool.spec]))
+  tool({ name: 'list_tools', description: 'List the tools you may call, one line each.', shape: { app: z.string().max(40).optional() }, run: async ({ app }) => text(toolList({ granted: await connectionService.tools({ agent }), app })) })
+  tool({ name: 'describe_tool', description: 'Show the input schema of one or more tools.', shape: { names: z.array(z.string().max(100)).min(1).max(20) }, run: async ({ names }) => {
+    const byName = new Map((await connectionService.tools({ agent })).map((each) => [each.name, each.spec]))
     return text(JSON.stringify(names.map((name) => ({ name, schema: byName.get(name)?.schema ?? null, description: byName.get(name)?.description ?? 'Not available to this agent' }))))
-  })
-  server.registerTool('call_tool', {
+  } })
+  tool({
+    name: 'call_tool',
     description: 'Run a tool from list_tools. Some tools wait for your owner\'s OK: then the call returns at once, and the result comes back to you as a message.',
-    inputSchema: z.object({ reason, name: z.string().max(100), arguments: z.record(z.string(), z.unknown()).default({}), connectionId: z.string().max(100).optional() }).passthrough(),
-  }, async ({ reason: why, name, arguments: args, connectionId, origin }) => {
-    const result = await connectionService.call({ agent, name, args, connectionId, reason: why, origin })
-    return text(result.text, result.isError)
+    shape: { reason, name: z.string().max(100), arguments: z.record(z.string(), z.unknown()).default({}), connectionId: z.string().max(100).optional() },
+    run: async ({ reason: why, name, arguments: args, connectionId }, origin) => {
+      const result = await connectionService.call({ agent, name, args, connectionId, reason: why, origin })
+      return text(result.text, result.isError)
+    },
   })
-  server.registerTool('ask_to_connect', {
+  tool({
+    name: 'ask_to_connect',
     description: 'Ask the person to connect the apps you need and can\'t reach yet, all in one card. You get the card: put it in your reply.',
-    inputSchema: {
+    shape: {
       why: z.string().min(1).max(300).describe('One or two sentences for the person: what the apps are for, and how to make the access if they need to (a read-only role, a token\'s scopes).'),
       apps: z.array(z.object({
         app: z.enum(ConnectionKind.options),
@@ -106,32 +109,39 @@ function agentMcp(agent: GatewayAgent): McpServer {
         auth: z.enum(MCP_AUTH).optional().describe('For app mcp: how the server lets you in. header for a token, sign_in for OAuth (Cloudflare\'s servers, like https://observability.mcp.cloudflare.com/mcp), public for none.'),
       })).min(1).max(8),
     },
-  }, async ({ why, apps }) => {
-    if (apps.some(({ app, url, name, auth }) => (url || name || auth) && app !== 'mcp')) return text('Only app mcp takes a url, a name or auth. Leave them out.', true)
-    if (apps.some(({ app, url }) => app === 'mcp' && !url)) return text('Send the MCP server\'s url with app mcp.', true)
-    return text(`Put this card in your reply, after a sentence on what you need:\n\n${askCard({ asks: apps.map((each) => ({ ...each, agentId: agent.id })), why })}`)
+    run: async ({ why, apps }) => {
+      if (apps.some(({ app, url, name, auth }) => (url || name || auth) && app !== 'mcp')) return text('Only app mcp takes a url, a name or auth. Leave them out.', true)
+      if (apps.some(({ app, url }) => app === 'mcp' && !url)) return text('Send the MCP server\'s url with app mcp.', true)
+      return text(`Put this card in your reply, after a sentence on what you need:\n\n${askCard({ asks: apps.map((each) => ({ ...each, agentId: agent.id })), why })}`)
+    },
   })
-  server.registerTool('schedule_routine', {
+  tool({
+    name: 'schedule_routine',
     description: 'Use this whenever something needs a follow-up later: a promise you made, a reply you\'re waiting on, a date someone mentioned. Don\'t wait to be asked. Then tell the person in one line what you set up. Check list_routines first, and don\'t set up the same follow-up twice. Each run starts in the chat where you call this, with that chat\'s history.',
-    inputSchema: z.object({
+    shape: {
       name: z.string().min(1).max(80).describe('Starts with a verb, plain words: "Chase Acme on invoice #4471".'),
       plan: z.string().min(1).max(2000).describe('Written to yourself: what to check, when to speak up, when to stop.'),
       at: z.string().max(40).optional().describe('ISO time with an offset, for a one-time routine, like 2026-11-28T09:00:00+01:00.'),
       cron: z.string().max(100).optional().describe('Minute hour day month weekday, in the owner\'s time zone, for a repeating one, like 0 10 * * 1-5. At most every 15 minutes.'),
       until: z.string().max(40).optional().describe('ISO time; a repeating routine stops then. At most 90 days ahead, the default.'),
-    }).passthrough(),
-  }, async (input) => text(await routineService.schedule({ agentId: agent.id, input })))
-  server.registerTool('list_routines', { description: 'List your routines, one line each.' }, async () => text(await routineService.listForAgent({ agentId: agent.id })))
-  server.registerTool('cancel_routine', {
+    },
+    run: async (input, origin) => text(await routineService.schedule({ agentId: agent.id, input: { ...input, origin } })),
+  })
+  tool({ name: 'list_routines', description: 'List your routines, one line each.', shape: {}, run: async () => text(await routineService.listForAgent({ agentId: agent.id })) })
+  tool({
+    name: 'cancel_routine',
     description: 'Use this when what you were following up on is done, or no longer needed. Tell the chat first: the routine leaves the owner\'s list.',
-    inputSchema: { id: z.string().max(40), reason: z.string().max(200).describe('Short, past tense, for the log: "Paid on Nov 26".') },
-  }, async ({ id, reason }) => text(await routineService.cancel({ agentId: agent.id, id, reason })))
-  server.registerTool('get_self', { description: 'Your name, instructions and channels, where post_message can post (postTo), the connections you have, and the ones you can ask for. Read it before you ask to change any of them.' }, async () => text(await selfOf(agent)))
+    shape: { id: z.string().max(40), reason: z.string().max(200).describe('Short, past tense, for the log: "Paid on Nov 26".') },
+    run: async ({ id, reason: why }) => text(await routineService.cancel({ agentId: agent.id, id, reason: why })),
+  })
+  tool({ name: 'get_self', description: 'Your name, instructions and channels, where post_message can post (postTo), the connections you have, and the ones you can ask for. Read it before you ask to change any of them.', shape: {}, run: async () => text(await selfOf(agent)) })
   const why = z.string().min(1).max(300).describe('One sentence for your owner: why this change, in plain words.')
-  const ask = ({ name, action, description, shape }: { name: string; action: ChangeAction; description: string; shape: z.ZodRawShape }) => server.registerTool(name, {
+  const ask = ({ name, action, description, shape }: { name: string; action: ChangeAction; description: string; shape: z.ZodRawShape }) => tool({
+    name,
     description: `${description} Your owner approves it in OpenHut first: the call returns at once, and the answer comes back to you as a message.`,
-    inputSchema: z.object({ why, ...shape }).passthrough(),
-  }, async ({ why: reason, origin, ...input }: Record<string, unknown>) => text(await changeRequestService.ask({ agentId: agent.id, action, input, why: String(reason), origin })))
+    shape: { why, ...shape },
+    run: async ({ why: because, ...input }, origin) => text(await changeRequestService.ask({ agentId: agent.id, action, input, why: String(because), origin })),
+  })
   ask({ name: 'update_self', action: 'update_self', description: 'Ask to change your own name or instructions. Send the whole new instructions, not a diff.', shape: { name: z.string().min(1).max(40).optional(), instructions: z.string().max(20_000).optional() } })
   ask({
     name: 'add_channel', action: 'add_channel', description: 'Ask to add WhatsApp, Telegram or Discord, so people can message you there. Slack needs a Slack app, so your owner adds it in OpenHut.',
