@@ -1,13 +1,12 @@
 import * as z from 'zod/mini'
+import { Place } from '@openhut/common/channels/channel.ts'
 import { Thread } from '@openhut/common/threads/thread.ts'
 
-export const Place = z.object({ platform: z.string(), chat_id: z.string(), thread_id: z.optional(z.string()), chat_name: z.string() })
-export type Place = z.infer<typeof Place>
 
 export const Origin = z.object({ platform: z.enum(['app', 'discord', 'webhook', 'routine']), label: z.string(), url: z.optional(z.string()) })
 export type Origin = z.infer<typeof Origin>
 
-export const SourcedThread = z.extend(Thread, { origin: z.optional(Origin), mirrors: z.optional(z.array(Place)), waiting: z.optional(z.boolean()), mirrorPaused: z.optional(z.boolean()) })
+export const SourcedThread = z.extend(Thread, { origin: z.optional(Origin), mirrors: z.optional(z.array(Place)), waiting: z.optional(z.boolean()), mirrorPaused: z.optional(z.boolean()), readOnly: z.optional(z.boolean()), continueUrl: z.optional(z.nullable(z.string())) })
 export type SourcedThread = z.infer<typeof SourcedThread>
 
 export const NotifySettings = z.object({ default: z.nullable(Place), rules: z.string() })
@@ -27,6 +26,8 @@ export function samePlace(a: Place | null | undefined, b: Place | null | undefin
 export function placeName(place: Place): string {
   return place.platform === 'discord' || place.platform === 'slack' ? `#${place.chat_name.replace(/^#/, '')}` : place.chat_name
 }
+
+export const PLATFORM_WORD: Record<string, string> = { discord: 'Discord', slack: 'Slack', telegram: 'Telegram', whatsapp: 'WhatsApp' }
 
 const SOURCE_WORD: Record<Origin['platform'], string> = { app: 'Web', discord: 'Discord', webhook: 'Webhook', routine: 'Routine' }
 

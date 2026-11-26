@@ -13,7 +13,8 @@ import { agentPath } from '@/app/routes'
 import { Face } from '@/features/agents/face'
 import { FIELD_MENU, SOFT_TRIGGER } from '@/features/models/model-picker'
 import { PlaceIcon } from '@/features/routines/target-picker'
-import { NotifySettings, Place, placeKey, placeName, samePlace } from '@/features/threads/places'
+import { Place } from '@openhut/common/channels/channel.ts'
+import { NotifySettings, placeKey, placeName, samePlace } from '@/features/threads/places'
 import { request } from '@/lib/api-client'
 import { formValues } from '@/lib/form'
 import { cn } from '@/lib/utils'
@@ -45,11 +46,11 @@ function useSaveNotify(agentId: string) {
   })
 }
 
-function PlacePicker({ agentId, value, none, label, className, onPick }: { agentId: string; value: Place | null; none: string; label: string; className?: string; onPick: (place: Place | null) => void }) {
+export function PlacePicker({ agentId, value, none, label, disabled, className, onPick }: { agentId: string; value: Place | null; none: string; label: string; disabled?: boolean; className?: string; onPick: (place: Place | null) => void }) {
   const places = usePlaces(agentId).data ?? []
   const options = value && !places.some((place) => samePlace(place, value)) ? [value, ...places] : places
   return <DropdownMenu>
-    <DropdownMenuTrigger className={cn(SOFT_TRIGGER, 'gap-2', className)} aria-label={`${label}: ${value ? placeName(value) : none}`}>
+    <DropdownMenuTrigger className={cn(SOFT_TRIGGER, 'gap-2', className)} disabled={disabled} aria-label={`${label}: ${value ? placeName(value) : none}`}>
       <PlaceIcon platform={value?.platform ?? 'app'} />
       <span className="min-w-0 flex-1 truncate text-left">{value ? placeName(value) : none}</span>
       <I icon={UnfoldMoreIcon} size={12} className="text-mute" />

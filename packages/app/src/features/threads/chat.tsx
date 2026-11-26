@@ -11,7 +11,7 @@ import { openhut, type OpenHutAgent } from '@/lib/openhut'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { ChatCall, fileInHome, MAX_FILE_BYTES, MAX_FILES, ToolProgress, Work, type ChatFile, type ChatMessage } from '@openhut/common/threads/thread.ts'
 import { Alert } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { DropdownMenuItem, LongPressMenu } from '@/components/ui/dropdown-menu'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
@@ -28,7 +28,8 @@ import { troubleOf } from '@/features/agents/status'
 import { useAgents, useUpdateAgent } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
 import { deleteUpload, saveFile, threadPath, uploadFile, useClearChat, useHomeFiles, useResumeMirror, useThread, useThumb, useTouchThread, type ThreadWithMessages } from '@/features/threads/api'
-import { Notified, placeName, sourceOf, startedIn, type Place, type SourcedThread } from '@/features/threads/places'
+import { Notified, PLATFORM_WORD, placeName, sourceOf, startedIn, type SourcedThread } from '@/features/threads/places'
+import type { Place } from '@openhut/common/channels/channel.ts'
 import { PlaceIcon } from '@/features/routines/target-picker'
 import { WebhookSetup, WebhookSetupCard } from '@/features/webhooks/setup-card'
 import { homePathsIn, linkHomeFiles, RASTER } from '@/features/threads/files'
@@ -81,10 +82,10 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
   const shown = agent.runsHere ? chat.messages : chat.messages.filter((message) => message.role === 'user' || message.parts.some((part) => part.type !== 'step-start'))
   const last = shown.at(-1)
   const clear = agent.canEdit && chat.messages.length > 0 && !busy && !attachments.uploading && <ClearChat agent={agent} threadId={thread.id} attachments={attachments} />
-  return <ChatFiles value={files}><CardReply value={(text) => { if (!busy) send(text) }}><ChatFrame agent={agent} thread={thread} tools={<>{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={<Composer agent={agent} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void chat.stop()} />}>
+  return <ChatFiles value={files}><CardReply value={(text) => { if (!busy) send(text) }}><ChatFrame agent={agent} thread={thread} tools={<>{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={thread.readOnly ? <ContinueBar thread={thread} /> : <Composer agent={agent} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void chat.stop()} />}>
     {shown.length ? <>
       <Day iso={thread.updatedAt} />
-      {shown.map((message) => <Message key={message.id} agent={agent} message={message} mirrors={thread.mirrorPaused ? [] : thread.mirrors ?? []} live={busy && message === last} onRetry={!busy && message === last ? () => void chat.regenerate() : undefined} />)}
+      {shown.map((message) => <Message key={message.id} agent={agent} message={message} mirrors={thread.mirrorPaused || thread.readOnly ? [] : thread.mirrors ?? []} live={busy && message === last} onRetry={!busy && message === last ? () => void chat.regenerate() : undefined} />)}
     </> : <ChatEmpty agent={agent} />}
     {chat.status === 'submitted' && last?.role === 'user' && <Message agent={agent} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
     <PendingAsks agent={agent} shown={new Set(chat.messages.flatMap(changesOf))} />
@@ -192,7 +193,7 @@ function ThreadSource({ thread }: { thread: SourcedThread }) {
   const origin = thread.origin
   const resume = useResumeMirror(thread)
   const paused = !!thread.mirrorPaused && !!thread.mirrors?.length
-  const mirrors = (thread.mirrors ?? []).filter((mirror) => paused || !(origin?.platform === mirror.platform && placeName(mirror) === sourceOf(thread).label))
+  const mirrors = thread.readOnly ? [] : (thread.mirrors ?? []).filter((mirror) => paused || !(origin?.platform === mirror.platform && placeName(mirror) === sourceOf(thread).label))
   if (!origin?.url && !mirrors.length) return null
   const started = origin?.url && <a href={origin.url} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-1 text-mute no-underline hover:text-ink">
     <span className="truncate">Started in {startedIn(thread)}</span><I icon={ArrowUpRight01Icon} size={12} />
@@ -204,6 +205,18 @@ function ThreadSource({ thread }: { thread: SourcedThread }) {
     {paused && <span className="truncate">Paused posting to {mirrors.map(placeName).join(', ')}</span>}
     {paused && <><span aria-hidden="true">·</span><Button type="button" variant="link" className="h-auto p-0 text-[12.5px] font-normal text-ink" disabled={resume.isPending} onClick={() => resume.mutate(undefined, { onError: toastError })}>Resume</Button></>}
   </span>
+}
+
+function ContinueBar({ thread }: { thread: SourcedThread }) {
+  const place = thread.mirrors?.[0]
+  const where = place ? PLATFORM_WORD[place.platform] ?? place.platform : 'the other app'
+  return <div className="shrink-0 px-8 pb-5 phone:px-3 phone:pb-3">
+    <div className="mx-auto flex max-w-[640px] items-center gap-2.5 rounded-xl bg-sidebar py-2.5 pr-2.5 pl-3.5 text-[13.5px] text-body phone:flex-wrap">
+      {place && <PlaceIcon platform={place.platform} size={16} />}
+      <span className="min-w-0 flex-1">This conversation continues in {place ? placeName(place) : where}</span>
+      {thread.continueUrl && <a href={thread.continueUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'secondary', size: 'sm' })}>Open in {where}<span className="text-[11px] text-mute">↗</span></a>}
+    </div>
+  </div>
 }
 
 function NotifiedRow({ notified }: { notified: Notified[number] }) {
