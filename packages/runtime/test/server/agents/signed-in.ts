@@ -39,7 +39,7 @@ async function seed(): Promise<void> {
       const record: ChannelRecord = { kind: channel.kind, status: channel.status, account: channel.account, ...audienceOf(channel), createdAt: new Date(channel.created_at).toISOString() }
       await recordsService.put({ collection: 'channel', id: channel.id, ...place, value: record, ...channel.secrets && { secret: JSON.parse(unseal(channel.secrets)) } })
     }
-    for (const routine of await db.selectFrom('routine').selectAll().where('agent_id', '=', row.id).execute()) {
+    for (const routine of await db.selectFrom('inbox_source').selectAll().where('agent_id', '=', row.id).where('kind', '=', 'schedule').execute()) {
       const record: RoutineRecord = { name: routine.name, plan: routine.plan, at: iso(routine.at), cron: routine.cron, until: iso(routine.until), origin: routine.origin, createdAt: new Date(routine.created_at).toISOString() }
       await recordsService.put({ collection: 'routine', id: routine.id, ...place, value: record })
     }

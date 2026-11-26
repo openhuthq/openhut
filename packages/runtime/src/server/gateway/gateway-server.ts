@@ -12,8 +12,9 @@ import { testAnthropic, testModel } from './test-model.ts'
 import { brokerService, upstreams } from './broker.ts'
 import { activity } from './activity.ts'
 import { cardService } from '../cards/card-service.ts'
-import { routineService } from '../routines/routine-service.ts'
+import { routineService } from '../inbox/routines.ts'
 import { changeRequestService } from '../agents/change-request-service.ts'
+import { inboxService } from '../inbox/inbox-service.ts'
 import { channelService } from '../channels/channel-service.ts'
 import { db } from '../platform/db.ts'
 import type { ChangeAction } from '@openhut/common/agents/change-request.ts'
@@ -66,8 +67,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const upstream = brokered && upstreams.get(brokered[1])
   if (brokered && upstream) return brokerService.forward({ agent, upstream, path: brokered[2] + url.search, req, res })
   if (path === '/api/v1/mcp') return serveMcp({ server: agentMcp(agent), req, res, body: mcp })
-  if (path === '/routines/due' && req.method === 'GET') return json(res, 200, { object: 'list', url: path, hasMore: false, data: [...await routineService.due({ agentId: agent.id }), ...await changeRequestService.due({ agentId: agent.id })] })
-  const run = /^\/routines\/runs\/((?:ru|chg)_[a-z0-9]+)$/.exec(path)
+  if (path === '/routines/due' && req.method === 'GET') return json(res, 200, { object: 'list', url: path, hasMore: false, data: [...await inboxService.due({ agentId: agent.id }), ...await changeRequestService.due({ agentId: agent.id })] })
+  const run = /^\/routines\/runs\/((?:ru|chg|hd)_[a-z0-9]+)$/.exec(path)
   if (run && req.method === 'POST') return json(res, 200, await reportRun({ agentId: agent.id, runId: run[1], body: await readBody(req) }))
   if (path === '/messages/target' && req.method === 'POST') return json(res, 200, await messageTarget({ agentId: agent.id, body: await readBody(req) }))
   if (path === '/telegram/joins' && req.method === 'POST') return json(res, 200, await telegramJoin({ agentId: agent.id, body: await readBody(req) }))
@@ -173,17 +174,19 @@ function agentMcp(agent: GatewayAgent): McpServer {
       header: z.string().max(200).optional().describe('How the service wants it, with {value} for the key. Default: Authorization: Bearer {value}. Stripe: Authorization: Bearer {value}; others: X-Api-Key: {value}.'),
     },
   })
+  ask({ name: 'add_webhook', action: 'add_webhook', description: 'Ask for a webhook: an address another service (like DigitalOcean alerts) calls when something happens. Each call comes to you as a message in this chat, with the raw payload. Once approved you get the address; your owner keeps the secret.', shape: { name: z.string().min(1).max(60).describe('What calls it, in a few words: "DigitalOcean Postgres alerts".') } })
   ask({ name: 'request_connection', action: 'request_connection', description: 'Ask for a connection that already exists in OpenHut (get_self lists them). For an app nobody connected yet, use ask_to_connect.', shape: { connectionId: z.string().max(40) } })
   return server
 }
 
 async function selfOf(agent: GatewayAgent): Promise<string> {
-  const [row, channels, connections, grants, postTo] = await Promise.all([
+  const [row, channels, connections, grants, postTo, hooks] = await Promise.all([
     db.selectFrom('agent').select(['name', 'instructions']).where('id', '=', agent.id).executeTakeFirstOrThrow(),
     channelService.list({ agentId: agent.id }),
     db.selectFrom('connection').select(['id', 'name', 'kind']).orderBy('created_at').execute(),
     db.selectFrom('connection_grant').select('connection_id').where('agent_id', '=', agent.id).execute(),
     channelService.postTargets({ agentId: agent.id }),
+    inboxService.forAgent({ agentId: agent.id }),
   ])
   const have = new Set(grants.map((grant) => grant.connection_id))
   return JSON.stringify({
@@ -193,6 +196,7 @@ async function selfOf(agent: GatewayAgent): Promise<string> {
     connections: connections.filter((each) => have.has(each.id)),
     canAskFor: connections.filter((each) => !have.has(each.id)),
     postTo: postTo.map(({ channel, chat, place }) => ({ channel, chat, place })),
+    webhooks: hooks,
   }, null, 2)
 }
 
@@ -202,8 +206,8 @@ async function reportRun({ agentId, runId, body }: { agentId: string; runId: str
   if (runId.startsWith('chg_')) {
     if (!parsed.data.picked) throw new HttpError(400, 'Send picked: true.')
     await changeRequestService.picked({ agentId, id: runId })
-  } else if (parsed.data.picked) await routineService.picked({ agentId, runId })
-  else await routineService.report({ agentId, runId, said: parsed.data.said ?? '' })
+  } else if (parsed.data.picked) await inboxService.picked({ agentId, id: runId })
+  else await inboxService.report({ agentId, runId, said: parsed.data.said ?? '' })
   return { object: 'routine_run', id: runId }
 }
 

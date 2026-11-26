@@ -5,7 +5,7 @@ import { clientOf, rateLimit, requireUnder } from '../platform/rate-limit.ts'
 import { checkAddress, clearAddress, publicAddress, saveAddress } from '../platform/address.ts'
 import { deleted, IdParams, listOf } from '../platform/responses.ts'
 import { clearSessionCookie, cookieOf, googleStateCookie, GOOGLE_STATE, requireLocal, requireSignIn, sessionToken, setSessionCookie, who } from './identity.ts'
-import { routineService } from '../routines/routine-service.ts'
+import { routineService } from '../inbox/routines.ts'
 import { installSettingsService } from './install-settings-service.ts'
 import { teamService } from './team-service.ts'
 

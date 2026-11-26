@@ -17,6 +17,7 @@ export const Routine = z.object({
   cron: z.nullable(z.string()),
   until: z.nullable(Timestamp),
   platform: z.string(),
+  target: z.string(),
   place: z.string(),
   nextRunAt: z.nullable(Timestamp),
   stopped: z.nullable(z.string()),
@@ -26,6 +27,9 @@ export const Routine = z.object({
 export type Routine = z.infer<typeof Routine>
 
 export const ListRoutines = z.object({ agentId: z.string() })
+
+export const UpdateRoutine = z.object({ target: z.optional(z.string().check(z.maxLength(40))), until: z.optional(z.nullable(z.string().check(z.maxLength(40)))) })
+export type UpdateRoutine = z.infer<typeof UpdateRoutine>
 export type ListRoutines = z.infer<typeof ListRoutines>
 
 export const RoutineRecord = z.object({

@@ -8,7 +8,7 @@ import type { Database } from '../platform/db-schema.ts'
 import { emit, log } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { deleted } from '../platform/responses.ts'
-import { newId } from '../platform/secrets.ts'
+import { newId, sha } from '../platform/secrets.ts'
 import { settings } from '../platform/settings.ts'
 import { agentService, mayEdit, placeOf as recordPlace, type AgentFacts } from '../agents/agent-service.ts'
 import { recordsService, type Held } from '../platform/records.ts'
@@ -41,16 +41,13 @@ export const Origin = z.looseObject({
   user_name: z.optional(z.nullable(z.string())),
 })
 export type Origin = z.infer<typeof Origin>
+export const placeFor = (input: { agentId: string; origin: Origin }): Promise<string> => placeOf(input)
 type Stored = Origin & { place: string }
-type RoutineRow = Selectable<Database['routine']>
+type RoutineRow = Selectable<Database['inbox_source']>
 type ScheduleInput = { name: string; plan: string; at?: string; cron?: string; until?: string; origin?: unknown }
-export type DueRun = { runId: string; routineId: string; text: string; origin: Origin }
+export type Fired = { runId: string; routineId: string; agentId: string; text: string }
 
 const ranToday = new Map<string, { day: string; count: number; capLogged: boolean }>()
-const dashboardRuns = new Set<string>()
-let ticking: NodeJS.Timeout | undefined
-let inTick = false
-let dashboardRunner: (input: { agentId: string; text: string }) => Promise<string> = async () => { throw new Error('No dashboard runner.') }
 
 export const routineService = {
   inRun: (agentId: string): Promise<boolean> => openRun(agentId),
@@ -64,15 +61,15 @@ export const routineService = {
     if (!origin.success) throw new HttpError(400, 'You can only set up routines from a chat you\'re in.')
     const place = await placeOf({ agentId, origin: origin.data })
     if (await openRun(agentId)) throw new HttpError(409, 'A routine can\'t set up another routine. Tell the person instead.')
-    const active = await db.selectFrom('routine').select((eb) => eb.fn.countAll<number>().as('n')).where('agent_id', '=', agentId).executeTakeFirstOrThrow()
+    const active = await db.selectFrom('inbox_source').select((eb) => eb.fn.countAll<number>().as('n')).where('agent_id', '=', agentId).where('kind', '=', 'schedule').executeTakeFirstOrThrow()
     if (Number(active.n) >= MAX_ACTIVE) throw new HttpError(409, `You already have ${MAX_ACTIVE} routines. Stop one with cancel_routine first.`)
     const now = new Date()
     const at = input.at ? timeOf({ value: input.at, field: 'at' }) : null
     if (at && at.getTime() < now.getTime() - 60_000) throw new HttpError(400, 'That time has passed. Pick a time in the future.')
     const until = input.cron ? untilOf({ value: input.until, now }) : null
     const nextRunAt = at ?? nextOf({ cron: checkedCron(input.cron ?? ''), after: now })
-    const row = await db.insertInto('routine').values({
-      id: newId('rt'), agent_id: agentId, name, plan, at, cron: input.cron ?? null, until, origin: JSON.stringify({ ...origin.data, place }), next_run_at: nextRunAt,
+    const row = await db.insertInto('inbox_source').values({
+      id: newId('rt'), agent_id: agentId, kind: 'schedule', name, plan, at, cron: input.cron ?? null, until, origin: JSON.stringify({ ...origin.data, place }), next_run_at: nextRunAt,
     }).returningAll().executeTakeFirstOrThrow()
     await upload(row)
     changed({ name: 'routine.scheduled', agentId, routineId: row.id, properties: { cron: row.cron, at: at?.toISOString() } })
@@ -80,67 +77,59 @@ export const routineService = {
   },
 
   async listForAgent({ agentId }: { agentId: string }): Promise<string> {
-    const rows = await db.selectFrom('routine').selectAll().where('agent_id', '=', agentId).orderBy('created_at').execute()
+    const rows = await db.selectFrom('inbox_source').selectAll().where('agent_id', '=', agentId).where('kind', '=', 'schedule').orderBy('created_at').execute()
     if (!rows.length) return 'No routines.'
     return rows.map((row) => `${row.id} ${row.name} · ${row.cron ?? 'once'} · ${row.next_run_at ? `next ${shortTime(new Date(row.next_run_at))}` : stoppedOf(row) ?? 'running now'}`).join('\n')
   },
 
   async cancel({ agentId, id, reason }: { agentId: string; id: string; reason: string }): Promise<string> {
-    const gone = await db.deleteFrom('routine').where('id', '=', id).where('agent_id', '=', agentId).returningAll().executeTakeFirst()
+    const gone = await db.deleteFrom('inbox_source').where('id', '=', id).where('agent_id', '=', agentId).where('kind', '=', 'schedule').returningAll().executeTakeFirst()
     if (!gone) throw new HttpError(404, `No routine ${id}. Call list_routines to see yours.`)
     await forget(gone)
     changed({ name: 'routine.ended', agentId, routineId: id, properties: { reason: reason.slice(0, 200) || 'cancelled' } })
     return 'Stopped.'
   },
 
-  async due({ agentId }: { agentId: string }): Promise<DueRun[]> {
-    const rows = await db.selectFrom('routine').selectAll().where('agent_id', '=', agentId).where('run_status', '=', 'open').where('run_picked_at', 'is', null).execute()
-    return rows.flatMap((row) => {
-      const origin = originOf(row)
-      return row.run_id && origin.platform !== DASHBOARD ? [{ runId: row.run_id, routineId: row.id, text: runText(row), origin: hermesOrigin(origin) }] : []
-    })
-  },
-
   async picked({ agentId, runId }: { agentId: string; runId: string }): Promise<void> {
-    const done = await db.updateTable('routine').set({ run_picked_at: new Date() }).where('agent_id', '=', agentId).where('run_id', '=', runId).where('run_status', '=', 'open').returning('id').executeTakeFirst()
+    const done = await db.updateTable('inbox_source').set({ run_picked_at: new Date() }).where('agent_id', '=', agentId).where('run_id', '=', runId).where('run_status', '=', 'open').returning('id').executeTakeFirst()
     if (!done) throw new HttpError(404, `No open run ${runId}.`)
     changed({ name: 'routine.run', agentId, routineId: done.id, properties: { run: runId, status: 'picked' } })
   },
 
   async report({ agentId, runId, said }: { agentId: string; runId: string; said: string }): Promise<void> {
-    const row = await db.selectFrom('routine').selectAll().where('agent_id', '=', agentId).where('run_id', '=', runId).where('run_status', '=', 'open').where('run_picked_at', 'is not', null).executeTakeFirst()
+    const row = await db.selectFrom('inbox_source').selectAll().where('agent_id', '=', agentId).where('run_id', '=', runId).where('run_status', '=', 'open').where('run_picked_at', 'is not', null).executeTakeFirst()
     if (!row) throw new HttpError(404, `No open run ${runId}.`)
     const status = SILENT.test(said) ? 'quiet' : 'told'
     changed({ name: 'routine.run', agentId, routineId: row.id, properties: { run: runId, status } })
     if (!row.cron) {
-      await db.deleteFrom('routine').where('id', '=', row.id).execute()
+      await db.deleteFrom('inbox_source').where('id', '=', row.id).execute()
       await forget(row)
       changed({ name: 'routine.ended', agentId, routineId: row.id, properties: { reason: 'ran once' } })
       return
     }
-    await db.updateTable('routine').set({ run_status: status, run_text: status === 'told' ? said.slice(0, 2000) : null, failures: 0 }).where('id', '=', row.id).execute()
+    await db.updateTable('inbox_source').set({ run_status: status, run_text: status === 'told' ? said.slice(0, 2000) : null, failures: 0 }).where('id', '=', row.id).execute()
   },
 
   async list({ actor, agentId }: { actor: Caller; agentId: string }): Promise<Routine[]> {
     const facts = await editable({ actor, id: agentId })
     if (facts.row) {
-      const rows = await db.selectFrom('routine').selectAll().where('agent_id', '=', agentId).orderBy('next_run_at', (ob) => ob.asc().nullsLast()).execute()
+      const rows = await db.selectFrom('inbox_source').selectAll().where('agent_id', '=', agentId).where('kind', '=', 'schedule').orderBy('next_run_at', (ob) => ob.asc().nullsLast()).execute()
       return rows.map(routineOf)
     }
     const held = await recordsService.list({ collection: 'routine', workspace: facts.workspace, parent: agentId })
     return held.flatMap((each) => {
       const value = RoutineRecord.safeParse(each.value).data
-      return value ? [routineOf({ ...value, at: dateOf(value.at), until: dateOf(value.until), id: each.id, agent_id: agentId, next_run_at: null, run_id: null, run_status: null, run_picked_at: null, run_at: null, run_text: null, failures: 0, created_at: new Date(value.createdAt) })] : []
+      return value ? [routineOf({ ...value, at: dateOf(value.at), until: dateOf(value.until), id: each.id, agent_id: agentId, kind: 'schedule', secret: null, last_at: null, next_run_at: null, run_id: null, run_status: null, run_picked_at: null, run_at: null, run_text: null, failures: 0, created_at: new Date(value.createdAt) })] : []
     })
   },
 
   async stop({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'routine'>> {
-    const row = await db.selectFrom('routine').select('agent_id').where('id', '=', id).executeTakeFirst()
+    const row = await db.selectFrom('inbox_source').select('agent_id').where('id', '=', id).where('kind', '=', 'schedule').executeTakeFirst()
     const agentId = row?.agent_id ?? await parentOf(id)
     if (!agentId) throw new HttpError(404, `There's no routine ${id}.`)
     const facts = await editable({ actor, id: agentId })
     await recordsService.remove({ collection: 'routine', workspace: facts.workspace, id })
-    await db.deleteFrom('routine').where('id', '=', id).execute()
+    await db.deleteFrom('inbox_source').where('id', '=', id).execute()
     changed({ name: 'routine.ended', agentId, routineId: id, properties: { reason: 'stopped by the owner' } })
     return deleted({ id, object: 'routine' })
   },
@@ -154,18 +143,18 @@ export const routineService = {
       wanted.add(each.id)
       const fields = { name: value.name, plan: value.plan, at: value.at, cron: value.cron, until: value.until, origin: value.origin }
       const nextRunAt = value.cron ? nextOf({ cron: value.cron, after: now }) : value.at && new Date(value.at) > now ? new Date(value.at) : now
-      await db.insertInto('routine').values({ id: each.id, agent_id: agentId, ...fields, next_run_at: nextRunAt, created_at: new Date(value.createdAt) })
+      await db.insertInto('inbox_source').values({ id: each.id, agent_id: agentId, kind: 'schedule', ...fields, next_run_at: nextRunAt, created_at: new Date(value.createdAt) })
         .onConflict((oc) => oc.column('id').doUpdateSet(fields)).execute()
     }
-    for (const row of await db.selectFrom('routine').select('id').where('agent_id', '=', agentId).execute()) {
-      if (!wanted.has(row.id) && await recordsService.held(row.id) > 0) await db.deleteFrom('routine').where('id', '=', row.id).execute()
+    for (const row of await db.selectFrom('inbox_source').select('id').where('agent_id', '=', agentId).where('kind', '=', 'schedule').execute()) {
+      if (!wanted.has(row.id) && await recordsService.held(row.id) > 0) await db.deleteFrom('inbox_source').where('id', '=', row.id).execute()
     }
   },
 
   async retime(): Promise<void> {
     const now = new Date()
-    const rows = await db.selectFrom('routine').select(['id', 'cron']).where('cron', 'is not', null).where('next_run_at', 'is not', null).execute()
-    for (const row of rows) await db.updateTable('routine').set({ next_run_at: nextOf({ cron: row.cron ?? '', after: now }) }).where('id', '=', row.id).execute()
+    const rows = await db.selectFrom('inbox_source').select(['id', 'cron']).where('cron', 'is not', null).where('next_run_at', 'is not', null).execute()
+    for (const row of rows) await db.updateTable('inbox_source').set({ next_run_at: nextOf({ cron: row.cron ?? '', after: now }) }).where('id', '=', row.id).execute()
   },
 
   setTimeZone: async (zone: string): Promise<void> => {
@@ -174,87 +163,74 @@ export const routineService = {
     await routineService.retime()
   },
 
-  runDashboardWith(runner: typeof dashboardRunner): void {
-    dashboardRunner = runner
+  tick: (now: Date): Promise<{ fired: Fired[]; failed: string[] }> => tickOnce(now),
+
+  async update({ actor, id, origin, until }: { actor: Caller; id: string; origin?: Origin; until?: string | null }): Promise<Routine> {
+    const row = await db.selectFrom('inbox_source').selectAll().where('id', '=', id).where('kind', '=', 'schedule').executeTakeFirst()
+    if (!row) throw new HttpError(404, `There's no routine ${id}.`)
+    await editable({ actor, id: row.agent_id })
+    if (until !== undefined && !row.cron) throw new HttpError(400, 'A one-time routine has no end date.')
+    const place = origin ? await placeOf({ agentId: row.agent_id, origin }) : originOf(row).place
+    const next = await db.updateTable('inbox_source').set({
+      ...origin && { origin: JSON.stringify({ ...origin, place }) },
+      ...until !== undefined && { until: until === null ? null : untilOf({ value: until, now: new Date(), most: null }) },
+    }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
+    await upload(next)
+    changed({ name: 'routine.updated', agentId: row.agent_id, routineId: id })
+    return routineOf(next)
   },
 
-  start(): void {
-    if (ticking) return
-    const run = () => void routineService.tick().catch((err: unknown) => log.error({ event: 'routine.tick_failed', error: messageOf(err) }))
-    ticking = setInterval(run, TICK_MS)
-    ticking.unref()
-    run()
-  },
-
-  async tick({ now = new Date() }: { now?: Date } = {}): Promise<void> {
-    if (inTick) return
-    inTick = true
-    try {
-      await tickOnce(now)
-    } finally {
-      inTick = false
-    }
-  },
+  fail: (input: { routineId: string; runId: string; text: string }): Promise<void> => fail(input),
 }
 
-async function tickOnce(now: Date): Promise<void> {
-  const expired = await db.deleteFrom('routine').where('until', '<=', now).returningAll().execute()
+async function tickOnce(now: Date): Promise<{ fired: Fired[]; failed: string[] }> {
+  const expired = await db.deleteFrom('inbox_source').where('kind', '=', 'schedule').where('until', '<=', now).returningAll().execute()
   for (const row of expired) await forget(row)
   for (const row of expired) changed({ name: 'routine.ended', agentId: row.agent_id, routineId: row.id, properties: { reason: 'until passed' } })
-  await sweep(now)
-  const due = await db.selectFrom('routine').selectAll().where('next_run_at', '<=', now).where((eb) => eb.or([eb('run_status', 'is', null), eb('run_status', '<>', 'open')])).orderBy('next_run_at').execute()
-  for (const row of due) await fire({ row, now })
+  const failed = await sweep(now)
+  const due = await db.selectFrom('inbox_source').selectAll().where('kind', '=', 'schedule').where('next_run_at', '<=', now).where((eb) => eb.or([eb('run_status', 'is', null), eb('run_status', '<>', 'open')])).orderBy('next_run_at').execute()
+  const fired: Fired[] = []
+  for (const row of due) {
+    const run = await fire({ row, now })
+    if (run) fired.push(run)
+  }
+  return { fired, failed }
 }
 
-async function fire({ row, now }: { row: RoutineRow; now: Date }): Promise<void> {
+async function fire({ row, now }: { row: RoutineRow; now: Date }): Promise<Fired | undefined> {
   const agent = await db.selectFrom('agent').select(['id', 'wanted']).where('id', '=', row.agent_id).executeTakeFirst()
-  if (agent?.wanted !== 'running') return
-  if (!underCap({ agentId: row.agent_id, now })) return
+  if (agent?.wanted !== 'running') return undefined
+  if (!underCap({ agentId: row.agent_id, now })) return undefined
   const runId = newId('ru')
   const origin = originOf(row)
   const refused = await placeOf({ agentId: row.agent_id, origin }).then(() => null, (err: unknown) => messageOf(err))
-  const claimed = await db.updateTable('routine').set((eb) => ({
+  const claimed = await db.updateTable('inbox_source').set((eb) => ({
     run_id: runId, run_status: refused ? 'failed' : 'open', run_at: now, run_picked_at: null, run_text: refused, next_run_at: row.cron ? nextOf({ cron: row.cron, after: now }) : null,
     failures: refused ? eb('failures', '+', 1) : eb.ref('failures'),
   })).where('id', '=', row.id).where('next_run_at', '<=', now).where((eb) => eb.or([eb('run_status', 'is', null), eb('run_status', '<>', 'open')])).returningAll().executeTakeFirst()
-  if (!claimed) return
+  if (!claimed) return undefined
   changed({ name: 'routine.run', agentId: row.agent_id, routineId: row.id, properties: { run: runId, status: refused ? 'failed' : 'open', reason: refused ?? undefined } })
   if (refused) {
-    if (!claimed.cron || claimed.failures >= MAX_FAILURES) await db.updateTable('routine').set({ next_run_at: null }).where('id', '=', row.id).execute()
-    return
+    if (!claimed.cron || claimed.failures >= MAX_FAILURES) await db.updateTable('inbox_source').set({ next_run_at: null }).where('id', '=', row.id).execute()
+    return undefined
   }
-  if (origin.platform === DASHBOARD) void runOnDashboard({ row: claimed, origin })
+  return { runId, routineId: row.id, agentId: row.agent_id, text: runText(claimed) }
 }
 
-async function runOnDashboard({ row, origin }: { row: RoutineRow; origin: Stored }): Promise<void> {
-  const runId = row.run_id ?? ''
-  if (dashboardRuns.has(row.agent_id)) return
-  dashboardRuns.add(row.agent_id)
-  try {
-    await routineService.picked({ agentId: row.agent_id, runId })
-    const said = await dashboardRunner({ agentId: row.agent_id, text: runText(row) })
-    await routineService.report({ agentId: row.agent_id, runId, said })
-  } catch (err) {
-    await fail({ routineId: row.id, runId, text: 'No answer in time.' })
-    log.warn({ event: 'routine.run', agent: row.agent_id, routine: row.id, run: runId, status: 'failed', error: messageOf(err) })
-  } finally {
-    dashboardRuns.delete(row.agent_id)
-  }
-}
-
-async function sweep(now: Date): Promise<void> {
-  const stale = await db.selectFrom('routine').select(['id', 'run_id', 'run_picked_at']).where('run_status', '=', 'open').where((eb) => eb.or([
+async function sweep(now: Date): Promise<string[]> {
+  const stale = await db.selectFrom('inbox_source').select(['id', 'run_id', 'run_picked_at']).where('kind', '=', 'schedule').where('run_status', '=', 'open').where((eb) => eb.or([
     eb.and([eb('run_picked_at', 'is', null), eb('run_at', '<', new Date(now.getTime() - PICKUP_MS))]),
     eb('run_picked_at', '<', new Date(now.getTime() - REPORT_MS)),
   ])).execute()
   for (const row of stale) await fail({ routineId: row.id, runId: row.run_id ?? '', text: row.run_picked_at ? 'No answer in time.' : 'Not picked up.' })
+  return stale.map((row) => row.run_id ?? '')
 }
 
 async function fail({ routineId, runId, text }: { routineId: string; runId: string; text: string }): Promise<void> {
-  const row = await db.updateTable('routine').set((eb) => ({ run_status: 'failed', run_text: text, failures: eb('failures', '+', 1) })).where('id', '=', routineId).where('run_id', '=', runId).returningAll().executeTakeFirst()
+  const row = await db.updateTable('inbox_source').set((eb) => ({ run_status: 'failed', run_text: text, failures: eb('failures', '+', 1) })).where('id', '=', routineId).where('run_id', '=', runId).returningAll().executeTakeFirst()
   if (!row) return
   changed({ name: 'routine.run', agentId: row.agent_id, routineId: row.id, properties: { run: runId, status: 'failed', reason: text } })
-  if (!row.cron || row.failures >= MAX_FAILURES) await db.updateTable('routine').set({ next_run_at: null }).where('id', '=', row.id).execute()
+  if (!row.cron || row.failures >= MAX_FAILURES) await db.updateTable('inbox_source').set({ next_run_at: null }).where('id', '=', row.id).execute()
 }
 
 function underCap({ agentId, now }: { agentId: string; now: Date }): boolean {
@@ -271,7 +247,7 @@ function underCap({ agentId, now }: { agentId: string; now: Date }): boolean {
 }
 
 async function openRun(agentId: string): Promise<boolean> {
-  const row = await db.selectFrom('routine').select('id').where('agent_id', '=', agentId).where('run_status', '=', 'open').where('run_picked_at', 'is not', null).executeTakeFirst()
+  const row = await db.selectFrom('inbox_source').select('id').where('agent_id', '=', agentId).where('run_status', '=', 'open').where('run_picked_at', 'is not', null).executeTakeFirst()
   return !!row
 }
 
@@ -299,11 +275,17 @@ async function placeOf({ agentId, origin }: { agentId: string; origin: Origin })
   return chat === owner ? `your ${PLATFORM_NAMES[channel.kind]}` : origin.chat_name || `a ${PLATFORM_NAMES[channel.kind]} chat`
 }
 
+export function targetOf(origin: Origin): string {
+  if (origin.platform === DASHBOARD) return 'app'
+  const { place: _place, ...rest } = origin as Stored
+  return sha(JSON.stringify(rest)).slice(0, 12)
+}
+
 function routineOf(row: RoutineRow): Routine {
   const origin = originOf(row)
   return {
     id: row.id, object: 'routine', agentId: row.agent_id, name: row.name, plan: row.plan,
-    at: iso(row.at), cron: row.cron, until: iso(row.until), platform: origin.platform, place: origin.place,
+    at: iso(row.at), cron: row.cron, until: iso(row.until), platform: origin.platform, target: targetOf(origin), place: origin.place,
     nextRunAt: iso(row.next_run_at), stopped: stoppedOf(row),
     last: row.run_status && row.run_at ? { status: row.run_status, at: new Date(row.run_at).toISOString(), text: row.run_text } : null,
     createdAt: new Date(row.created_at).toISOString(),
@@ -347,12 +329,11 @@ function nextOf({ cron, after }: { cron: string; after: Date }): Date | null {
   return new Cron(cron, { timezone: settings.timeZone(), paused: true }).nextRun(after)
 }
 
-function untilOf({ value, now }: { value: string | undefined; now: Date }): Date {
-  const most = new Date(now.getTime() + MAX_DAYS * DAY_MS)
-  if (!value) return most
-  const until = timeOf({ value, field: 'until' })
+function untilOf({ value, now, most = new Date(now.getTime() + MAX_DAYS * DAY_MS) }: { value: string | undefined; now: Date; most?: Date | null }): Date {
+  if (!value && most) return most
+  const until = timeOf({ value: value ?? '', field: 'until' })
   if (until <= now) throw new HttpError(400, 'until has passed. Pick a date in the future.')
-  return until > most ? most : until
+  return most && until > most ? most : until
 }
 
 function timeOf({ value, field }: { value: string; field: string }): Date {

@@ -21,11 +21,6 @@ export interface Database {
     everyone: Generated<boolean>; created_at: Timestamp; changed_by: Generated<string | null>
   }
   connection_grant: { id: string; connection_id: string; agent_id: string; created_at: Timestamp }
-  routine: {
-    id: string; agent_id: string; name: string; plan: string; at: Timestamp | null; cron: string | null; until: Timestamp | null; origin: string
-    next_run_at: Timestamp | null; created_at: Generated<Date>; run_id: string | null; run_status: 'open' | 'told' | 'quiet' | 'failed' | null
-    run_picked_at: Timestamp | null; run_at: Timestamp | null; run_text: string | null; failures: Generated<number>
-  }
   connection_event: {
     id: Generated<string>; at: Timestamp; agent_id: string; connection_id: string | null; tool: string; reason: string
     outcome: 'allowed' | 'asked' | 'denied' | 'failed'; ms: number; approved_by: Generated<string | null>
@@ -34,6 +29,13 @@ export interface Database {
   record: { key: string; collection: string; id: string; workspace: string; parent: string | null; ver: number; value: string; secret: string | null; personal: boolean; deleted: boolean }
   agent_secret: { id: string; agent_id: string; name: string; hosts: string; header: string; value: string; created_at: Generated<Date>; used_at: Timestamp | null }
   telegram_code: { hash: string; channel_id: string; agent_id: string; kind: 'claim' | 'invite'; sealed: string | null; expires_at: Timestamp }
+  inbox_source: {
+    id: string; agent_id: string; kind: 'schedule' | 'webhook'; name: string; origin: string; created_at: Generated<Date>
+    plan: Generated<string>; at: Timestamp | null; cron: string | null; until: Timestamp | null; next_run_at: Timestamp | null
+    run_id: string | null; run_status: 'open' | 'told' | 'quiet' | 'failed' | null; run_picked_at: Timestamp | null; run_at: Timestamp | null
+    run_text: string | null; failures: Generated<number>; secret: string | null; last_at: Timestamp | null
+  }
+  inbox_item: { id: string; source_id: string; agent_id: string; digest: string; text: string; told: Generated<boolean>; created_at: Generated<Date> }
   change_request: {
     id: string; agent_id: string; action: string; input: string; summary: string; why: string; origin: string
     status: Generated<'pending' | 'approved' | 'denied' | 'expired'>; note: string | null; told: Generated<boolean>; created_at: Generated<Date>; decided_at: Timestamp | null

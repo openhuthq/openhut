@@ -6,7 +6,8 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { gatewayServer } from '../../../src/server/gateway/gateway-server.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { agentToken, seal } from '../../../src/server/platform/secrets.ts'
-import { routineService } from '../../../src/server/routines/routine-service.ts'
+import { routineService } from '../../../src/server/inbox/routines.ts'
+import { inboxService } from '../../../src/server/inbox/inbox-service.ts'
 import { activity } from '../../../src/server/gateway/activity.ts'
 
 await migrate()
@@ -55,8 +56,8 @@ test('a routine scheduled over MCP with the plugin\'s origin runs through due, p
   const id = /rt_[a-z0-9]+/.exec(textOf(scheduled))?.[0] ?? ''
   assert.match(textOf(await client.callTool({ name: 'list_routines', arguments: {} })), new RegExp(`^${id} Remind Mo · 0 9 \\* \\* 5 · next `))
 
-  await db.updateTable('routine').set({ next_run_at: new Date(Date.now() - 60_000) }).where('id', '=', id).execute()
-  await routineService.tick()
+  await db.updateTable('inbox_source').set({ next_run_at: new Date(Date.now() - 60_000) }).where('id', '=', id).execute()
+  await inboxService.tick()
   const due = await (await fetch(`${base}/routines/due`, { headers })).json() as { data: { runId: string; text: string; origin: unknown }[] }
   assert.equal(due.data.length, 1)
   assert.deepEqual(due.data[0].origin, origin)
@@ -68,7 +69,7 @@ test('a routine scheduled over MCP with the plugin\'s origin runs through due, p
   assert.equal((await fetch(runUrl, { method: 'POST', headers: { ...headers, authorization: 'Agent nope' }, body: JSON.stringify({ said: 'x' }) })).status, 401)
   assert.equal((await fetch(runUrl, { method: 'POST', headers, body: JSON.stringify({ said: 'Reminded Mo.' }) })).status, 200)
   assert.equal((await fetch(runUrl, { method: 'POST', headers, body: JSON.stringify({ said: 'again' }) })).status, 404)
-  const row = await db.selectFrom('routine').selectAll().where('id', '=', id).executeTakeFirstOrThrow()
+  const row = await db.selectFrom('inbox_source').selectAll().where('id', '=', id).executeTakeFirstOrThrow()
   assert.deepEqual({ status: row.run_status, text: row.run_text }, { status: 'told', text: 'Reminded Mo.' })
 
   assert.equal(textOf(await client.callTool({ name: 'cancel_routine', arguments: { id, reason: 'Sent' } })), 'Stopped.')

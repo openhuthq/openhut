@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { List } from '@openhut/common/api.ts'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { ChangeRequest } from '@openhut/common/agents/change-request.ts'
-import { AlertCircleIcon, PencilEdit02Icon, SecurityCheckIcon } from '@hugeicons/core-free-icons'
+import { AlertCircleIcon, PencilEdit02Icon, SecurityCheckIcon, WebhookIcon } from '@hugeicons/core-free-icons'
 import { I } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -89,7 +89,7 @@ function SettingsCard({ agent, change, busy, error, send }: CardProps) {
     send('deny', { note: String(new FormData(event.currentTarget).get('note') ?? '') })
     setMode('view')
   }
-  return <RequestCard agent={agent} change={change} error={error} icon={kind ? <Glyph name={kind} size={22} /> : <Face agent={agent} size={28} />} action={{ icon: PencilEdit02Icon, hue: 'text-hue-violet' }} title={change.summary}
+  return <RequestCard agent={agent} change={change} error={error} icon={kind ? <Glyph name={kind} size={22} /> : <Face agent={agent} size={28} />} action={change.action === 'add_webhook' ? { icon: WebhookIcon, hue: 'text-hue-violet' } : { icon: PencilEdit02Icon, hue: 'text-hue-violet' }} title={change.summary}
     actions={mode === 'view' && <>
       <Button type="button" variant="primary" size="sm" disabled={busy} onClick={() => send('approve', {})}>Approve</Button>
       {editable && <Button type="button" variant="ghost" size="sm" onClick={() => setMode('edit')}>Edit</Button>}
@@ -106,13 +106,15 @@ function SettingsCard({ agent, change, busy, error, send }: CardProps) {
       <Input name="note" aria-label="Why not" placeholder="Why not? (optional)" maxLength={500} autoFocus className="flex-1" />
       <Button type="submit" variant="primary" size="sm" disabled={busy}>Don't approve</Button>
     </form>}
+    {change.status === 'approved' && change.action === 'add_webhook' &&
+      <Button type="button" variant="secondary" size="sm" className="w-fit" onClick={() => navigate(agentPath({ agentId: agent.id, dialog: 'webhooks' }))}>Get the address and secret</Button>}
     {change.status === 'approved' && change.action === 'add_channel' && change.input.kind === 'whatsapp' &&
       <Button type="button" variant="secondary" size="sm" className="w-fit" onClick={() => navigate(agentPath({ agentId: agent.id, dialog: 'whatsapp' }))}>Scan the QR code</Button>}
   </RequestCard>
 }
 
 function Details({ agent, change }: { agent: Agent; change: ChangeRequest }) {
-  const shown = Object.entries(change.input).filter(([key]) => key !== 'botToken' && key !== 'id' && key !== 'connectionId')
+  const shown = Object.entries(change.input).filter(([key]) => key !== 'botToken' && key !== 'id' && key !== 'connectionId' && key !== 'webhookId')
   if (!shown.length) return null
   return <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 text-[13px]">{shown.map(([key, value]) => <div key={key} className="contents">
     <dt className="text-mute">{LABELS[key] ?? key}</dt>

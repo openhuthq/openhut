@@ -1,4 +1,4 @@
-export const AGENT_DIALOGS = ['new', 'does', 'name', 'customize', 'memory', 'skills', 'routines', 'slack', 'whatsapp', 'telegram', 'discord', 'browser', 'apps', 'activity', 'keys'] as const
+export const AGENT_DIALOGS = ['new', 'does', 'name', 'customize', 'memory', 'skills', 'routines', 'slack', 'whatsapp', 'telegram', 'discord', 'browser', 'apps', 'activity', 'keys', 'webhooks'] as const
 export type AgentDialog = typeof AGENT_DIALOGS[number]
 
 export type Route =
