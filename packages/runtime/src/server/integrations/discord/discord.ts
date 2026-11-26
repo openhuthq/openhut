@@ -1,5 +1,5 @@
 import * as z from 'zod/mini'
-import type { Conversation } from '@openhut/common/channels/channel.ts'
+import type { Conversation, Sent } from '@openhut/common/channels/channel.ts'
 import { config } from '../../platform/config.ts'
 import { HttpError, messageOf } from '../../platform/http-error.ts'
 
@@ -18,7 +18,8 @@ const MESSAGE_CONTENT = (1 << 18) | (1 << 19)
 const MAX_LENGTH = 2000
 const RETRIES = 3
 const MAX_WAIT_MS = 30_000
-const Thread = z.object({ parent_id: z.optional(z.nullable(z.string())) })
+const Target = z.object({ guild_id: z.optional(z.string()), parent_id: z.optional(z.nullable(z.string())) })
+const Created = z.object({ id: z.string() })
 const Failure = z.object({ message: z.optional(z.string()), retry_after: z.optional(z.number()) })
 export const DiscordSecrets = z.object({ botToken: z.string() })
 
@@ -73,10 +74,18 @@ export const discord = {
     return failed
   },
 
-  async post({ botToken, channelId, threadId, text }: { botToken: string; channelId: string; threadId?: string; text: string }): Promise<void> {
-    const thread = threadId ? z.safeParse(Thread, (await call({ path: `/channels/${threadId}`, botToken })).body).data : undefined
-    if (threadId && thread?.parent_id !== channelId) throw new HttpError(400, 'That thread isn\'t in the channel. Post in the channel instead.')
-    for (const part of split(text)) await write({ path: `/channels/${threadId ?? channelId}/messages`, botToken, body: { content: part, allowed_mentions: { parse: [] } } })
+  async post({ botToken, channelId, threadId, text, startThread }: { botToken: string; channelId: string; threadId?: string; text: string; startThread?: string }): Promise<Sent> {
+    const target = threadId ?? channelId
+    const found = await call({ path: `/channels/${target}`, botToken })
+    const info = z.safeParse(Target, found.body).data
+    if (!found.ok || !info) throw new HttpError(400, `The bot can't see that channel (HTTP ${found.status}). In Discord, open the channel's settings, then Permissions, and add the bot.`)
+    if (threadId && info.parent_id !== channelId) throw new HttpError(400, 'That thread isn\'t in the channel. Post in the channel instead.')
+    const [first = '', ...rest] = split(text)
+    const message = await created(write({ path: `/channels/${target}/messages`, botToken, body: { content: first, allowed_mentions: { parse: [] } } }))
+    const started = startThread && !threadId ? await created(write({ path: `/channels/${channelId}/messages/${message}/threads`, botToken, body: { name: startThread.slice(0, 100) } })) : undefined
+    for (const part of rest) await write({ path: `/channels/${started ?? target}/messages`, botToken, body: { content: part, allowed_mentions: { parse: [] } } })
+    const base = `https://discord.com/channels/${info.guild_id ?? '@me'}`
+    return started ? { url: `${base}/${started}`, messageId: message, threadId: started } : { url: `${base}/${target}/${message}`, messageId: message }
   },
 
   env({ botToken, channels }: { botToken: string; channels: string[] }): Record<string, string> {
@@ -93,11 +102,11 @@ async function call({ path, botToken }: { path: string; botToken: string }): Pro
   return { ok: res.ok, status: res.status, body: await res.json().catch(() => undefined) }
 }
 
-async function write({ path, botToken, body }: { path: string; botToken: string; body: unknown }): Promise<void> {
+async function write({ path, botToken, body }: { path: string; botToken: string; body: unknown }): Promise<unknown> {
   for (let attempt = 0; ; attempt++) {
     const res = await fetch(`${config.discordApi}${path}`, { method: 'POST', headers: { authorization: `Bot ${botToken}`, 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10_000) })
       .catch((err: unknown) => { throw new HttpError(502, `Discord didn't answer (${messageOf(err).replaceAll(botToken, '…')}). Try again.`) })
-    if (res.ok) return
+    if (res.ok) return res.json().catch(() => undefined)
     const failure = z.safeParse(Failure, await res.json().catch(() => undefined)).data
     const wait = (failure?.retry_after ?? Number(res.headers.get('retry-after') ?? 1)) * 1000
     if (res.status === 429 && attempt < RETRIES && wait <= MAX_WAIT_MS) {
@@ -109,6 +118,12 @@ async function write({ path, botToken, body }: { path: string; botToken: string;
     if (res.status === 403 || res.status === 404) throw new HttpError(400, `The bot can't post there (${failure?.message ?? `HTTP ${res.status}`}). In Discord, open the channel's settings, then Permissions, and let the bot send messages.`)
     throw new HttpError(502, `Discord refused the message (${failure?.message ?? `HTTP ${res.status}`}). Try again.`)
   }
+}
+
+async function created(answer: Promise<unknown>): Promise<string> {
+  const parsed = z.safeParse(Created, await answer)
+  if (!parsed.success) throw new HttpError(502, 'Discord took the message but didn\'t say where it went. Check the channel.')
+  return parsed.data.id
 }
 
 export function split(text: string): string[] {

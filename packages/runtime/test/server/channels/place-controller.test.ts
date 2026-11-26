@@ -35,7 +35,7 @@ await app.register(placeController, { prefix: '/api/agents/:id/places' })
 await app.ready()
 
 function fakeDiscord(t: TestContext, { limited = 0 } = {}) {
-  const calls: { method: string; path: string; body: { content?: string } }[] = []
+  const calls: { method: string; path: string; body: { content?: string; name?: string } }[] = []
   let left = limited
   let next = 100
   t.mock.method(globalThis, 'fetch', async (url: string | URL, init?: RequestInit) => {
@@ -44,8 +44,9 @@ function fakeDiscord(t: TestContext, { limited = 0 } = {}) {
     calls.push({ method, path, body: init?.body ? JSON.parse(String(init.body)) : {} })
     assert.equal(new Headers(init?.headers).get('authorization'), `Bot ${TOKEN}`)
     if (path.startsWith('/users/@me') || path.startsWith('/guilds')) return Response.json(path === '/users/@me/guilds' ? [{ id: GUILD, name: 'Acme' }] : path === `/guilds/${GUILD}/channels` ? [{ id: OPS, name: 'ops', type: 0 }] : path === `/guilds/${GUILD}` ? { roles: [] } : path === '/users/@me' ? { id: '1', username: 'ops' } : { roles: [] })
-    if (method === 'GET') return Response.json({ id: path.split('/')[2], parent_id: path.includes('8888') ? OPS : RANDOM })
+    if (method === 'GET') return Response.json({ id: path.split('/')[2], guild_id: GUILD, parent_id: path.includes('8888') ? OPS : RANDOM })
     if (left-- > 0) return Response.json({ message: 'You are being rate limited.', retry_after: 0.01 }, { status: 429 })
+    if (path.endsWith('/threads')) return Response.json({ id: '7777777777777777777' })
     return Response.json({ id: String(next++) })
   })
   return calls
@@ -61,10 +62,23 @@ test('places are the Discord channels the agent has connected, with readable nam
 
 test('send posts to the channel with the agent\'s bot, splits long text and waits out a rate limit', async (t) => {
   const calls = fakeDiscord(t, { limited: 1 })
-  await channelService.send({ agentId: 'ag_placeops', place: PLACE, text: `${'a'.repeat(1500)}\n${'b'.repeat(1500)}` })
+  const sent = await channelService.send({ agentId: 'ag_placeops', place: PLACE, text: `${'a'.repeat(1500)}\n${'b'.repeat(1500)}` })
+  assert.deepEqual(sent, { url: `https://discord.com/channels/${GUILD}/${OPS}/100`, messageId: '100' })
   const posts = calls.filter((each) => each.method === 'POST')
   assert.deepEqual(posts.map((each) => each.path), [`/channels/${OPS}/messages`, `/channels/${OPS}/messages`, `/channels/${OPS}/messages`])
   assert.deepEqual(posts.slice(1).map((each) => each.body.content), ['a'.repeat(1500), 'b'.repeat(1500)])
+})
+
+test('send can start a thread from its message, and the rest of a long answer goes into it', async (t) => {
+  const calls = fakeDiscord(t)
+  const sent = await channelService.send({ agentId: 'ag_placeops', place: PLACE, text: `${'a'.repeat(1500)}\n${'b'.repeat(1500)}`, startThread: 'Disk alert' })
+  assert.deepEqual(sent, { url: `https://discord.com/channels/${GUILD}/7777777777777777777`, messageId: '100', threadId: '7777777777777777777' })
+  const posts = calls.filter((each) => each.method === 'POST')
+  assert.deepEqual(posts.map((each) => [each.path, each.body]), [
+    [`/channels/${OPS}/messages`, { content: 'a'.repeat(1500), allowed_mentions: { parse: [] } }],
+    [`/channels/${OPS}/messages/100/threads`, { name: 'Disk alert' }],
+    ['/channels/7777777777777777777/messages', { content: 'b'.repeat(1500), allowed_mentions: { parse: [] } }],
+  ])
 })
 
 test('send posts into a thread of a connected channel, and refuses another channel\'s thread or a channel the agent has not connected', async (t) => {
