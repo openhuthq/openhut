@@ -21,6 +21,9 @@ import { activity } from '../../src/server/gateway/activity.ts'
 import { agentService } from '../../src/server/agents/agent-service.ts'
 import { wakes } from '../../src/core/wakes.ts'
 import { HERE } from '../../src/server/team/home.ts'
+import { config } from '../../src/server/platform/config.ts'
+
+config.quietMs = 1000
 
 const agentd = fakeAgentd()
 await migrate()
@@ -266,7 +269,7 @@ test('a wake waits for the restart its answer needs, and the restart waits for t
   activity.ended('ag_chgagent')
   await settled()
   const restart = agentd.applies.slice(applies).find((each) => each.id === 'ag_chgagent')
-  assert.ok(restart && restart.at >= ended + 9_000, 'restarted once quiet for 10 seconds')
+  assert.ok(restart && restart.at >= ended + config.quietMs, 'restarted once quiet')
   assert.equal(told.length, before + 1)
   assert.match(told.at(-1)?.text ?? '', /Approved and done: Change its instructions\. You have already restarted with it\./)
 })

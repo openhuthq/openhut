@@ -36,7 +36,6 @@ let bootedAt = 0
 const PORT_TAKEN = 'Another program answers on this agent’s port, likely another OpenHut on this computer. Quit it, then stop and start this agent.'
 const DEFAULT_MODEL = 'claude:sonnet'
 const CHILDREN = ['channel', 'routine', 'skill'] as const
-const QUIET_MS = 10_000
 const held = new Map<string, { count: number; due: boolean }>()
 const applying = new Set<string>()
 const moving = new Set<string>()
@@ -131,7 +130,7 @@ export const agentService = {
     try {
       return await change()
     } finally {
-      void activity.quiet({ agentId: id, ms: QUIET_MS }).then(() => release(id))
+      void activity.quiet({ agentId: id, ms: config.quietMs }).then(() => release(id))
         .catch((err: unknown) => log.warn({ event: 'agent.reapply_failed', agent: id, error: messageOf(err) }))
     }
   },
