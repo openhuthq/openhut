@@ -43,11 +43,14 @@ function stop(code: number) {
 async function freePort(from: number): Promise<number> {
   for (let port = from; ; port++) {
     if (taken.has(port)) continue
-    const free = await new Promise<boolean>((done) => {
-      const probe = createServer().once('error', () => done(false)).listen(port, '127.0.0.1', () => probe.close(() => done(true)))
-    })
-    if (!free) continue
+    if (!await open(port, '127.0.0.1') || !await open(port, '0.0.0.0')) continue
     taken.add(port)
     return port
   }
+}
+
+function open(port: number, host: string): Promise<boolean> {
+  return new Promise((done) => {
+    const probe = createServer().once('error', () => done(false)).listen(port, host, () => probe.close(() => done(true)))
+  })
 }

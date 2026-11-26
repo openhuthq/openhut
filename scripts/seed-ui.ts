@@ -8,18 +8,17 @@ const AGENTS = [
   ['Sales', 'Posts the weekly pipeline report and answers questions about deals.', 'claude:sonnet', 'stopped'],
   ['Support', 'Answers customers in #support. Looks the customer up before replying.', 'claude:haiku', 'running'],
 ]
-const orders = (
-  await api<Connection>('POST', '/api/connections', { name: 'Orders DB', dsn: 'postgres://reader:sample@db.internal.example:5432/orders' })
-).json
-await api('POST', '/api/connections', { name: 'Analytics warehouse', dsn: 'postgres://reader:sample@warehouse.example:5432/analytics' })
+const DSN = process.env.SEED_POSTGRES_DSN
+const orders = DSN ? (await api<Connection>('POST', '/api/connections', { name: 'Orders DB', dsn: DSN })).json : undefined
+if (!orders) console.warn('No sample Postgres connection: OpenHut checks a database before saving it. Set SEED_POSTGRES_DSN to one it can reach to add it.')
 const ids: Record<string, string> = {}
 for (const [name, about, model, wanted] of AGENTS) {
   const agent = (await api<Agent>('POST', '/api/agents', { name, instructions: `# ${name}\n\n${about}` })).json
   ids[name] = agent.id
   await api('PATCH', `/api/agents/${agent.id}`, { model, wanted })
 }
-for (const agentId of [ids.Dev, ids.Support]) await api('POST', '/api/grants', { agentId, connectionId: orders.id })
-console.log(JSON.stringify({ agents: ids, connection: orders.id }))
+if (orders) for (const agentId of [ids.Dev, ids.Support]) await api('POST', '/api/grants', { agentId, connectionId: orders.id })
+console.log(JSON.stringify({ agents: ids, connection: orders?.id ?? null }))
 
 async function api<T>(method: string, path: string, body?: unknown) {
   const r = await fetch(APP + path, {
