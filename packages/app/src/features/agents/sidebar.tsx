@@ -1,6 +1,6 @@
-import { createContext, useEffect, useState, type ReactElement } from 'react'
+import { createContext, useEffect, useState, type MouseEvent, type ReactElement } from 'react'
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
-import { CancelCircleIcon, CheckmarkCircle02Icon, CircleIcon, DashedLineCircleIcon, PauseCircleIcon, ArrowDown01Icon, ArrowRight01Icon, BubbleChatIcon, Clock01Icon, Delete02Icon, GitBranchIcon, Logout01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SidebarLeftIcon, StopIcon, WebhookIcon } from '@hugeicons/core-free-icons'
+import { ArchiveIcon, CancelCircleIcon, CheckmarkCircle02Icon, CircleIcon, DashedLineCircleIcon, PauseCircleIcon, ArrowDown01Icon, ArrowRight01Icon, BubbleChatIcon, Clock01Icon, Delete02Icon, GitBranchIcon, Logout01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SidebarLeftIcon, StopIcon, WebhookIcon } from '@hugeicons/core-free-icons'
 import type { OpenHutAgent } from '@/lib/openhut'
 import { useQuery } from '@tanstack/react-query'
 import { List } from '@openhut/common/api.ts'
@@ -30,6 +30,7 @@ import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { useLiveLine } from '@/features/threads/live'
+import { useArchiveThread } from '@/features/threads/api'
 
 const ROUND = 'float phone:size-10 phone:rounded-full phone:bg-card phone:text-ink'
 
@@ -165,14 +166,27 @@ const SOURCE_ICON = { app: BubbleChatIcon, webhook: WebhookIcon, routine: Clock0
 export function ThreadRow({ agentId, thread, active, accent }: { agentId: string; thread: SourcedThread; active: boolean; accent: string }) {
   const source = sourceOf(thread)
   const live = useLiveLine(thread.id)
-  return <a href={threadRoute({ agentId, threadId: thread.id })} aria-current={active ? 'page' : undefined} title={source.word} className={cn('grid shrink-0 grid-cols-[14px_1fr_auto] items-start gap-x-2 rounded-lg px-2 py-1.5 text-inherit no-underline', HOVER, active && PICKED)}>
+  const archive = useArchiveThread(thread)
+  const main = thread.id === thread.agentId
+  const onArchive = (event: MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    archive.mutate(undefined, { onSuccess: () => active && navigate(agentPath({ agentId })), onError: toastError })
+  }
+  return <div className="group/thread relative">
+  <a href={threadRoute({ agentId, threadId: thread.id })} aria-current={active ? 'page' : undefined} title={source.word} className={cn('grid shrink-0 grid-cols-[14px_1fr_auto] items-start gap-x-2 rounded-lg px-2 py-1.5 text-inherit no-underline', HOVER, active && PICKED, !main && 'group-hover/thread:pr-9 group-focus-within/thread:pr-9')}>
     <span className="grid h-[18px] place-items-center text-mute">{source.platform === 'discord' ? <Glyph name="discord" size={13} /> : <I icon={SOURCE_ICON[source.platform]} size={13} />}</span>
     <span className="grid min-w-0">
       <span className="truncate text-[13px]/[18px] font-medium text-ink">{thread.title}</span>
       <span className="flex min-w-0 text-[11.5px]/[16px] text-mute-2 tabular-nums">{live ?? <span className="min-w-0 truncate">{source.label}</span>}<span className="shrink-0 whitespace-pre"> · {ago(thread.updatedAt)}</span></span>
     </span>
-    {thread.waiting && <span className="flex h-[18px] items-center gap-1 text-[11.5px] text-ink"><Mark status="review" accent={accent} />Waiting on you</span>}
+    {thread.waiting && <span className={cn('flex h-[18px] items-center gap-1 text-[11.5px] text-ink', !main && 'group-hover/thread:hidden group-focus-within/thread:hidden')}><Mark status="review" accent={accent} />Waiting on you</span>}
   </a>
+  {!main && <Button type="button" variant="bare" aria-label={`Archive ${thread.title}`} title="Archive" disabled={archive.isPending} onClick={onArchive}
+    className={cn('absolute top-1/2 right-1.5 grid size-6 -translate-y-1/2 place-items-center rounded-md text-mute opacity-0 transition-opacity group-hover/thread:opacity-100 group-focus-within/thread:opacity-100', HOVER)}>
+    <I icon={ArchiveIcon} size={14} />
+  </Button>}
+  </div>
 }
 
 const SESSION = 'grid h-8 shrink-0 grid-cols-[14px_1fr_auto] items-center gap-2 overflow-hidden rounded-lg px-2 text-inherit no-underline transition-[height,opacity] duration-500 ease-out'
