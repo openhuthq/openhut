@@ -23,7 +23,9 @@ export function testModel({ path, body, res }: { path: string; body: unknown; re
   const toolNames = (request.tools ?? []).map((tool) => tool.function?.name ?? tool.name).filter((name) => name !== undefined)
   const callTool = toolNames.find((name) => name.endsWith('call_tool'))
   log.info({ event: 'test_llm.request', messages: messages.length, lastRole: last.role, tools: toolNames.length, callTool })
-  const reply = replyTo({ last, callTool, shell: toolNames.find((name) => name === 'terminal' || name === 'Bash'), schedule: toolNames.find((name) => name.endsWith('schedule_routine')), names: toolNames })
+  const nudge = (message: { content?: unknown }) => /returned an empty response/.test(asText(message.content))
+  const quiet = (last.role === 'tool' || nudge(last)) && /\(quietly\)/.test(asText(messages.findLast((message) => message.role === 'user' && !nudge(message))?.content))
+  const reply = quiet ? {} : replyTo({ last, callTool, shell: toolNames.find((name) => name === 'terminal' || name === 'Bash'), schedule: toolNames.find((name) => name.endsWith('schedule_routine')), names: toolNames })
   const base = { id: `cmpl-${Date.now()}`, created: Math.floor(Date.now() / 1000), model: request.model ?? 'openhut-test' }
   const calls = reply.tools ?? (reply.tool ? [reply.tool] : [])
   const toolCalls = calls.length ? calls.map((tool, index) => ({ id: `call_${Date.now()}_${index}`, type: 'function', function: { name: tool.name, arguments: tool.args } })) : undefined
@@ -69,9 +71,19 @@ function replyTo({ last, callTool, shell, schedule, names }: { last: { role?: st
   if (sql && callTool) return { tool: { name: callTool, args: JSON.stringify({ reason: 'The user asked for data', name: 'postgres_query', arguments: { sql } }) } }
   const command = /browser:\s*([a-z][a-z -]*(?:\s+[^\s'"`$;&|<>\\]+)*)\s*"?\s*$/i.exec(lastText(last.content))?.[1]
   if (command && shell) return { tool: { name: shell, args: JSON.stringify({ command: `agent-browser ${command}`, description: 'Use the browser' }) } }
+  const card = /\bcard:\s*([\w -]+?)\s*(?:now\b|$)/im.exec(asText(last.content))?.[1]
+  if (card) return { content: cardReply(card) }
   const said = asText(last.content)
   const wake = said.indexOf('[OpenHut asks:')
   return { content: `ECHO: ${wake < 0 ? said.slice(-200) : said.slice(wake, wake + 2000)}` }
+}
+
+function cardReply(title: string): string {
+  const lines = [{ op: 'add', path: '/root', value: 'card' }, { op: 'add', path: '/elements/card', value: { type: 'Card', props: { title }, children: ['fields'] } },
+    { op: 'add', path: '/elements/fields', value: { type: 'Fields', props: {}, children: ['size', 'region'] } },
+    { op: 'add', path: '/elements/size', value: { type: 'Field', props: { label: 'Size', value: 's-2vcpu-4gb' } } },
+    { op: 'add', path: '/elements/region', value: { type: 'Field', props: { label: 'Region', value: 'fra1' } } }]
+  return `Here it is.\n\n\`\`\`spec\n${lines.map((line) => JSON.stringify(line)).join('\n')}\n\`\`\`\n`
 }
 
 function lastText(content: unknown): string {
