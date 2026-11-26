@@ -10,7 +10,7 @@ import { Face } from '@/features/agents/face'
 import { RequestCard } from '@/features/agents/request-card'
 import { plainKey } from '@/lib/tool-label'
 import { cn } from '@/lib/utils'
-import { custom } from '@/features/asks/custom'
+import { custom, extras } from '@/features/asks/custom'
 import { useAnswer, useAsks } from '@/features/asks/api'
 
 const LONG = 1000
@@ -50,6 +50,8 @@ function AskList({ agent, asks }: { agent: Agent; asks: Ask[] }) {
 function AskCard({ agent, ask }: { agent: Agent; ask: Ask }) {
   const answer = useAnswer(agent.id)
   const [declining, setDeclining] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const Extra = extras[ask.kind]
   const fields = Object.entries(z.safeParse(Form, ask.form ?? {}).data?.properties ?? {})
   const details = Object.entries(ask.input).filter(([key, value]) => !HIDDEN.has(key) && !fields.some(([name]) => name === key) && value !== undefined)
   const approve = (event: FormEvent<HTMLFormElement>) => {
@@ -67,17 +69,20 @@ function AskCard({ agent, ask }: { agent: Agent; ask: Ask }) {
     answer.mutate({ id: ask.id, verb: 'declines', body: { note: String(new FormData(event.currentTarget).get('note') ?? '') } })
   }
   const formId = `ask-${ask.id}`
+  const folded = fields.some(([, field]) => isLong(field))
   return <RequestCard agent={agent} change={ask} error={answer.error?.message} icon={<Face agent={agent} size={28} />} title={ask.title}
     actions={!declining && <>
       <Button type="submit" form={formId} variant="primary" size="sm" disabled={answer.isPending}>Approve</Button>
+      {folded && !editing && <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(true)}>Edit</Button>}
       <Button type="button" variant="ghost" size="sm" disabled={answer.isPending} onClick={() => setDeclining(true)}>Not now</Button>
     </>}>
     {details.length > 0 && <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1 text-[13px]">{details.flatMap(([key, value]) => flat(key, value)).map(([key, value]) => <div key={key} className="contents">
       <dt className="text-mute">{plainKey(key)}</dt>
       <dd className="m-0 max-h-48 overflow-y-auto whitespace-pre-wrap text-ink [overflow-wrap:anywhere]">{value}</dd>
     </div>)}</dl>}
+    {Extra && <Extra agent={agent} ask={ask} />}
     {ask.status === 'open' && agent.canEdit && <form id={formId} className="flex flex-col gap-2" onSubmit={approve}>
-      {fields.map(([name, field]) => <FormField key={name} name={name} field={field} value={ask.input[name]} />)}
+      {fields.filter(([name]) => !folded || name in ask.input).map(([name, field]) => <div key={name} className={folded && !editing ? 'hidden' : 'contents'}><FormField name={name} field={field} value={ask.input[name]} /></div>)}
     </form>}
     {declining && <form className="flex gap-2" onSubmit={decline}>
       <Input name="note" aria-label="Why not" placeholder="Why not? (optional)" maxLength={500} autoFocus className="flex-1" />
@@ -90,8 +95,12 @@ function FormField({ name, field, value }: { name: string; field: Field; value: 
   const label = field.description ?? plainKey(name)
   const given = typeof value === 'string' ? value : undefined
   if (field.type === 'boolean') return <label className="flex items-center gap-2 text-[13px] text-ink"><Switch name={name} defaultChecked={value === true} aria-label={label} />{label}</label>
-  if ((field.maxLength ?? 0) > LONG && !field.secret) return <label className="flex flex-col gap-1 text-[12.5px] text-mute">{label}<Textarea name={name} aria-label={label} defaultValue={given} maxLength={field.maxLength} className="min-h-40" /></label>
+  if (isLong(field)) return <label className="flex flex-col gap-1 text-[12.5px] text-mute">{label}<Textarea name={name} aria-label={label} defaultValue={given} maxLength={field.maxLength} className="min-h-40" /></label>
   return <label className="flex flex-col gap-1 text-[12.5px] text-mute">{label}<Input name={name} aria-label={label} type={field.secret ? 'password' : 'text'} autoComplete="off" defaultValue={field.secret ? undefined : given} maxLength={field.maxLength} placeholder={field.secret ? `Paste the ${label.toLowerCase()}` : undefined} /></label>
+}
+
+function isLong(field: Field): boolean {
+  return (field.maxLength ?? 0) > LONG && !field.secret
 }
 
 function flat(key: string, value: unknown): [string, string][] {
