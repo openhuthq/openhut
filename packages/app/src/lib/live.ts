@@ -6,7 +6,7 @@ import { AGENTS_KEY, COMPUTERS_KEY, CONNECTIONS_KEY, GRANTS_KEY, PROVIDERS_KEY, 
 
 const FILTERS: Record<string, QueryFilters[]> = {
   agent: [{ queryKey: AGENTS_KEY }],
-  thread: [{ queryKey: THREADS_KEY, exact: true }, { queryKey: [...THREADS_KEY, 'agent'] }],
+  thread: [{ queryKey: THREADS_KEY, exact: true }, { queryKey: [...THREADS_KEY, 'thread'] }],
   channel: [{ queryKey: ['channels'] }],
   connection: [{ queryKey: CONNECTIONS_KEY }],
   grant: [{ queryKey: GRANTS_KEY }],

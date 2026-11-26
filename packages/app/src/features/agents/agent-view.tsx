@@ -20,13 +20,14 @@ import { ToolPermissionsDialog } from '@/features/agents/tool-permissions'
 import { ActivityDialog } from '@/features/agents/activity-dialog'
 import { KeysDialog } from '@/features/agents/secrets'
 import { WebhooksDialog } from '@/features/webhooks/webhooks-dialog'
+import { NotifyDialog } from '@/features/agents/notify'
 import { Chat } from '@/features/threads/chat'
 import { RequestError } from '@/lib/api-client'
 import { AGENTS_KEY } from '@/lib/query-keys'
 import { PHONE, useMedia } from '@/lib/media'
 import { navigate, Redirect } from '@/lib/router'
 
-export function AgentView({ agentId, dialog, detail }: { agentId: string; dialog: AgentDialog | undefined; detail: string | undefined }) {
+export function AgentView({ agentId, threadId, dialog, detail }: { agentId: string; threadId?: string; dialog: AgentDialog | undefined; detail: string | undefined }) {
   const agent = useAgent(agentId)
   const agents = useAgents()
   const client = useQueryClient()
@@ -48,7 +49,7 @@ export function AgentView({ agentId, dialog, detail }: { agentId: string; dialog
   const panel = open && <Panel agent={agent.data} naming={dialog === 'name'} watching={dialog === 'browser'} onHide={() => setShown(false)} />
   return <>
     <div className="relative flex min-w-0 flex-1">
-      <Chat agent={agent.data} tools={toggle} onTitle={phone ? () => setShown(true) : undefined} />
+      <Chat key={threadId} agent={agent.data} threadId={threadId ?? agent.data.id} tools={toggle} onTitle={phone ? () => setShown(true) : undefined} />
     </div>
     {phone && panel ? <Dialog size="window" label={`${agent.data.name}'s details`} className="phone:bg-sidebar" onClose={() => setShown(false)}>{panel}{dialogs}</Dialog> : <>{panel}{dialogs}</>}
   </>
@@ -71,6 +72,7 @@ function Dialogs({ agent, dialog, detail }: { agent: Agent; dialog: AgentDialog 
     case 'activity': return <ActivityDialog agent={agent} onClose={close} />
     case 'keys': return <KeysDialog agent={agent} onClose={close} />
     case 'webhooks': return <WebhooksDialog agent={agent} onClose={close} />
+    case 'notify': return agent.canEdit ? <NotifyDialog agent={agent} onClose={close} /> : null
     case 'browser': return agent.browser && agent.canEdit ? <BrowserDialog agent={agent} onClose={close} /> : null
     default: return null
   }

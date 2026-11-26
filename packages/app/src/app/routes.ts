@@ -1,9 +1,9 @@
-export const AGENT_DIALOGS = ['new', 'does', 'name', 'customize', 'memory', 'skills', 'routines', 'slack', 'whatsapp', 'telegram', 'discord', 'browser', 'apps', 'activity', 'keys', 'webhooks'] as const
+export const AGENT_DIALOGS = ['new', 'does', 'name', 'customize', 'memory', 'skills', 'routines', 'slack', 'whatsapp', 'telegram', 'discord', 'browser', 'apps', 'activity', 'keys', 'webhooks', 'notify'] as const
 export type AgentDialog = typeof AGENT_DIALOGS[number]
 
 export type Route =
   | { page: 'home'; adding: boolean }
-  | { page: 'agent'; agentId: string; dialog: AgentDialog | undefined; detail: string | undefined }
+  | { page: 'agent'; agentId: string; dialog: AgentDialog | undefined; detail: string | undefined; threadId?: string }
   | { page: 'connections' }
   | { page: 'settings'; tab: string }
   | { page: 'missing' }
@@ -20,6 +20,7 @@ export function routeOf(path: string): Route {
   if (section === '' || (section === 'agents' && !id)) return { page: 'home', adding: false }
   if (section === 'new' && !id) return { page: 'home', adding: true }
   if (section !== 'agents') return MISSING
+  if (dialog === 'threads' && detail) return { page: 'agent', agentId: id, dialog: undefined, detail: undefined, threadId: detail }
   if (!dialog) return { page: 'agent', agentId: id, dialog: undefined, detail: undefined }
   const known = AGENT_DIALOGS.find((each) => each === dialog)
   if (!known || (detail && !DETAILED.has(known))) return MISSING
@@ -28,6 +29,10 @@ export function routeOf(path: string): Route {
 
 export function agentPath({ agentId, dialog, detail }: { agentId: string; dialog?: AgentDialog; detail?: string }) {
   return `/agents/${encodeURIComponent(agentId)}${dialog ? `/${dialog}` : ''}${detail ? `/${encodeURIComponent(detail)}` : ''}`
+}
+
+export function threadRoute({ agentId, threadId }: { agentId: string; threadId: string }) {
+  return threadId === agentId ? agentPath({ agentId }) : `${agentPath({ agentId })}/threads/${encodeURIComponent(threadId)}`
 }
 
 export function goneAgentPath({ agentId, listed }: { agentId: string; listed: string[] }) {

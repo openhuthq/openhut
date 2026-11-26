@@ -1,11 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@openhut/common/api.ts'
-import { ChatFile, HomeFile, Thread, ThreadWithMessages } from '@openhut/common/threads/thread.ts'
+import * as z from 'zod/mini'
+import { ChatFile, ChatMessage, HomeFile } from '@openhut/common/threads/thread.ts'
 import { request, requestBlob } from '@/lib/api-client'
 import { THREADS_KEY } from '@/lib/query-keys'
 import { RASTER } from '@/features/threads/files'
+import { SourcedThread } from '@/features/threads/places'
 
-const THREAD_LIST = List(Thread)
+const THREAD_LIST = List(SourcedThread)
+const THREAD_WITH_MESSAGES = z.extend(SourcedThread, { messages: z.array(ChatMessage) })
+export type ThreadWithMessages = z.infer<typeof THREAD_WITH_MESSAGES>
 const HOME_FILES = List(HomeFile)
 
 export function useThreads() {
@@ -15,27 +19,27 @@ export function useThreads() {
   })
 }
 
-export function useAgentThread(agentId: string) {
+export function useThread({ agentId, threadId }: { agentId: string; threadId: string }) {
   return useQuery({
-    queryKey: [...THREADS_KEY, 'agent', agentId],
-    queryFn: () => request({ schema: ThreadWithMessages, of: agentId, path: threadPath(agentId) }),
+    queryKey: [...THREADS_KEY, 'thread', threadId],
+    queryFn: () => request({ schema: THREAD_WITH_MESSAGES, of: agentId, path: threadPath(threadId) }),
     staleTime: Infinity,
   })
 }
 
 export function useTouchThread() {
   const client = useQueryClient()
-  return (thread: Thread) => {
-    client.setQueryData<Thread[]>(THREADS_KEY, (threads) => threads && [{ ...thread, updatedAt: new Date().toISOString() }, ...threads.filter((each) => each.id !== thread.id)])
-    void client.invalidateQueries({ queryKey: [...THREADS_KEY, 'agent', thread.agentId], refetchType: 'all' })
+  return (thread: SourcedThread) => {
+    client.setQueryData<SourcedThread[]>(THREADS_KEY, (threads) => threads && [{ ...thread, updatedAt: new Date().toISOString() }, ...threads.filter((each) => each.id !== thread.id)])
+    void client.invalidateQueries({ queryKey: [...THREADS_KEY, 'thread', thread.id], refetchType: 'all' })
   }
 }
 
-export function useClearChat(agentId: string) {
+export function useClearChat({ agentId, threadId }: { agentId: string; threadId: string }) {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: ({ threadId, uploads }: { threadId: string; uploads: string[] }) => request({ schema: Deleted('thread'), of: agentId, path: threadPath(threadId), method: 'DELETE', body: { uploads } }),
-    onSuccess: () => client.setQueryData<ThreadWithMessages>([...THREADS_KEY, 'agent', agentId], (thread) => thread && { ...thread, messages: [] }),
+    mutationFn: ({ uploads }: { uploads: string[] }) => request({ schema: Deleted('thread'), of: agentId, path: threadPath(threadId), method: 'DELETE', body: { uploads } }),
+    onSuccess: () => client.setQueryData<ThreadWithMessages>([...THREADS_KEY, 'thread', threadId], (thread) => thread && { ...thread, messages: [] }),
   })
 }
 
