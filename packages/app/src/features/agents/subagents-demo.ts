@@ -22,12 +22,7 @@ export function useDemoThreads() {
 }
 
 function enabled(): boolean {
-  try {
-    if (new URLSearchParams(location.search).get('subagents') === 'demo') localStorage.setItem('openhut.demo.subagents', '1')
-    return localStorage.getItem('openhut.demo.subagents') === '1'
-  } catch {
-    return false
-  }
+  return new URLSearchParams(location.search).get('subagents') === 'demo'
 }
 
 export function useSubagents(agentId: string | undefined): SubagentBatch | undefined {

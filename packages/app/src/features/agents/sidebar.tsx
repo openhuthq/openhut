@@ -1,5 +1,6 @@
 import { createContext, useState, type ReactElement } from 'react'
-import { ArrowDown01Icon, ArrowRight01Icon, Clock01Icon, Delete02Icon, GitBranchIcon, Logout01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SidebarLeftIcon, StopIcon } from '@hugeicons/core-free-icons'
+import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
+import { CancelCircleIcon, CheckmarkCircle02Icon, CircleIcon, DashedLineCircleIcon, PauseCircleIcon, ArrowDown01Icon, ArrowRight01Icon, Clock01Icon, Delete02Icon, GitBranchIcon, Logout01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SidebarLeftIcon, StopIcon } from '@hugeicons/core-free-icons'
 import type { OpenHutAgent } from '@/lib/openhut'
 import type { Thread } from '@openhut/common/threads/thread.ts'
 import { Button } from '@/components/ui/button'
@@ -119,7 +120,7 @@ function AgentRow({ agent, thread, active, phone }: { agent: OpenHutAgent; threa
   }
   return <div className="group relative flex flex-col">
     <RowMenu agent={agent}><a href={agentPath({ agentId: agent.id })} aria-current={active ? 'page' : undefined}
-      className={cn('row grid w-full shrink-0 data-popup-open:bg-picked grid-cols-[40px_1fr] items-center gap-3 rounded-lg px-2.5 py-2 pr-8 text-left text-inherit no-underline phone:grid-cols-[52px_1fr_auto] phone:gap-3.5 phone:rounded-2xl phone:px-3 phone:py-3', HOVER, !phone && active && PICKED)}
+      className={cn('row grid w-full shrink-0 data-popup-open:bg-picked grid-cols-[40px_1fr] items-center gap-3 rounded-lg px-2.5 py-2 text-left text-inherit no-underline phone:grid-cols-[52px_1fr_auto] phone:gap-3.5 phone:rounded-2xl phone:px-3 phone:py-3', HOVER, shown > 0 && 'pr-8', !phone && active && PICKED)}
       title={agent.online ? undefined : 'Offline'}>
       <span className={cn('relative', !agent.online && 'opacity-45')}><Face agent={agent} size={phone ? 52 : 40} /><Live agent={agent} className="-right-0.5 -bottom-0.5 phone:size-3.5" /></span>
       <span className="grid min-w-0 gap-0.5">
@@ -158,19 +159,13 @@ function Session({ href, picked = false, gone = false, icon, title, detail, stat
   return <div title={detail} className={cn(SESSION, HOVER, gone && 'h-0 opacity-0')}>{body}</div>
 }
 
+const MARK_ICON: Record<Progress, IconSvgElement> = { idle: CircleIcon, queued: DashedLineCircleIcon, working: DashedLineCircleIcon, review: PauseCircleIcon, done: CheckmarkCircle02Icon, failed: CancelCircleIcon }
+const MARK_COLOR: Partial<Record<Progress, string>> = { done: 'oklch(62% .13 150)', failed: 'oklch(60% .15 27)' }
+
 function Mark({ status, accent }: { status: Progress; accent: string }) {
-  if (status === 'working' || status === 'queued') return <svg width={14} height={14} viewBox="0 0 14 14" role="img" aria-label={MARK_LABEL[status]}
-    className={cn('shrink-0', status === 'working' ? 'animate-[spin_3s_linear_infinite]' : 'opacity-45')}>
-    <circle cx={7} cy={7} r={5.5} fill="none" stroke={accent} strokeWidth={1.5} strokeLinecap="round" strokeDasharray="2 2.32" />
-  </svg>
-  if (status === 'review') return <svg width={14} height={14} viewBox="0 0 14 14" role="img" aria-label={MARK_LABEL[status]} fill="none" stroke={accent} strokeWidth={1.5} strokeLinecap="round" className="shrink-0">
-    <circle cx={7} cy={7} r={5.5} /><path d="M5.6 5.2v3.6M8.4 5.2v3.6" />
-  </svg>
-  if (status === 'done' || status === 'failed') return <svg width={14} height={14} viewBox="0 0 14 14" role="img" aria-label={MARK_LABEL[status]} className={cn('shrink-0 animate-[pop_.4s_ease-out]', status === 'done' ? 'text-[oklch(66%_.13_150)]' : 'text-[oklch(62%_.15_27)]')}>
-    <circle cx={7} cy={7} r={6.5} fill="currentColor" />
-    <path d={status === 'done' ? 'M4.4 7.2 6.2 9 9.6 5.3' : 'M5 5l4 4M9 5l-4 4'} fill="none" stroke="#fff" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-  return <svg width={14} height={14} viewBox="0 0 14 14" role="img" aria-label={MARK_LABEL[status]} className="shrink-0 text-mute-2"><circle cx={7} cy={7} r={5.5} fill="none" stroke="currentColor" strokeWidth={1.25} /></svg>
+  return <span role="img" aria-label={MARK_LABEL[status]} className={cn('grid place-items-center', status === 'working' && 'animate-[spin_3s_linear_infinite] motion-reduce:animate-none', status === 'queued' && 'opacity-45', (status === 'done' || status === 'failed') && 'animate-[pop_.4s_ease-out]')}>
+    <HugeiconsIcon icon={MARK_ICON[status]} size={14} strokeWidth={1.8} color={MARK_COLOR[status] ?? (status === 'idle' ? 'currentColor' : accent)} aria-hidden="true" />
+  </span>
 }
 
 const MARK_LABEL: Record<Progress, string> = { idle: 'Idle', queued: 'Waiting', working: 'Working', review: 'Needs you', done: 'Done', failed: 'Failed' }
