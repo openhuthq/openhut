@@ -49,6 +49,7 @@ test.after(() => { void client.close(); server.close() })
 test('every openhut tool takes the origin the Hermes plugin stamps on it', async () => {
   const { tools } = await client.listTools()
   assert.ok(tools.length >= 16)
+  assert.ok(!tools.some((tool) => tool.name === 'post_message'), 'a local tool runs in Hermes, not over MCP')
   for (const tool of tools) assert.deepEqual(tool.inputSchema.additionalProperties, {}, `${tool.name} drops origin`)
   const origin = { platform: 'slack', chat_id: 'C1' }
   assert.ok(!(await client.callTool({ name: 'list_routines', arguments: { origin } })).isError)

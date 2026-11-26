@@ -22,17 +22,28 @@ OpenHut needs them to go to its gateway, which swaps the agent's stand-in token 
 
 Lines we added are marked `OpenHut`. To offer upstream: the same setting, without the plain-HTTP allowance.
 
-## openhut-ui (ours)
+## openhut (ours)
 
-`openhut-ui/` turns a reply's ```` ```spec ```` card (`packages/common/src/cards/card.ts`) into something each chat can show.
-Its `transform_llm_output` hook sends the finished reply to the gateway's `POST /cards/render`, which posts the card to
-Slack as Block Kit in the turn's thread and answers with the reply's words, or swaps the card for a text version on
-other chats. The desktop app (`api_server`) is left alone: the thread stream renders cards itself. A Slack card button
-comes back through `register_slack_action_handler` and `inject_message` as the person's reply. `core/hermes.ts`
-enables it (`plugins.enabled`) and allows `allow_gateway_injection`.
-It also registers the agent's `post_message` tool (toolset `openhut-post`): the gateway's `POST /messages/target` checks the
-channel and chat are the agent's own and answers with the Hermes target, which goes to Hermes's own `send_message` helper,
-so a post uses the same adapters as a reply.
+`openhut/` is OpenHut's only Hermes plugin, and it holds no feature code. What it registers comes from
+`plugins.entries.openhut.settings` in `config.yaml`, which `core/hermes.ts` writes from the runtime's plugin list
+(`core/hooks.ts` `manifest()`):
+
+- `tools`: each local tool (`local: true` in a plugin, like `post`'s `post_message`), with the JSON schema of its zod
+  input. Its handler sends `{ args, origin }` to the gateway's `POST /tools/<name>`; an answer `{ send: { target, message } }`
+  goes to Hermes's own `send_message` helper, so a post uses the same adapters as a reply.
+- `hooks`: the Hermes hook names some plugin handles (`hooks: { <hermes hook>: run }` in a plugin). For each, a
+  forwarder sends the hook's arguments, made plain JSON (enums as their value, dataclasses as their fields, anything
+  else dropped), and the turn's `origin` to `POST /hooks/<hook name>`, and returns the `result` the plugins gave (the
+  first one that isn't null; every plugin's handler runs). Today: `transform_llm_output` (cards: a reply's
+  ```` ```spec ```` card, `packages/common/src/cards/card.ts`, goes to Slack as Block Kit in the turn's thread, or becomes
+  text on other chats; the app chat, `api_server`, is left alone since the thread stream renders cards itself) and
+  `pre_gateway_dispatch` (channels: a Telegram `/start <invite>` is taken and skipped, so the agent never sees it).
+- `slack_actions`: a Slack action handler per prefix (`card:`), to `POST /slack-actions`; the cards plugin answers with
+  the button's text and its thread, which goes back in through `inject_message` as the person's reply. `core/hermes.ts`
+  allows `allow_gateway_injection`.
+
 Its `pre_tool_call` hook stamps every `mcp__openhut__*` call with the chat it came from (`origin`), with no list of tools to
 keep in sync. Every gateway tool takes `origin` and reads it in one place (`core/mcp.ts`); it is advice,
-since the gateway checks the chat again before it posts there.
+since the gateway checks the chat again before it posts there. It also polls the gateway for due routine runs and starts
+them in their chat. `slack_transport.py` is transport, not a feature: Hermes has no Slack API base URL, so it points
+`slack_sdk` and Slack file downloads at the gateway (`OPENHUT_SLACK_API`, `OPENHUT_SLACK_FILES`).

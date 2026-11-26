@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { CARD_PROMPT } from '@openhut/common/cards/card.ts'
 import { ASK_PROMPT, INTERVIEW_PROMPT, starterInstructions } from '@openhut/common/asks/ask.ts'
 import { hermesFiles, merge } from '../../src/core/hermes.ts'
+import { manifest } from '../../src/core/hooks.ts'
 import type { HermesCtx } from '../../src/core/plugin.ts'
 import type { RenderedChannel } from '../../src/plugins/channels/index.ts'
 import { config } from '../../src/server/platform/config.ts'
@@ -44,10 +45,11 @@ test('the base Hermes settings, the app chat and the openhut MCP server and plug
   assert.deepEqual(yaml.terminal, { backend: 'local' })
   assert.equal(yaml.agent.api_max_retries, 30)
   assert.deepEqual(yaml.tools, { tool_search: { enabled: 'off' } })
-  assert.deepEqual(yaml.platform_toolsets, { api_server: ['hermes-api-server', 'openhut', 'openhut-post'] })
+  assert.deepEqual(yaml.platform_toolsets, { api_server: ['hermes-api-server', 'openhut'] })
   assert.deepEqual(yaml.mcp_servers, { openhut: { url: 'http://10.200.3.1:8081/api/v1/mcp', headers: { Authorization: 'Agent ag_chantest.token' } } })
-  assert.deepEqual(yaml.plugins.enabled, ['openhut-ui'])
-  assert.deepEqual(yaml.plugins.entries['openhut-ui'], { allow_gateway_injection: true })
+  assert.deepEqual(yaml.plugins.enabled, ['openhut'])
+  assert.deepEqual(yaml.plugins.entries.openhut, { allow_gateway_injection: true, settings: manifest() })
+  assert.deepEqual(yaml.plugins.entries.openhut.settings.tools.map((tool: { name: string }) => tool.name), ['post_message'])
   assert.deepEqual(env, { OPENHUT_GATEWAY: 'http://10.200.3.1:8081', OPENHUT_AGENT_TOKEN: 'ag_chantest.token', API_SERVER_KEY: 'k'.repeat(32), API_SERVER_HOST: '0.0.0.0', API_SERVER_PORT: '8642' })
 })
 
@@ -106,7 +108,7 @@ test('Claude mode: the seat plugin is the model for everything, and the agent ho
   assert.deepEqual(yaml.model, { default: 'sonnet', ...route })
   for (const task of AUXILIARY) assert.deepEqual(yaml.auxiliary[task], { model: 'sonnet', ...route })
   assert.deepEqual(yaml.plugins.entries['claude-subscription-directsdk-experimental'], { settings: { relay_upstream: 'http://10.200.3.1:8081/u/anthropic' } })
-  assert.equal(yaml.plugins.entries['openhut-ui'].allow_gateway_injection, true)
+  assert.equal(yaml.plugins.entries.openhut.allow_gateway_injection, true)
   assert.equal(yaml.fallback_providers, undefined)
   assert.equal(env.CLAUDE_CODE_OAUTH_TOKEN, 'ag_chantest.token')
   assert.doesNotMatch(JSON.stringify([yaml, env]), /sk-ant|test-llm/)

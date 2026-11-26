@@ -6,15 +6,14 @@ import { log } from '../platform/events.ts'
 import { serveMcp } from '../platform/mcp-transport.ts'
 import { agentService } from '../agents/agent-service.ts'
 import { mcpOf } from '../../core/mcp.ts'
+import { runHook, runLocal, runSlackAction } from '../../core/hooks.ts'
 import { plugins } from '../../core/plugins.ts'
 import { forward } from '../relay/forward.ts'
 import { testAnthropic, testModel } from './test-model.ts'
 import { brokerService, upstreams } from './broker.ts'
 import { activity } from './activity.ts'
-import { cardService } from '../cards/card-service.ts'
 import { changeRequestService } from '../agents/change-request-service.ts'
 import { inboxService } from '../inbox/inbox-service.ts'
-import { channelService } from '../channels/channel-service.ts'
 
 export { toolList } from '../../plugins/connections/index.ts'
 
@@ -24,9 +23,6 @@ const LONG_POLL = /^(\/u\/telegram\/bot[^/]+\/getUpdates|\/routines\/due)$/
 const MAX_BODY = 1 << 20
 const LIMITS = { requestTimeout: 600_000, headersTimeout: 10_000, connectionsCheckingInterval: 2_000 }
 const RunReport = z.object({ picked: z.literal(true).optional(), said: z.string().max(200_000).optional() })
-const TelegramJoin = z.object({ code: z.string().max(64), userId: z.string().regex(/^[1-9]\d{4,14}$/), name: z.string().max(100).default('there'), chatId: z.number() })
-const MessageTarget = z.object({ channel: z.string().max(40), chat: z.string().max(200).optional() })
-const RenderCard = z.object({ text: z.string().max(200_000), channel: z.string().max(40), chatId: z.string().max(200).optional(), threadId: z.string().max(200).optional() })
 
 export const gatewayServer = {
   start({ port = config.gatewayPort }: { port?: number } = {}): Promise<void> {
@@ -68,9 +64,11 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   if (path === '/routines/due' && req.method === 'GET') return json(res, 200, { object: 'list', url: path, hasMore: false, data: [...await inboxService.due({ agentId: agent.id }), ...await changeRequestService.due({ agentId: agent.id })] })
   const run = /^\/routines\/runs\/((?:ru|chg|hd)_[a-z0-9]+)$/.exec(path)
   if (run && req.method === 'POST') return json(res, 200, await reportRun({ agentId: agent.id, runId: run[1], body: await readBody(req) }))
-  if (path === '/messages/target' && req.method === 'POST') return json(res, 200, await messageTarget({ agentId: agent.id, body: await readBody(req) }))
-  if (path === '/telegram/joins' && req.method === 'POST') return json(res, 200, await telegramJoin({ agentId: agent.id, body: await readBody(req) }))
-  if (path === '/cards/render' && req.method === 'POST') return json(res, 200, await cardService.render({ agent, ...renderRequest(await readBody(req)) }))
+  const local = /^\/tools\/(\w+)$/.exec(path)
+  if (local && req.method === 'POST') return json(res, 200, await runLocal({ agent, name: local[1], body: await readBody(req) }))
+  if (path === '/slack-actions' && req.method === 'POST') return json(res, 200, await runSlackAction({ agent, body: await readBody(req) }))
+  const hook = /^\/hooks\/(\w+)$/.exec(path)
+  if (hook && req.method === 'POST') return json(res, 200, await runHook({ agent, hook: hook[1], body: await readBody(req) }))
   if (path.startsWith('/test-llm/') && config.modelMode === 'test') return testModel({ path, body: await readBody(req), res })
   json(res, 404, errorBody({ status: 404, message: `No route ${path}.` }))
 }
@@ -84,27 +82,6 @@ async function reportRun({ agentId, runId, body }: { agentId: string; runId: str
   } else if (parsed.data.picked) await inboxService.picked({ agentId, id: runId })
   else await inboxService.report({ agentId, runId, said: parsed.data.said ?? '' })
   return { object: 'routine_run', id: runId }
-}
-
-async function messageTarget({ agentId, body }: { agentId: string; body: unknown }): Promise<{ object: 'message_target'; target: string; place: string }> {
-  const parsed = MessageTarget.safeParse(body)
-  if (!parsed.success) throw new HttpError(400, 'Send the channel id from get_self, and the chat if it has more than one.')
-  const found = await channelService.postTarget({ agentId, ...parsed.data })
-  log.info({ event: 'message.posted', agent: agentId, channel: found.channel })
-  return { object: 'message_target', target: found.target, place: found.place }
-}
-
-async function telegramJoin({ agentId, body }: { agentId: string; body: unknown }) {
-  const parsed = TelegramJoin.safeParse(body)
-  if (!parsed.success) throw new HttpError(400, 'Send the invite code, the Telegram user and the chat.')
-  const { code, ...person } = parsed.data
-  return channelService.telegramJoin({ agentId, code, person })
-}
-
-function renderRequest(body: unknown): z.infer<typeof RenderCard> {
-  const parsed = RenderCard.safeParse(body)
-  if (!parsed.success) throw new HttpError(400, 'Send the reply as text, with the channel it goes to.')
-  return parsed.data
 }
 
 async function readBody(req: IncomingMessage): Promise<unknown> {

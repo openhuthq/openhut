@@ -7,7 +7,17 @@ import { slack } from '../../server/integrations/slack/slack.ts'
 import { telegram } from '../../server/integrations/telegram/telegram.ts'
 import { discord } from '../../server/integrations/discord/discord.ts'
 import { whatsapp } from '../../server/integrations/whatsapp/whatsapp.ts'
+import { channelService } from '../../server/channels/channel-service.ts'
 import { changeTool } from '../asks/change.ts'
+
+const INVITE = /^\/start(?:@\w+)?\s+([\w-]{16,64})$/
+const TELEGRAM_USER = /^[1-9]\d{4,14}$/
+const Dispatched = z.object({
+  event: z.object({
+    text: z.string(),
+    source: z.object({ platform: z.string(), user_id: z.coerce.string().nullish(), user_name: z.string().nullish(), chat_id: z.coerce.string().nullish() }).nullish(),
+  }),
+})
 
 export type RenderedChannel =
   | { kind: Extract<ChannelKind, 'slack'>; audience: Audience }
@@ -35,6 +45,19 @@ export const channels = definePlugin({
     }),
     update_channel: changeTool({ action: 'update_channel', description: 'Ask to change who can message you on one of your channels.', input: { id: z.string().max(40), open: z.boolean().optional(), allowed: z.array(z.string().max(20)).max(50).optional().describe('The whole new list.') } }),
     remove_channel: changeTool({ action: 'remove_channel', description: 'Ask to remove one of your channels.', input: { id: z.string().max(40) } }),
+  },
+  hooks: {
+    pre_gateway_dispatch: async ({ agent, args }) => {
+      const event = Dispatched.safeParse(args).data?.event
+      const code = event?.source?.platform === 'telegram' ? INVITE.exec(event.text.trim())?.[1] : undefined
+      const userId = event?.source?.user_id
+      if (!code || !userId) return undefined
+      const chatId = Number(event.source?.chat_id)
+      if (TELEGRAM_USER.test(userId) && Number.isSafeInteger(chatId)) {
+        await channelService.telegramJoin({ agentId: agent.id, code, person: { userId, name: event.source?.user_name?.slice(0, 100) || 'there', chatId } }).catch(() => undefined)
+      }
+      return { action: 'skip', reason: 'openhut invite' }
+    },
   },
 })
 
