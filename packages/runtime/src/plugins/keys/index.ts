@@ -34,7 +34,7 @@ export const keys = definePlugin({
       run: async ({ ask: { agentId, input }, answer }) => {
         const secret = secretOf(input)
         await agentService.quietly({ id: agentId, change: () => secretService.save({ agentId, input: secret, value: answer.value }) })
-        return `You restart to pick it up right after this reply. You never see the key: call https://${secret.hosts[0]}/… as $OPENHUT_GATEWAY/x/${secret.hosts[0]}/… with the header "Authorization: Agent $OPENHUT_AGENT_TOKEN", and OpenHut adds it.`
+        return `You have already restarted with it. You never see the key: call https://${secret.hosts[0]}/… as $OPENHUT_GATEWAY/x/${secret.hosts[0]}/… with the header "Authorization: Agent $OPENHUT_AGENT_TOKEN", and OpenHut adds it.`
       },
     }),
   },

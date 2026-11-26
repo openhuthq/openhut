@@ -57,7 +57,7 @@ export const channels = definePlugin({
       },
       run: async ({ actor, ask: { agentId, input } }) => {
         await agentService.quietly({ id: agentId, change: () => channelService.create({ actor, ...newChannel({ agentId, input }) }).catch(alreadyDone(409)) })
-        return input.kind === 'whatsapp' ? 'WhatsApp links once your owner scans the QR code on your page in OpenHut.' : 'You restart to pick it up right after this reply.'
+        return input.kind === 'whatsapp' ? 'WhatsApp links once your owner scans the QR code on your page in OpenHut.' : 'You have already restarted with it.'
       },
     }),
     update_channel: defineAsk({
@@ -68,7 +68,7 @@ export const channels = definePlugin({
       run: async ({ actor, ask: { agentId, input: { id, ...patch } } }) => {
         await ownChannel({ agentId, id })
         await agentService.quietly({ id: agentId, change: () => channelService.update({ actor, id, patch }) })
-        return 'You restart to pick it up right after this reply.'
+        return 'You have already restarted with it.'
       },
     }),
     remove_channel: defineAsk({
@@ -77,7 +77,7 @@ export const channels = definePlugin({
       title: async ({ agentId, input }) => `Remove ${LABEL[(await ownChannel({ agentId, id: input.id })).kind]}`,
       run: async ({ actor, ask: { agentId, input: { id } } }) => {
         await ownChannel({ agentId, id }).then(() => agentService.quietly({ id: agentId, change: () => channelService.delete({ actor, id }) })).catch(alreadyDone(404))
-        return 'You restart to pick it up right after this reply.'
+        return 'You have already restarted with it.'
       },
     }),
   },

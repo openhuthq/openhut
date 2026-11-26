@@ -273,7 +273,7 @@ test('a wake waits for the restart its answer needs, and the restart waits for t
   const restart = agentd.applies.slice(applies).find((each) => each.id === 'ag_chgagent')
   assert.ok(restart && restart.at >= ended + 9_000, 'restarted once quiet for 10 seconds')
   assert.equal(told.length, before + 1)
-  assert.match(told.at(-1)?.text ?? '', /Approved and done: Change its instructions\. You restart/)
+  assert.match(told.at(-1)?.text ?? '', /Approved and done: Change its instructions\. You have already restarted with it\./)
 })
 
 test('a grant made in the app waits for the agent to go quiet before it restarts it', async () => {

@@ -86,7 +86,7 @@ export const connections = definePlugin({
       },
       run: async ({ actor, ask: { agentId, input } }) => {
         await agentService.createGrant({ actor, agentId, connectionId: input.connectionId })
-        return 'You restart to pick it up right after this reply.'
+        return 'You have already restarted with it.'
       },
     }),
     propose_connection: defineAsk({
@@ -107,7 +107,7 @@ export const connections = definePlugin({
       title: ({ input }) => `Connect ${proposalOf(input).name}`,
       run: async ({ actor, ask: { agentId, input }, answer }) => {
         await connectProposed({ actor, agentId, proposal: proposalOf(input), token: answer.key })
-        return 'You restart to pick it up right after this reply.'
+        return 'You have already restarted with it.'
       },
     }),
     call_tool: defineAsk({
