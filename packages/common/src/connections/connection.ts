@@ -130,6 +130,8 @@ export const CreateConnectionAuthorization = z.object({
   name: z.optional(Name),
   url: z.optional(McpUrl),
   connectionId: z.optional(z.string().check(z.maxLength(40))),
+  askId: z.optional(z.string().check(z.maxLength(40))),
+  permissions: z.optional(z.partialRecord(ToolGroup, Permission)),
 })
 export type CreateConnectionAuthorization = z.infer<typeof CreateConnectionAuthorization>
 

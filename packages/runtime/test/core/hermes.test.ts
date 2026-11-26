@@ -207,8 +207,7 @@ test('a new agent with its starter instructions is told to interview the person 
   const fresh = files({ agent: { ...agent, name: 'Pulse', instructions: starterInstructions('Pulse') } })
   assert.equal(fresh.soul, `${starterInstructions('Pulse')}\n${INTERVIEW_PROMPT}${ASK_PROMPT}${CARD_PROMPT}`)
   assert.match(INTERVIEW_PROMPT, /update_self/)
-  assert.match(INTERVIEW_PROMPT, /ask_to_connect/)
-  assert.match(INTERVIEW_PROMPT, /propose_connection/)
+  assert.match(INTERVIEW_PROMPT, /connect_app/)
   assert.doesNotMatch(render([]).soul, /Your first chat/)
 })
 

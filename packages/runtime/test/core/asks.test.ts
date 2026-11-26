@@ -13,6 +13,7 @@ import { db, migrate } from '../../src/server/platform/db.ts'
 import { agentToken, seal } from '../../src/server/platform/secrets.ts'
 import { runSet } from '../../src/server/agents/run-set.ts'
 import { fakeAgentd, refresh, signIn } from '../server/agents/signed-in.ts'
+import { connectionAuthorizationService } from '../../src/server/connections/connection-authorization-service.ts'
 import { connectionService } from '../../src/server/connections/connection-service.ts'
 import { mcp } from '../../src/server/integrations/mcp/mcp.ts'
 import { permissions } from '../../src/server/permissions/permissions.ts'
@@ -138,88 +139,80 @@ test('approving again after a crash is safe: a channel already removed counts as
   assert.equal((await asks.approve({ actor: owner, id })).status, 'done')
 })
 
-const DIGITALOCEAN = {
-  why: 'To watch prod-db and set up alerts. Changes wait for your OK.',
-  name: 'DigitalOcean', line: 'where your database runs', url: 'https://mcp.digitalocean.com/mcp',
-  token: { label: 'DigitalOcean token', guide: 'Make a token with read and write access to Databases and Monitoring.', link: 'https://cloud.digitalocean.com/account/api/tokens', scopes: ['database:read', 'database:update'] },
-  groups: [
-    { group: 'read', label: 'Read database info', permission: 'allow' },
-    { group: 'update', label: 'Change database settings', permission: 'ask' },
-    { group: 'delete', label: 'Delete databases', permission: 'deny' },
-  ],
-}
+const DIGITALOCEAN = { why: 'To watch prod-db.', app: 'mcp', name: 'DigitalOcean', url: 'https://mcp.digitalocean.com/mcp', token: 'DigitalOcean token', guide: 'Make a read and write token.', link: 'https://cloud.digitalocean.com/account/api/tokens', permissions: { read: 'allow', update: 'ask', delete: 'deny' } }
 const DO_TOOLS = [
   { name: 'db-cluster-get', description: 'Get a cluster', schema: {}, annotations: { readOnlyHint: true } },
   { name: 'db-cluster-resize', description: 'Resize a cluster', schema: {}, annotations: { readOnlyHint: false } },
   { name: 'db-cluster-delete', description: 'Delete a cluster', schema: {}, annotations: { destructiveHint: true } },
 ]
 
-test('a proposed connection the owner approves with a token becomes a granted connection with the permissions they picked, and the agent never sees the token', async () => {
+test('connect_app with a token: the owner pastes it, OpenHut connects and grants the asking agent with the permissions picked, and the agent never sees the token', async () => {
   const secret = 'dop_v1_fakeTokenThatMustStayHidden0123456789'
   const probes: unknown[] = []
   mock.method(mcp, 'probe', async (target: unknown) => { probes.push(target); return DO_TOOLS.length })
   mock.method(connectionService, 'specs', async () => DO_TOOLS)
-  const asked = await client.callTool({ name: 'propose_connection', arguments: { ...DIGITALOCEAN, origin: app } })
+  const asked = await client.callTool({ name: 'connect_app', arguments: { ...DIGITALOCEAN, origin: app } })
   assert.notEqual(asked.isError, true)
   const id = idIn(textOf(asked))
   assert.match(textOf(asked), /Connect DigitalOcean/)
-  await assert.rejects(asks.approve({ actor: owner, id }), /Paste the DigitalOcean token/)
-  const edited = { ...DIGITALOCEAN, groups: DIGITALOCEAN.groups.map((each) => each.group === 'update' ? { ...each, permission: 'deny' } : each) }
-  const approved = await asks.approve({ actor: owner, id, answer: { groups: edited.groups, key: ` ${secret} ` } })
+  const open = await asks.get({ actor: owner, id })
+  assert.deepEqual(Object.keys((open.form as { properties: object }).properties), ['connectionId', 'fields', 'permissions'])
+  await assert.rejects(asks.approve({ actor: owner, id, answer: {} }), /Pick a connection or fill in its fields/)
+  await assert.rejects(asks.approve({ actor: owner, id, answer: { fields: { token: 'has space' } } }), /no spaces/)
+  const approved = await asks.approve({ actor: owner, id, answer: { fields: { token: ` ${secret} ` }, permissions: { read: 'allow', update: 'deny', delete: 'deny' } } })
   assert.equal(approved.status, 'done')
   assert.deepEqual(probes, [{ url: DIGITALOCEAN.url, headers: { Authorization: `Bearer ${secret}` } }])
-  const connection = await db.selectFrom('connection').select(['id', 'kind', 'name', 'config']).where('name', '=', 'DigitalOcean').executeTakeFirstOrThrow()
+  const connection = await db.selectFrom('connection').select(['id', 'kind', 'config']).where('name', '=', 'DigitalOcean').executeTakeFirstOrThrow()
   assert.equal(connection.kind, 'mcp')
   assert.doesNotMatch(connection.config, new RegExp(secret))
-  assert.deepEqual(connectionService.unsealed(connection.config), { url: DIGITALOCEAN.url, headers: { Authorization: `Bearer ${secret}` } })
-  const grants = await connectionService.reachable({ agent: { id: 'ag_chgagent', owner_id: 'usr_chgowner' } })
-  assert.ok(grants.some((grant) => grant.id === connection.id))
+  assert.ok((await connectionService.reachable({ agent: { id: 'ag_chgagent', owner_id: 'usr_chgowner' } })).some((each) => each.id === connection.id))
   const states = await permissions.list({ agentId: 'ag_chgagent', connectionId: connection.id, tools: DO_TOOLS })
   assert.deepEqual(states.map((each) => [each.name, each.permission]), [['db-cluster-get', 'allow'], ['db-cluster-resize', 'deny'], ['db-cluster-delete', 'deny']])
   await settled()
-  const row = await db.selectFrom('ask').select(['input', 'title']).where('id', '=', id).executeTakeFirstOrThrow()
-  const seen = [asked, await client.callTool({ name: 'get_self', arguments: {} })].map((each) => JSON.stringify(each.content))
-  for (const text of [row.input, row.title, JSON.stringify(approved), ...told.map((each) => each.text), ...seen]) assert.doesNotMatch(text, new RegExp(secret))
-  assert.match(told.at(-1)?.text ?? '', /^\[OpenHut asks:wk_[a-z0-9]+\] Your owner answered your ask:\n- Approved and done: Connect DigitalOcean\./)
+  const row = await db.selectFrom('ask').select(['input', 'title', 'reply']).where('id', '=', id).executeTakeFirstOrThrow()
+  for (const text of [row.input, row.title, row.reply ?? '', JSON.stringify(approved), ...told.map((each) => each.text)]) assert.doesNotMatch(text, new RegExp(secret))
+  assert.match(told.at(-1)?.text ?? '', new RegExp(`Approved and done: Connect DigitalOcean\\. You can use DigitalOcean now \\(${connection.id}\\)`))
   mock.restoreAll()
 })
 
-const DO_REMOTE_TOOLS = [
-  { name: 'mcp_find_tools', description: 'Find DigitalOcean tools', schema: {}, annotations: { readOnlyHint: true } },
-  { name: 'mcp_retrieve_schema', description: 'Read a tool schema', schema: {}, annotations: { readOnlyHint: true } },
-  { name: 'mcp_invoke_tool', description: 'Invoke a DigitalOcean tool', schema: {}, annotations: { readOnlyHint: false, destructiveHint: true } },
-]
+test('connect_app with a connection that already exists grants it without a second step, and refuses one of another kind', async () => {
+  await db.insertInto('connection').values([
+    { id: 'cn_existpg1', kind: 'postgres', name: 'Prod DB', owner_id: 'usr_chgowner', config: seal('{}') },
+    { id: 'cn_existln1', kind: 'linear', name: 'Linear', owner_id: 'usr_chgowner', config: seal('{}') },
+  ]).execute()
+  const id = idIn(textOf(await client.callTool({ name: 'connect_app', arguments: { why: 'To watch slow queries.', app: 'postgres', origin: app } })))
+  await assert.rejects(asks.approve({ actor: owner, id, answer: { connectionId: 'cn_existln1' } }), /Linear isn't a Postgres connection/)
+  assert.equal((await asks.approve({ actor: owner, id, answer: { connectionId: 'cn_existpg1', permissions: { read: 'allow' } } })).status, 'done')
+  assert.ok((await agentService.listGrants({ agentId: 'ag_chgagent' })).some((grant) => grant.connectionId === 'cn_existpg1'))
+})
 
-test('DigitalOcean\'s one invoke-anything tool asks first instead of landing under Delete: Never, and an approved setting for it is stored as approved', async () => {
-  mock.method(mcp, 'probe', async () => DO_REMOTE_TOOLS.length)
-  mock.method(connectionService, 'specs', async () => DO_REMOTE_TOOLS)
-  const approveWith = async ({ name, groups }: { name: string; groups: typeof DIGITALOCEAN.groups }) => {
-    const id = idIn(textOf(await client.callTool({ name: 'propose_connection', arguments: { ...DIGITALOCEAN, name, origin: app } })))
-    await asks.approve({ actor: owner, id, answer: { groups, key: 'dop_v1_token' } })
-    const connection = await db.selectFrom('connection').select('id').where('name', '=', name).executeTakeFirstOrThrow()
-    const states = await permissions.list({ agentId: 'ag_chgagent', connectionId: connection.id, tools: DO_REMOTE_TOOLS })
-    return Object.fromEntries(states.map((each) => [each.name, [each.group, each.permission]]))
-  }
-  assert.deepEqual(await approveWith({ name: 'DigitalOcean A', groups: DIGITALOCEAN.groups }), {
-    mcp_find_tools: ['read', 'allow'], mcp_retrieve_schema: ['read', 'allow'], mcp_invoke_tool: ['other', 'ask'],
-  })
-  const picked = [...DIGITALOCEAN.groups, { group: 'other', label: 'Run any DigitalOcean tool', permission: 'allow' }]
-  assert.deepEqual((await approveWith({ name: 'DigitalOcean B', groups: picked })).mcp_invoke_tool, ['other', 'allow'])
+test('connect_app by sign-in: the callback approves the ask for the owner, so the agent gets the new connection with the permissions picked before the sign-in', async () => {
+  mock.method(mcp, 'beginSignIn', async () => ({ authorizationUrl: 'https://tracker.example.com/authorize', flow: {} }))
+  mock.method(mcp, 'finishSignIn', async () => ({ tokens: { access_token: 'at', token_type: 'Bearer' } }))
+  mock.method(connectionService, 'listTools', async () => [])
+  mock.method(connectionService, 'specs', async () => DO_TOOLS)
+  const id = idIn(textOf(await client.callTool({ name: 'connect_app', arguments: { why: 'To file issues.', app: 'mcp', name: 'Tracker', url: 'https://tracker.example.com/mcp', origin: app } })))
+  await assert.rejects(connectionAuthorizationService.create({ actor: owner, kind: 'mcp', url: 'https://tracker.example.com/mcp', askId: idIn(textOf(await client.callTool({ name: 'update_self', arguments: { why: 'x', name: 'Not a connect', origin: app } }))) }), /isn't for connecting an app/)
+  const started = await connectionAuthorizationService.create({ actor: owner, kind: 'mcp', name: 'Tracker', url: 'https://tracker.example.com/mcp', askId: id, permissions: { read: 'allow', update: 'deny' } })
+  assert.equal((await asks.get({ actor: owner, id })).status, 'open')
+  const done = await connectionAuthorizationService.finish({ state: started.id, code: 'good' })
+  assert.equal(done.error, undefined)
+  assert.equal((await asks.get({ actor: owner, id })).status, 'done')
+  assert.ok((await agentService.listGrants({ agentId: 'ag_chgagent' })).some((grant) => grant.connectionId === done.connectionId))
+  const states = await permissions.list({ agentId: 'ag_chgagent', connectionId: done.connectionId ?? '', tools: DO_TOOLS })
+  assert.deepEqual(states.map((each) => each.permission), ['allow', 'deny', 'deny'])
+  assert.equal((await connectionAuthorizationService.get({ actor: owner, id: started.id })).status, 'done')
   mock.restoreAll()
 })
 
-test('a bad token leaves no connection behind, and choosing to set it up themselves tells the agent to give steps', async () => {
-  mock.method(mcp, 'probe', async () => { throw new Error('401 Unauthorized') })
-  const id = idIn(textOf(await client.callTool({ name: 'propose_connection', arguments: { ...DIGITALOCEAN, name: 'Fly', url: 'https://mcp.fly.example/mcp', origin: app } })))
-  await assert.rejects(asks.approve({ actor: owner, id, answer: { key: 'wrong-token' } }), /didn't answer as an MCP server/)
-  assert.equal(await db.selectFrom('connection').select('id').where('name', '=', 'Fly').executeTakeFirst(), undefined)
-  await asks.decline({ actor: owner, id, note: 'I’ll set it up myself' })
-  await settled()
-  assert.match(told.at(-1)?.text ?? '', /Not approved: Connect Fly\. They said: "I’ll set it up myself"/)
-  assert.match(((await client.listTools()).tools.find((tool) => tool.name === 'propose_connection')?.description ?? ''), /numbered steps/)
-  const twice = await client.callTool({ name: 'propose_connection', arguments: { ...DIGITALOCEAN, groups: [DIGITALOCEAN.groups[0], DIGITALOCEAN.groups[0]], origin: app } })
-  assert.equal(twice.isError, true)
-  mock.restoreAll()
+test('connect_app takes a url, a name or a token only for app mcp, and app mcp needs its url', async () => {
+  const wrong = await client.callTool({ name: 'connect_app', arguments: { why: 'x', app: 'linear', url: 'https://mcp.linear.app/mcp', origin: app } })
+  assert.equal(wrong.isError, true)
+  assert.match(textOf(wrong), /Only app mcp takes a url/)
+  const missing = await client.callTool({ name: 'connect_app', arguments: { why: 'x', app: 'mcp', name: 'Thing', origin: app } })
+  assert.equal(missing.isError, true)
+  assert.match(textOf(missing), /Send the MCP server's url/)
+  assert.deepEqual((await client.listTools()).tools.map((tool) => tool.name).filter((name) => /connect|propose|request_connection/.test(name)), ['connect_app'])
 })
 
 test('asks list newest first, and ones made at the same moment keep one order', async () => {

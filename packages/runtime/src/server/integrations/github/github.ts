@@ -78,7 +78,7 @@ export const github = {
   async gitToken({ agentId, push = false }: { agentId: string; push?: boolean }): Promise<string> {
     const row = await db.selectFrom('connection as c').innerJoin('connection_grant as g', 'g.connection_id', 'c.id').select(['c.id', 'c.config'])
       .where('g.agent_id', '=', agentId).where('c.kind', '=', 'github').orderBy('c.created_at').executeTakeFirst()
-    if (!row) throw new HttpError(403, 'No GitHub connection is granted to this agent. Ask for one with ask_to_connect.')
+    if (!row) throw new HttpError(403, 'No GitHub connection is granted to this agent. Ask for one with connect_app.')
     const state = await permissions.decide({ agentId, connectionId: row.id, spec: GIT })
     if (state === 'deny') throw new HttpError(403, 'git_credentials is set to Never for you, so git can\'t reach GitHub. Ask your owner to change it in OpenHut.')
     if (push && state !== 'allow') throw new HttpError(403, 'Pushing needs git_credentials set to Always. Call call_tool git_credentials to ask your owner, and ask them to choose Always, then push again.')

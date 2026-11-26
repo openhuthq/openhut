@@ -3,18 +3,10 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { createRenderer } from '@json-render/react'
 import { cardCatalog } from '@openhut/common/cards/card.ts'
-import { askedPath } from '@openhut/common/asks/ask.ts'
-import type { Connection } from '@openhut/common/connections/connection.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 import { isBrand } from '@/components/brand-icons'
 import { Glyph } from '@/components/glyph'
-import { StatusBadge } from '@/components/status-badge'
 import { integration } from '@/features/connections/catalog'
-import { useGrants } from '@/features/agents/api'
-import { useConnections } from '@/features/connections/api'
-import { I } from '@/components/kit'
-import { CheckmarkCircle02Icon } from '@hugeicons/core-free-icons'
 
 export const CardReply = createContext<(text: string) => void>(() => undefined)
 
@@ -68,31 +60,12 @@ export const MessageCard = createRenderer(cardCatalog, {
     const reply = useContext(CardReply)
     return <Button type="button" size="sm" variant={props.style ? VARIANTS[props.style] : 'secondary'} onClick={() => reply(props.label)}>{props.label}</Button>
   },
-  LinkButton: ({ element: { props } }) => {
-    const inApp = askedPath(props.url)
-    if (inApp) return <a href={inApp} className={cn(buttonVariants({ variant: 'text' }), 'ml-auto')}>{props.label}</a>
-    return <a href={props.url} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'secondary', size: 'sm' })}>{props.label}<span className="text-[11px] text-mute">↗</span></a>
-  },
+  LinkButton: ({ element: { props } }) => <a href={props.url} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'secondary', size: 'sm' })}>{props.label}<span className="text-[11px] text-mute">↗</span></a>,
   Connect: ({ element: { props } }) => {
     const brand = props.brand && isBrand(props.brand) ? props.brand : undefined
-    const inApp = askedPath(props.url)
-    const done = useConnected(inApp)
     return <div className="flex min-w-0 items-center gap-3">
       <span className="grid size-6 shrink-0 place-items-center">{brand && <Glyph name={brand} size={20} />}</span>
       <span className="min-w-0 flex-1 truncate text-[13.5px]"><span className="text-ink">{props.title}</span>{props.subtitle && <span className="text-mute"> · {props.subtitle}</span>}</span>
-      {done?.status === 'failing' && <StatusBadge status="failing" />}
-      {done && done.status !== 'failing' && <span className="inline-flex h-7 items-center gap-1.5 text-[13px] text-ink"><I icon={CheckmarkCircle02Icon} size={16} className="animate-[pop_.45s_cubic-bezier(.2,.8,.2,1)] text-hue-green" />Connected</span>}
-      {!done && <a href={inApp ?? props.url} className={buttonVariants({ variant: 'secondary', size: 'sm' })}>Connect</a>}
     </div>
   },
 })
-
-function useConnected(path: string | undefined): Connection | undefined {
-  const [, kind = '', query = ''] = (path && /^\/connections\/new\/([a-z_]+)\?(.*)$/.exec(path)) || []
-  const wanted = new URLSearchParams(query)
-  const url = wanted.get('url')
-  const host = url && URL.canParse(url) ? new URL(url).host : undefined
-  const grants = useGrants({ agentId: wanted.get('for') ?? '' }).data ?? []
-  const connections = useConnections().data ?? []
-  return connections.find((connection) => grants.some((grant) => grant.connectionId === connection.id) && connection.kind === kind && (kind !== 'mcp' || connection.account.split(' · ')[0] === host))
-}

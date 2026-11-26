@@ -5,6 +5,7 @@ import type { Database } from '../platform/db-schema.ts'
 import { seal, unseal } from '../platform/secrets.ts'
 import { CONNECTION_TITLES as TITLES, GOOGLE_KINDS, SIGN_IN_KINDS, type ConnectionAuthorization, type CreateConnectionAuthorization } from '@openhut/common/connections/connection.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
+import { asks } from '../../core/asks.ts'
 import { github } from '../integrations/github/github.ts'
 import { google, type GoogleKind } from '../integrations/google/google.ts'
 import { MCP_SERVERS, mcp, type SignIn } from '../integrations/mcp/mcp.ts'
@@ -15,14 +16,15 @@ import type { Secret } from './connection-records.ts'
 const SIGN_IN_MS = 15 * 60_000
 
 export const connectionAuthorizationService = {
-  async create({ actor, kind: chosen, name, url: given, connectionId }: { actor: Caller } & CreateConnectionAuthorization): Promise<ConnectionAuthorization> {
+  async create({ actor, kind: chosen, name, url: given, connectionId, askId, permissions }: { actor: Caller } & CreateConnectionAuthorization): Promise<ConnectionAuthorization> {
     const existing = connectionId ? await connectionService.owned({ id: connectionId }) : undefined
     const kind = existing ? signInKind(existing.kind) : chosen
     if (!kind) throw new HttpError(400, 'Pass the kind to sign in to, or the connectionId to reconnect.', { param: 'kind' })
     const url = kind === 'mcp' ? serverUrl({ existing, given }) : knownServer(kind)
     if (kind === 'mcp' && !url) throw new HttpError(400, 'Paste the MCP server URL.', { param: 'url' })
     const state = randomBytes(24).toString('base64url')
-    const base = { kind, name: existing?.name ?? name ?? TITLES[kind], actor, connectionId: existing?.id, expires: Date.now() + SIGN_IN_MS }
+    if (askId && (await asks.get({ actor, id: askId })).kind !== 'connect_app') throw new HttpError(400, 'That ask isn\'t for connecting an app.', { param: 'askId' })
+    const base = { kind, name: existing?.name ?? name ?? TITLES[kind], actor, connectionId: existing?.id, expires: Date.now() + SIGN_IN_MS, askId, permissions }
     if (kind === 'github') {
       const app = github.app()
       if (!app) throw new HttpError(409, github.NOT_SET_UP)
@@ -51,9 +53,12 @@ export const connectionAuthorizationService = {
 
   async finish(query: { state?: string; code?: string; error?: string; installation_id?: string; setup_action?: string }): Promise<{ kind?: SignInKind; connectionId?: string; error?: string }> {
     const row = query.state ? await db.updateTable('sign_in').set({ status: 'working' }).where('state', '=', query.state).where('status', '=', 'pending').where('expires_at', '>', new Date()).returningAll().executeTakeFirst() : undefined
-    const result = await finishing({ ...query, sign: row && pendingOf(row) })
-    if (row) await db.updateTable('sign_in').set({ status: result.error ? 'failed' : 'done', connection_id: result.connectionId ?? null, error: result.error ?? null, data: '' }).where('state', '=', row.state).execute()
-    return result
+    const sign = row && pendingOf(row)
+    const result = await finishing({ ...query, sign })
+    const refused = sign?.askId && result.connectionId && !result.error ? await asks.approve({ actor: sign.actor, id: sign.askId, answer: { connectionId: result.connectionId, permissions: sign.permissions } }).then(() => undefined, messageOf) : undefined
+    const error = result.error ?? refused
+    if (row) await db.updateTable('sign_in').set({ status: error ? 'failed' : 'done', connection_id: result.connectionId ?? null, error: error ?? null, data: '' }).where('state', '=', row.state).execute()
+    return { ...result, error }
   },
 
   async sweep(): Promise<void> {
@@ -125,4 +130,4 @@ const isSignInKind = (kind: string): kind is SignInKind => SIGN_IN_KINDS.some((e
 const isGoogle = (kind: SignInKind): kind is GoogleKind => (GOOGLE_KINDS as readonly string[]).includes(kind)
 
 type SignInKind = (typeof SIGN_IN_KINDS)[number]
-type Pending = { kind: SignInKind; name: string; actor: Caller; connectionId?: string; expires: number; url?: string; flow?: SignIn; verifier?: string }
+type Pending = { kind: SignInKind; name: string; actor: Caller; connectionId?: string; expires: number; askId?: string; permissions?: CreateConnectionAuthorization['permissions']; url?: string; flow?: SignIn; verifier?: string }

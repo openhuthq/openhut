@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowRight01Icon, Cancel01Icon, Key01Icon, SquareLock01Icon } from '@hugeicons/core-free-icons'
+import { ArrowRight01Icon, Cancel01Icon, Key01Icon } from '@hugeicons/core-free-icons'
 import { Deleted, List } from '@openhut/common/api.ts'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { AgentSecret } from '@openhut/common/agents/secret.ts'
@@ -11,8 +11,7 @@ import { ConfirmButton } from '@/components/confirm-button'
 import { ErrorNote } from '@/components/error-note'
 import { DialogCard, I, Loading, ROW, ROW_VALUE } from '@/components/kit'
 import { agentPath } from '@/app/routes'
-import { DetailRow, Details, Quiet, RequestCard } from '@/features/agents/request-card'
-import type { CardProps } from '@/features/agents/change-requests'
+import { Quiet } from '@/features/agents/request-card'
 import { request } from '@/lib/api-client'
 import { formValues } from '@/lib/form'
 import { ago } from '@/lib/format'
@@ -40,33 +39,6 @@ function useDeleteSecret(agentId: string) {
     mutationFn: (id: string) => request({ schema: DELETED_SECRET, of: agentId, path: `/api/agent-secrets/${encodeURIComponent(id)}`, method: 'DELETE' }),
     onSuccess: ({ id }) => client.setQueryData<AgentSecret[]>(secretsKey(agentId), (all) => all?.filter((each) => each.id !== id)),
   })
-}
-
-export function SecretCard({ agent, change, busy, error, send }: CardProps) {
-  const client = useQueryClient()
-  const name = String(change.input.name ?? '')
-  const hosts = Array.isArray(change.input.hosts) ? change.input.hosts.map(String) : []
-  const form = `secret-${change.id}`
-  const save = (value: string) => {
-    send('approve', { answer: { value } })
-    void client.invalidateQueries({ queryKey: secretsKey(agent.id) })
-  }
-  return <RequestCard agent={agent} change={change} error={error} decided={change.status === 'done' ? { label: 'Key saved', tone: 'success' } : undefined}
-    icon={<I icon={Key01Icon} size={22} className="text-hue-amber" />} action={{ icon: SquareLock01Icon, hue: 'text-hue-green' }}
-    title={<>{agent.name} needs a key: <b>{name}</b></>}
-    actions={<>
-      <Button type="submit" form={form} variant="primary" size="sm" disabled={busy}>Save key</Button>
-      <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => send('deny', {})}>Not now</Button>
-    </>}>
-    <span className="text-[13px] text-body">{agent.name} never sees it. It's only sent to {hosts.join(', ')}.</span>
-    {change.status === 'open' && agent.canEdit && <form id={form} onSubmit={(event) => save(formValues(event)('value'))}>
-      <Input type="password" name="value" aria-label={`Paste the ${name} key`} placeholder={`Paste the ${name} key`} autoComplete="off" spellCheck={false} required maxLength={4000} />
-    </form>}
-    <Details>
-      <DetailRow label="Sent as"><code className="font-mono text-[12px]">{String(change.input.header ?? '')}</code></DetailRow>
-      <DetailRow label="Only to">{hosts.join(', ')}</DetailRow>
-    </Details>
-  </RequestCard>
 }
 
 export function KeysRow({ agent }: { agent: Agent }) {
