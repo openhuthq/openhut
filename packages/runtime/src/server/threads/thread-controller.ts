@@ -1,6 +1,6 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { agentService } from '../agents/agent-service.ts'
-import { DeleteThread, LookUpFiles, MAX_FILE_BYTES, MirrorThread, ReadFile, SendChat, UploadFile } from '@openhut/common/threads/thread.ts'
+import { DeleteThread, ListThreads, LookUpFiles, MAX_FILE_BYTES, MirrorThread, ReadFile, SendChat, UploadFile } from '@openhut/common/threads/thread.ts'
 import { IdParams, listOf } from '../platform/responses.ts'
 import { requireSignIn, who } from '../team/identity.ts'
 import { threadService } from './thread-service.ts'
@@ -8,9 +8,9 @@ import { threadService } from './thread-service.ts'
 export const threadController: FastifyPluginAsyncZod = async (app) => {
   app.addContentTypeParser('application/octet-stream', { parseAs: 'buffer' }, (_req, body, done) => done(null, body))
 
-  app.get('/', async (req) => {
+  app.get('/', ListRequest, async (req) => {
     const visible = await agentService.visibleIds({ actor: await who(req) })
-    return listOf({ req, data: (await threadService.list()).filter((thread) => visible.has(thread.agentId)) })
+    return listOf({ req, data: (await threadService.list({ archived: req.query.archived === 'true' })).filter((thread) => visible.has(thread.agentId)) })
   })
 
   app.get('/:id', { schema: { params: IdParams } }, async (req) => {
@@ -24,6 +24,10 @@ export const threadController: FastifyPluginAsyncZod = async (app) => {
 
   app.post('/:id/mirror', MirrorRequest, async (req) => threadService.mirror({ actor: await who(req), id: req.params.id, paused: req.body.paused }))
 
+  app.post('/:id/archive', IdRequest, async (req) => threadService.archive({ actor: await who(req), id: req.params.id, archived: true }))
+
+  app.post('/:id/unarchive', IdRequest, async (req) => threadService.archive({ actor: await who(req), id: req.params.id, archived: false }))
+
   app.post('/:id/chat', ChatRequest, async (req, reply) => threadService.chat({ actor: await who(req), id: req.params.id, body: req.body, reply }))
 
   app.post('/:id/files', UploadRequest, async (req) => threadService.upload({ actor: await who(req), id: req.params.id, file: req.query, body: req.body }))
@@ -36,6 +40,8 @@ export const threadController: FastifyPluginAsyncZod = async (app) => {
 }
 
 const SignedIn = { onRequest: requireSignIn }
+const ListRequest = { schema: { querystring: ListThreads } }
+const IdRequest = { schema: { params: IdParams } }
 const ChatRequest = { schema: { params: IdParams, body: SendChat } }
 const MirrorRequest = { schema: { params: IdParams, body: MirrorThread } }
 const DeleteRequest = { schema: { params: IdParams, body: DeleteThread } }

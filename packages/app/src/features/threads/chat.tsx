@@ -46,6 +46,9 @@ import { usePhoneBack } from '@/app/phone-page'
 import { TOUCH, useMedia } from '@/lib/media'
 import { cn } from '@/lib/utils'
 import { ICONS } from '@/components/icons'
+import { useThreadLive, useTyping } from '@/lib/thread-live'
+import { busyAgent, LiveTitle, PresenceFaces, SeenBy, TypingNow } from '@/features/threads/live'
+import { webhookOf, WebhookMessage } from '@/features/webhooks/message'
 
 type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; work: Work; spec: SpecDataPart; asks: string[]; notified: Notified; 'webhook-setup': WebhookSetup }>
 type AgentPart = AgentMessage['parts'][number]
@@ -74,6 +77,8 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
   const attachments = useAttachments({ agentId: agent.id, threadId: thread.id })
   const files = useMemo(() => ({ agentId: agent.id, threadId: thread.id, save: (path: string) => void saveFile({ agentId: agent.id, threadId: thread.id, path }).catch(toastError) }), [agent.id, thread.id])
   const busy = chat.status === 'submitted' || chat.status === 'streaming'
+  const live = useThreadLive(thread.id)
+  const me = useOwner()
   const retrying = useRetryOnce({ status: chat.status, error: chat.error, retry: () => void chat.regenerate() })
   useEffect(() => { if (!busy) chat.setMessages(thread.messages.map(uiMessageOf)) }, [thread.messages])
   const send = (text: string) => {
@@ -82,18 +87,24 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
     void chat.sendMessage(files.length ? { text, files } : { text })
     attachments.clear()
   }
-  const shown = agent.runsHere ? chat.messages : chat.messages.filter((message) => message.role === 'user' || message.parts.some((part) => part.type !== 'step-start'))
+  const own = busy ? live.streaming?.text : undefined
+  const listed = agent.runsHere ? chat.messages : chat.messages.filter((message) => message.role === 'user' || message.parts.some((part) => part.type !== 'step-start'))
+  const shown = own ? listed.map((message, index) => index === listed.length - 1 && message.role === 'assistant' ? withStream({ message, text: own }) : message) : listed
   const last = shown.at(-1)
+  const mine = [...shown].reverse().find((message) => message.role === 'user' && !webhookOf(message.metadata) && (z.safeParse(Authored, message.metadata).data?.author ?? me) === me)
+  const watching = !busy && (live.streaming || busyAgent(live.agent)) && !shown.some((message) => message.id === (live.streaming?.turnId ?? live.agent.turnId))
   const clear = agent.canEdit && chat.messages.length > 0 && !busy && !attachments.uploading && <ClearChat agent={agent} threadId={thread.id} attachments={attachments} />
-  return <ChatFiles value={files}><CardReply value={(text) => { if (!busy) send(text) }}><ChatFrame agent={agent} thread={thread} tools={<>{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={thread.readOnly ? <ContinueBar thread={thread} /> : <Composer agent={agent} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void chat.stop()} />}>
+  return <ChatFiles value={files}><CardReply value={(text) => { if (!busy) send(text) }}><ChatFrame agent={agent} thread={thread} tools={<>{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={thread.readOnly ? <ContinueBar thread={thread} /> : <Composer agent={agent} threadId={thread.id} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void chat.stop()} />}>
     {shown.length ? <>
       <Day iso={thread.updatedAt} />
-      {shown.map((message) => <Message key={message.id} agent={agent} message={message} mirrors={thread.mirrorPaused || thread.readOnly ? [] : thread.mirrors ?? []} live={busy && message === last} onRetry={!busy && message === last ? () => void chat.regenerate() : undefined} />)}
-    </> : <ChatEmpty agent={agent} />}
-    {chat.status === 'submitted' && last?.role === 'user' && <Message agent={agent} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
+      {shown.map((message) => <Message key={message.id} agent={agent} thread={thread} message={message} seen={message === mine} mirrors={thread.mirrorPaused || thread.readOnly ? [] : thread.mirrors ?? []} live={busy && message === last} onRetry={!busy && message === last ? () => void chat.regenerate() : undefined} />)}
+    </> : !watching && <ChatEmpty agent={agent} />}
+    {watching && <AgentReply agent={agent} threadId={thread.id} step={live.agent.step} message={{ id: live.streaming?.turnId ?? 'live', role: 'assistant', parts: live.streaming?.text ? [{ type: 'text', text: live.streaming.text }] : [] }} live />}
+    {chat.status === 'submitted' && last?.role === 'user' && <AgentReply agent={agent} threadId={thread.id} message={withStream({ message: { id: 'waiting', role: 'assistant', parts: [] }, text: own ?? '' })} live />}
     <PendingAsks agent={agent} shown={new Set(chat.messages.flatMap(changesOf))} />
     {!agent.runsHere && chat.status !== 'submitted' && last?.role === 'user' && !troubleOf(agent) && <p className="m-0 text-right text-[12.5px] text-mute">{agent.runsNowhere ? `No computer runs ${agent.name} now. ${agent.canManage ? 'Run it here to get an answer.' : `Ask an admin to run ${agent.name} on their computer.`}` : `Sent to ${agent.runsOnName ?? 'your other computer'}. ${agent.name} answers when it’s on.`}</p>}
-    {retrying && <Message agent={agent} message={{ id: 'retrying', role: 'assistant', parts: [] }} live />}
+    {retrying && <AgentReply agent={agent} message={{ id: 'retrying', role: 'assistant', parts: [] }} live />}
+    {!thread.readOnly && <TypingNow threadId={thread.id} />}
     {chat.error && !retrying && !(last && workOf(last)?.error) && <Alert variant="error-outline" role="alert"><span>{plainError(chat.error.message)}</span><Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={() => void chat.regenerate()}>Try again</Button></Alert>}
   </ChatFrame></CardReply></ChatFiles>
 }
@@ -213,7 +224,7 @@ function ChatFrame({ agent, thread, composer, tools, onTitle, onFiles, children 
       {onTitle
         ? <Button type="button" variant="bare" className="float flex h-10 min-w-0 items-center gap-2 rounded-full bg-card pr-4 pl-1.5 text-ink" onClick={onTitle}><Face agent={agent} size={28} /><span className="truncate text-[16px] font-semibold">{agent.name}</span></Button>
         : <><Face agent={agent} size={26} /><span className="shrink-0 text-[14px] font-semibold">{agent.name}</span>{thread && <ThreadSource thread={thread} />}</>}
-      <span className="float ml-auto flex items-center gap-0.5 phone:h-10 phone:justify-self-end phone:rounded-full phone:bg-card phone:px-1">{tools}</span>
+      <span className="float ml-auto flex items-center gap-0.5 phone:h-10 phone:justify-self-end phone:rounded-full phone:bg-card phone:px-1">{thread && <PresenceFaces agent={agent} threadId={thread.id} />}{tools}</span>
     </div>
     <div ref={log} className="fade-t flex flex-1 flex-col overflow-auto px-8 py-5 phone:px-4" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80 }}>
       <div className="mx-auto flex w-full max-w-[640px] flex-1 flex-col justify-end gap-4">{children}</div>
@@ -263,7 +274,7 @@ function Day({ iso }: { iso: string }) {
   return <div className="flex items-center gap-3 text-[11.5px] text-mute-2"><span className="h-px flex-1 bg-hair" />{label}<span className="h-px flex-1 bg-hair" /></div>
 }
 
-function Composer({ agent, busy, quiet, attachments, onSend, onStop }: { agent: Agent; busy: boolean; quiet: boolean; attachments: Attachments; onSend: (text: string) => void; onStop: () => void }) {
+function Composer({ agent, threadId, busy, quiet, attachments, onSend, onStop }: { agent: Agent; threadId: string; busy: boolean; quiet: boolean; attachments: Attachments; onSend: (text: string) => void; onStop: () => void }) {
   const touch = useMedia(TOUCH)
   const [empty, setEmpty] = useState(true)
   const picker = useRef<HTMLInputElement>(null)
@@ -271,12 +282,14 @@ function Composer({ agent, busy, quiet, attachments, onSend, onStop }: { agent: 
   const ready = !BLOCKED.includes(state)
   const starting = state === 'starting' || state === 'missing'
   const nothing = empty && !attachments.items.length
+  const typing = useTyping(threadId)
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const box = event.currentTarget.elements.namedItem('text')
     if (busy) return onStop()
     if (!(box instanceof HTMLTextAreaElement) || attachments.uploading || (!box.value.trim() && !attachments.items.length)) return
     onSend(box.value.trim())
+    typing.stop()
     box.value = ''
     box.style.height = ''
     setEmpty(true)
@@ -300,8 +313,8 @@ function Composer({ agent, busy, quiet, attachments, onSend, onStop }: { agent: 
         <Input ref={picker} type="file" multiple hidden onChange={(event) => { attachments.add(Array.from(event.currentTarget.files ?? [])); event.currentTarget.value = '' }} />
         <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Attach files" title="Attach files" disabled={!ready} onClick={() => picker.current?.click()}><I icon={Attachment01Icon} size={16} /></Button>
         <Textarea variant="composer" name="text" rows={1} aria-label="Message" placeholder={placeholderOf(agent)} disabled={!ready} autoFocus={!touch}
-          className="min-h-0 flex-1 py-1.5 text-[14px]" onKeyDown={enter} onPaste={paste}
-          onInput={(event) => { const box = event.currentTarget; setEmpty(!box.value.trim()); box.style.height = 'auto'; box.style.height = `${Math.min(box.scrollHeight, 240)}px` }} />
+          className="min-h-0 flex-1 py-1.5 text-[14px]" onKeyDown={enter} onPaste={paste} onBlur={typing.stop}
+          onInput={(event) => { const box = event.currentTarget; setEmpty(!box.value.trim()); if (box.value.trim()) typing.ping(); else typing.stop(); box.style.height = 'auto'; box.style.height = `${Math.min(box.scrollHeight, 240)}px` }} />
         <Button type="submit" variant="send" onMouseDown={(event) => event.preventDefault()} className={cn(!busy && nothing && 'bg-transparent text-mute disabled:opacity-100')} aria-label={busy ? 'Stop' : 'Send'} title={busy ? 'Stop' : 'Send (Enter). Shift+Enter for a new line'} disabled={!busy && (!ready || nothing || attachments.uploading)}>{busy ? <span className="size-2.5 rounded-[2px] bg-white" /> : <I icon={ArrowUp02Icon} />}</Button>
       </div>
     </form>
@@ -343,11 +356,13 @@ function useOffline(agent: Agent) {
   return home && !home.online
 }
 
-function Message({ agent, message, mirrors = [], live, onRetry }: { agent: Agent; message: AgentMessage; mirrors?: Place[]; live: boolean; onRetry?: () => void }) {
-  return message.role === 'user' ? <UserMessage message={message} mirrors={mirrors} /> : <AgentReply agent={agent} message={message} live={live} onRetry={onRetry} />
+function Message({ agent, thread, message, seen, mirrors = [], live, onRetry }: { agent: Agent; thread: SourcedThread; message: AgentMessage; seen: boolean; mirrors?: Place[]; live: boolean; onRetry?: () => void }) {
+  const webhook = webhookOf(message.metadata)
+  if (webhook && message.role === 'user') return <WebhookMessage webhook={webhook} at={thread.createdAt} />
+  return message.role === 'user' ? <UserMessage message={message} mirrors={mirrors} seen={seen ? thread.id : undefined} /> : <AgentReply agent={agent} threadId={thread.id} message={message} live={live} onRetry={onRetry} />
 }
 
-function AgentReply({ agent, message, live, onRetry }: { agent: Agent; message: AgentMessage; live: boolean; onRetry?: () => void }) {
+function AgentReply({ agent, threadId: liveThread, step, message, live, onRetry }: { agent: Agent; threadId?: string; step?: string; message: AgentMessage; live: boolean; onRetry?: () => void }) {
   const { agentId, threadId } = useContext(ChatFiles)
   const blocks = blocksOf(message)
   const ids = changesOf(message)
@@ -361,14 +376,16 @@ function AgentReply({ agent, message, live, onRetry }: { agent: Agent; message: 
   return <div className="grid grid-cols-[34px_minmax(0,1fr)] gap-3">
     <span className={live ? 'talking' : undefined}><Face agent={agent} size={34} /></span>
     <CopyMenu text={textOf(message)}><div className="flex min-w-0 flex-col gap-2 pt-1.5 pointer-coarse:select-none">
+      {live && liveThread && <LiveTitle threadId={liveThread} />}
       {work && <WorkLine agent={agent} work={work} live={live} answered={blocks.length > 0} onRetry={onRetry} />}
+      {step && !work && <span className="flex min-w-0 items-center gap-2 text-[12.5px] text-mute" role="status">{!blocks.length && <Spinner className="mt-0 size-3.5 shrink-0" />}<span className="truncate">{step}</span></span>}
       {blocks.map((block, index) => block.type === 'text'
-        ? <div key={index} className="msg-t"><Markdown remarkPlugins={plugins} components={{ a: ChatLink, code: FileCode, pre: CodeBlock, input: TaskBox, table: WideTable }}>{live ? settled(bullets(block.text)) : bullets(block.text)}</Markdown></div>
+        ? <div key={index} className={cn('msg-t', live && index === blocks.length - 1 && 'caret')}><Markdown remarkPlugins={plugins} components={{ a: ChatLink, code: FileCode, pre: CodeBlock, input: TaskBox, table: WideTable }}>{live ? settled(bullets(block.text)) : bullets(block.text)}</Markdown></div>
         : hasSpec && <MessageCard key={index} spec={spec} loading={live} />)}
       {ids.length > 0 && <AskCards agent={agent} ids={ids} />}
       {message.parts.map((part, index) => part.type === 'data-webhook-setup' && <WebhookSetupCard key={index} agentId={agentId} card={part.data} />)}
       {message.parts.flatMap((part, index) => part.type === 'data-notified' ? part.data.map((each, at) => <NotifiedRow key={`${index}-${at}`} notified={each} />) : [])}
-      {live && !blocks.length && !work?.calls.some((call) => call.status === 'running') && <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>}
+      {live && !blocks.length && !step && !work?.calls.some((call) => call.status === 'running') && <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>}
       {!live && error !== undefined && <span className="flex flex-wrap items-center gap-2 text-[13.5px] text-mute-2 italic">{error}{onRetry && <RetryButton onRetry={onRetry} />}</span>}
     </div></CopyMenu>
   </div>
@@ -376,7 +393,7 @@ function AgentReply({ agent, message, live, onRetry }: { agent: Agent; message: 
 
 const Authored = z.object({ author: z.string() })
 
-function UserMessage({ message, mirrors }: { message: AgentMessage; mirrors: Place[] }) {
+function UserMessage({ message, mirrors, seen }: { message: AgentMessage; mirrors: Place[]; seen?: string }) {
   const text = textOf(message)
   const files = message.parts.flatMap((part) => part.type === 'file' ? [part] : [])
   const author = z.safeParse(Authored, message.metadata).data?.author
@@ -392,6 +409,7 @@ function UserMessage({ message, mirrors }: { message: AgentMessage; mirrors: Pla
     {files.length > 0 && <div className="flex max-w-[78%] flex-wrap justify-end gap-1.5">{files.map((file) => <SentFile key={file.url} name={file.filename ?? nameOf(file.url)} path={file.url} mediaType={file.mediaType} />)}</div>}
     {text && <CopyMenu text={text}><div className="max-w-[78%] rounded-[12px_12px_4px_12px] bg-soft px-3.5 py-2 text-[14px]/[1.5] [overflow-wrap:anywhere] whitespace-pre-wrap text-ink pointer-coarse:select-none">{text}</div></CopyMenu>}
     {mirrors.length > 0 && <span className="inline-flex items-center gap-1.5 text-[12px] text-mute"><PlaceIcon platform={mirrors[0]?.platform ?? 'app'} size={12} />Sent to {mirrors.map(placeName).join(', ')}</span>}
+    {seen && <SeenBy threadId={seen} />}
   </div>
 }
 
@@ -530,6 +548,11 @@ function uiMessageOf(message: ChatMessage): AgentMessage {
     if (part.type === 'file' && typeof part.url === 'string' && typeof part.mediaType === 'string') return [{ type: 'file', url: part.url, mediaType: part.mediaType, filename: typeof part.filename === 'string' ? part.filename : undefined }]
     return []
   }) }
+}
+
+function withStream({ message, text }: { message: AgentMessage; text: string }): AgentMessage {
+  if (textOf(message).length >= text.length) return message
+  return { ...message, parts: [...message.parts.filter((part) => part.type !== 'text'), { type: 'text', text }] }
 }
 
 function textOf(message: AgentMessage) {

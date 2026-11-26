@@ -38,7 +38,7 @@ export const channelService = {
     const row = await db.selectFrom('channel').selectAll().where('id', '=', id).executeTakeFirst()
     if (!row) return channelOf({ held: await recordOf(id), qr: null })
     if (row.kind === 'telegram' && row.status === 'linking') return channelOf({ held: await recordOf(id), qr: await owned({ actor, agentId: row.agent_id }).then(() => claimLink(row), () => null) })
-    if (row.kind === 'telegram') return channelOf({ held: await recordOf(id), qr: null })
+    if (row.kind === 'telegram' || row.kind === 'discord') return channelOf({ held: await recordOf(id), qr: null })
     if (row.kind !== 'whatsapp' || row.status !== 'linking') return rowChannel({ row, qr: null })
     const agent = await agentService.requireUse({ actor, id: row.agent_id }).catch(() => null)
     if (!agent || (agent.owner ?? actor.email) !== actor.email) return rowChannel({ row, qr: null })

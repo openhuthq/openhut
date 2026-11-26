@@ -141,10 +141,10 @@ export const agentService = {
     }
   },
 
-  async statuses({ workspace }: { workspace: string }): Promise<Record<string, { status: AgentStatus; health: AgentHealth | null; detail?: string }>> {
+  async statuses({ workspace }: { workspace?: string } = {}): Promise<Record<string, { status: AgentStatus; health: AgentHealth | null; detail?: string }>> {
     const rows = await db.selectFrom('agent').selectAll().execute()
     const states = await containerStates()
-    const mine = rows.filter((row) => (row.workspace ?? HOME) === workspace)
+    const mine = workspace ? rows.filter((row) => (row.workspace ?? HOME) === workspace) : rows
     return Object.fromEntries(await Promise.all(mine.map(async (row) => {
       const { health, detail } = await healthOf({ row, state: states?.[row.id] })
       return [row.id, { status: statusOf(states?.[row.id]), health: health === 'setup_failed' ? 'not_answering' : health, ...detail && { detail } }] as const

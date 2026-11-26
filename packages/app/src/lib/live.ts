@@ -2,6 +2,9 @@ import type { QueryClient, QueryFilters } from '@tanstack/react-query'
 import * as z from 'zod/mini'
 import { LIVE_BEAT_MS, LiveEvent } from '@openhut/common/live.ts'
 import { openChannel, type Channel } from '@/lib/live-socket'
+import { liveThreads, LiveSnapshot, ThreadEvent, type LiveAgentBoard } from '@/lib/thread-live'
+import type { OpenHutAgent } from '@/lib/openhut'
+import { request } from '@/lib/api-client'
 import { AGENTS_KEY, COMPUTERS_KEY, CONNECTIONS_KEY, GRANTS_KEY, PROVIDERS_KEY, THREADS_KEY } from '@/lib/query-keys'
 
 const FILTERS: Record<string, QueryFilters[]> = {
@@ -17,7 +20,6 @@ const FILTERS: Record<string, QueryFilters[]> = {
   provider: [{ queryKey: PROVIDERS_KEY }],
   admin: [{ queryKey: COMPUTERS_KEY }],
 }
-const EVERYTHING = Object.values(FILTERS).flat()
 const OFFLINE = [{ queryKey: COMPUTERS_KEY }, { queryKey: AGENTS_KEY }]
 const GIVE_UP = [4401, 4403, 4404]
 const SILENT_MS = LIVE_BEAT_MS * 2.5
@@ -31,6 +33,11 @@ export function followEvents(client: QueryClient): void {
   const follow: { channel?: Channel; retry?: ReturnType<typeof setTimeout>; heardAt: number; heard: boolean; live: boolean; tries: number } = { heardAt: 0, heard: false, live: false, tries: 0 }
   const pending = new Map<string, QueryFilters>()
   let flush: ReturnType<typeof setTimeout> | undefined
+  liveThreads.connect({
+    send: (message) => follow.channel?.send(JSON.stringify(message)),
+    fetchLive: (thread) => request({ schema: LiveSnapshot, path: `/api/threads/${encodeURIComponent(thread)}/live` }),
+    refetch: (thread) => client.invalidateQueries({ queryKey: [...THREADS_KEY, 'thread', thread] }),
+  })
 
   const invalidate = (filters: QueryFilters[]) => {
     for (const filter of filters) pending.set(JSON.stringify(filter), filter)
@@ -50,12 +57,17 @@ export function followEvents(client: QueryClient): void {
       path: '/api/events',
       onLine: (line) => {
         follow.heardAt = Date.now()
-        const event = z.safeParse(LiveEvent, parsed(line)).data
+        const message = parsed(line)
+        const live = z.safeParse(ThreadEvent, message).data
+        if (live?.type === 'agents') syncAgents({ client, agents: live.agents })
+        if (live) return liveThreads.receive(live)
+        const event = z.safeParse(LiveEvent, message).data
         if (!event) return
         if (event.type === 'beat') return channel.send('beat')
         if (event.type !== 'hello') return invalidate(FILTERS[event.data.object] ?? [])
-        if (follow.heard) invalidate(EVERYTHING)
+        if (follow.heard) void client.invalidateQueries()
         follow.heard = true
+        liveThreads.opened()
         follow.live = true
         follow.tries = 0
       },
@@ -91,6 +103,20 @@ export function followEvents(client: QueryClient): void {
   open()
   setInterval(check, CHECK_MS)
   document.addEventListener('visibilitychange', wake)
+}
+
+function syncAgents({ client, agents }: { client: QueryClient; agents: LiveAgentBoard[] }): void {
+  const changed = agents.filter((live) => {
+    const agent = client.getQueryData<OpenHutAgent[]>(AGENTS_KEY)?.find((each) => each.id === live.id)
+    return agent && (agent.status !== live.status || agent.health !== live.health)
+  })
+  if (!changed.length) return
+  const byId = new Map(changed.map((live) => [live.id, live]))
+  client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (list) => list?.map((each) => {
+    const live = byId.get(each.id)
+    return live ? { ...each, status: live.status, health: live.health } : each
+  }))
+  for (const live of changed) void client.invalidateQueries({ queryKey: [...AGENTS_KEY, live.id], exact: true })
 }
 
 function parsed(line: string): unknown {
