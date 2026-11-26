@@ -18,7 +18,6 @@ import { AccessPicker } from '@/features/agents/access'
 import { BrowserPreview } from '@/features/agents/browser'
 import { ChannelRows } from '@/features/agents/channels'
 import { Face } from '@/features/agents/face'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { RoutinesRow } from '@/features/routines/routines-dialog'
 import { ActivityRow } from '@/features/agents/activity-dialog'
 import { KeysRow } from '@/features/agents/secrets'
@@ -57,23 +56,20 @@ export function Panel({ agent, naming, watching, collapsed = false }: { agent: A
       <RunsOnRow agent={agent} />
       <AccessRow agent={agent} />
     </div>
+    <AgentActions agent={agent} watching={watching} />
     <ChannelRows agent={agent} />
     <CanUse agent={agent} />
-    <Collapsible className="-mx-2.5 flex flex-col gap-px">
-      <CollapsibleTrigger className={cn(ROW, 'group/more cursor-pointer text-mute')}><I icon={MoreHorizontalIcon} size={15} className="text-mute" />More<span className={cn(VALUE, 'text-mute')}><I icon={ArrowRight01Icon} size={12} className="[transition:transform_.15s] group-data-panel-open/more:rotate-90" /></span></CollapsibleTrigger>
-      <CollapsibleContent className="flex flex-col gap-px">
-        {agent.runsHere && <>
-          <Counted agent={agent} dialog="memory" icon={AiBrain01Icon} hue="text-hue-violet" title="Memory" value={memory} />
-          <Counted agent={agent} dialog="skills" icon={BookOpen01Icon} hue="text-hue-blue" title="Skills" value={skills} />
-        </>}
-        <RoutinesRow agent={agent} />
-        <NotifyRow agent={agent} />
-        <WebhooksRow agent={agent} />
-        <ActivityRow agent={agent} />
-        <KeysRow agent={agent} />
-      </CollapsibleContent>
-    </Collapsible>
-    <AgentActions agent={agent} watching={watching} />
+    <div className="-mx-2.5 flex flex-col gap-px">
+      {agent.runsHere && <>
+        <Counted agent={agent} dialog="memory" icon={AiBrain01Icon} hue="text-hue-violet" title="Memory" value={memory} />
+        <Counted agent={agent} dialog="skills" icon={BookOpen01Icon} hue="text-hue-blue" title="Skills" value={skills} />
+      </>}
+      <RoutinesRow agent={agent} />
+      <NotifyRow agent={agent} />
+      <WebhooksRow agent={agent} />
+      <ActivityRow agent={agent} />
+      <KeysRow agent={agent} />
+    </div>
     </div>
   </aside>
 }
@@ -93,7 +89,7 @@ function AgentActions({ agent, watching }: { agent: Agent; watching: boolean }) 
   const locked = !agent.canEdit || !agent.canManage || updateAgent.isPending
   const browser = features.browser || agent.browser
   if (!agent.canManage && !browser && !agent.runsHere) return null
-  return <div className="mt-auto flex flex-col pt-2">
+  return <div className="flex flex-col">
     <span className={LABEL}>Allowed to</span>
     <div className="-mx-2.5 flex flex-col gap-px">
       {agent.canManage && <label className={ROW}><I icon={SourceCodeIcon} size={15} className="text-mute" />Run code<Switch className="ml-auto" checked={agent.codeExecution} aria-label="Run code" disabled={locked} onCheckedChange={() => change({ codeExecution: !agent.codeExecution })} /></label>}
