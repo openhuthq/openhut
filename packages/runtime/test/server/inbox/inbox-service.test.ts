@@ -15,6 +15,7 @@ import { db, migrate } from '../../../src/server/platform/db.ts'
 import { answerErrors } from '../../../src/server/platform/http-error.ts'
 import { agentToken, seal } from '../../../src/server/platform/secrets.ts'
 import { runSet } from '../../../src/server/agents/run-set.ts'
+import { agentService } from '../../../src/server/agents/agent-service.ts'
 import { fakeAgentd, refresh, signIn } from '../agents/signed-in.ts'
 
 fakeAgentd()
@@ -168,4 +169,28 @@ test('the owner sees the last payload a webhook got', async () => {
   await post({ id: hook.id, body: '{"n":2}', headers: { authorization: `Bearer ${hook.secret}` } })
   const listed = (await inboxService.webhooks({ actor: owner, agentId: 'ag_hookpuls' })).find((each) => each.id === hook.id)
   assert.equal(listed?.lastPayload, '{"n":2}')
+})
+
+test('a member who can chat with a whole-team agent can\'t touch its webhooks or routines, or approve add_webhook', async () => {
+  await db.insertInto('person').values({ id: 'usr_hookmmbr', email: 'member@example.com', role: 'member', removed_at: null }).execute()
+  const member = { id: 'usr_hookmmbr', email: 'member@example.com', role: 'member' as const }
+  await agentService.update({ actor: owner, id: 'ag_hookpuls', patch: { shared: true } })
+  assert.equal((await agentService.requireUse({ actor: member, id: 'ag_hookpuls' })).id, 'ag_hookpuls')
+  const hook = await inboxService.createSource({ actor: owner, agentId: 'ag_hookpuls', name: 'Owner only' })
+  const routine = /rt_[a-z0-9]+/.exec(await routineService.schedule({ agentId: 'ag_hookpuls', input: { name: 'Nightly', plan: 'x', cron: '0 3 * * *', origin: { platform: 'slack', chat_id: 'C0ALERTS', chat_type: 'group', chat_name: 'db-alerts' } } }))?.[0] ?? ''
+  await db.insertInto('change_request').values({ id: 'chg_hookmmbr', agent_id: 'ag_hookpuls', action: 'add_webhook', input: JSON.stringify({ name: 'Sneaky' }), summary: 'Add a webhook named Sneaky', why: 'x', origin: JSON.stringify({ platform: 'slack', chat_id: 'C0ALERTS' }), expires_at: new Date(Date.now() + 60_000) }).execute()
+  for (const attempt of [
+    inboxService.webhooks({ actor: member, agentId: 'ag_hookpuls' }),
+    inboxService.createSource({ actor: member, agentId: 'ag_hookpuls', name: 'Mine' }),
+    inboxService.updateWebhook({ actor: member, id: hook.id, name: 'Renamed' }),
+    inboxService.rotateSecret({ actor: member, id: hook.id }),
+    inboxService.remove({ actor: member, id: hook.id }),
+    inboxService.targets({ actor: member, agentId: 'ag_hookpuls' }),
+    inboxService.updateRoutine({ actor: member, id: routine, target: 'app' }),
+    inboxService.updateRoutine({ actor: member, id: routine, until: null }),
+    inboxService.stopRoutine({ actor: member, id: routine }),
+    changeRequestService.approve({ actor: member, id: 'chg_hookmmbr' }),
+  ]) await assert.rejects(attempt, { status: 403 })
+  assert.equal((await db.selectFrom('inbox_source').select('id').where('name', 'in', ['Mine', 'Sneaky', 'Renamed']).execute()).length, 0)
+  assert.equal((await changeRequestService.approve({ actor: owner, id: 'chg_hookmmbr' })).status, 'approved')
 })

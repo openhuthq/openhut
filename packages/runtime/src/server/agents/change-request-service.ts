@@ -82,7 +82,7 @@ export const changeRequestService = {
       await agentService.releaseReapply(row.agent_id)
       throw err
     }
-    const decided = await db.updateTable('change_request').set({ told: false }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
+    const decided = await db.updateTable('change_request').set({ input: JSON.stringify(final), told: false }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
     deliver(decided)
     void activity.quiet({ agentId: row.agent_id, ms: QUIET_MS }).then(() => agentService.releaseReapply(row.agent_id))
       .catch((err: unknown) => log.warn({ event: 'change_request.reapply_failed', agent: row.agent_id, error: messageOf(err) }))
