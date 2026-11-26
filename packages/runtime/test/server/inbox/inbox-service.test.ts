@@ -129,7 +129,7 @@ test('add_webhook waits for approval; approving creates the webhook, tells the a
   assert.equal(hook?.place, '#db-alerts')
 
   const headers = { authorization: `Agent ${token}`, 'content-type': 'application/json' }
-  const decision = (await (await fetch(`${base}/wakes`, { headers })).json() as { data: { id: string; text: string }[] }).data.find((wake) => wake.id === `asks:${id}`)
+  const decision = (await (await fetch(`${base}/wakes`, { headers })).json() as { data: { id: string; text: string }[] }).data.find((wake) => wake.id.startsWith('asks:wk_'))
   assert.match(decision?.text ?? '', new RegExp(`Its address is \\S+/inbox/${hookId}\\.`))
   assert.doesNotMatch(decision?.text ?? '', new RegExp(hook?.secret ?? 'none'))
 

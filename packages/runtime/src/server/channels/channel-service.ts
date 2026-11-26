@@ -19,10 +19,8 @@ import type { Caller } from '../team/identity.ts'
 import { audienceOf } from './audience.ts'
 import { whatsappPairing } from './whatsapp-pairing.ts'
 import { telegramCodes, welcome, type Person } from './telegram-codes.ts'
-import { activity } from '../gateway/activity.ts'
 
 const CHANNEL_KINDS = new Set<ChannelKind>(['slack', 'discord'])
-const QUIET_MS = 10_000
 const LABEL = { slack: 'Slack', whatsapp: 'WhatsApp', telegram: 'Telegram', discord: 'Discord' } as const
 
 export const channelService = {
@@ -86,12 +84,11 @@ export const channelService = {
     if (!known) {
       const facts = await agentService.find({ id: agentId })
       const add = (value: ChannelRecord): ChannelRecord => ({ ...value, allowed: [...new Set([...value.allowed, person.userId])], names: { ...value.names, [person.userId]: person.name } })
-      await recordsService.put({ collection: 'channel', id: row.id, parent: agentId, workspace: facts.workspace, personal: facts.personal, value: add(current), secret: held.secret, reapply: (latest) => ({ value: add(ChannelRecord.parse(latest.value)), secret: latest.secret }) })
+      await agentService.quietly({ id: agentId, change: async () => {
+        await recordsService.put({ collection: 'channel', id: row.id, parent: agentId, workspace: facts.workspace, personal: facts.personal, value: add(current), secret: held.secret, reapply: (latest) => ({ value: add(ChannelRecord.parse(latest.value)), secret: latest.secret }) })
+        await runSet.apply({ workspace: facts.workspace, id: agentId }).catch((err: unknown) => log.warn({ event: 'telegram.join_apply_failed', agent: agentId, error: messageOf(err) }))
+      } })
       emit({ name: 'channel.updated', target: { type: 'channel', id: row.id, kind: 'telegram', agentId } })
-      agentService.holdReapply(agentId)
-      await runSet.apply({ workspace: facts.workspace, id: agentId }).catch((err: unknown) => log.warn({ event: 'telegram.join_apply_failed', agent: agentId, error: messageOf(err) }))
-      void activity.quiet({ agentId, ms: QUIET_MS }).then(() => agentService.releaseReapply(agentId))
-        .catch((err: unknown) => log.warn({ event: 'telegram.join_reapply_failed', agent: agentId, error: messageOf(err) }))
     }
     await telegram.send({ botToken, chatId: person.chatId, text: welcome(person.name) }).catch(() => undefined)
     return { object: 'telegram_join', joined: !known }

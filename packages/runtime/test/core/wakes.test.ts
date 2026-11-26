@@ -39,10 +39,10 @@ test('every plugin\'s due wakes come back as one list, each named and prefixed [
   await db.updateTable('inbox_source').set({ next_run_at: new Date(Date.now() - 60_000) }).where('id', '=', routine).execute()
   await inboxService.tick()
   const due = await wakes.due({ agentId: 'ag_wakeagnt' })
-  assert.deepEqual(due.map((wake) => wake.id.replace(/_[a-z0-9]+$/, '_*')).sort(), ['asks:ask_*', 'asks:ask_*', 'inbox:ru_*'])
+  assert.deepEqual(due.map((wake) => wake.id.replace(/_[a-z0-9]+$/, '_*')).sort(), ['asks:wk_*', 'asks:wk_*', 'inbox:ru_*'])
   for (const wake of due) assert.ok(wake.text.startsWith(`[OpenHut ${wake.id}] `), wake.text)
   assert.ok(!due.some((wake) => /\[OpenHut ask_|\[Routine /.test(wake.text)), 'no second, older prefix')
-  assert.deepEqual(due.find((wake) => wake.id === `asks:${fromApp}`)?.origin, app)
+  assert.deepEqual(due.filter((wake) => wake.id.startsWith('asks:')).map((wake) => wake.origin.platform).sort(), ['api_server', 'whatsapp'])
 
   const listed = await (await fetch(url('/wakes'), { headers })).json() as { data: { id: string }[] }
   assert.deepEqual(listed.data.map((wake) => wake.id).sort(), due.filter((wake) => wake.origin.platform !== 'api_server').map((wake) => wake.id).sort(), 'the Hermes plugin never gets the app\'s wakes')

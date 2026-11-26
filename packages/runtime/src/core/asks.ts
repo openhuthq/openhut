@@ -3,7 +3,6 @@ import { sql, type Kysely, type Selectable } from 'kysely'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { ApproveAsk, ASK_PROMPT, DeclineAsk, ListAsks, type Ask } from '@openhut/common/asks/ask.ts'
 import { agentService } from '../server/agents/agent-service.ts'
-import { activity } from '../server/gateway/activity.ts'
 import { Origin } from '../server/inbox/routines.ts'
 import { allowOnly, db } from '../server/platform/db.ts'
 import type { Database } from '../server/platform/db-schema.ts'
@@ -16,7 +15,7 @@ import { APP_PLATFORM, defineTool, type AskKind, type Plugin, type Tool } from '
 import { plugins } from './plugins.ts'
 import { wakes } from './wakes.ts'
 
-const QUIET_MS = 10_000
+const BATCH_MS = 30_000
 const SWEEP_MS = 60_000
 const STATUSES = ['open', 'done', 'declined', 'expired'] as const
 const running = new Map<string, Promise<Ask>>()
@@ -89,12 +88,14 @@ export function asksPlugin(list: Plugin[]): Plugin {
     wakes: {
       due: async ({ agentId }) => {
         await sweep()
-        const rows = await db.selectFrom('ask').selectAll().where('agent_id', '=', agentId).where('status', '<>', 'open').where('told', '=', false).execute()
-        return rows.map((row) => ({ id: row.id, text: `${row.reply ?? row.title} Tell the chat in one line, with the final values if they differ from what you asked for, then carry on.`, origin: originOf(row) }))
+        await batch(agentId)
+        const rows = await db.selectFrom('ask').selectAll().where('agent_id', '=', agentId).where('told', '=', false).where('wake_id', 'is not', null).orderBy('answered_at').execute()
+        const open = await db.selectFrom('ask').select(['origin', 'title']).where('agent_id', '=', agentId).where('status', '=', 'open').execute()
+        return [...grouped({ rows, by: (row) => row.wake_id ?? '' })].map(([id, told]) => ({ id, text: noteOf({ told, open: open.filter((each) => each.origin === told[0].origin) }), origin: originOf(told[0]) }))
       },
       picked: async ({ agentId, id }) => {
-        const done = await db.updateTable('ask').set({ told: true }).where('agent_id', '=', agentId).where('id', '=', id).where('status', '<>', 'open').returning('id').executeTakeFirst()
-        if (!done) throw new HttpError(404, `No answered ask ${id}.`)
+        const done = await db.updateTable('ask').set({ told: true }).where('agent_id', '=', agentId).where('wake_id', '=', id).returning('id').execute()
+        if (!done.length) throw new HttpError(404, `No answered asks in ${id}.`)
       },
     },
     start: () => void setInterval(() => void sweep().catch((err: unknown) => log.warn({ event: 'ask.sweep_failed', error: messageOf(err) })), SWEEP_MS).unref(),
@@ -120,14 +121,8 @@ async function approving({ actor, id, answer }: { actor: Caller; id: string; ans
   const edits = given?.data ? pick({ from: given.data, keys: Object.keys(kind.input.shape) }) : {}
   const final = { ...input, ...edits }
   const title = Object.keys(edits).length ? await kind.title({ agentId: row.agent_id, input: final }) : row.title
-  agentService.holdReapply(row.agent_id)
-  try {
-    const note = await kind.run({ actor, ask: { ...askFor(row), input: final }, answer: given?.data })
-    return await answered({ actor, row, status: 'done', set: { input: JSON.stringify(final), title, reply: `Approved and done: ${title}.${note ? ` ${note}` : ''}` } })
-  } finally {
-    void activity.quiet({ agentId: row.agent_id, ms: QUIET_MS }).then(() => agentService.releaseReapply(row.agent_id))
-      .catch((err: unknown) => log.warn({ event: 'ask.reapply_failed', agent: row.agent_id, error: messageOf(err) }))
-  }
+  const note = await kind.run({ actor, ask: { ...askFor(row), input: final }, answer: given?.data })
+  return answered({ actor, row, status: 'done', set: { input: JSON.stringify(final), title, reply: `Approved and done: ${title}.${note ? ` ${note}` : ''}` } })
 }
 
 async function answered({ actor, row, status, set }: { actor?: Caller; row: Row; status: 'done' | 'declined'; set: Partial<Pick<Row, 'input' | 'title' | 'note' | 'reply'>> }): Promise<Ask> {
@@ -149,7 +144,31 @@ async function sweep(): Promise<void> {
 }
 
 function told(row: Row): void {
-  if (inApp(row)) wakes.nudge(row.agent_id)
+  if (!inApp(row)) return
+  wakes.nudge(row.agent_id)
+  setTimeout(() => wakes.nudge(row.agent_id), BATCH_MS + 1000).unref()
+}
+
+async function batch(agentId: string): Promise<void> {
+  const answered = await db.selectFrom('ask').select(['id', 'origin', 'answered_at']).where('agent_id', '=', agentId).where('told', '=', false).where('status', '<>', 'open').where('wake_id', 'is', null).execute()
+  const open = new Set((await db.selectFrom('ask').select('origin').where('agent_id', '=', agentId).where('status', '=', 'open').execute()).map((row) => row.origin))
+  for (const [origin, rows] of grouped({ rows: answered, by: (row) => row.origin })) {
+    const last = Math.max(...rows.map((row) => new Date(row.answered_at ?? 0).getTime()))
+    if (open.has(origin) && Date.now() - last < BATCH_MS) continue
+    await db.updateTable('ask').set({ wake_id: newId('wk') }).where('id', 'in', rows.map((row) => row.id)).where('wake_id', 'is', null).execute()
+  }
+}
+
+function grouped<T>({ rows, by }: { rows: T[]; by: (row: T) => string }): Map<string, T[]> {
+  const groups = new Map<string, T[]>()
+  for (const row of rows) groups.set(by(row), [...groups.get(by(row)) ?? [], row])
+  return groups
+}
+
+function noteOf({ told, open }: { told: Row[]; open: { title: string }[] }): string {
+  const head = told.length === 1 ? 'Your owner answered your ask:' : `Your owner answered ${told.length} of your asks:`
+  const waiting = open.length ? `\nStill waiting for: ${open.map((each) => each.title).join('; ')}.` : ''
+  return `${head}\n${told.map((row) => `- ${row.reply ?? row.title}`).join('\n')}${waiting}\nTell the chat in a line or two what changed, with the final values if they differ from what you asked for, then carry on with the job.`
 }
 
 async function owned({ actor, id }: { actor: Caller; id: string }): Promise<Row> {
@@ -207,6 +226,7 @@ async function createTables(database: Kysely<Database>): Promise<void> {
     id text primary key, agent_id text not null references agent(id) on delete cascade, kind text not null, input text not null, title text not null, why text not null,
     origin text not null, status text not null default 'open', note text, reply text, told boolean not null default false, created_at timestamptz not null default now(),
     answered_at timestamptz, expires_at timestamptz)`.execute(database)
+  await sql`alter table ask add column if not exists wake_id text`.execute(database)
   await sql`create index if not exists ask_by_agent on ask (agent_id, created_at desc)`.execute(database)
   await allowOnly({ table: 'ask', column: 'status', values: STATUSES })
   const { rows } = await sql<{ found: string | null }>`select to_regclass('change_request')::text as found`.execute(database)

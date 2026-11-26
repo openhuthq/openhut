@@ -95,7 +95,7 @@ test('a request nobody answers expires and the agent hears about it', async () =
   await db.updateTable('ask').set({ expires_at: new Date(Date.now() - 1000) }).where('id', '=', id).execute()
   assert.equal((await asks.approve({ actor: owner, id })).status, 'expired')
   await settle()
-  assert.match(told.at(-1) ?? '', new RegExp(`\\[OpenHut asks:${id}\\] Nobody answered in time`))
+  assert.match(told.at(-1) ?? '', /\[OpenHut asks:wk_[a-z0-9]+\] Your owner answered your ask:\n- Nobody answered in time/)
 })
 
 test('an app\'s status follows its latest call, and apps list by name', async () => {

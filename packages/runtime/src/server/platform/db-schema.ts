@@ -41,6 +41,6 @@ export interface Database {
   ask: {
     id: string; agent_id: string; kind: string; input: string; title: string; why: string; origin: string
     status: Generated<'open' | 'done' | 'declined' | 'expired'>; note: string | null; reply: string | null; told: Generated<boolean>; created_at: Generated<Date>
-    answered_at: Timestamp | null; expires_at: Timestamp | null
+    answered_at: Timestamp | null; expires_at: Timestamp | null; wake_id: string | null
   }
 }

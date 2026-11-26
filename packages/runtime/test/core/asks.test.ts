@@ -16,8 +16,11 @@ import { fakeAgentd, refresh, signIn } from '../server/agents/signed-in.ts'
 import { connectionService } from '../../src/server/connections/connection-service.ts'
 import { mcp } from '../../src/server/integrations/mcp/mcp.ts'
 import { permissions } from '../../src/server/permissions/permissions.ts'
+import { activity } from '../../src/server/gateway/activity.ts'
+import { agentService } from '../../src/server/agents/agent-service.ts'
+import { wakes } from '../../src/core/wakes.ts'
 
-fakeAgentd()
+const agentd = fakeAgentd()
 await migrate()
 await db.insertInto('person').values({ id: 'usr_chgowner', email: 'chg@example.com', role: 'owner', removed_at: null }).execute()
 await db.insertInto('agent').values({ id: 'ag_chgagent', name: 'Dev', owner_id: 'usr_chgowner', instructions: '#', model: 'claude:sonnet', net: 73, channel_key: seal('k'.repeat(48)), wanted: 'stopped' }).execute()
@@ -40,6 +43,12 @@ const whatsapp = { platform: 'whatsapp', chat_id: '15550002222@s.whatsapp.net', 
 const textOf = (result: Awaited<ReturnType<Client['callTool']>>) => (result.content as { text: string }[])[0].text
 const idIn = (text: string) => /ask_[a-z0-9]+/.exec(text)?.[0] ?? ''
 
+test.afterEach(async () => {
+  const open = await db.selectFrom('ask').select('id').where('agent_id', '=', 'ag_chgagent').where('status', '=', 'open').execute()
+  for (const { id } of open) await asks.decline({ actor: owner, id })
+  await settled()
+})
+
 test('get_self shows the agent its name, instructions and channels', async () => {
   const self = JSON.parse(textOf(await client.callTool({ name: 'get_self', arguments: {} })))
   assert.equal(self.name, 'Dev')
@@ -61,7 +70,7 @@ test('a rename waits for approval, the owner edits it, and the decision goes bac
   assert.equal((await db.selectFrom('agent').select('name').where('id', '=', 'ag_chgagent').executeTakeFirstOrThrow()).name, 'Ops Bot')
   await settled()
   assert.deepEqual(told.map((each) => each.agentId), ['ag_chgagent'])
-  assert.match(told[0].text, new RegExp(`^\\[OpenHut asks:${id}\\] Approved and done: Rename to Ops Bot\\.`))
+  assert.match(told[0].text, /^\[OpenHut asks:wk_[a-z0-9]+\] Your owner answered your ask:\n- Approved and done: Rename to Ops Bot\./)
   assert.equal((await asks.approve({ actor: owner, id, answer: { name: 'Other' } })).title, 'Rename to Ops Bot', 'approving an answered ask returns it as it is')
 })
 
@@ -77,10 +86,11 @@ test('a denied request from WhatsApp reaches the agent through the plugin\'s wak
   assert.equal((await db.selectFrom('channel').select('open').where('id', '=', 'ch_chgwhats').executeTakeFirstOrThrow()).open, false)
   const headers = { authorization: `Agent ${token}`, 'content-type': 'application/json' }
   const due = await (await fetch(`${base}/wakes`, { headers })).json() as { data: { id: string; text: string; origin: unknown }[] }
-  assert.deepEqual(due.data.map((wake) => wake.id), [`asks:${id}`])
+  assert.equal(due.data.length, 1)
+  assert.match(due.data[0].id, /^asks:wk_[a-z0-9]+$/)
   assert.match(due.data[0].text, /Not approved: Change who can message it on WhatsApp\. They said: "Not yet"/)
   assert.deepEqual(due.data[0].origin, whatsapp)
-  assert.equal((await fetch(`${base}/wakes/asks:${id}`, { method: 'POST', headers, body: JSON.stringify({ picked: true }) })).status, 200)
+  assert.equal((await fetch(`${base}/wakes/${due.data[0].id}`, { method: 'POST', headers, body: JSON.stringify({ picked: true }) })).status, 200)
   assert.equal(((await (await fetch(`${base}/wakes`, { headers })).json()) as { data: unknown[] }).data.length, 0)
 })
 
@@ -113,7 +123,7 @@ test('a decision the agent never heard about is sent again by the chat plugin\'s
   deliver('ag_chgagent')
   await settled()
   assert.equal(told.length, before + 1)
-  assert.match(told.at(-1)?.text ?? '', new RegExp(`^\\[OpenHut asks:${id}\\] Not approved`))
+  assert.match(told.at(-1)?.text ?? '', /^\[OpenHut asks:wk_[a-z0-9]+\] Your owner answered your ask:\n- Not approved/)
   assert.equal((await db.selectFrom('ask').select('told').where('id', '=', id).executeTakeFirstOrThrow()).told, true)
 })
 
@@ -169,7 +179,7 @@ test('a proposed connection the owner approves with a token becomes a granted co
   const row = await db.selectFrom('ask').select(['input', 'title']).where('id', '=', id).executeTakeFirstOrThrow()
   const seen = [asked, await client.callTool({ name: 'get_self', arguments: {} })].map((each) => JSON.stringify(each.content))
   for (const text of [row.input, row.title, JSON.stringify(approved), ...told.map((each) => each.text), ...seen]) assert.doesNotMatch(text, new RegExp(secret))
-  assert.match(told.at(-1)?.text ?? '', new RegExp(`^\\[OpenHut asks:${id}\\] Approved and done: Connect DigitalOcean\\.`))
+  assert.match(told.at(-1)?.text ?? '', /^\[OpenHut asks:wk_[a-z0-9]+\] Your owner answered your ask:\n- Approved and done: Connect DigitalOcean\./)
   mock.restoreAll()
 })
 
@@ -216,6 +226,67 @@ test('asks list newest first, and ones made at the same moment keep one order', 
   const ids = (await asks.list({ agentId: 'ag_chgagent' })).map((each) => each.id)
   assert.ok(ids.length > 1)
   assert.deepEqual(ids, [...ids].sort().reverse())
+})
+
+test('asks answered in one chat reach the agent as one wake, once nothing in that chat is open', async () => {
+  const chat = { platform: 'api_server', chat_id: 'openhut-batch' }
+  const first = idIn(await asks.create({ agentId: 'ag_chgagent', kind: 'add_webhook', input: { name: 'Batch one' }, why: 'x', origin: chat }))
+  const second = idIn(await asks.create({ agentId: 'ag_chgagent', kind: 'add_webhook', input: { name: 'Batch two' }, why: 'x', origin: chat }))
+  const before = told.length
+  await asks.decline({ actor: owner, id: first, note: 'Later' })
+  await settled()
+  assert.equal(told.length, before, 'one ask in that chat is still open')
+  await asks.approve({ actor: owner, id: second })
+  await settled()
+  assert.equal(told.length, before + 1)
+  const [line] = told.slice(-1)
+  assert.match(line.text, /^\[OpenHut asks:wk_[a-z0-9]+\] Your owner answered 2 of your asks:\n- Not approved: Add a webhook named Batch one\. They said: "Later".*\n- Approved and done: Add a webhook named Batch two\. Its address is /)
+  deliver('ag_chgagent')
+  await settled()
+  assert.equal(told.length, before + 1, 'told once')
+})
+
+test('an answer waits at most 30 seconds for the chat\'s other asks, then goes alone and says what is still open', async () => {
+  const chat = { platform: 'api_server', chat_id: 'openhut-slow' }
+  const first = idIn(await asks.create({ agentId: 'ag_chgagent', kind: 'add_webhook', input: { name: 'Slow one' }, why: 'x', origin: chat }))
+  idIn(await asks.create({ agentId: 'ag_chgagent', kind: 'add_webhook', input: { name: 'Slow two' }, why: 'x', origin: chat }))
+  await asks.decline({ actor: owner, id: first })
+  assert.deepEqual((await wakes.due({ agentId: 'ag_chgagent' })).filter((wake) => wake.origin.chat_id === 'openhut-slow'), [])
+  await db.updateTable('ask').set({ answered_at: new Date(Date.now() - 31_000) }).where('id', '=', first).execute()
+  const [wake] = (await wakes.due({ agentId: 'ag_chgagent' })).filter((each) => each.origin.chat_id === 'openhut-slow')
+  assert.match(wake.text, /Your owner answered your ask:\n- Not approved: Add a webhook named Slow one\..*\nStill waiting for: Add a webhook named Slow two\./s)
+})
+
+test('a wake waits for the restart its answer needs, and the restart waits for the agent to go quiet', async () => {
+  const id = idIn(await asks.create({ agentId: 'ag_chgagent', kind: 'update_self', input: { instructions: '# Quiet\nNew.' }, why: 'x', origin: app }))
+  activity.started('ag_chgagent')
+  const applies = agentd.applies.length
+  const before = told.length
+  await asks.approve({ actor: owner, id })
+  await new Promise((resolve) => setTimeout(resolve, 1500))
+  assert.equal(agentService.restartPending('ag_chgagent'), true)
+  assert.equal(agentd.applies.length, applies, 'no restart while a call is open')
+  assert.deepEqual(await wakes.due({ agentId: 'ag_chgagent' }), [], 'no wake before the restart')
+  const ended = Date.now()
+  activity.ended('ag_chgagent')
+  await settled()
+  const restart = agentd.applies.slice(applies).find((each) => each.id === 'ag_chgagent')
+  assert.ok(restart && restart.at >= ended + 9_000, 'restarted once quiet for 10 seconds')
+  assert.equal(told.length, before + 1)
+  assert.match(told.at(-1)?.text ?? '', /Approved and done: Change its instructions\. You restart/)
+})
+
+test('a grant made in the app waits for the agent to go quiet before it restarts it', async () => {
+  const connection = { id: 'cn_quietdb1' }
+  await db.insertInto('connection').values({ id: connection.id, kind: 'postgres', name: 'Quiet DB', owner_id: 'usr_chgowner', config: seal('{}') }).execute()
+  activity.started('ag_chgagent')
+  const applies = agentd.applies.length
+  await agentService.createGrant({ actor: owner, agentId: 'ag_chgagent', connectionId: connection.id })
+  await new Promise((resolve) => setTimeout(resolve, 1500))
+  assert.equal(agentd.applies.length, applies)
+  activity.ended('ag_chgagent')
+  await settled()
+  assert.ok(agentd.applies.length > applies)
 })
 
 test('asking for the same thing twice while it is open gives back the first ask', async () => {
