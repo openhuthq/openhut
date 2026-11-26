@@ -1,0 +1,60 @@
+import { mock, test } from 'node:test'
+import assert from 'node:assert/strict'
+import type { LiveDown } from '@openhut/common/live.ts'
+import { liveThreads } from '../../../src/server/threads/live.ts'
+
+function viewer(id: string) {
+  const heard: LiveDown[] = []
+  return { heard, key: {}, viewer: { person: { id, name: id, email: `${id}@example.com` }, send: (message: LiveDown) => heard.push(message) } }
+}
+
+test('typing shows on everyone\'s presence and ends by itself 5 s after the last keystroke', () => {
+  mock.timers.enable({ apis: ['setTimeout'] })
+  try {
+    const ana = viewer('ana')
+    const bo = viewer('bo')
+    liveThreads.join({ thread: 'th_typing', ...ana })
+    liveThreads.join({ thread: 'th_typing', ...bo })
+    liveThreads.typing({ thread: 'th_typing', key: ana.key, on: true })
+    const states = () => bo.heard.flatMap((each) => each.type === 'presence' ? [each.people.map((person) => `${person.id}:${person.state}`).join(',')] : [])
+    assert.equal(states().at(-1), 'ana:typing,bo:viewing')
+    mock.timers.tick(4000)
+    liveThreads.typing({ thread: 'th_typing', key: ana.key, on: true })
+    mock.timers.tick(4000)
+    assert.equal(states().at(-1), 'ana:typing,bo:viewing')
+    mock.timers.tick(1000)
+    assert.equal(states().at(-1), 'ana:viewing,bo:viewing')
+    liveThreads.leave({ thread: 'th_typing', key: ana.key })
+    assert.equal(states().at(-1), 'bo:viewing')
+    liveThreads.drop(bo.key)
+  } finally {
+    mock.timers.reset()
+  }
+})
+
+test('deltas are batched every 40 ms with rising seq, catch-up has what was sent, and a new text part starts a new paragraph', () => {
+  mock.timers.enable({ apis: ['setTimeout'] })
+  try {
+    const ana = viewer('ana')
+    liveThreads.join({ thread: 'th_batch', ...ana })
+    const turn = liveThreads.turn({ thread: 'th_batch', turnId: 'msg_1', answering: ['ana@example.com'] })
+    turn.delta({ part: 't1', text: 'Hel' })
+    turn.delta({ part: 't1', text: 'lo' })
+    assert.equal(ana.heard.filter((each) => each.type === 'delta').length, 0)
+    mock.timers.tick(40)
+    turn.step('Search the web')
+    turn.delta({ part: 't2', text: 'Done.' })
+    mock.timers.tick(40)
+    const deltas = ana.heard.filter((each) => each.type === 'delta')
+    assert.deepEqual(deltas.map((each) => [each.seq, each.text]), [[1, 'Hello'], [2, '\n\nDone.']])
+    assert.deepEqual(liveThreads.catchUp('th_batch'), { object: 'thread_live', thread: 'th_batch', turnId: 'msg_1', seq: 2, text: 'Hello\n\nDone.', agent: { state: 'replying', turnId: 'msg_1', answering: ['ana@example.com'] } })
+    turn.end()
+    const agents = ana.heard.flatMap((each) => each.type === 'presence' ? [[each.agent.state, each.agent.step].filter(Boolean).join(':')] : [])
+    assert.deepEqual(agents, ['idle', 'thinking', 'replying', 'working:Search the web', 'replying', 'idle'])
+    assert.deepEqual(ana.heard.at(-2), { type: 'turn', thread: 'th_batch', turnId: 'msg_1', state: 'done' })
+    assert.deepEqual(liveThreads.catchUp('th_batch'), { object: 'thread_live', thread: 'th_batch', turnId: null, seq: 0, text: '', agent: { state: 'idle' } })
+    liveThreads.drop(ana.key)
+  } finally {
+    mock.timers.reset()
+  }
+})

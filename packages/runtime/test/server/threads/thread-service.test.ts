@@ -406,7 +406,9 @@ test('a webhook turn runs in a thread of its own, listed with where it came from
   const posted = mock.method(channelService, 'send', async () => ({ url: '', messageId: '' }))
   const place = { platform: 'discord', chat_id: '111', chat_name: '#alerts' }
   const id = await threadService.open({ agentId: 'ag_chathook', title: 'DO alerts', origin: { platform: 'webhook', label: 'DO alerts' }, mirrors: [place] })
-  assert.equal(await threadService.runRoutine({ agentId: 'ag_chathook', threadId: id, text: 'Webhook called: cpu 99%' }), 'Let me check.214 orders.')
+  const metadata = { source: { kind: 'webhook', id: 'wh_chatdoal', name: 'DO alerts' }, payload: { data: { alert_rule_name: 'CPU' } } }
+  assert.equal(await threadService.runRoutine({ agentId: 'ag_chathook', threadId: id, text: 'Webhook called: cpu 99%', metadata }), 'Let me check.214 orders.')
+  assert.deepEqual((await messagesOf(id))[0].metadata, { ...metadata, author: 'DO alerts' })
   assert.deepEqual((await messagesOf(id)).map((message) => [message.role, message.parts.filter((part) => part.type === 'text').map((part) => part.text).join('')]), [['user', 'Webhook called: cpu 99%'], ['assistant', 'Let me check.214 orders.']])
   assert.deepEqual(posted.mock.calls.map((call) => call.arguments[0]), [{ agentId: 'ag_chathook', place, text: 'Let me check.214 orders.' }])
   const listed = (await app.inject({ method: 'GET', url: '/api/threads', headers: as() })).json().data as { id: string; agentId: string; origin: { platform: string }; mirrors: unknown[] }[]
