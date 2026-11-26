@@ -45,3 +45,12 @@ test('ask_to_connect fills in an MCP server and refuses a url for anything else'
 })
 
 test.after(() => { void client.close(); server.close() })
+
+test('every openhut tool takes the origin the Hermes plugin stamps on it', async () => {
+  const { tools } = await client.listTools()
+  assert.ok(tools.length >= 16)
+  for (const tool of tools) assert.deepEqual(tool.inputSchema.additionalProperties, {}, `${tool.name} drops origin`)
+  const origin = { platform: 'slack', chat_id: 'C1' }
+  assert.ok(!(await client.callTool({ name: 'list_routines', arguments: { origin } })).isError)
+  assert.ok(!(await call({ why: 'x', apps: [{ app: 'github' }], origin })).isError)
+})
