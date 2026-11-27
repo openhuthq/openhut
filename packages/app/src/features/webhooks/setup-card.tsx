@@ -1,4 +1,5 @@
-import { useContext } from 'react'
+import { useContext, useState } from 'react'
+import { CheckmarkCircle02Icon } from '@hugeicons/core-free-icons'
 import { useQuery } from '@tanstack/react-query'
 import * as z from 'zod/mini'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -6,7 +7,7 @@ import { isBrand, type BrandName } from '@/components/brand-icons'
 import { CopyButton } from '@/components/copy-button'
 import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
-import { Loading } from '@/components/kit'
+import { I, Loading } from '@/components/kit'
 import { CardReply } from '@/features/threads/card'
 import { request } from '@/lib/api-client'
 
@@ -20,8 +21,11 @@ export type WebhookSetup = z.infer<typeof WebhookSetup>
 
 const SetupValues = z.object({ address: z.string(), secret: z.string() })
 
-export function WebhookSetupCard({ agentId, card }: { agentId: string; card: WebhookSetup }) {
+export const doneText = (card: WebhookSetup) => `Done: ${card.title}`
+
+export function WebhookSetupCard({ agentId, card, done }: { agentId: string; card: WebhookSetup; done: boolean }) {
   const reply = useContext(CardReply)
+  const [sent, setSent] = useState(false)
   const values = useQuery({
     queryKey: ['webhooks', agentId, card.webhookId, 'setup'],
     queryFn: () => request({ schema: SetupValues, of: agentId, path: `/api/agents/${encodeURIComponent(agentId)}/webhooks/${encodeURIComponent(card.webhookId)}/setup` }),
@@ -42,7 +46,9 @@ export function WebhookSetupCard({ agentId, card }: { agentId: string; card: Web
     {card.steps.length > 0 && <ol className="m-0 flex list-decimal flex-col gap-1 pl-5 text-[13.5px]/[1.5] text-ink marker:text-mute">{card.steps.map((step, index) => <li key={index}>{step}</li>)}</ol>}
     <div className="flex flex-wrap gap-2">
       {card.openUrl && <a href={card.openUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'secondary', size: 'sm' })}>Open {brandWord(card.openUrl)}<span className="text-[11px] text-mute">↗</span></a>}
-      <Button type="button" variant="primary" size="sm" disabled={!values.data} onClick={() => reply(`Done: ${card.title}`)}>Done</Button>
+      {done || sent
+        ? <span className="inline-flex items-center gap-1.5 text-[13px] text-ink"><I icon={CheckmarkCircle02Icon} size={16} className="animate-[pop_.45s_cubic-bezier(.2,.8,.2,1)] text-hue-green" />Done</span>
+        : <Button type="button" variant="primary" size="sm" disabled={!values.data} onClick={() => setSent(reply(doneText(card)))}>Done</Button>}
     </div>
   </div>
 }

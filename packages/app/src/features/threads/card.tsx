@@ -8,7 +8,7 @@ import { isBrand } from '@/components/brand-icons'
 import { Glyph } from '@/components/glyph'
 import { integration } from '@/features/connections/catalog'
 
-export const CardReply = createContext<(text: string) => void>(() => undefined)
+export const CardReply = createContext<(text: string) => boolean>(() => false)
 
 const VARIANTS = { primary: 'primary', danger: 'destructive' } as const
 
