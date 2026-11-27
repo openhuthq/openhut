@@ -56,7 +56,7 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew }: {
       </span>
     </div>
     <h1 className="m-0 hidden px-5 pt-1 pb-3 text-[32px]/[1.1] font-bold tracking-[-.02em] phone:block">Agents</h1>
-    <nav className="flex min-h-0 flex-col gap-0.5 overflow-auto px-3 pt-1 phone:gap-0 phone:px-2">
+    <nav className="flex min-h-0 flex-col gap-0.5 overflow-auto px-4 pt-1 phone:gap-0 phone:px-2">
       {!!contacts?.length && <div className="flex flex-col gap-0.5 phone:gap-0">
       {contacts.map(({ agent, threads }) => <AgentRow key={agent.id} agent={agent} threads={threads} active={agent.id === activeId} phone={phone} />)}
       </div>}
