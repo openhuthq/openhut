@@ -11,6 +11,8 @@ import { openhut, type OpenHutAgent } from '@/lib/openhut'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { ChatCall, fileInHome, MAX_FILE_BYTES, MAX_FILES, ToolProgress, Work, type ChatFile, type ChatMessage } from '@openhut/common/threads/thread.ts'
 import { Alert } from '@/components/ui/alert'
+import { Tooltip } from '@/components/ui/tooltip'
+import { ConfirmDialog } from '@/components/confirm-button'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { DropdownMenuItem, LongPressMenu } from '@/components/ui/dropdown-menu'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -18,7 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { ErrorNote } from '@/components/error-note'
-import { Dots, HINT, I, ICON_BUTTON } from '@/components/kit'
+import { Dots, HINT, I, ICON_BUTTON, TINY_ICON } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { useOwner } from '@/features/people/api'
 import { personName } from '@/lib/format'
@@ -35,7 +37,6 @@ import { PlaceIcon } from '@/features/routines/target-picker'
 import { doneText, WebhookSetup, WebhookSetupCard } from '@/features/webhooks/setup-card'
 import { saidAfter } from '@/lib/said-after'
 import { homePathsIn, linkHomeFiles, RASTER } from '@/features/threads/files'
-import { ConfirmIcon } from '@/components/confirm-button'
 import { errorUnder, legacyWork, withoutCards } from '@/features/threads/steps'
 import { RetryButton, WorkLine } from '@/features/threads/work'
 import { CardReply, MessageCard } from '@/features/threads/card'
@@ -320,8 +321,12 @@ function NotReady({ agent }: { agent: Agent }) {
 function ClearChat({ agent, threadId, attachments, disabled }: { agent: Agent; threadId: string; attachments: Attachments; disabled: boolean }) {
   const clearChat = useClearChat({ agentId: agent.id, threadId })
   const uploads = attachments.items.flatMap((item) => item.file ? [item.file.path] : [])
-  return <ConfirmIcon label="Clear chat" disabled={disabled} icon={EraserIcon} question="Clear this chat? Memory stays; files you sent are deleted." action="Clear" busy={clearChat.isPending}
-    onConfirm={(done) => clearChat.mutate({ uploads }, { onSuccess: () => { attachments.clear(); done() }, onError: toastError })} />
+  const [asking, setAsking] = useState(false)
+  return <>
+    <Tooltip label="Clear chat"><Button type="button" variant="bare" className={TINY_ICON} aria-label="Clear chat" disabled={disabled} onClick={() => setAsking(true)}><I icon={EraserIcon} size={16} /></Button></Tooltip>
+    <ConfirmDialog open={asking} onOpenChange={setAsking} question="Clear this chat?" detail="Memory stays. Files you sent are deleted." action="Clear"
+      onConfirm={() => clearChat.mutateAsync({ uploads }).then(() => attachments.clear())} />
+  </>
 }
 
 function useOffline(agent: Agent) {
