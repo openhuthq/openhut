@@ -12,6 +12,7 @@ import { Glyph } from '@/components/glyph'
 import { I, PILL, ROW, Status } from '@/components/kit'
 import { agentPath } from '@/app/routes'
 import { AccessPicker } from '@/features/agents/access'
+import { Face } from '@/features/agents/face'
 import { MemoryEditor } from '@/features/agents/memory-dialog'
 import { SkillsBrowser } from '@/features/agents/skills-dialog'
 import { useChannels, useCreateGrant, useDeleteAgent, useDeleteChannel, useDeleteGrant, useGrants, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
@@ -113,6 +114,11 @@ function GeneralPane({ agent }: { agent: Agent }) {
     <Head title="General" subtitle={`How ${agent.name} works and who can use it`} />
     <Body>
       <div className={GROUP}>
+        <Button type="button" variant="bare" disabled={!agent.canEdit} onClick={() => open('customize')} className="-mx-2.5 mb-1 flex w-[calc(100%+20px)] items-center gap-3 rounded-md px-2.5 py-2 text-left hover:bg-hover disabled:hover:bg-transparent">
+          <Face agent={agent} size={44} />
+          <span className="grid min-w-0 flex-1"><span className="truncate text-[15px]/[20px] font-medium text-ink">{agent.name}</span><span className="text-[12.5px] text-mute">Name and picture</span></span>
+          {agent.canEdit && <span className={VALUE}>Edit<I icon={ArrowRight01Icon} size={12} className="shrink-0 text-mute" /></span>}
+        </Button>
         <Go icon={PencilEdit02Icon} label="What it does" value={<span className="max-w-[300px] truncate">{agent.summary || 'Not set yet'}</span>} to="does" />
         <div className={REUSED}>
           <ModelRows agent={agent} />
