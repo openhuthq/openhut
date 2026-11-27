@@ -10,7 +10,7 @@ export function scheduleOf(cron: string): string {
   const time = `${Number(hour)}:${minute.padStart(2, '0')}`
   if (day === '*' && weekday === '*') return `Every day at ${time}`
   if (day === '*' && weekday === '1-5') return `Weekdays at ${time}`
-  if (day === '*' && /^[0-6]$/.test(weekday)) return `${DAYS[Number(weekday)]} at ${time}`
+  if (day === '*' && /^[0-6](,[0-6])*$/.test(weekday)) return `${listOf(weekday.split(',').map((each) => DAYS[Number(each)]))} at ${time}`
   if (/^\d+$/.test(day) && weekday === '*') return `Monthly on the ${ordinal(Number(day))} at ${time}`
   return 'Repeats'
 }
@@ -47,4 +47,8 @@ function startOf(date: Date): number {
 function ordinal(n: number): string {
   const tail = n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'
   return `${n}${tail}`
+}
+
+function listOf(items: string[]): string {
+  return items.length < 3 ? items.join(' and ') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`
 }

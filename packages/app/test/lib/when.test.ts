@@ -5,6 +5,8 @@ import { dayOf, nextOf, onceOf, scheduleOf } from '../../src/lib/when.ts'
 test('common cron schedules read as plain words', () => {
   assert.equal(scheduleOf('0 10 * * 1-5'), 'Weekdays at 10:00')
   assert.equal(scheduleOf('0 9 * * 1'), 'Mondays at 9:00')
+  assert.equal(scheduleOf('0 18 * * 1,4'), 'Mondays and Thursdays at 18:00')
+  assert.equal(scheduleOf('30 7 * * 1,3,5'), 'Mondays, Wednesdays and Fridays at 7:30')
   assert.equal(scheduleOf('*/30 * * * *'), 'Every 30 minutes')
   assert.equal(scheduleOf('0 */2 * * *'), 'Every 2 hours')
   assert.equal(scheduleOf('15 8 * * *'), 'Every day at 8:15')
