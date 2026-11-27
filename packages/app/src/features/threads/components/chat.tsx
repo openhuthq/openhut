@@ -25,7 +25,6 @@ import { CardReply } from '@/features/threads/components/card'
 import { plainError, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { useJoinThread } from '@/lib/thread-live'
-import { TypingNow } from '@/features/threads/components/live'
 import { webhookOf } from '@/features/threads/components/webhook-message'
 import { ChatAsks, ChatFiles, Day, Message, AgentReply, Authored, changesOf, workOf, uiMessageOf, type AgentMessage, type AskSlots } from '@/features/threads/components/messages'
 import { Composer, ComposerSkeleton, ClearChat } from '@/features/threads/components/composer'
@@ -79,7 +78,6 @@ function ThreadView({ thread, fetchedAt, agent, asks, actions, tools, onTitle }:
     {waiting && <AgentReply agent={agent} threadId={thread.id} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
     <asks.Pending agent={agent} shown={new Set(chat.messages.flatMap(changesOf))} />
     {!agent.runsHere && !busy && last?.role === 'user' && !troubleOf(agent) && <p className="m-0 text-right text-[12.5px] text-mute">{agent.runsNowhere ? `No computer runs ${agent.name} now. ${agent.canManage ? 'Run it here to get an answer.' : `Ask an admin to run ${agent.name} on their computer.`}` : `Sent to ${agent.runsOnName ?? 'your other computer'}. ${agent.name} answers when it’s on.`}</p>}
-    {!thread.readOnly && <TypingNow threadId={thread.id} />}
     {chat.error && !busy && !(last && workOf(last)?.error) && <Alert variant="error-outline" role="alert"><span>{plainError(chat.error.message)}</span><Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={retry}>Try again</Button></Alert>}
   </ChatFrame></CardReply></ChatFiles></ChatAsks>
 }

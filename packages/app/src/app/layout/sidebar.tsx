@@ -45,7 +45,7 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew }: {
   const phone = useMedia(PHONE)
   return <aside inert={collapsed} className={cn('pushable still shrink-0 overflow-hidden border-hair transition-[width] duration-[240ms] ease-(--ease-spring)', collapsed ? 'w-0' : 'w-[256px] border-r-[0.5px]', contacts?.length === 0 ? 'phone:hidden' : 'phone:w-full phone:border-r-0', GLASS)}>
     <div className={cn('flex h-full w-[256px] flex-col phone:w-full transition-[opacity,translate] duration-[160ms] ease-out', collapsed && '-translate-x-2 opacity-0')}>
-    <div className={cn('flex h-[44px] shrink-0 items-center gap-1.5 pr-3 pl-3 phone:h-16 phone:px-4')}>
+    <div className={cn('flex h-[44px] shrink-0 items-center gap-1.5 pr-3 pl-[18px] phone:h-16 phone:px-4')}>
       <h2 className="m-0 pl-2.5 text-[15px]/[20px] font-semibold text-ink phone:hidden">Agents</h2>
       <a href="/settings/people" aria-label="Settings" className={cn(ICON_BUTTON, ROUND, 'hidden phone:grid')}><I icon={Settings02Icon} size={20} /></a>
       <span className="ml-auto flex gap-1.5">
@@ -54,7 +54,7 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew }: {
       </span>
     </div>
     <h1 className="m-0 hidden px-5 pt-1 pb-3 text-[32px]/[1.1] font-bold tracking-[-.02em] phone:block">Agents</h1>
-    <nav className="flex min-h-0 flex-col gap-0.5 overflow-auto px-4 pt-1 phone:gap-0 phone:px-2">
+    <nav className="flex min-h-0 flex-col gap-0.5 overflow-auto px-2 pt-1 phone:gap-0">
       {!!contacts?.length && <div className="flex flex-col gap-0.5 phone:gap-0">
       {contacts.map(({ agent, threads }) => <AgentRow key={agent.id} agent={agent} threads={threads} active={agent.id === activeId} phone={phone} />)}
       </div>}
@@ -84,7 +84,7 @@ function AgentRow({ agent, threads, active, phone }: { agent: OpenHutAgent; thre
   const trouble = agent.online ? troubleOf(agent) : 'Offline'
   const preview = previewOf({ agent, threads })
   return <RowMenu agent={agent}><a href={agentPath({ agentId: agent.id })} aria-current={active ? 'page' : undefined}
-    className={cn('row flex w-full shrink-0 items-center gap-3 rounded-[10px] px-2.5 py-2 text-left text-inherit no-underline data-popup-open:bg-picked phone:rounded-2xl', HOVER, !phone && active && PICKED)}
+    className={cn('row flex w-full shrink-0 items-center gap-3 rounded-[10px] px-2.5 py-1 text-left text-inherit no-underline data-popup-open:bg-picked phone:rounded-2xl', HOVER, !phone && active && PICKED)}
     title={trouble}>
     <span className={cn('relative grid size-10 shrink-0 place-items-center', !agent.online && 'opacity-45')}>
       <Face agent={agent} size={40} />
