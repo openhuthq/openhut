@@ -4,7 +4,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { bullets, settled } from '../../../src/features/threads/markdown.ts'
+import { bullets, media, settled } from '../../../src/features/threads/markdown.ts'
 
 const html = (text: string) => renderToStaticMarkup(createElement(Markdown, { remarkPlugins: [remarkGfm] }, settled(text)))
 
@@ -36,4 +36,11 @@ test('"•" lines an agent writes become a real list instead of running into one
   const out = html(bullets('3. Missing:\n   • webhooks\n   • Discord\n\n```\n• kept\n```'))
   assert.match(out, /<li>Missing:\n<ul>\n<li>webhooks<\/li>\n<li>Discord<\/li>/)
   assert.match(out, /<code>• kept\n<\/code>/)
+})
+
+test('a MEDIA line for a home file becomes an image, anything else stays text', () => {
+  assert.equal(media('Done.\nMEDIA:/opt/data/home/pr748/empty-routines.png'), 'Done.\n![](/opt/data/home/pr748/empty-routines.png)')
+  assert.equal(media('  MEDIA: ~/shots/after.jpg  '), '![](~/shots/after.jpg)')
+  assert.equal(media('MEDIA:/etc/passwd.png'), 'MEDIA:/etc/passwd.png')
+  assert.equal(media('See MEDIA:/opt/data/home/a.png inline'), 'See MEDIA:/opt/data/home/a.png inline')
 })
