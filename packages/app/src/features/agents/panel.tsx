@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Globe02Icon, PlayIcon, Settings02Icon, StopIcon } from '@hugeicons/core-free-icons'
+import { Globe02Icon, PencilEdit02Icon, PlayIcon, Settings02Icon, StopIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { DialogClose, DialogTitle } from '@/components/ui/dialog'
@@ -10,7 +10,6 @@ import { Glyph } from '@/components/glyph'
 import { agentPath } from '@/app/routes'
 import { useChannels, useGrants, useUpdateAgent } from '@/features/agents/api'
 import { listedChannels } from '@/features/agents/channel-kinds'
-import { plainText } from '@/features/agents/progress'
 import { toneOf, wordOf } from '@/features/agents/status'
 import { useConnections } from '@/features/connections/api'
 import { connectionBrand } from '@/features/connections/catalog'
@@ -66,12 +65,10 @@ function StatusLine({ agent }: { agent: Agent }) {
 }
 
 function WhatItDoes({ agent }: { agent: Agent }) {
-  const text = plainText({ text: agent.instructions, name: agent.name })
-  if (!text && !agent.canEdit) return null
-  return <a href={agentPath({ agentId: agent.id, dialog: 'does' })} className={cn('col-span-full -mx-2 -mt-0.5 grid gap-1 rounded-lg px-2 py-1.5 text-left no-underline', HOVER)}>
-    {text ? <><span className="text-[13px] text-mute">What it does</span><span className="line-clamp-4 text-[15px]/[22px] text-ink">{text}</span></>
-      : <span className="text-[15px]/[22px] text-mute">Add what it does</span>}
-  </a>
+  return <div className="relative col-span-full -mx-2.5"><Button type="button" variant="bare" onClick={() => navigate(agentPath({ agentId: agent.id, dialog: 'does' }))} className={cn('group flex w-full flex-col gap-1 rounded-lg px-2.5 py-2', HOVER)}>
+    <span className="flex items-center text-[12px]/[16px] text-mute">What it does<span className="ml-auto text-mute opacity-0 group-hover:opacity-100"><I icon={PencilEdit02Icon} size={13} /></span></span>
+    <span className={cn('line-clamp-2 text-left text-[13px]/[1.45]', agent.summary ? 'text-ink' : 'text-body')}>{agent.summary || 'Tell it what its job is.'}</span>
+  </Button></div>
 }
 
 const CHANNEL_WORD: Record<string, string> = { slack: 'Slack', discord: 'Discord', whatsapp: 'WhatsApp', telegram: 'Telegram' }
