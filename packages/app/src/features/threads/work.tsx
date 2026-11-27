@@ -26,6 +26,14 @@ export function WorkLine({ agent, work: all, notes = [], live, answered, onRetry
     <span className={cn('truncate', LIVE)}>{running.label}…</span>
   </div>
   if (!work.calls.length) return now
+  const only = work.calls.length === 1 && !notes.length ? work.calls[0] : undefined
+  if (only) return <>
+    <ul className="m-0 -ml-1 list-none p-0 pl-1 text-[12.5px] text-mute"><Row call={only} ms={work.ms} />
+      {work.error !== undefined && answered && <li className="flex flex-wrap items-center gap-2 py-1 text-body"><I icon={Alert02Icon} size={12} className="text-fail" />{work.error}{onRetry && <RetryButton onRetry={onRetry} />}</li>}
+    </ul>
+    {only.status === 'blocked' && <Blocked agent={agent} call={only} />}
+    {now}
+  </>
   return <>
     <Collapsible defaultOpen={work.error !== undefined} className="text-[12.5px] text-mute">
       <CollapsibleTrigger className="group/work -ml-1 flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-2 rounded-lg border-0 bg-transparent py-[3px] pr-2 pl-1 text-left text-inherit hover:bg-tint">
@@ -55,13 +63,14 @@ function Mark({ call, size = 14 }: { call: ToolCall; size?: number }) {
 
 const STATUS = { failed: ['Failed', Alert02Icon, 'text-fail'], blocked: ['Blocked', SquareLock02Icon, 'text-fail'] } as const
 
-function Row({ call }: { call: ToolCall }) {
+function Row({ call, ms }: { call: ToolCall; ms?: number }) {
   const status = call.status === 'failed' || call.status === 'blocked' ? STATUS[call.status] : undefined
   const hint = call.input && hintOf(call.input)
   const head = <span className="flex min-w-0 items-center gap-2">
     <Mark call={call} />
     <span className={cn('shrink-0', status ? 'text-ink' : 'text-body')}>{labelOf(call)}</span>
     {hint && <span className="min-w-0 truncate font-mono text-[11.5px] text-mute-2">{hint}</span>}
+    {ms !== undefined && ms > 10_000 && <span className="shrink-0 text-mute-2">· {durationOf(ms)}</span>}
     {call.status === 'running' && <Spinner className="mt-0 size-3 shrink-0" />}
     {status && <span className={cn('inline-flex shrink-0 items-center gap-1', status[2])}><I icon={status[1]} size={12} />{status[0]}</span>}
   </span>

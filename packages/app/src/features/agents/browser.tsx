@@ -19,34 +19,29 @@ const RIPPLE_MS = 600
 const HOLD_IDLE_S = 120
 const ACTION_WORDS: Record<string, string> = { navigate: 'Opened', click: 'Clicked', fill: 'Filled in', type: 'Typed', press: 'Pressed a key', scroll: 'Scrolled', snapshot: 'Read the page', gettext: 'Read the text', url: 'Checked the address', title: 'Checked the title', screenshot: 'Took a screenshot', back: 'Went back', forward: 'Went forward', reload: 'Reloaded' }
 
-export function BrowserPip({ agent, hidden, onClose, onBrowsing }: { agent: Agent; hidden: boolean; onClose: () => void; onBrowsing: (browsing: boolean) => void }) {
+export function BrowserCard({ agent, open, onClose, onBrowsing }: { agent: Agent; open: boolean; onClose: () => void; onBrowsing: (browsing: boolean) => void }) {
   const canvas = useRef<HTMLCanvasElement>(null)
   const live = useLive({ path: livePath({ agentId: agent.id, fps: PREVIEW_FPS }), canvas })
-  const [moved, setMoved] = useState({ x: 0, y: 0 })
-  const grab = useRef<{ x: number; y: number } | null>(null)
   useEffect(() => onBrowsing(live.busy), [live.busy, onBrowsing])
   useEffect(() => () => onBrowsing(false), [onBrowsing])
   const address = addressOf(live.page.url)
+  const host = address.host.replace(/^www\./, '')
   const last = live.actions[0]
-  const doing = last ? `${ACTION_WORDS[last.action] ?? last.action}${live.page.title ? ` · ${live.page.title}` : ''}` : live.page.title || address.host
-  return <section aria-label="Browser" hidden={hidden || !live.busy} style={{ translate: `${moved.x}px ${moved.y}px` }}
-    className="absolute right-6 bottom-[104px] z-20 w-80 overflow-hidden rounded-xl bg-card shadow-[0_16px_40px_-12px_oklch(0%_0_0/.32),0_2px_6px_oklch(0%_0_0/.08)]">
-    <div className="flex h-8 cursor-grab touch-none items-center gap-2 bg-[oklch(98.4%_0_0)] pr-1 pl-2.5 active:cursor-grabbing"
-      onPointerDown={(event) => { if (event.target instanceof Element && event.target.closest('a,button')) return; event.currentTarget.setPointerCapture(event.pointerId); grab.current = { x: event.clientX - moved.x, y: event.clientY - moved.y } }}
-      onPointerMove={(event) => { if (grab.current) setMoved({ x: event.clientX - grab.current.x, y: event.clientY - grab.current.y }) }}
-      onPointerUp={() => { grab.current = null }} onPointerCancel={() => { grab.current = null }}>
-      <span aria-hidden className="grid size-4 shrink-0 place-items-center rounded-[4px] bg-ink text-[9.5px] font-bold text-white uppercase">{address.host.replace(/^www\./, '').charAt(0)}</span>
-      <span className="min-w-0 truncate text-[13px] font-medium">Browser<span className="font-normal text-mute"> · {address.host.replace(/^www\./, '')}</span></span>
-      <i aria-label="Live" className="size-1.5 shrink-0 rounded-full bg-pass" />
-      <span className="ml-auto flex gap-0.5">
-        <a href={agentPath({ agentId: agent.id, dialog: 'browser' })} aria-label="Open full size" title="Open full size" className={cn(TINY_ICON, 'size-6')}><I icon={ArrowExpand01Icon} size={14} /></a>
-        <Button type="button" variant="bare" aria-label="Close browser" title="Close" className={cn(TINY_ICON, 'size-6')} onClick={onClose}><I icon={Cancel01Icon} size={14} /></Button>
+  const doing = last ? `${ACTION_WORDS[last.action] ?? last.action}${live.page.title ? ` · ${live.page.title}` : ''}` : live.page.title || host
+  return <section aria-label="Browser" hidden={!open} className="absolute top-[56px] right-3 z-20 flex w-[360px] flex-col gap-2.5 rounded-2xl border border-hair bg-card p-4 pb-3 shadow-pop">
+    <div className="flex items-center gap-2 text-[12px]/[16px] text-mute">
+      <span className="min-w-0 truncate">Browser{live.busy && host && <span> · {host}</span>}</span>
+      {live.busy && <i aria-label="Live" className="size-1.5 shrink-0 rounded-full bg-pass" />}
+      <span className="ml-auto flex items-center gap-0.5">
+        <a href={agentPath({ agentId: agent.id, dialog: 'browser' })} aria-label="Open full size" title="Open full size" className={cn(TINY_ICON, 'size-6 text-mute hover:text-ink')}><I icon={ArrowExpand01Icon} size={14} /></a>
+        <Button type="button" variant="bare" aria-label="Close" title="Close" className={cn(TINY_ICON, 'size-6 text-mute hover:text-ink')} onClick={onClose}><I icon={Cancel01Icon} size={14} /></Button>
       </span>
     </div>
-    <canvas ref={canvas} className="block h-[158px] w-full bg-tint object-cover object-top" aria-label={`The page ${agent.name} has open: ${live.page.title}`} />
-    <div className="flex h-[34px] min-w-0 items-center gap-2 px-3 text-[12px] text-body">
-      <I icon={Cursor01Icon} size={13} className="text-mute" /><span className="truncate">{doing}</span>
+    <div className="relative overflow-hidden rounded-lg bg-tint">
+      <canvas ref={canvas} className={cn('block aspect-[16/10] w-full object-cover object-top', !live.busy && 'invisible')} aria-label={`The page ${agent.name} has open: ${live.page.title}`} />
+      {!live.busy && <p className="absolute inset-0 m-0 grid place-items-center text-[13px] text-mute">Not browsing right now</p>}
     </div>
+    {live.busy && <div className="flex min-w-0 items-center gap-2 text-[12px] text-body"><I icon={Cursor01Icon} size={13} className="text-mute" /><span className="truncate">{doing}</span></div>}
   </section>
 }
 

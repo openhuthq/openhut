@@ -32,14 +32,11 @@ export function FloatingThreads({ agent, threadId, onClose }: { agent: Agent; th
   </section>
 }
 
-export function AgentActions({ agent, threads, onBrowser }: { agent: Agent; threads?: ReactNode; onBrowser?: () => void }) {
+export function AgentActions({ agent, threads }: { agent: Agent; threads?: ReactNode }) {
   const updateAgent = useUpdateAgent(agent.id)
   const running = agent.wanted === 'running'
   const toggle = running ? 'Stop' : 'Start'
   return <>
-    {onBrowser && <Tooltip label="Browser"><Button type="button" variant="bare" className={cn(TINY_ICON, 'relative')} aria-label="Browser" onClick={onBrowser}>
-      <I icon={Globe02Icon} size={16} /><i aria-label="Live" className="absolute top-[5px] right-[5px] size-1.5 rounded-full bg-pass shadow-[0_0_0_2px_var(--card)]" />
-    </Button></Tooltip>}
     {threads}
     <Tooltip label="Setup"><a href={agentPath({ agentId: agent.id, dialog: 'setup', detail: 'general' })} aria-label={`Set up ${agent.name}`} className={TINY_ICON}><I icon={Settings02Icon} size={16} /></a></Tooltip>
     <Tooltip label={toggle}><Button type="button" variant="bare" className={TINY_ICON} aria-label={`${toggle} ${agent.name}`} disabled={!agent.canEdit || updateAgent.isPending}
