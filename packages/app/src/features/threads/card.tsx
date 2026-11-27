@@ -8,7 +8,7 @@ import { isBrand } from '@/components/brand-icons'
 import { Glyph } from '@/components/glyph'
 import { integration } from '@/features/connections/catalog'
 
-export const CardReply = createContext<(text: string) => boolean>(() => false)
+export const CardReply = createContext<((text: string) => boolean) | undefined>(undefined)
 
 const VARIANTS = { primary: 'primary', danger: 'destructive' } as const
 
@@ -58,7 +58,7 @@ export const MessageCard = createRenderer(cardCatalog, {
   Actions: ({ children }) => <div className="flex flex-wrap gap-2">{children}</div>,
   Button: ({ element: { props } }) => {
     const reply = useContext(CardReply)
-    return <Button type="button" size="sm" variant={props.style ? VARIANTS[props.style] : 'secondary'} onClick={() => reply(props.label)}>{props.label}</Button>
+    return <Button type="button" size="sm" variant={props.style ? VARIANTS[props.style] : 'secondary'} disabled={!reply} onClick={() => reply?.(props.label)}>{props.label}</Button>
   },
   LinkButton: ({ element: { props } }) => <a href={props.url} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'secondary', size: 'sm' })}>{props.label}<span className="text-[11px] text-mute">↗</span></a>,
   Connect: ({ element: { props } }) => {
