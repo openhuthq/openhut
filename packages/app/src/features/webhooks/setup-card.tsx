@@ -48,7 +48,7 @@ export function WebhookSetupCard({ agentId, card, done }: { agentId: string; car
       {card.openUrl && <a href={card.openUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'secondary', size: 'sm' })}>Open {brandWord(card.openUrl)}<span className="text-[11px] text-mute">↗</span></a>}
       {done || sent
         ? <span className="inline-flex items-center gap-1.5 text-[13px] text-ink"><I icon={CheckmarkCircle02Icon} size={16} className="animate-[pop_.45s_cubic-bezier(.2,.8,.2,1)] text-hue-green" />Done</span>
-        : <Button type="button" variant="primary" size="sm" disabled={!values.data} onClick={() => setSent(reply(doneText(card)))}>Done</Button>}
+        : <Button type="button" variant="primary" size="sm" disabled={!values.data || !reply} onClick={() => setSent(!!reply?.(doneText(card)))}>Done</Button>}
     </div>
   </div>
 }

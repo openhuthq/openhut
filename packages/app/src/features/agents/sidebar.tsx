@@ -136,7 +136,7 @@ function AgentRow({ agent, threads, active, threadId, phone }: { agent: OpenHutA
       <I icon={open ? ArrowDown01Icon : ArrowRight01Icon} size={14} />
     </Button>}
     </div>
-    {open && <div className="flex flex-col gap-px pt-0.5 pb-2.5 phone:gap-0.5 phone:pt-1.5 phone:pb-2 phone:pl-[48px]">
+    {open && <div className="relative flex flex-col gap-px pt-0.5 pb-2.5 pl-[38px] [--mark:14px] [--mark-gap:8px] before:absolute before:top-0 before:bottom-2.5 before:left-[22px] before:w-px before:bg-hair phone:gap-0.5 phone:pt-1.5 phone:pb-2 phone:pl-[48px] phone:[--mark:28px] phone:[--mark-gap:10px] phone:before:hidden">
       {more ? rows : rows.slice(0, cut === -1 ? rows.length : cut)}
       {subagents > FIRST && <Button type="button" variant="bare" onClick={() => setMore(!more)} className={cn(MORE, HOVER)}>
         {more ? 'Show less' : `Show ${subagents - FIRST} more`}
@@ -147,7 +147,7 @@ function AgentRow({ agent, threads, active, threadId, phone }: { agent: OpenHutA
   </div>
 }
 
-const MORE = 'flex h-[30px] w-full items-center justify-start rounded-lg pr-2 pl-[46px] text-[12.5px] font-normal text-mute'
+const MORE = 'flex h-[30px] w-full items-center justify-start rounded-lg pr-2 pl-[30px] text-[12.5px] phone:pl-[46px] font-normal text-mute'
 
 function lineOf({ working, waiting, activity, idle }: { working: number; waiting: number; activity: LiveAgentBoard['activity']; idle: string }) {
   if (working) return `Working on ${working} ${working === 1 ? 'task' : 'tasks'}`
@@ -159,7 +159,7 @@ function lineOf({ working, waiting, activity, idle }: { working: number; waiting
 
 const SOURCE_ICON = { app: BubbleChatIcon, webhook: WebhookIcon, routine: Clock01Icon }
 
-const ROW = 'grid h-[30px] shrink-0 grid-cols-[28px_1fr_auto] items-center gap-2.5 rounded-lg px-2 text-inherit no-underline'
+const ROW = 'grid h-[30px] shrink-0 grid-cols-[var(--mark,28px)_1fr_auto] items-center gap-(--mark-gap,10px) rounded-lg px-2 text-inherit no-underline'
 
 export function ThreadRow({ agentId, thread, active }: { agentId: string; thread: SourcedThread; active: boolean }) {
   const source = sourceOf(thread)
