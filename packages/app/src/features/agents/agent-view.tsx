@@ -3,7 +3,8 @@ import { InformationCircleIcon, MessageMultiple01Icon } from '@hugeicons/core-fr
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
-import { GLASS, HEADER_ACTION, I, ICON_BUTTON } from '@/components/kit'
+import { GLASS, I, ICON_BUTTON, TINY_ICON } from '@/components/kit'
+import { Tooltip } from '@/components/ui/tooltip'
 import { PanelThreads } from '@/features/threads/thread-list'
 import { cn } from '@/lib/utils'
 import { ErrorNote } from '@/components/error-note'
@@ -49,7 +50,7 @@ export function AgentView({ agentId, threadId, dialog, detail }: { agentId: stri
   useEffect(() => { if (!browsing) setPipClosed(false) }, [browsing])
   if (away) return <Redirect to={away} />
   if (!agent.data) return <section className="grid flex-1 place-items-center bg-card">{!gone && <ErrorNote message={agent.error?.message} />}</section>
-  const threadsToggle = <Button type="button" variant="bare" data-threads-toggle aria-label="Threads" aria-pressed={!phone && threadsOpen} onClick={() => phone ? setDetails(true) : setThreadsOpen(!threadsOpen)} className={cn(HEADER_ACTION, 'aria-pressed:bg-picked')}><I icon={MessageMultiple01Icon} size={15} />Threads</Button>
+  const threadsToggle = <Tooltip label="Threads"><Button type="button" variant="bare" data-threads-toggle aria-label="Threads" aria-pressed={!phone && threadsOpen} onClick={() => phone ? setDetails(true) : setThreadsOpen(!threadsOpen)} className={cn(TINY_ICON, 'aria-pressed:bg-picked')}><I icon={MessageMultiple01Icon} size={16} /></Button></Tooltip>
   const dialogs = <Dialogs agent={agent.data} dialog={dialog} detail={detail} />
   const actions = <AgentActions agent={agent.data} threads={threadsToggle} onBrowser={browsing && pipClosed ? () => setPipClosed(false) : undefined} />
   return <>
