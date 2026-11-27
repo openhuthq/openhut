@@ -31,7 +31,8 @@ import { deleteUpload, saveFile, threadPath, uploadFile, useClearChat, useHomeFi
 import { Notified, PLATFORM_WORD, placeName, sourceOf, startedIn, type SourcedThread } from '@/features/threads/places'
 import type { Place } from '@openhut/common/channels/channel.ts'
 import { PlaceIcon } from '@/features/routines/target-picker'
-import { WebhookSetup, WebhookSetupCard } from '@/features/webhooks/setup-card'
+import { doneText, WebhookSetup, WebhookSetupCard } from '@/features/webhooks/setup-card'
+import { saidAfter } from '@/lib/said-after'
 import { homePathsIn, linkHomeFiles, RASTER } from '@/features/threads/files'
 import { ConfirmIcon } from '@/components/confirm-button'
 import { errorUnder, legacyWork, withoutCards } from '@/features/threads/steps'
@@ -94,11 +95,12 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
   const last = shown.at(-1)
   const mine = [...shown].reverse().find((message) => message.role === 'user' && !webhookOf(message.metadata) && (z.safeParse(Authored, message.metadata).data?.author ?? me) === me)
   const watching = !busy && (live.streaming || busyAgent(live.agent)) && !shown.some((message) => message.id === (live.streaming?.turnId ?? live.agent.turnId))
+  const said = saidAfter(shown)
   const clear = agent.canEdit && chat.messages.length > 0 && !busy && !attachments.uploading && <ClearChat agent={agent} threadId={thread.id} attachments={attachments} />
-  return <ChatFiles value={files}><CardReply value={(text) => { if (!busy) send(text) }}><ChatFrame agent={agent} thread={thread} tools={<>{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={thread.readOnly ? <ContinueBar thread={thread} /> : <Composer agent={agent} threadId={thread.id} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void chat.stop()} />}>
+  return <ChatFiles value={files}><CardReply value={(text) => { if (busy) return false; send(text); return true }}><ChatFrame agent={agent} thread={thread} tools={<>{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={thread.readOnly ? <ContinueBar thread={thread} /> : <Composer agent={agent} threadId={thread.id} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void chat.stop()} />}>
     {shown.length ? <>
       <Day iso={thread.updatedAt} />
-      {shown.map((message) => <Message key={message.id} agent={agent} thread={thread} message={message} seen={message === mine} mirrors={thread.mirrorPaused || thread.readOnly ? [] : thread.mirrors ?? []} live={busy && message === last} onRetry={!busy && message === last ? () => void chat.regenerate() : undefined} />)}
+      {shown.map((message, index) => <Message key={message.id} agent={agent} thread={thread} message={message} said={(text) => said(index, text)} seen={message === mine} mirrors={thread.mirrorPaused || thread.readOnly ? [] : thread.mirrors ?? []} live={busy && message === last} onRetry={!busy && message === last ? () => void chat.regenerate() : undefined} />)}
     </> : !watching && <ChatEmpty agent={agent} />}
     {watching && <AgentReply agent={agent} threadId={thread.id} step={live.agent.step} message={{ id: live.streaming?.turnId ?? 'live', role: 'assistant', parts: live.streaming?.text ? [{ type: 'text', text: live.streaming.text }] : [] }} live />}
     {chat.status === 'submitted' && last?.role === 'user' && <AgentReply agent={agent} threadId={thread.id} message={withStream({ message: { id: 'waiting', role: 'assistant', parts: [] }, text: own ?? '' })} live />}
@@ -357,13 +359,13 @@ function useOffline(agent: Agent) {
   return home && !home.online
 }
 
-function Message({ agent, thread, message, seen, mirrors = [], live, onRetry }: { agent: Agent; thread: SourcedThread; message: AgentMessage; seen: boolean; mirrors?: Place[]; live: boolean; onRetry?: () => void }) {
+function Message({ agent, thread, message, said, seen, mirrors = [], live, onRetry }: { agent: Agent; thread: SourcedThread; message: AgentMessage; said: (text: string) => boolean; seen: boolean; mirrors?: Place[]; live: boolean; onRetry?: () => void }) {
   const webhook = webhookOf(message.metadata)
   if (webhook && !callOf(message.metadata) && message.role === 'user') return <WebhookMessage webhook={webhook} at={thread.createdAt} />
-  return message.role === 'user' ? <UserMessage message={message} mirrors={mirrors} seen={seen ? thread.id : undefined} /> : <AgentReply agent={agent} threadId={thread.id} message={message} live={live} onRetry={onRetry} />
+  return message.role === 'user' ? <UserMessage message={message} mirrors={mirrors} seen={seen ? thread.id : undefined} /> : <AgentReply agent={agent} threadId={thread.id} message={message} said={said} live={live} onRetry={onRetry} />
 }
 
-function AgentReply({ agent, threadId: liveThread, step, message, live, onRetry }: { agent: Agent; threadId?: string; step?: string; message: AgentMessage; live: boolean; onRetry?: () => void }) {
+function AgentReply({ agent, threadId: liveThread, step, message, said, live, onRetry }: { agent: Agent; threadId?: string; step?: string; message: AgentMessage; said?: (text: string) => boolean; live: boolean; onRetry?: () => void }) {
   const { agentId, threadId } = useContext(ChatFiles)
   const blocks = blocksOf(message)
   const ids = changesOf(message)
@@ -384,7 +386,7 @@ function AgentReply({ agent, threadId: liveThread, step, message, live, onRetry 
         ? <div key={index} className={cn('msg-t', live && index === blocks.length - 1 && 'caret')}><Markdown remarkPlugins={plugins} components={{ a: ChatLink, code: FileCode, pre: CodeBlock, input: TaskBox, table: WideTable }}>{live ? settled(bullets(block.text)) : bullets(block.text)}</Markdown></div>
         : hasSpec && <MessageCard key={index} spec={spec} loading={live} />)}
       {ids.length > 0 && <AskCards agent={agent} ids={ids} />}
-      {message.parts.map((part, index) => part.type === 'data-webhook-setup' && <WebhookSetupCard key={index} agentId={agentId} card={part.data} />)}
+      {message.parts.map((part, index) => part.type === 'data-webhook-setup' && <WebhookSetupCard key={index} agentId={agentId} card={part.data} done={said?.(doneText(part.data)) ?? false} />)}
       {message.parts.flatMap((part, index) => part.type === 'data-notified' ? part.data.map((each, at) => <NotifiedRow key={`${index}-${at}`} notified={each} />) : [])}
       {live && !blocks.length && !step && !work?.calls.some((call) => call.status === 'running') && <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>}
       {!live && error !== undefined && <span className="flex flex-wrap items-center gap-2 text-[13.5px] text-mute-2 italic">{error}{onRetry && <RetryButton onRetry={onRetry} />}</span>}
