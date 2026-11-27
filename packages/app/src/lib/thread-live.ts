@@ -209,7 +209,7 @@ export function useWorking(thread: string): boolean {
 }
 
 export function agentWorking(board: LiveAgentBoard | undefined): boolean {
-  return !!board?.threads.some((thread) => thread.agent.state !== 'idle')
+  return !!board && (board.threads.some((thread) => thread.agent.state !== 'idle') || board.subagents.some((child) => child.status === 'working'))
 }
 
 export function useAgentsLive(): Map<string, LiveAgentBoard> {

@@ -117,7 +117,7 @@ test('a turn that starts before the last one refetched keeps the last text until
   assert.equal(liveThreads.get('th_1').stream?.text, 'Second')
 })
 
-test('a thread is working when its own presence or the agents board says so, and the agent works only while one of its threads does', () => {
+test('a thread is working when its own presence or the agents board says so, and the agent works while one of its threads or sub-agents does', () => {
   const idle = { state: 'idle' as const }
   const working = { state: 'working' as const }
   assert.equal(busyOf({ live: { people: [], agent: idle }, board: { id: 'th_1', agent: working, typing: [] } }), true)
@@ -126,5 +126,6 @@ test('a thread is working when its own presence or the agents board says so, and
   const agent = (state: 'idle' | 'working') => ({ id: 'ag_1', activity: 'idle' as const, status: 'running' as const, health: null, subagents: [], threads: [{ id: 'th_1', agent: { state }, typing: [] }] })
   assert.equal(agentWorking(agent('working')), true)
   assert.equal(agentWorking(agent('idle')), false)
+  assert.equal(agentWorking({ ...agent('idle'), subagents: [{ id: 'sa_1', object: 'subagent' as const, title: 'Check payouts', status: 'working' as const, startedAt: '2026-11-27T10:00:00Z' }] }), true, 'a running sub-agent counts')
   assert.equal(agentWorking(undefined), false)
 })

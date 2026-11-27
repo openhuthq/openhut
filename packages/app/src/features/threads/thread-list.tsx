@@ -87,7 +87,7 @@ export function PanelThreads({ agent, threadId }: { agent: Agent; threadId: stri
       <a href={agentPath({ agentId: agent.id, dialog: 'threads' })} className="text-[12px] font-medium text-ink no-underline hover:underline">View all</a>
     </span></div>
     <ErrorNote message={threads.error?.message} />
-    <div ref={list.ref} className={cn('no-scrollbar -mx-2.5 flex min-h-0 flex-1 flex-col gap-px overflow-y-auto', list.more && 'fade-b-lg')}>
+    <div ref={list.ref} className={cn('no-scrollbar -mx-2.5 flex min-h-0 flex-1 flex-col gap-px overflow-y-auto', list.more && '[mask-image:linear-gradient(to_bottom,#000_calc(100%-56px),transparent)]')}>
       {mine.map((thread) => <ThreadRow key={thread.id} agentId={agent.id} thread={thread} active={thread.id === open} />)}
     </div>
   </div>

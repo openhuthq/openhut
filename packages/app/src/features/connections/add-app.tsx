@@ -31,7 +31,7 @@ export function AddAppDialog({ onClose }: { onClose: () => void }) {
       <I icon={Search01Icon} size={16} />
       <Input type="search" autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search apps" aria-label="Search apps" className="h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-[14px] focus:border-0" />
     </label>
-    <div ref={list.ref} className={cn('no-scrollbar min-h-0 flex-1 overflow-y-auto pb-3', list.more && 'fade-b-lg')}>
+    <div ref={list.ref} className={cn('no-scrollbar min-h-0 flex-1 overflow-y-auto pb-3', list.more && '[mask-image:linear-gradient(to_bottom,#000_calc(100%-32px),transparent)]')}>
       {items.map((item) => <div key={item.name} className="flex min-h-[54px] items-center gap-3.5">
         <Glyph name={item.name} size={28} />
         <span className="grid min-w-0 flex-1 gap-0.5"><b className="truncate text-[14px] font-medium">{item.title}</b><small className="truncate text-[12.5px] text-mute">{item.short}</small></span>
