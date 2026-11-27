@@ -63,7 +63,7 @@ export function CallCardMessage({ call, card, name, text }: { call: Call; card: 
   return <div className="w-fit max-w-[440px] min-w-[280px] rounded-xl border border-hair bg-card px-3.5 py-3 text-[13.5px]/[1.5]">
     <CallCardBody card={card} name={name} seen={call.seen} calls={call.calls}>
       <span className="mt-1 flex flex-wrap items-center gap-x-3">
-        {card.link && <a href={card.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-[13.5px] text-ink no-underline hover:underline">Open run<I icon={ArrowUpRight01Icon} size={12} /></a>}
+        {card.link && <a href={card.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-[13.5px] text-mute underline underline-offset-2 hover:text-ink">Open run<I icon={ArrowUpRight01Icon} size={12} /></a>}
         <Button type="button" variant="bare" className="h-auto cursor-pointer p-0 text-[13.5px] text-mute underline underline-offset-2 hover:text-ink" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Hide payload' : 'Show payload'}</Button>
       </span>
       {open && <pre className="m-0 mt-1 max-h-[320px] overflow-auto rounded-lg bg-soft p-3 font-mono text-[12px]/[1.5] whitespace-pre-wrap text-body">{payloadOf(text)}</pre>}
