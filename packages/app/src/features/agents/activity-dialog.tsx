@@ -1,11 +1,9 @@
-import { AlertCircleIcon, Cancel01Icon, CancelCircleIcon, CheckmarkCircle02Icon, HourglassIcon, SecurityCheckIcon } from '@hugeicons/core-free-icons'
+import { AlertCircleIcon, CancelCircleIcon, CheckmarkCircle02Icon, HourglassIcon, SecurityCheckIcon } from '@hugeicons/core-free-icons'
 import type { ConnectionEvent } from '@openhut/common/connections/connection.ts'
 import type { Agent } from '@openhut/common/agents/agent.ts'
-import { Button } from '@/components/ui/button'
-import { DialogTitle } from '@/components/ui/dialog'
 import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
-import { DialogCard, I, Loading } from '@/components/kit'
+import { I, Loading } from '@/components/kit'
 import { Quiet } from '@/features/agents/request-card'
 import { connectionBrand } from '@/features/connections/catalog'
 import { useAgentEvents, useConnections } from '@/features/connections/api'
@@ -30,15 +28,10 @@ function outcomeOf(event: ConnectionEvent) {
   return { icon: SecurityCheckIcon, hue: 'text-hue-amber', word: `${event.approvedBy} said yes${event.outcome === 'failed' ? ', then it failed' : ''}` }
 }
 
-export function ActivityDialog({ agent, onClose }: { agent: Agent; onClose: () => void }) {
+export function ActivityList({ agent }: { agent: Agent }) {
   const events = useAgentEvents(agent.id)
   const connections = useConnections().data ?? []
-  return <DialogCard onClose={onClose} className="max-h-[min(640px,calc(100vh-48px))] w-[540px] gap-0 overflow-hidden p-0">
-    <div className="flex items-center gap-3 px-6 pt-6 pb-4">
-      <DialogTitle className="min-w-0 flex-1 text-[15px]/[22px] font-medium">Activity</DialogTitle>
-      <Button type="button" size="icon-sm" aria-label="Close" title="Close" tabIndex={-1} className="-mr-2" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
-    </div>
-    <div className="flex min-h-0 flex-1 flex-col overflow-auto px-6 pb-6">
+  return <>
       <ErrorNote message={events.error?.message} />
       {!events.data && !events.error && <Loading />}
       {events.data && (events.data.length
@@ -54,6 +47,5 @@ export function ActivityDialog({ agent, onClose }: { agent: Agent; onClose: () =
           </div>
         })}</div>
         : <Quiet agent={agent} line={`All quiet. ${agent.name} hasn't used any apps yet.`} />)}
-    </div>
-  </DialogCard>
+  </>
 }
