@@ -53,6 +53,11 @@ export interface Database {
     state: string; actor: string; actor_id: string; kind: string; name: string; existing_id: string | null; data: string
     status: 'pending' | 'working' | 'done' | 'failed'; connection_id: Generated<string | null>; error: Generated<string | null>; expires_at: Timestamp; created_at: Generated<Date>
   }
+  artifact: {
+    id: string; agent_id: string; created_by: string; title: string; titled: Generated<boolean>; access: Generated<'private' | 'team' | 'link'>; people: Generated<string[]>; entry: Generated<string>
+    share_token: string | null; ver: Generated<number>; created_at: Generated<Date>; updated_at: Generated<Date>
+  }
+  artifact_file: { artifact_id: string; path: string; type: string; body: Uint8Array }
   ask: {
     id: string; agent_id: string; kind: string; input: string; title: string; why: string; origin: string
     status: Generated<'open' | 'done' | 'declined' | 'expired'>; note: string | null; reply: string | null; told: Generated<boolean>; created_at: Generated<Date>

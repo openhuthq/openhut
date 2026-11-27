@@ -1,17 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Invite, Person, Session, Setup } from '@openhut/common/team/team.ts'
 import * as z from 'zod/mini'
+import { inviteKey, SETUP_KEY } from '@/lib/query-keys'
 import { request } from '@/lib/api-client'
 import { navigate } from '@/lib/router'
 
 const Reset = z.object({ object: z.literal('password_reset') })
 
 export function useSetup() {
-  return useQuery({ queryKey: ['setup'], queryFn: () => request({ schema: Setup, path: '/api/setup' }) })
+  return useQuery({ queryKey: SETUP_KEY, queryFn: () => request({ schema: Setup, path: '/api/setup' }) })
 }
 
 export function useInviteLink(token: string) {
-  return useQuery({ queryKey: ['invite', token], queryFn: () => request({ schema: Invite, path: `/api/invites/${encodeURIComponent(token)}` }), retry: false })
+  return useQuery({ queryKey: inviteKey(token), queryFn: () => request({ schema: Invite, path: `/api/invites/${encodeURIComponent(token)}` }), retry: false })
 }
 
 function useSignedIn<T>(mutationFn: (body: T) => Promise<unknown>) {

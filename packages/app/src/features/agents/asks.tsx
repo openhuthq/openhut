@@ -1,7 +1,6 @@
 import { Button } from '@/components/ui/button'
-import { agentPath } from '@/app/routes'
-import type { AskExtra } from '@/features/asks/custom'
-import { lineDiff, needsQrScan } from '@/features/asks/extras'
+import { agentPath } from '@/config/paths'
+import { lineDiff, needsQrScan, type AskExtra } from '@/lib/asks'
 import { navigate } from '@/lib/router'
 
 const InstructionsDiff: AskExtra = ({ agent, ask }) => {

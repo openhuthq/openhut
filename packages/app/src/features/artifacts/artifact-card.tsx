@@ -4,13 +4,13 @@ import { ArrowRight01Icon, BrowserIcon, Download04Icon, File01Icon, File02Icon, 
 import type { IconSvgElement } from '@hugeicons/react'
 import { I } from '@/components/kit'
 import { Button } from '@/components/ui/button'
-import { artifactPath } from '@/app/routes'
+import { artifactPath } from '@/config/paths'
 import { request, RequestError } from '@/lib/api-client'
 import { PHONE } from '@/lib/media'
 import { toastError } from '@/lib/toast'
 import { usePath } from '@/lib/router'
 import { cn } from '@/lib/utils'
-import { ArtifactView, metaOf, type ArtifactAccess, type ArtifactCard, type ArtifactKind } from '@/features/artifacts/artifact'
+import { ArtifactCard, ArtifactView, metaOf, type ArtifactAccess, type ArtifactKind } from '@/features/artifacts/artifact'
 
 const KIND: Record<ArtifactKind, { icon: IconSvgElement; tone: string }> = {
   page: { icon: BrowserIcon, tone: 'text-[oklch(57%_.14_255)] bg-[color-mix(in_oklch,oklch(57%_.14_255)_13%,#fff)]' },
@@ -39,7 +39,12 @@ export function KindTile({ kind, title, small, large }: { kind: ArtifactKind; ti
   return <span className={cn('grid shrink-0 place-items-center', small && 'size-[22px] rounded-md', large && 'size-10 rounded-[10px]', !small && !large && 'size-9 rounded-[9px]', KIND[kind].tone)}><I icon={icon} size={small ? 13 : 18} /></span>
 }
 
-export function ArtifactCardLink({ agentId, threadId, card }: { agentId: string; threadId: string; card: ArtifactCard }) {
+export function ArtifactCardLink({ agentId, threadId, data }: { agentId: string; threadId: string; data: unknown }) {
+  const parsed = ArtifactCard.safeParse(data)
+  return parsed.success ? <CardLink agentId={agentId} threadId={threadId} card={parsed.data} /> : null
+}
+
+function CardLink({ agentId, threadId, card }: { agentId: string; threadId: string; card: ArtifactCard }) {
   const client = useQueryClient()
   const known = useQuery({ queryKey: artifactKey(card.id), queryFn: () => fetchArtifact(card.id), enabled: false }).data
   const shown = { ...card, title: known?.title ?? card.title, access: known?.access ?? card.access }

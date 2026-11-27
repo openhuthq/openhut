@@ -1,0 +1,93 @@
+import { useEffect, useRef, useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Deleted } from '@openhut/common/api.ts'
+import { Connection, ConnectionAuthorization, type CreateConnection, type CreateConnectionAuthorization, type ReconnectConnection } from '@openhut/common/connections/connection.ts'
+import { request, RequestError } from '@/lib/api-client'
+import { connectionKey, CONNECTIONS_KEY, connectionToolsKey, GRANTS_KEY } from '@/lib/query-keys'
+import { navigate } from '@/lib/router'
+
+const DELETED_CONNECTION = Deleted('connection')
+
+export function useReconnect(connection: Connection) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (body: ReconnectConnection) => request({ schema: Connection, path: `/api/connections/${encodeURIComponent(connection.id)}`, method: 'PATCH', body }),
+    onSuccess: () => Promise.all([CONNECTIONS_KEY, connectionToolsKey(connection.id)].map((queryKey) => client.invalidateQueries({ queryKey }))),
+  })
+}
+
+export function useCreateConnection() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (body: CreateConnection) => request({ schema: Connection, path: '/api/connections', method: 'POST', body }),
+    onSuccess: (connection) => {
+      void client.invalidateQueries({ queryKey: CONNECTIONS_KEY })
+      client.setQueryData(connectionKey(connection.id), connection)
+      navigate(`/connections/${connection.id}?connected=1`, true)
+    },
+  })
+}
+
+const SIGN_IN_POLL_MS = 1500
+const SIGN_IN_WAIT_MS = 15 * 60_000
+const CLOSED_GRACE_MS = 4000
+
+export function openSignInTab(): Window | null {
+  const tab = window.open('', '_blank')
+  if (tab) tab.opener = null
+  return tab
+}
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+export function useAuthorizeConnection({ stay = false }: { stay?: boolean } = {}) {
+  const client = useQueryClient()
+  const live = useRef(true)
+  const [url, setUrl] = useState<string>()
+  useEffect(() => {
+    live.current = true
+    return () => { live.current = false }
+  }, [])
+  const mutation = useMutation({
+    mutationFn: async ({ tab, ...body }: CreateConnectionAuthorization & { tab: Window | null }) => {
+      const started = await request({ schema: ConnectionAuthorization, path: '/api/connection-authorizations', method: 'POST', body }).catch((err: unknown) => {
+        tab?.close()
+        throw err
+      })
+      setUrl(started.authorizationUrl)
+      if (tab && !tab.closed) tab.location.href = started.authorizationUrl
+      else window.open(started.authorizationUrl, '_blank', 'noopener')
+      let closedAt: number | undefined
+      for (let waited = 0; live.current && waited < SIGN_IN_WAIT_MS; waited += SIGN_IN_POLL_MS) {
+        await sleep(SIGN_IN_POLL_MS)
+        const now = await request({ schema: ConnectionAuthorization, path: `/api/connection-authorizations/${encodeURIComponent(started.id)}` }).catch((err: unknown) => {
+          if (err instanceof RequestError && err.status < 500) throw err
+          return undefined
+        })
+        if (now?.status === 'failed') throw new Error(now.error ?? 'The sign-in didn’t finish. Try again.')
+        if (now?.status === 'done') return now
+        if (tab?.closed) closedAt ??= Date.now()
+        if (closedAt && Date.now() - closedAt > CLOSED_GRACE_MS) throw new Error('The sign-in tab was closed before it finished. Sign in again.')
+      }
+      return null
+    },
+    onSuccess: (done) => {
+      if (!done?.connectionId) return
+      void client.invalidateQueries({ queryKey: CONNECTIONS_KEY })
+      if (stay) return
+      navigate(`/connections/${done.connectionId}?connected=1`, true)
+    },
+  })
+  return { ...mutation, url }
+}
+
+export function useDeleteConnection(connection: Connection) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => request({ schema: DELETED_CONNECTION, path: `/api/connections/${encodeURIComponent(connection.id)}`, method: 'DELETE' }),
+    onSuccess: () => {
+      navigate('/connections')
+      client.setQueryData<Connection[]>(CONNECTIONS_KEY, (connections) => connections?.filter((each) => each.id !== connection.id))
+      void client.invalidateQueries({ queryKey: GRANTS_KEY })
+    },
+  })
+}

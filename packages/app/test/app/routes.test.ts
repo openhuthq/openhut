@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { agentPath, artifactPath, goneAgentPath, routeOf, threadRoute } from '../../src/app/routes.ts'
+import { routeOf } from '../../src/app/routes.ts'
+import { agentPath, artifactPath, goneAgentPath, threadRoute } from '../../src/config/paths.ts'
 
 test('every screen has one path and the dialog lives in it', () => {
   assert.deepEqual(routeOf('/'), { page: 'home', adding: false })

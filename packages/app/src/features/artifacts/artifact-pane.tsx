@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent, type PointerEvent } from 'react'
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ComponentType, type CSSProperties, type FormEvent, type KeyboardEvent, type PointerEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as z from 'zod/mini'
 import { ArrowExpand01Icon, ArrowLeft01Icon, ArrowShrink01Icon, Cancel01Icon, Copy01Icon, Delete02Icon, LinkSquare02Icon, MoreHorizontalIcon, Share03Icon } from '@hugeicons/core-free-icons'
@@ -14,9 +14,8 @@ import { ConfirmPills, useConfirming } from '@/components/confirm-button'
 import { ErrorNote } from '@/components/error-note'
 import { PersonFace } from '@/components/custom/person-face'
 import { I } from '@/components/kit'
-import { Face } from '@/features/agents/face'
-import { usePeople } from '@/features/people/api'
-import { ChatMarkdown } from '@/features/threads/chat'
+import { Face } from '@/components/agent-face'
+import { usePeople } from '@/lib/queries/people'
 import { request, RequestError } from '@/lib/api-client'
 import { openhut } from '@/lib/openhut'
 import { copyText } from '@/lib/clipboard'
@@ -25,6 +24,8 @@ import { toast, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { ACCESS_WORD, ArtifactView, DOCK_FROM, keptSrc, paneWidth, sizeOf, type ArtifactAccess, type ShownSrc } from '@/features/artifacts/artifact'
 import { ACCESS_ICON, artifactKey, fetchArtifact, KindTile, retryUnlessGone } from '@/features/artifacts/artifact-card'
+
+export const NotesMarkdown = createContext<ComponentType<{ text: string }>>(({ text }) => <p className="m-0 whitespace-pre-wrap">{text}</p>)
 
 const SPLIT_KEY = 'openhut.artifactSplit'
 const STEP = 24
@@ -176,6 +177,7 @@ export function Viewer({ view }: { view: Pick<ArtifactView, 'id' | 'kind' | 'src
 }
 
 function Notes({ src }: { src: string }) {
+  const ChatMarkdown = useContext(NotesMarkdown)
   const text = useQuery({ queryKey: ['artifact-text', src], queryFn: async () => {
     const response = await openhut.fetch({ path: src })
     if (!response.ok) throw new Error('These notes didn’t load. Try again.')
