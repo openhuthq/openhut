@@ -1,13 +1,17 @@
 import { createContext, useContext, type FormEvent, type ReactNode } from 'react'
+import { Checkbox as CheckboxPrimitive } from '@base-ui/react/checkbox'
 
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
-import { ArrowLeft01Icon, Cancel01Icon, Clock01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
-import { Button } from '@/components/ui/button'
+import { ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, Clock01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { Meter } from '@/components/ui/meter'
 import { Spinner } from '@/components/ui/spinner'
 import { Glyph } from '@/components/glyph'
+import { Face } from '@/components/agent-face'
 import type { BrandName } from '@/components/brand-icons'
+import { open } from '@/lib/router'
 import { cn } from '@/lib/utils'
 
 const InWindow = createContext(false)
@@ -23,6 +27,10 @@ export const PILL = 'h-[26px] rounded-full px-2.5 text-[12px] font-normal'
 export const TINY_ICON = 'grid size-7 shrink-0 place-items-center rounded-md border-0 bg-transparent p-0 text-ink hover:bg-hover disabled:opacity-50'
 export const ICON_BUTTON = 'grid size-8 shrink-0 place-items-center rounded-lg border-0 bg-transparent p-0 text-body no-underline shadow-none outline-offset-0 hover:bg-hover hover:text-ink'
 export const HINT = 'm-0 text-[12px]/[16px] text-mute [&_b]:font-medium [&_b]:text-body [&_code]:font-mono [&_code]:text-[11.5px] [&_code]:text-ink'
+
+export const FIELD_MENU = 'w-(--anchor-width) min-w-(--anchor-width)'
+
+export const SOFT_TRIGGER = cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'min-w-[136px] max-w-full justify-between')
 
 export function I({ icon, size = 16, className }: { icon: IconSvgElement; size?: number; className?: string }) {
   return <HugeiconsIcon icon={icon} size={size} strokeWidth={1.6} className={cn('shrink-0', className)} aria-hidden="true" />
@@ -139,4 +147,74 @@ export function Dots() {
 
 export function Loading() {
   return <p role="status" className="m-0 flex items-center gap-2 p-5 text-[13px] text-mute"><Spinner />Loading…</p>
+}
+
+export function Intro({ children }: { children: ReactNode }) {
+  return <p className="m-0 -mb-[30px] px-2.5 text-[13px]/[18px] text-mute">{children}</p>
+}
+
+export function ListNote({ children }: { children: ReactNode }) {
+  return <p className="m-0 -mt-1 px-2.5 text-[12px]/[16px] text-mute">{children}</p>
+}
+
+const SETTINGS_ROW = 'flex min-h-12 w-full items-start gap-4 rounded-lg! border-0 bg-transparent px-2.5 py-[9px] text-left text-ink no-underline'
+
+const TOP = 'flex max-h-[34px] shrink-0 items-center self-stretch'
+
+export function Row({ icon, title, note, href, onClick, disabled, children }: { icon: ReactNode; title: ReactNode; note?: ReactNode; href?: string; onClick?: () => void; disabled?: boolean; children?: ReactNode }) {
+  const body = <>
+    <span className={cn(TOP, 'w-6 justify-center')}>{icon}</span>
+    <span className="flex min-w-0 flex-1 flex-col self-center"><span className="truncate text-[13px]/[18px]">{title}</span>{note && <span className="text-[12px]/[16px] text-pretty text-mute">{note}</span>}</span>
+    {children && <span className={cn(TOP, 'gap-2 text-[13px]')}>{children}</span>}
+  </>
+  if (href) return <a href={href} {...href.startsWith('http') && { target: '_blank', rel: 'noreferrer' }} className={cn(SETTINGS_ROW, 'cursor-pointer hover:bg-hover focus-visible:bg-hover')}>{body}</a>
+  if (onClick) return <Button type="button" variant="bare" disabled={disabled} className={cn(SETTINGS_ROW, 'not-disabled:hover:bg-hover')} onClick={onClick}>{body}</Button>
+  return <div className={SETTINGS_ROW}>{body}</div>
+}
+
+export function Rows({ children }: { children: ReactNode }) {
+  return <div className="flex flex-col gap-0.5 empty:hidden phone:rounded-2xl phone:bg-card phone:p-1">{children}</div>
+}
+
+export function SubPage({ title, back, children }: { title: string; back: string; children: ReactNode }) {
+  return <div className="flex flex-col gap-4">
+    <div className="-mt-1 flex items-center gap-1"><Button type="button" data-back variant="bare" className={ICON_BUTTON} aria-label="Back" title="Back" onClick={() => open(back)}><I icon={ArrowLeft01Icon} size={16} /></Button><span className="text-[14px] font-medium">{title}</span></div>
+    {children}
+  </div>
+}
+
+export function Chevron() {
+  return <I icon={ArrowRight01Icon} size={16} className="-mr-[5px] text-mute" />
+}
+
+export function CardTitle({ children }: { children: ReactNode }) {
+  return <DialogTitle className="text-[15px]/[22px] font-medium">{children}</DialogTitle>
+}
+
+const MARKS = { done: <I icon={Tick02Icon} size={12} />, now: <i className="size-2 animate-pulse rounded-full bg-ink" />, failed: <i className="size-2 rounded-full bg-fail" />, next: null }
+
+export function Progress({ rows }: { rows: [string, string, 'done' | 'now' | 'next' | 'failed', number?][] }) {
+  return <div className="flex flex-col gap-3">{rows.map(([label, note, state, fraction]) => <div key={label} className="flex flex-col gap-2">
+    <div className={cn('flex items-center gap-2.5 text-sm', state === 'next' && 'text-mute-2', state === 'now' && 'font-medium', state === 'failed' && 'font-medium text-fail')}>
+      <span className={cn('grid size-5 place-items-center rounded-full', state === 'done' ? 'bg-success-subtle text-success-foreground' : 'bg-soft')}>{MARKS[state]}</span>
+      {label}<span className={cn('ml-auto whitespace-nowrap text-right font-mono text-xs tabular-nums', state === 'failed' ? 'text-fail' : 'text-mute')}>{note}</span>
+    </div>
+    {state === 'now' && fraction !== undefined && <Meter className="ml-[30px]" value={Math.round(fraction * 100)} aria-label={label} />}
+  </div>)}</div>
+}
+
+export function Check({ checked, disabled, onChange, children }: { checked: boolean; disabled?: boolean; onChange: () => void; children: ReactNode }) {
+  return <label className={cn('flex items-center gap-2.5 rounded-lg px-2 py-1.5', disabled ? 'opacity-50' : 'cursor-pointer hover:bg-tint')}>
+    <CheckboxPrimitive.Root checked={checked} disabled={disabled} onCheckedChange={onChange} className="grid size-4 shrink-0 place-items-center rounded-[4px] border border-mid bg-card p-0 data-checked:border-ink data-checked:bg-ink">
+      <CheckboxPrimitive.Indicator className="flex text-white"><I icon={Tick02Icon} size={11} /></CheckboxPrimitive.Indicator>
+    </CheckboxPrimitive.Root>
+    {children}
+  </label>
+}
+
+export function AgentCheck({ agent, checked, disabled, onChange }: { agent: { id: string; name: string; instructions: string }; checked: boolean; disabled?: boolean; onChange: () => void }) {
+  return <Check checked={checked} disabled={disabled} onChange={onChange}>
+    <Face agent={agent} size={28} />
+    <span className="grid min-w-0 leading-tight"><span className="text-[13px] font-medium">{agent.name}</span><span className="truncate text-[11.5px] text-mute">{agent.instructions.split('\n')[0] || 'No instructions yet'}</span></span>
+  </Check>
 }

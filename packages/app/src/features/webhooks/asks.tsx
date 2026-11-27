@@ -1,8 +1,7 @@
 import { CopyButton } from '@/components/copy-button'
-import { Details } from '@/features/agents/request-card'
-import type { AskExtra } from '@/features/asks/custom'
-import { webhookOf } from '@/features/asks/extras'
-import { useWebhooks } from '@/features/webhooks/api'
+import { Details } from '@/components/request-card'
+import { webhookOf, type AskExtra } from '@/lib/asks'
+import { useWebhooks } from '@/lib/queries/webhooks'
 
 const AddressAndSecret: AskExtra = ({ agent, ask }) => {
   const webhooks = useWebhooks(agent.id, agent.canEdit && ask.status === 'done').data ?? []
