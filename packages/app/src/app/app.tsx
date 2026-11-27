@@ -6,6 +6,7 @@ import { useMe } from '@/features/people/api'
 import { SettingsView } from '@/features/settings/settings-view'
 import { navigate, Redirect, usePath } from '@/lib/router'
 import { RequestError } from '@/lib/api-client'
+import { SharePage } from '@/app/share-page'
 import { InvitePage, ResetPage, SetupPage, SignInPage } from '@/features/auth/pages'
 
 type Background = { path: string; route: ShellRoute }
@@ -15,6 +16,7 @@ export function App() {
   if (path === '/setup') return <SetupPage />
   if (path === '/login') return <SignInPage />
   if (path === '/reset') return <ResetPage />
+  if (path.startsWith('/share/')) return <SharePage token={decodeURIComponent(path.slice('/share/'.length))} />
   if (path.startsWith('/invite/')) return <InvitePage token={decodeURIComponent(path.slice('/invite/'.length))} />
   return <SignedIn path={path} />
 }

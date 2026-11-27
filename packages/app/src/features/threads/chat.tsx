@@ -54,8 +54,10 @@ import { LiveTitle, PresenceFaces, SeenBy, TypingNow } from '@/features/threads/
 import { CallText, webhookOf, WebhookMessage } from '@/features/webhooks/message'
 import { callOf } from '@/features/webhooks/call'
 import { CallCardMessage } from '@/features/webhooks/call-card'
+import { ArtifactCard } from '@/features/artifacts/artifact'
+import { ArtifactCardLink } from '@/features/artifacts/artifact-card'
 
-type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; work: Work; spec: SpecDataPart; asks: string[]; notified: Notified; 'webhook-setup': WebhookSetup; step: Record<string, never> }>
+type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; work: Work; spec: SpecDataPart; asks: string[]; notified: Notified; 'webhook-setup': WebhookSetup; artifact: ArtifactCard; step: Record<string, never> }>
 type AgentPart = AgentMessage['parts'][number]
 type Attachment = { key: string; name: string; image: boolean; thumb?: string; file?: ChatFile }
 
@@ -374,6 +376,7 @@ function AgentReply({ agent, threadId: liveThread, step, message, said, live, on
         : hasSpec && <MessageCard key={index} spec={spec} loading={live} />)}
       {ids.length > 0 && <AskCards agent={agent} ids={ids} />}
       {message.parts.map((part, index) => part.type === 'data-webhook-setup' && <WebhookSetupCard key={index} agentId={agentId} card={part.data} done={said?.(doneText(part.data)) ?? false} />)}
+      {message.parts.map((part, index) => part.type === 'data-artifact' && <ArtifactCardLink key={index} agentId={agentId} threadId={threadId} card={part.data} />)}
       {message.parts.flatMap((part, index) => part.type === 'data-notified' ? part.data.map((each, at) => <NotifiedRow key={`${index}-${at}`} notified={each} />) : [])}
       {live && !blocks.length && !step && !work?.calls.some((call) => call.status === 'running') && <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>}
       {!live && error !== undefined && <span className="flex flex-wrap items-center gap-2 text-[13.5px] text-mute-2 italic">{error}{onRetry && <RetryButton onRetry={onRetry} />}</span>}
@@ -466,6 +469,10 @@ function workOf(message: AgentMessage): Work | undefined {
   return legacyWork({ events: message.parts.flatMap((part) => part.type === 'data-tool' ? [part.data] : []), calls: message.parts.flatMap((part) => part.type === 'data-calls' ? part.data : []) })
 }
 
+export function ChatMarkdown({ text }: { text: string }) {
+  return <div className="msg-t"><Markdown remarkPlugins={[remarkGfm]} components={{ a: ChatLink, pre: CodeBlock, input: TaskBox, table: WideTable }}>{bullets(text)}</Markdown></div>
+}
+
 export function ChatLink({ href, children }: { href?: string; children?: ReactNode }) {
   const { save } = useContext(ChatFiles)
   const path = href === undefined ? undefined : homeFile(href)
@@ -541,6 +548,7 @@ function uiMessageOf(message: ChatMessage): AgentMessage {
     if (part.type === 'data-calls') return [{ type: 'data-calls', data: z.safeParse(z.array(ChatCall), part.data).data ?? [] }]
     if (part.type === 'data-asks' || part.type === 'data-changes') return [{ type: 'data-asks', data: z.safeParse(z.array(z.string()), part.data).data ?? [] }]
     if (part.type === 'data-webhook-setup') return z.safeParse(WebhookSetup, part.data).data ? [{ type: 'data-webhook-setup', data: z.parse(WebhookSetup, part.data) }] : []
+    if (part.type === 'data-artifact') return z.safeParse(ArtifactCard, part.data).data ? [{ type: 'data-artifact', data: z.parse(ArtifactCard, part.data) }] : []
     if (part.type === 'data-notified') return z.safeParse(Notified, part.data).data ? [{ type: 'data-notified', data: z.parse(Notified, part.data) }] : []
     if (part.type === 'data-spec') return [{ type: 'data-spec', data: part.data as SpecDataPart }]
     if (part.type === 'data-step') return [{ type: 'data-step', data: {} }]

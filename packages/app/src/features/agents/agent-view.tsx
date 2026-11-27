@@ -9,7 +9,8 @@ import { PanelThreads } from '@/features/threads/thread-list'
 import { cn } from '@/lib/utils'
 import { ErrorNote } from '@/components/error-note'
 import { useQueryClient } from '@tanstack/react-query'
-import { AGENT_DIALOGS, agentPath, goneAgentPath, type AgentDialog } from '@/app/routes'
+import { AGENT_DIALOGS, agentPath, goneAgentPath, threadRoute, type AgentDialog } from '@/app/routes'
+import { ArtifactDock } from '@/features/artifacts/artifact-pane'
 import { useAgent, useAgents } from '@/features/agents/api'
 import { BrowserCard, BrowserDialog } from '@/features/agents/browser'
 import { ChannelDialog } from '@/features/agents/channels'
@@ -29,7 +30,7 @@ import { navigate, open, Redirect, useOpen } from '@/lib/router'
 import { SetupDialog } from '@/features/agents/setup-dialog'
 import { AddAppDialog } from '@/features/connections/add-app'
 
-export function AgentView({ agentId, threadId, dialog, detail }: { agentId: string; threadId?: string; dialog: AgentDialog | undefined; detail: string | undefined }) {
+export function AgentView({ agentId, threadId, artifactId, dialog, detail }: { agentId: string; threadId?: string; artifactId?: string; dialog: AgentDialog | undefined; detail: string | undefined }) {
   const agent = useAgent(agentId)
   const agents = useAgents()
   const client = useQueryClient()
@@ -40,12 +41,19 @@ export function AgentView({ agentId, threadId, dialog, detail }: { agentId: stri
   const moved = gone && !!agents.data && !agents.isFetching && !away
   useEffect(() => { if (moved) void refetch() }, [moved, agents.dataUpdatedAt, refetch])
   const phone = useMedia(PHONE)
-  const [side, setSide] = useState(savedSide)
-  useEffect(() => saveSide(side), [side])
+  const [picked, setSide] = useState(savedSide)
+  useEffect(() => saveSide(picked), [picked])
+  useEffect(() => { if (artifactId) setSide(null) }, [artifactId])
+  const side: Side = artifactId ? 'artifact' : picked
+  const [row, setRow] = useState<HTMLDivElement | null>(null)
+  const leave = () => navigate(threadRoute({ agentId, threadId: threadId ?? agentId }))
   const [details, setDetails] = useState(false)
   const [browsing, setBrowsing] = useState(false)
   useEffect(() => { if (browsing) setSide((open) => open ?? 'browser') }, [browsing])
-  const flip = (card: Side) => setSide(side === card ? null : card)
+  const flip = (card: Side) => {
+    if (artifactId) leave()
+    setSide(side === card ? null : card)
+  }
   if (away) return <Redirect to={away} />
   if (!agent.data) return <section className="grid flex-1 place-items-center bg-card">{!gone && <ErrorNote message={agent.error?.message} />}</section>
   const threadsToggle = <Tooltip label="Threads"><Button type="button" variant="bare" data-threads-toggle aria-label="Threads" aria-pressed={!phone && side === 'threads'} onClick={() => phone ? setDetails(true) : flip('threads')} className={cn(TINY_ICON, 'aria-pressed:bg-picked')}><I icon={MessageMultiple01Icon} size={16} /></Button></Tooltip>
@@ -55,12 +63,15 @@ export function AgentView({ agentId, threadId, dialog, detail }: { agentId: stri
   const actions = <AgentActions agent={agent.data} threads={<>{browserToggle}{threadsToggle}</>} />
   return <>
     <SyncFace agent={agent.data} />
-    <div className="group/chat relative flex min-w-0 flex-1" data-threads={!phone && side ? '' : undefined}>
+    <div ref={setRow} className="relative flex min-w-0 flex-1">
+    <div className="group/chat relative flex min-w-0 flex-1" data-threads={!phone && (side === 'threads' || side === 'browser') ? '' : undefined}>
       <Chat key={threadId} agent={agent.data} threadId={threadId ?? agent.data.id} actions={actions}
         tools={phone && <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Details" title="Details" onClick={() => setDetails(true)}><I icon={InformationCircleIcon} size={20} /></Button>}
         onTitle={phone ? () => setDetails(true) : undefined} />
       {!phone && side === 'threads' && <FloatingThreads agent={agent.data} threadId={threadId} onClose={() => setSide(null)} />}
       {hasBrowser && dialog !== 'browser' && <BrowserCard agent={agent.data} open={side === 'browser'} onClose={() => setSide(null)} onBrowsing={setBrowsing} />}
+    </div>
+    {artifactId && <ArtifactDock key={artifactId} agent={agent.data} artifactId={artifactId} row={row} onClose={leave} />}
     </div>
     {phone && details && <Dialog size="window" label={agent.data.name} className="phone:bg-sidebar" onClose={() => setDetails(false)}>
       <div className={cn('flex flex-1 flex-col p-6', GLASS)}><PanelThreads agent={agent.data} threadId={threadId} /></div>
@@ -102,7 +113,7 @@ function SetupChild({ agent }: { agent: Agent }) {
   return dialog ? <Dialogs agent={agent} dialog={dialog} detail={detail} onClose={back} /> : null
 }
 
-type Side = 'threads' | 'browser' | null
+type Side = 'threads' | 'browser' | 'artifact' | null
 const SIDE_KEY = 'openhut.side'
 
 function savedSide(): Side {
