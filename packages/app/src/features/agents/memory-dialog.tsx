@@ -5,9 +5,9 @@ import type { Memory, MemoryTarget } from '@openhut/common/agents/memory.ts'
 import { Button } from '@/components/ui/button'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
-import { EmptyScene } from '@/components/empty-art'
+import { EmptyScene, SceneLoading } from '@/components/empty-art'
 import { ErrorNote } from '@/components/error-note'
-import { I, Loading, PILL } from '@/components/kit'
+import { I, PILL } from '@/components/kit'
 import { useMemory, useUpdateMemory } from '@/features/agents/api'
 import type { Crumb } from '@/features/agents/skills-dialog'
 import { formValues } from '@/lib/form'
@@ -24,9 +24,9 @@ type Entry = { kind: (typeof KINDS)[number]; text: string; index: number; key: s
 export function MemoryEditor({ agent, head }: { agent: Agent; head: (crumb?: Crumb) => ReactNode }) {
   const memory = useMemory(agent.id)
   return <>
-    {!memory.data && head()}
+    {!memory.data && <>{head()}<div className="mb-1.5 min-h-[26px]" /></>}
     <ErrorNote message={memory.error?.message} />
-    {!memory.data && !memory.error && <Loading />}
+    {!memory.data && !memory.error && <SceneLoading />}
     {memory.data && <Entries agent={{ ...agent, canEdit: agent.canEdit && agent.runsHere }} memory={memory.data} head={head} />}
   </>
 }
@@ -71,7 +71,7 @@ function Entries({ agent, memory, head }: { agent: Agent; memory: Memory; head: 
     <div className="mb-1.5 flex min-h-[26px] items-center pr-8 text-[12px]/[16px] text-mute">{all.length === 1 ? '1 note' : `${all.length} notes`}
       {agent.canEdit && saved && <Button type="button" variant="primary" className={cn(PILL, 'ml-auto gap-1')} onClick={() => { setAdding(true); setRemoving(false) }}><I icon={PlusSignIcon} size={14} />Add</Button>}
     </div>
-    {!all.length && <EmptyScene kind="memory" title="Nothing saved yet" line={`${agent.name} writes down what\u2019s worth remembering. So can you.`} />}
+    {!all.length && <EmptyScene kind="memory" title="Nothing saved yet" line={`${agent.name} saves what it learns about you and your work here.`} />}
     {all.length > 0 && <div className="no-scrollbar -ml-2.5 flex min-h-0 flex-1 flex-col overflow-y-auto pr-8">
       {all.map((entry) => <Button key={entry.key} type="button" variant="bare" onClick={() => setPicked(entry.key)}
         className="flex h-[42px] w-full shrink-0 items-center gap-3 rounded-md px-2.5 text-left text-[13.5px] text-ink hover:bg-hover">

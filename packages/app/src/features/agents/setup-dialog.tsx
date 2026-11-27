@@ -14,7 +14,7 @@ import { agentPath } from '@/app/routes'
 import { AccessPicker } from '@/features/agents/access'
 import { Face } from '@/features/agents/face'
 import { MemoryEditor } from '@/features/agents/memory-dialog'
-import { EmptyScene } from '@/components/empty-art'
+import { EmptyScene, SceneLoading } from '@/components/empty-art'
 import { KeysList } from '@/features/agents/secrets'
 import { ActivityList } from '@/features/agents/activity-dialog'
 import { SkillsBrowser, type Crumb } from '@/features/agents/skills-dialog'
@@ -86,14 +86,13 @@ function Pane({ agent, tab }: { agent: Agent; tab: typeof SETUP_TABS[number]['sl
   }
 }
 
-function Head({ title, subtitle, count, action, crumb }: { title: string; subtitle: string; count?: string; action?: ReactNode; crumb?: Crumb }) {
+function Head({ title, subtitle, count, action, crumb, bar }: { title: string; subtitle: string; count?: string; action?: ReactNode; crumb?: Crumb; bar?: boolean }) {
   return <div className="flex shrink-0 flex-col">
     {crumb
       ? <h2 className="m-0 flex min-w-0 items-center gap-1.5 pr-[52px] text-[15px]/[22px] font-medium"><Button type="button" variant="bare" className="h-auto p-0 text-[15px] font-medium text-mute hover:text-ink" onClick={crumb.onBack}>{title}</Button><I icon={ArrowRight01Icon} size={13} className="shrink-0 text-mute-2" /><span className="min-w-0 truncate">{crumb.label}</span></h2>
       : <h2 className="m-0 pr-[52px] text-[15px]/[22px] font-medium">{title}</h2>}
     <p className="m-0 pr-[52px] text-[12.5px]/[18px] text-mute">{subtitle}</p>
-    {(count || action) && <div className="mt-[18px] mb-1.5 flex min-h-[26px] items-center pr-8 text-[12px]/[16px] text-mute">{count}<span className="ml-auto">{action}</span></div>}
-    {!count && !action && <div className="h-[18px]" />}
+    {bar || count || action ? <div className="mt-[18px] mb-1.5 flex min-h-[26px] items-center pr-8 text-[12px]/[16px] text-mute">{count}<span className="ml-auto">{action}</span></div> : <div className="h-[18px]" />}
   </div>
 }
 
@@ -193,10 +192,11 @@ function ConnectionsPane({ agent }: { agent: Agent }) {
   const deleteGrant = useDeleteGrant()
   const busy = createGrant.isPending || deleteGrant.isPending
   return <>
-    <Head title="Connections" subtitle={`Apps ${agent.name} can read and use`} count={connections.data ? (connections.data.length ? countOf(grants.data?.length ?? 0, 'app on', 'apps on') : 'No apps yet') : undefined} action={agent.canEdit && <Add label="Add app" onClick={() => open('add-app')} />} />
+    <Head bar title="Connections" subtitle={`Apps ${agent.name} can read and use`} count={connections.data ? (connections.data.length ? countOf(grants.data?.length ?? 0, 'app on', 'apps on') : 'No apps yet') : undefined} action={agent.canEdit && <Add label="Add app" onClick={() => open('add-app')} />} />
     <Body>
       <ErrorNote message={(connections.error ?? grants.error)?.message} />
-      {connections.data && !connections.data.length && <EmptyScene kind="connections" title="No apps yet" line={`Plug in Gmail, GitHub or a database, and ${agent.name} can use it.`} />}
+      {!connections.data && !connections.error && <SceneLoading />}
+      {connections.data && !connections.data.length && <EmptyScene kind="connections" title="No apps yet" line={`Add Gmail, GitHub or a database, and ${agent.name} can use it.`} />}
       {byName(connections.data ?? [], (each) => each.name).map((connection) => {
         const grant = grants.data?.find((each) => each.connectionId === connection.id)
         const label = <><span className="truncate text-[14px] font-medium">{connection.name}</span><span className="truncate text-[12.5px] text-mute">{integration(connection.kind)?.short ?? kindNote(connection)}</span></>
@@ -220,7 +220,7 @@ function ChannelsPane({ agent }: { agent: Agent }) {
   const [leaving, setLeaving] = useState<ChannelKind>()
   const gone = channels.data?.find((each) => each.kind === leaving)
   return <>
-    <Head title="Channels" subtitle={`Where people talk to ${agent.name}`} count={channels.data ? countOf(channels.data.filter((each) => each.status === 'connected').length, 'connected', 'connected') : undefined} />
+    <Head bar title="Channels" subtitle={`Where people talk to ${agent.name}`} count={channels.data ? countOf(channels.data.filter((each) => each.status === 'connected').length, 'connected', 'connected') : undefined} />
     <Body>
       <ErrorNote message={channels.error?.message} />
       {ORDER.map((kind) => {
@@ -251,10 +251,11 @@ function RoutinesPane({ agent }: { agent: Agent }) {
   const routines = useRoutines(agent.id)
   const now = new Date()
   return <>
-    <Head title="Routines" subtitle={`What ${agent.name} does on a schedule`} count={routines.data ? countOf(routines.data.length, 'routine', 'routines') : undefined} />
+    <Head bar title="Routines" subtitle={`What ${agent.name} does on a schedule`} count={routines.data ? countOf(routines.data.length, 'routine', 'routines') : undefined} />
     <Body>
       <ErrorNote message={routines.error?.message} />
-      {routines.data && !routines.data.length && <EmptyScene kind="routines" title="No routines yet" line={`Ask ${agent.name} to do something every morning, and it lands here.`} />}
+      {!routines.data && !routines.error && <SceneLoading />}
+      {routines.data && !routines.data.length && <EmptyScene kind="routines" title="No routines yet" line={`Ask ${agent.name} to do something on a schedule, like every Monday morning.`} />}
       {routines.data?.map((routine) => <Go key={routine.id} icon={HistoryIcon} label={routine.name} to={`routines:${routine.id}`} chevron="none"
         value={<span className="truncate text-[12.5px] text-mute">{routine.stopped ? 'Stopped' : routine.nextRunAt ? nextOf({ at: new Date(routine.nextRunAt), now }) : ''}</span>} />)}
     </Body>
@@ -265,10 +266,11 @@ function WebhooksPane({ agent }: { agent: Agent }) {
   const webhooks = useWebhooks(agent.id, agent.canEdit)
   const add = agent.canEdit && <Add label="Add webhook" onClick={() => open('webhooks')} />
   return <>
-    <Head title="Webhooks" subtitle={`Apps that start a thread with ${agent.name}`} count={webhooks.data ? countOf(webhooks.data.length, 'webhook', 'webhooks') : undefined} action={add} />
+    <Head bar title="Webhooks" subtitle={`Apps that start a thread with ${agent.name}`} count={webhooks.data ? countOf(webhooks.data.length, 'webhook', 'webhooks') : undefined} action={add} />
     <Body>
       <ErrorNote message={webhooks.error?.message} />
-      {webhooks.data && !webhooks.data.length && <EmptyScene kind="webhooks" title="No webhooks yet" line={`Let another app knock, like Stripe when a payment fails, and ${agent.name} picks it up.`} />}
+      {!webhooks.data && !webhooks.error && <SceneLoading />}
+      {webhooks.data && !webhooks.data.length && <EmptyScene kind="webhooks" title="No webhooks yet" line={`Another app can start a thread with ${agent.name}, like Stripe when a payment fails.`} />}
       {webhooks.data?.map((webhook) => <Go key={webhook.id} icon={WebhookIcon} label={webhook.name} to="webhooks" chevron="none"
         value={<span className="text-[12.5px] text-mute">{webhook.lastAt ? `Called ${ago(webhook.lastAt)} ago` : 'Not called yet'}</span>} />)}
     </Body>

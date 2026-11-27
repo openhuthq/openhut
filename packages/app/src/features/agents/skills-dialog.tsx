@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ConfirmIcon } from '@/components/confirm-button'
 import { CopyButton } from '@/components/copy-button'
-import { EmptyScene } from '@/components/empty-art'
+import { EmptyScene, SceneLoading } from '@/components/empty-art'
 import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
 import { skillIcon } from '@/components/icons'
@@ -43,8 +43,8 @@ export function SkillsBrowser({ agent, head }: { agent: Agent; head: (crumb?: Cr
     {head()}
     <div className="mb-1.5 flex min-h-[26px] items-center pr-8 text-[12px]/[16px] text-mute">{all.length === 1 ? '1 skill' : `${all.length} skills`}</div>
     <ErrorNote message={skills.error?.message} />
-    {!skills.data && !skills.error && <Loading />}
-    {skills.data && !all.length && <EmptyScene kind="skills" title="No skills yet" line={`Show ${agent.name} how to do something once, and it keeps the recipe.`} />}
+    {!skills.data && !skills.error && <SceneLoading />}
+    {skills.data && !all.length && <EmptyScene kind="skills" title="No skills yet" line={`Show ${agent.name} how to do something once, and it remembers how.`} />}
     {all.length > 0 && <nav aria-label="Skills" className="no-scrollbar -ml-2.5 flex min-h-0 flex-1 flex-col overflow-y-auto pr-8 pb-2">
       {groups.filter(([, list]) => list.length).map(([label, list]) => <section key={label} className="flex flex-col not-first:mt-4">
         <h3 className="m-0 px-2.5 pb-1 text-[12px] font-medium text-mute">{label}</h3>

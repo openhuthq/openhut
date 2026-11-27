@@ -142,6 +142,10 @@ export function EmptyScene({ kind, title, line }: { kind: EmptyKind; title: stri
   return <div className='flex flex-1 flex-col items-center justify-center gap-1.5 px-6 pb-10 text-center'>
     <EmptyArt kind={kind} className='mb-2 h-28 w-40' />
     <b className='text-[15px] font-semibold text-ink'>{title}</b>
-    <p className='m-0 max-w-[340px] text-[13px]/[1.5] text-balance text-mute'>{line}</p>
+    <p className='m-0 max-w-[480px] text-[13px]/[1.5] text-pretty text-mute'>{line}</p>
   </div>
+}
+
+export function SceneLoading() {
+  return <div role='status' aria-label='Loading' className='flex flex-1 items-center justify-center pb-10'><span className='size-4 animate-spin rounded-full border-2 border-mid border-t-ink' /></div>
 }
