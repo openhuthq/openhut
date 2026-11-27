@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { faceArt, parseLook } from '../../src/lib/face.ts'
+import { folkFace } from '../../src/lib/folk-face.ts'
 
 const HOSTILE = [
   '<script>alert(1)</script>',
@@ -35,9 +36,17 @@ test('a hostile synced face only ever picks from the built-in parts', () => {
   }
 })
 
+test('a hostile email only picks a built-in person face', () => {
+  for (const text of HOSTILE) {
+    const svg = folkFace(text)
+    assert.equal(svg.includes(text), false)
+    assert.doesNotMatch(svg, /<script|\son\w+=|javascript:/i)
+  }
+})
+
 test('raw HTML is set only from art built into the app, never from data', () => {
   const root = new URL('../../src/', import.meta.url)
   const users = readdirSync(root, { recursive: true, encoding: 'utf8' })
     .filter((file) => /\.tsx?$/.test(file) && !file.startsWith('proto') && readFileSync(new URL(file, root), 'utf8').includes('dangerouslySetInnerHTML'))
-  assert.deepEqual(users.sort(), ['components/creature.tsx', 'components/glyph.tsx', 'components/hut.tsx'])
+  assert.deepEqual(users.sort(), ['components/creature.tsx', 'components/custom/person-face.tsx', 'components/glyph.tsx', 'components/hut.tsx'])
 })

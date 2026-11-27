@@ -90,10 +90,10 @@ function AgentRow({ agent, threads, active, phone }: { agent: OpenHutAgent; thre
     <span className={cn('relative grid size-10 shrink-0 place-items-center', !agent.online && 'opacity-45')}>
       <Face agent={agent} size={40} />
       {working && <span className="absolute -right-[3px] -bottom-[3px] grid size-4 place-items-center rounded-full bg-card shadow-[0_0_0_1px_var(--hair)]"><ThreadMark status="working" size={12} /></span>}
+      {waiting && !working && <i role="img" aria-label="Waiting on you" title="Waiting on you" className="absolute right-0 bottom-0 size-2.5 rounded-full bg-wait" />}
     </span>
     <span className="flex min-w-0 flex-1 items-center gap-2">
       <span className={cn('min-w-0 flex-1 truncate text-[15px]/[20px] font-medium', !agent.online && 'text-mute', agent.online && trouble && 'text-fail')}>{agent.name}</span>
-      {waiting && <i role="img" aria-label="Waiting on you" title="Waiting on you" className="size-2 shrink-0 rounded-full bg-wait" />}
       {preview.at && <time dateTime={preview.at} className="shrink-0 text-[12.5px] text-mute tabular-nums">{lastSeenOf({ at: preview.at })}</time>}
     </span>
   </a></RowMenu>
