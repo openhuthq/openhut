@@ -63,7 +63,7 @@ export function AdminSettings() {
     {opened === 'google-sign-in' && <GoogleSignInSheet settings={data} />}
     {opened === 'email' && <SmtpSheet settings={data} />}
     <GitHubDialogs opened={opened} extra={<label className="flex items-center gap-3 border-t border-hair pt-4">
-      <span className="grid min-w-0 flex-1 gap-0.5"><span className="text-[13px] text-ink">Sign agents’ work</span><span className="text-[12px] text-mute">{data.githubFooter ? 'Adds “Made with OpenHut” under their pull requests, issues and first comments' : 'Off · no OpenHut footer'}</span></span>
+      <span className="grid min-w-0 flex-1 gap-0.5"><span className="text-[13px] text-ink">Sign agents’ work</span><span className="text-[12px] text-mute">{data.githubFooter ? 'Adds “Opened by <agent>, an AI agent” under their pull requests, issues and first comments' : 'Off · no footer'}</span></span>
       <Switch checked={data.githubFooter} aria-label="Sign agents’ work on GitHub" onCheckedChange={(on) => update.mutate({ githubFooter: on }, { onError: toastError })} />
     </label>} />
   </Rows>
