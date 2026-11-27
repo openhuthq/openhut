@@ -56,7 +56,10 @@ export function TypingNow({ threadId }: { threadId: string }) {
   const me = useOwner()
   const typing = usePresence(threadId).typing.filter((person) => person.email !== me)
   if (!typing.length) return null
-  return <p role="status" className="absolute bottom-full left-4 m-0 mb-2 text-[12.5px] text-mute">{typingLine(typing.map((person) => nameOf(person).split(' ')[0]))}…</p>
+  return <p role="status" className="absolute bottom-full left-4 m-0 mb-2 flex items-center gap-1.5 text-[12.5px] text-mute">
+    <span className="flex items-center gap-0.5">{typing.slice(0, 3).map((person) => <PersonFace key={person.id} name={nameOf(person)} email={person.email} size={18} />)}</span>
+    {typingLine(typing.map((person) => nameOf(person).split(' ')[0]))}…
+  </p>
 }
 
 export function SeenBy({ threadId }: { threadId: string }) {
