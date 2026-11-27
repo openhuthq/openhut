@@ -1,6 +1,6 @@
 import { createContext, useState, type ReactElement } from 'react'
 import { Delete02Icon, Logout01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SidebarLeftIcon, StopIcon } from '@hugeicons/core-free-icons'
-import { HERE, type OpenHutAgent } from '@/lib/openhut'
+import type { OpenHutAgent } from '@/lib/openhut'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, LongPressMenu } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/components/confirm-button'
@@ -11,7 +11,6 @@ import { PersonFace } from '@/components/custom/person-face'
 import { agentPath } from '@/app/routes'
 import type { SourcedThread } from '@/features/threads/places'
 import { ThreadMark } from '@/features/threads/thread-list'
-import { useComputers } from '@/features/computers/api'
 import { useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
 import { toneOf, troubleOf, wordOf } from '@/features/agents/status'
@@ -20,13 +19,13 @@ import { useOwner } from '@/features/people/api'
 import { useConnections } from '@/features/connections/api'
 import { chipMarks } from '@/features/connections/catalog'
 import { UpdateEverything } from '@/features/settings/update-pill'
-import { ago, personName } from '@/lib/format'
+import { lastSeenOf, personName } from '@/lib/format'
 import { PHONE, useMedia } from '@/lib/media'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
-import { useAgentsLive, type LiveAgentBoard } from '@/lib/thread-live'
-import { summaryOf } from '@/features/agents/progress'
+import { useAgentsLive } from '@/lib/thread-live'
+import { previewOf } from '@/features/agents/progress'
 
 const ROUND = 'float phone:size-10 phone:rounded-full phone:bg-card phone:text-ink'
 
@@ -58,8 +57,8 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew }: {
       </span>
     </div>
     <h1 className="m-0 hidden px-5 pt-1 pb-3 text-[32px]/[1.1] font-bold tracking-[-.02em] phone:block">Agents</h1>
-    <nav className="flex min-h-0 flex-col gap-1 overflow-auto px-3 pt-1 phone:gap-0 phone:px-2">
-      {!!contacts?.length && <div className="flex flex-col gap-1 phone:gap-0">
+    <nav className="flex min-h-0 flex-col gap-0.5 overflow-auto px-3 pt-1 phone:gap-0 phone:px-2">
+      {!!contacts?.length && <div className="flex flex-col gap-0.5 phone:gap-0">
       {contacts.map(({ agent, threads }) => <AgentRow key={agent.id} agent={agent} threads={threads} active={agent.id === activeId} phone={phone} />)}
       </div>}
       {contacts?.length === 0 && <Button type="button" variant="bare" onClick={onNew} className={cn('grid h-auto w-full grid-cols-[40px_1fr] items-center gap-3 rounded-lg px-2.5 py-2 text-left font-normal text-inherit', HOVER)}>
@@ -83,35 +82,30 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew }: {
 
 function AgentRow({ agent, threads, active, phone }: { agent: OpenHutAgent; threads: SourcedThread[]; active: boolean; phone: boolean }) {
   const live = useAgentsLive().get(agent.id)
-  const activity = live?.activity ?? 'idle'
-  const working = live?.subagents?.filter((child) => child.status === 'working').length ?? 0
-  const waiting = threads.filter((each) => each.waiting).length
-  const where = useComputers().data?.find((computer) => computer.id === (agent.runsOn ?? HERE))?.name
-  const thread = threads[0]
-  const idle = agent.online ? troubleOf(agent) ?? (agent.summary || 'Say hello') : 'Offline'
-  const line = lineOf({ working, waiting, activity, idle })
-  const summary = summaryOf({ working, waiting, activity })
+  const working = live?.activity === 'working' || !!live?.subagents?.some((child) => child.status === 'working')
+  const waiting = live?.activity === 'waiting' || threads.some((each) => each.waiting)
+  const preview = previewOf({ agentId: agent.id, summary: agent.summary, threads })
+  const trouble = agent.online ? troubleOf(agent) : 'Offline'
   return <RowMenu agent={agent}><a href={agentPath({ agentId: agent.id })} aria-current={active ? 'page' : undefined}
-    className={cn('row grid w-full shrink-0 data-popup-open:bg-picked grid-cols-[40px_1fr_auto] items-center gap-3 rounded-lg px-2.5 py-2 text-left text-inherit no-underline phone:grid-cols-[52px_1fr_auto] phone:gap-3.5 phone:rounded-2xl phone:px-3 phone:py-3', HOVER, !phone && active && PICKED)}
+    className={cn('row grid w-full shrink-0 grid-cols-[48px_minmax(0,1fr)] items-center gap-3 rounded-[10px] px-3 py-2.5 text-left text-inherit no-underline data-popup-open:bg-picked phone:rounded-2xl', HOVER, !phone && active && PICKED)}
     title={agent.online ? undefined : 'Offline'}>
-    <span className={cn('relative', !agent.online && 'opacity-45')}><Face agent={agent} size={phone ? 52 : 40} /><Live agent={agent} className="-right-0.5 -bottom-0.5 phone:size-3.5" /></span>
-    <span className="grid min-w-0 gap-0.5">
-      <span className="flex min-w-0 items-center gap-2">
-        <span className={cn('min-w-0 flex-1 truncate text-[14px] font-semibold phone:text-[17px]', !agent.online && 'text-mute')}>{agent.name}</span>
-        {summary && <span className="phone:hidden"><ThreadMark status={summary} /></span>}
-      </span>
-      <span className={cn('truncate text-[13px]', agent.online ? 'text-body' : 'text-mute', agent.online && !working && troubleOf(agent) && 'text-fail')}>{[where, line].filter(Boolean).join(' · ')}</span>
+    <span className={cn('relative grid size-12 place-items-center', !agent.online && 'opacity-45')}>
+      <Face agent={agent} size={48} />
+      {working
+        ? <span className="absolute -right-[3px] -bottom-[3px] grid size-[18px] place-items-center rounded-full bg-card shadow-[0_0_0_1px_var(--hair)]"><ThreadMark status="working" size={14} /></span>
+        : <Live agent={agent} className="-right-0.5 -bottom-0.5" />}
     </span>
-    {thread && <span className="hidden self-start pt-1 text-[12px] text-mute tabular-nums phone:block">{ago(thread.updatedAt)}</span>}
+    <span className="grid min-w-0 gap-[3px]">
+      <span className="flex min-w-0 items-center gap-2">
+        <span className={cn('min-w-0 flex-1 truncate text-[14.5px] font-medium', !agent.online && 'text-mute')}>{agent.name}</span>
+        {preview.at && <time dateTime={preview.at} className="shrink-0 text-[12.5px] text-mute tabular-nums">{lastSeenOf({ at: preview.at })}</time>}
+      </span>
+      <span className="flex min-w-0 items-center gap-2">
+        <span className={cn('min-w-0 flex-1 truncate text-[13px] text-mute', agent.online && trouble && 'text-fail')}>{trouble ?? preview.text}</span>
+        {waiting && <i role="img" aria-label="Waiting on you" title="Waiting on you" className="size-2 shrink-0 rounded-full bg-wait" />}
+      </span>
+    </span>
   </a></RowMenu>
-}
-
-function lineOf({ working, waiting, activity, idle }: { working: number; waiting: number; activity: LiveAgentBoard['activity']; idle: string }) {
-  if (working) return `Working on ${working} ${working === 1 ? 'task' : 'tasks'}`
-  if (activity === 'working') return 'Working…'
-  if (waiting) return `${waiting} waiting`
-  if (activity === 'waiting') return 'Waiting on you'
-  return idle
 }
 
 function RowMenu({ agent, children }: { agent: OpenHutAgent; children: ReactElement }) {

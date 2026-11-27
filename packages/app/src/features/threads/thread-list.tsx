@@ -19,14 +19,14 @@ export type ThreadStatus = 'main' | 'working' | 'waiting' | 'idle'
 const MARK: Record<ThreadStatus, ReactElement> = {
   main: <><circle cx="8" cy="8" r="6" fill="none" stroke="var(--ink)" strokeWidth="1.6" /><circle cx="8" cy="8" r="3" fill="var(--ink)" /></>,
   working: <><circle cx="8" cy="8" r="5.8" fill="none" stroke="var(--mid)" strokeWidth="1.6" /><path d="M8 2.2a5.8 5.8 0 0 1 5.8 5.8" fill="none" stroke="var(--ink)" strokeWidth="1.6" strokeLinecap="round" /></>,
-  waiting: <circle cx="8" cy="8" r="4" fill="#D9824A" />,
+  waiting: <circle cx="8" cy="8" r="4" fill="var(--wait)" />,
   idle: <circle cx="8" cy="8" r="5.8" fill="none" stroke="var(--mute-2)" strokeWidth="1.6" strokeDasharray="2.4 2.15" />,
 }
 
 const MARK_LABEL: Record<ThreadStatus, string> = { main: 'Main thread', working: 'Working', waiting: 'Waiting on you', idle: 'Idle' }
 
-export function ThreadMark({ status }: { status: ThreadStatus }) {
-  return <svg role="img" aria-label={MARK_LABEL[status]} width="16" height="16" viewBox="0 0 16 16" className={cn('block shrink-0', status === 'working' && 'animate-spin motion-reduce:animate-none')}>{MARK[status]}</svg>
+export function ThreadMark({ status, size = 16 }: { status: ThreadStatus; size?: number }) {
+  return <svg role="img" aria-label={MARK_LABEL[status]} width={size} height={size} viewBox="0 0 16 16" className={cn('block shrink-0', status === 'working' && 'animate-spin motion-reduce:animate-none')}>{MARK[status]}</svg>
 }
 
 const SOURCE_ICON = { app: GlobalIcon, webhook: WebhookIcon, routine: Clock01Icon }
