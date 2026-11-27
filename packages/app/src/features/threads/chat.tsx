@@ -20,7 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { ErrorNote } from '@/components/error-note'
-import { Dots, HINT, I, ICON_BUTTON, TINY_ICON } from '@/components/kit'
+import { Dots, HINT, I, ICON_BUTTON } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { useOwner } from '@/features/people/api'
 import { personName } from '@/lib/format'
@@ -100,8 +100,8 @@ function ThreadView({ thread, fetchedAt, agent, actions, tools, onTitle }: { thr
   const waiting = busy && chat.status !== 'streaming' && !(last?.role === 'assistant' && last.id === thread.activeTurn)
   const mine = [...shown].reverse().find((message) => message.role === 'user' && !webhookOf(message.metadata) && (z.safeParse(Authored, message.metadata).data?.author ?? me) === me)
   const said = saidAfter(shown)
-  const clear = agent.canEdit && <ClearChat agent={agent} threadId={thread.id} attachments={attachments} disabled={!chat.messages.length || busy || attachments.uploading} />
-  return <ChatFiles value={files}><CardReply value={thread.readOnly ? undefined : (text) => { if (busy) return false; send(text); return true }}><ChatFrame agent={agent} thread={thread} tools={<>{actions}{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={thread.readOnly ? <ContinueBar thread={thread} /> : <Composer agent={agent} threadId={thread.id} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void stopThread({ agentId: agent.id, threadId: thread.id }).catch(toastError)} />}>
+  const clear = agent.canEdit && chat.messages.length > 0 && <ClearChat agent={agent} threadId={thread.id} attachments={attachments} disabled={busy || attachments.uploading} />
+  return <ChatFiles value={files}><CardReply value={thread.readOnly ? undefined : (text) => { if (busy) return false; send(text); return true }}><ChatFrame agent={agent} thread={thread} tools={<>{actions}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={thread.readOnly ? <ContinueBar thread={thread} /> : <Composer agent={agent} threadId={thread.id} busy={busy} quiet={!chat.messages.length} attachments={attachments} clear={clear} onSend={send} onStop={() => void stopThread({ agentId: agent.id, threadId: thread.id }).catch(toastError)} />}>
     {shown.length ? <>
       <Welcome agent={agent} />
       <Day iso={thread.updatedAt} />
@@ -248,7 +248,7 @@ function ComposerSkeleton() {
   return <div className="shrink-0 px-8 pb-5 transition-[padding] group-data-[threads]/chat:pr-[396px] phone:px-3 phone:pb-3"><div className="mx-auto h-[108px] max-w-[840px] rounded-[22px] border border-hair bg-sidebar" /></div>
 }
 
-function Composer({ agent, threadId, busy, quiet, attachments, onSend, onStop }: { agent: Agent; threadId: string; busy: boolean; quiet: boolean; attachments: Attachments; onSend: (text: string) => void; onStop: () => void }) {
+function Composer({ agent, threadId, busy, quiet, attachments, clear, onSend, onStop }: { agent: Agent; threadId: string; busy: boolean; quiet: boolean; attachments: Attachments; clear?: ReactNode; onSend: (text: string) => void; onStop: () => void }) {
   const touch = useMedia(TOUCH)
   const [empty, setEmpty] = useState(true)
   const picker = useRef<HTMLInputElement>(null)
@@ -289,6 +289,7 @@ function Composer({ agent, threadId, busy, quiet, attachments, onSend, onStop }:
           onInput={(event) => { const box = event.currentTarget; setEmpty(!box.value.trim()); if (box.value.trim()) typing.ping(); else typing.stop(); box.style.height = 'auto'; box.style.height = `${Math.min(box.scrollHeight, 240)}px` }} />
       <div className="flex items-center gap-1">
         <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Attach files" title="Attach files" disabled={!ready} onClick={() => picker.current?.click()}><I icon={Attachment01Icon} size={16} /></Button>
+        {clear}
         <span className="ml-auto"><Button type="submit" variant="send" className="rounded-full" onMouseDown={(event) => event.preventDefault()} aria-label={busy ? 'Stop' : 'Send'} title={busy ? 'Stop' : 'Send (Enter). Shift+Enter for a new line'} disabled={!busy && (!ready || nothing || attachments.uploading)}>{busy ? <span className="size-2.5 rounded-[2px] bg-white" /> : <I icon={ArrowUp02Icon} className="text-white" />}</Button></span>
       </div>
     </form>
@@ -323,7 +324,7 @@ function ClearChat({ agent, threadId, attachments, disabled }: { agent: Agent; t
   const uploads = attachments.items.flatMap((item) => item.file ? [item.file.path] : [])
   const [asking, setAsking] = useState(false)
   return <>
-    <Tooltip label="Clear chat"><Button type="button" variant="bare" className={TINY_ICON} aria-label="Clear chat" disabled={disabled} onClick={() => setAsking(true)}><I icon={EraserIcon} size={16} /></Button></Tooltip>
+    <Tooltip label="Clear chat"><Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Clear chat" disabled={disabled} onClick={() => setAsking(true)}><I icon={EraserIcon} size={16} /></Button></Tooltip>
     <ConfirmDialog open={asking} onOpenChange={setAsking} question="Clear this chat?" detail="Memory stays. Files you sent are deleted." action="Clear"
       onConfirm={() => clearChat.mutateAsync({ uploads }).then(() => attachments.clear())} />
   </>
