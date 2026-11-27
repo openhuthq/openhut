@@ -44,6 +44,14 @@ export const inbox = definePlugin({
       run: (input, { agent }) => inboxService.setThreads({ agentId: agent.id, ...input }),
     }),
     list_routines: defineTool({ description: 'List your routines, one line each.', input: {}, run: (_, { agent }) => routineService.listForAgent({ agentId: agent.id }) }),
+    run_routine: defineTool({
+      description: 'Run one of your routines now, to check it works after you set it up. Its schedule stays the same. The run reaches you as a new turn where the routine posts.',
+      input: { id: z.string().max(40).describe('The routine\'s id, like rt_ab12cd34.') },
+      run: async ({ id }, { agent }) => {
+        await inboxService.runRoutine({ agentId: agent.id, id })
+        return 'Started. Finish this reply; the run comes next.'
+      },
+    }),
     cancel_routine: defineTool({
       description: 'Use this when what you were following up on is done, or no longer needed. Tell the chat first: the routine leaves the owner\'s list.',
       input: { id: z.string().max(40), reason: z.string().max(200).describe('Short, past tense, for the log: "Paid on Nov 26".') },

@@ -165,6 +165,26 @@ export const routineService = {
 
   tick: (now: Date): Promise<{ fired: Fired[]; failed: string[] }> => tickOnce(now),
 
+  async runNow({ actor, agentId, id }: { actor?: Caller; agentId?: string; id: string }): Promise<Fired> {
+    const row = await db.selectFrom('inbox_source').selectAll().where('id', '=', id).where('kind', '=', 'schedule').$if(!!agentId, (qb) => qb.where('agent_id', '=', agentId ?? '')).executeTakeFirst()
+    if (!row) throw new HttpError(404, agentId ? `No routine ${id}. Call list_routines to see yours.` : `There's no routine ${id}.`)
+    if (actor) await editable({ actor, id: row.agent_id })
+    const agent = await db.selectFrom('agent').select(['name', 'wanted']).where('id', '=', row.agent_id).executeTakeFirstOrThrow()
+    if (agent.wanted !== 'running') throw new HttpError(409, `${agent.name} is stopped. Start it, then run the routine.`)
+    if (row.run_status === 'open') throw new HttpError(409, `${row.name} is running now. Wait for this run to finish.`)
+    const run = await fire({ row, now: new Date(), early: true })
+    if (run) return run
+    const after = await db.selectFrom('inbox_source').select(['run_status', 'run_text']).where('id', '=', id).executeTakeFirst()
+    if (after?.run_status === 'open') throw new HttpError(409, `${row.name} is running now. Wait for this run to finish.`)
+    if (after?.run_status === 'failed' && after.run_text) throw new HttpError(409, `${row.name} couldn't run: ${after.run_text}`)
+    throw new HttpError(409, `${agent.name} already ran ${MAX_RUNS_A_DAY} routines today. Try again tomorrow.`)
+  },
+
+  async get({ id }: { id: string }): Promise<Routine> {
+    const row = await db.selectFrom('inbox_source').selectAll().where('id', '=', id).where('kind', '=', 'schedule').executeTakeFirstOrThrow()
+    return routineOf(row)
+  },
+
   async update({ actor, id, origin, until }: { actor: Caller; id: string; origin?: Origin; until?: string | null }): Promise<Routine> {
     const row = await db.selectFrom('inbox_source').selectAll().where('id', '=', id).where('kind', '=', 'schedule').executeTakeFirst()
     if (!row) throw new HttpError(404, `There's no routine ${id}.`)
@@ -196,7 +216,7 @@ async function tickOnce(now: Date): Promise<{ fired: Fired[]; failed: string[] }
   return { fired, failed }
 }
 
-async function fire({ row, now }: { row: RoutineRow; now: Date }): Promise<Fired | undefined> {
+async function fire({ row, now, early = false }: { row: RoutineRow; now: Date; early?: boolean }): Promise<Fired | undefined> {
   const agent = await db.selectFrom('agent').select(['id', 'wanted']).where('id', '=', row.agent_id).executeTakeFirst()
   if (agent?.wanted !== 'running') return undefined
   if (!underCap({ agentId: row.agent_id, now })) return undefined
@@ -204,9 +224,12 @@ async function fire({ row, now }: { row: RoutineRow; now: Date }): Promise<Fired
   const origin = originOf(row)
   const refused = await placeOf({ agentId: row.agent_id, origin }).then(() => null, (err: unknown) => messageOf(err))
   const claimed = await db.updateTable('inbox_source').set((eb) => ({
-    run_id: runId, run_status: refused ? 'failed' : 'open', run_at: now, run_picked_at: null, run_text: refused, next_run_at: row.cron ? nextOf({ cron: row.cron, after: now }) : null,
+    run_id: runId, run_status: refused ? 'failed' : 'open', run_at: now, run_picked_at: null, run_text: refused, next_run_at: nextRunOf({ row, now, early }),
     failures: refused ? eb('failures', '+', 1) : eb.ref('failures'),
-  })).where('id', '=', row.id).where('next_run_at', '<=', now).where((eb) => eb.or([eb('run_status', 'is', null), eb('run_status', '<>', 'open')])).returningAll().executeTakeFirst()
+  })).where('id', '=', row.id).where((eb) => eb.and([
+    ...early ? [] : [eb('next_run_at', '<=', now)],
+    eb.or([eb('run_status', 'is', null), eb('run_status', '<>', 'open')]),
+  ])).returningAll().executeTakeFirst()
   if (!claimed) return undefined
   changed({ name: 'routine.run', agentId: row.agent_id, routineId: row.id, properties: { run: runId, status: refused ? 'failed' : 'open', reason: refused ?? undefined } })
   if (refused) {
@@ -214,6 +237,11 @@ async function fire({ row, now }: { row: RoutineRow; now: Date }): Promise<Fired
     return undefined
   }
   return { runId, routineId: row.id, agentId: row.agent_id, text: runText(claimed) }
+}
+
+function nextRunOf({ row, now, early }: { row: RoutineRow; now: Date; early: boolean }): Date | null {
+  if (early) return row.next_run_at
+  return row.cron ? nextOf({ cron: row.cron, after: now }) : null
 }
 
 async function sweep(now: Date): Promise<string[]> {

@@ -21,6 +21,8 @@ To change the plan, tell the agent. Two things you can set yourself:
 - **Posts in** moves the routine to another place the agent already posts: the OpenHut app or any chat on its channels.
 - **No end date** keeps a repeating routine going past its 90 days until you or the agent stop it.
 
+**Run now** runs it right away, where it posts, so you can see what it does without waiting for its time. Its next run stays where it was. It's off while a run is going.
+
 **Stop** ends one for good.
 
 A routine that can't run three times in a row (the agent was stopped or didn't answer) stops trying and shows in red, so nothing fails quietly. **Clear** takes it off the list.
@@ -29,6 +31,6 @@ A routine that can't run three times in a row (the agent was stopped or didn't a
 
 - Up to 20 routines and 100 runs a day per agent, at most every 15 minutes, for up to 90 days unless you turn on **No end date**.
 - A routine reports only to a chat the agent is in. On a WhatsApp or Telegram number anyone can message, only to yours.
-- A routine can't set up another routine.
+- A routine can't set up another routine. An agent can run one of its own right away to check it after setting it up.
 - Routines run while the agent is running. One that comes due while it's stopped waits and runs once when it starts again.
 - Every call a routine makes goes through the same [connections and grants](/data) as a chat.

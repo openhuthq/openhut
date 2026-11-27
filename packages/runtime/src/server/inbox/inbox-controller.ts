@@ -15,6 +15,8 @@ export const routineController: FastifyPluginAsyncZod = async (app) => {
 
   app.patch('/:id', UpdateRoutineRequest, async (req) => inboxService.updateRoutine({ actor: await who(req), id: req.params.id, ...req.body }))
 
+  app.post('/:id/runs', IdRequest, async (req) => inboxService.runRoutine({ actor: await who(req), id: req.params.id }))
+
   app.delete('/:id', IdRequest, async (req) => inboxService.stopRoutine({ actor: await who(req), id: req.params.id }))
 }
 

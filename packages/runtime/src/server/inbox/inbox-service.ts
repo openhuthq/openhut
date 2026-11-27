@@ -120,6 +120,12 @@ export const inboxService = {
 
   stopRoutine: (input: { actor: Caller; id: string }): Promise<Deleted<'routine'>> => routineService.stop(input),
 
+  async runRoutine({ actor, agentId, id }: { actor?: Caller; agentId?: string; id: string }): Promise<Routine> {
+    const run = await routineService.runNow({ actor, agentId, id })
+    await fireRoutine(run)
+    return routineService.get({ id })
+  },
+
   async targets({ actor, agentId }: { actor: Caller; agentId: string }): Promise<DeliveryTarget[]> {
     await agentService.requireOwner({ actor, id: agentId })
     const known = await knownOrigins(agentId)
