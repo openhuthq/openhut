@@ -55,14 +55,8 @@ function Row({ face, name, you, state, tone }: { face: ReactNode; name: string; 
 export function TypingNow({ threadId }: { threadId: string }) {
   const me = useOwner()
   const typing = usePresence(threadId).typing.filter((person) => person.email !== me)
-  return typing.slice(0, 3).map((person) => <div key={person.id} className="flex gap-3" role="status" aria-label={`${nameOf(person)} is typing`}>
-    <PersonFace name={nameOf(person)} email={person.email} size={28} />
-    <span className="grid gap-1"><span className="text-[12px] text-mute">{nameOf(person)}</span>
-      <span className="flex h-[37px] w-fit items-center gap-[5px] rounded-[4px_12px_12px_12px] bg-soft px-3.5">
-        {['', '[animation-delay:.15s]', '[animation-delay:.3s]'].map((delay) => <i key={delay} className={cn('size-[6px] animate-typing-dot rounded-full bg-mute', delay)} />)}
-      </span>
-    </span>
-  </div>)
+  if (!typing.length) return null
+  return <p role="status" className="absolute bottom-full left-4 m-0 mb-2 text-[12.5px] text-mute">{typingLine(typing.map((person) => nameOf(person).split(' ')[0]))}…</p>
 }
 
 export function SeenBy({ threadId }: { threadId: string }) {

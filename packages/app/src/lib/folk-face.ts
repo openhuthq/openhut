@@ -76,10 +76,8 @@ function folk(pick: Pick, mood: Mood): [string, string] {
   const hairColor = pick([ink, ink, '#55555f', '#6b3f24', '#a35a2c', '#d9b25a', denim, plum, pine])
   const shirt = pick(swatches.filter(color => color !== hairColor))
   const hair = (d: string) => shape(d, hairColor)
-  const style = pick(['short', 'spiky', 'curly cloud', 'wavy', 'top bun', 'ponytail', 'pigtails',
-    'long straight', 'bob', 'fringe', 'side part', 'swoop', 'messy', 'bald'])
+  const style = pick(['short', 'spiky', 'curly cloud', 'wavy', 'fringe', 'side part', 'swoop', 'messy', 'bald'])
   const crown = 'M18 49C15 30 29 14 49 14C69 13 84 28 82 49'
-  const swept = crown + 'Q75 44 69 31C57 38 42 37 35 32Q31 42 18 49Z'
   let back = '', front = ''
   switch (style) {
     case 'short':
@@ -93,28 +91,6 @@ function folk(pick: Pick, mood: Mood): [string, string] {
       break
     case 'wavy':
       front = hair('M17 49C15 40 18 35 20 31Q12 32 13 27C23 27 24 17 35 19C44 21 46 11 58 13C77 15 85 31 82 48Q75 45 70 32C64 27 57 32 51 37Q40 44 34 36Q26 34 23 45Z')
-      break
-    case 'top bun':
-      back = hair('M37 22C29 18 33 8 42 8C45 1 59 3 61 10C68 15 62 23 55 25Z')
-        + detail('M41 14Q47 8 53 12')
-      front = hair(swept)
-      break
-    case 'ponytail':
-      back = hair('M66 28C76 15 87 22 87 36C87 47 89 50 94 48C93 63 76 65 76 49Q77 37 68 38Z')
-        + shape('M68 27L75 23L80 32L73 36Z', shirt)
-      front = hair(swept)
-      break
-    case 'pigtails':
-      back = pair(hair('M24 35C15 30 10 37 10 47Q11 57 6 60C16 66 25 59 22 48Q20 42 27 41Z')
-        + shape('M19 34L25 36L23 44L17 42Z', shirt))
-      front = hair(crown + 'Q73 43 68 34Q57 36 49 29Q36 40 28 36Q25 45 18 49Z')
-      break
-    case 'long straight':
-      back = hair('M18 43Q18 18 50 17Q80 17 82 44L85 81Q77 87 68 84L64 78L63 86Q43 90 34 85L30 78L29 85Q19 86 14 81Z')
-      front = hair(crown + 'L80 65Q71 55 69 35Q55 32 49 25Q42 35 29 38Q27 55 20 66Z')
-      break
-    case 'bob':
-      front = hair('M14 67C17 54 12 42 19 29C27 12 53 7 69 17C88 28 82 48 86 64Q81 70 72 68L72 38Q52 41 37 36L34 31L33 37L28 37Q29 54 26 69Q19 70 14 67Z')
       break
     case 'fringe':
       front = hair(crown + 'L74 45L73 36L60 39L58 33L56 40L40 41L36 36L35 41L27 41L24 49Z')
@@ -135,8 +111,8 @@ function folk(pick: Pick, mood: Mood): [string, string] {
       break
   }
 
-  const props = ['round glasses', 'round glasses', 'freckles']
-  if (!['spiky', 'curly cloud', 'top bun', 'swoop', 'messy'].includes(style)) props.push('headphones')
+  const props = ['round glasses', 'freckles']
+  if (!['spiky', 'curly cloud', 'swoop', 'messy'].includes(style)) props.push('headphones')
   const prop = pick([false, true]) ? pick(props) : ''
   let accessory = ''
   switch (prop) {
