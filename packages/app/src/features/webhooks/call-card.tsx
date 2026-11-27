@@ -37,7 +37,7 @@ export function CallCardBody({ card, name, seen, calls, children }: { card: Call
       <div className="flex min-h-[30px] items-center gap-2">
         <span className="min-w-0 flex-1 text-[14px] font-semibold text-ink [overflow-wrap:anywhere]">{card.title}</span>
         {many && <Pill>{many.length} calls</Pill>}
-        {!many && seen && seen > 1 && <Pill>Seen {seen}×</Pill>}
+        {!many && (seen ?? 0) > 1 && <Pill>Seen {seen}×</Pill>}
         {card.status && <Pill tone={toneOf(card.status)} dot>{statusLabel(card.status)}</Pill>}
       </div>
       {card.details && <span className="text-[13px] text-mute [overflow-wrap:anywhere]">{card.details}</span>}
