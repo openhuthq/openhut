@@ -102,7 +102,8 @@ function useSubagents(agentId: string): (Subagent & { gone: boolean })[] {
 function AgentRow({ agent, threads, active, threadId, phone }: { agent: OpenHutAgent; threads: SourcedThread[]; active: boolean; threadId: string | undefined; phone: boolean }) {
   const children = useSubagents(agent.id)
   const activity = useAgentsLive().get(agent.id)?.activity ?? 'idle'
-  const [choice, setChoice] = useState<{ active: boolean; open: boolean }>()
+  const [expanded, setExpanded] = useState(active)
+  useEffect(() => { if (active) setExpanded(true) }, [active])
   const working = children.filter((child) => child.status === 'working').length
   useTick(working > 0)
   const listed = threads.filter((thread) => thread.id !== agent.id)
@@ -111,14 +112,14 @@ function AgentRow({ agent, threads, active, threadId, phone }: { agent: OpenHutA
   const subagents = children.filter((child) => !child.gone).length
   const thread = threads[0]
   const shown = subagents + sessions.length
-  const open = (phone || (choice?.active === active ? choice.open : active)) && shown > 0
+  const open = (phone || expanded) && shown > 0
   const idle = agent.online ? troubleOf(agent) ?? (agent.summary || 'Say hello') : 'Offline'
   const line = lineOf({ working, waiting, activity, idle })
   const [more, setMore] = useState(false)
   const accent = SWATCHES[lookOf(agent).body].shade
   const rows = children.map((child) => <Session key={child.id} gone={child.gone} icon={<I icon={GitBranchIcon} size={12} />} title={child.title} detail="Sub-agent" status={child.status} time={ago(child.startedAt)} accent={accent} />)
   const cut = children.findIndex((_, index) => children.slice(0, index + 1).filter((child) => !child.gone).length > FIRST)
-  const toggle = () => setChoice({ active, open: !open })
+  const toggle = () => setExpanded(!open)
   return <div className="group relative flex flex-col">
     <RowMenu agent={agent}><a href={agentPath({ agentId: agent.id })} aria-current={active ? 'page' : undefined}
       className={cn('row grid w-full shrink-0 data-popup-open:bg-picked grid-cols-[40px_1fr] items-center gap-3 rounded-lg px-2.5 py-2 text-left text-inherit no-underline phone:grid-cols-[52px_1fr_auto] phone:gap-3.5 phone:rounded-2xl phone:px-3 phone:py-3', HOVER, shown > 0 && 'pr-8', !phone && active && !(open && sessions.some((each) => each.id === threadId)) && PICKED)}
