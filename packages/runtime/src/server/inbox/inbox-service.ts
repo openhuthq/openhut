@@ -69,7 +69,7 @@ export const inboxService = {
       return { object: 'inbox_item', id: null, repeat: false, skipped: true }
     }
     const fingerprint = (source.fingerprint ? keyOf(await evaluate(source.fingerprint, payload)) : undefined) ?? deliveryIdOf({ headers, payload })
-    const groupKey = header(headers, 'x-group-key')?.slice(0, KEY_MAX) ?? (source.thread ? keyOf(await evaluate(source.thread, payload)) : undefined) ?? ''
+    const groupKey = header(headers, 'x-group-key')?.slice(0, KEY_MAX) ?? await groupOf({ thread: source.thread, payload })
     const delivered = await inboxService.deliver({ agentId: source.agent_id, sourceId: source.id, kind: 'webhook', body: text, receivedAt: now, fingerprint, groupKey })
     return { object: 'inbox_item', ...delivered }
   },
@@ -315,13 +315,27 @@ async function threadOf({ agentId, row, title }: { agentId: string; row: Pending
 }
 
 async function regroup({ id, thread }: { id: string; thread: string | null }): Promise<void> {
-  const held = await db.selectFrom('inbox_thread').select('thread_id').where('source_id', '=', id).execute()
-  for (const { thread_id } of held) {
-    const last = await db.selectFrom('inbox_item').select(['text', 'sample']).where('source_id', '=', id).where('thread_id', '=', thread_id).orderBy(sql`coalesce(last_at, created_at)`, 'desc').executeTakeFirst()
-    if (!last) continue
-    const group = (thread ? keyOf(await evaluate(thread, payloadOf(latestOf(last)))) : undefined) ?? ''
-    await db.insertInto('inbox_thread').values({ source_id: id, group_key: group, thread_id }).onConflict((conflict) => conflict.columns(['source_id', 'group_key']).doNothing()).execute()
-  }
+  const newest = await db.selectFrom('inbox_thread')
+    .innerJoin('inbox_item', (join) => join.onRef('inbox_item.thread_id', '=', 'inbox_thread.thread_id').onRef('inbox_item.source_id', '=', 'inbox_thread.source_id'))
+    .select(['inbox_thread.thread_id', 'inbox_item.text', 'inbox_item.sample'])
+    .distinctOn('inbox_thread.thread_id')
+    .where('inbox_thread.source_id', '=', id)
+    .orderBy('inbox_thread.thread_id')
+    .orderBy(sql`coalesce(inbox_item.last_at, inbox_item.created_at)`, 'desc')
+    .execute()
+  if (!newest.length) return
+  const rows = await Promise.all(newest.map(async (item) => ({
+    source_id: id,
+    group_key: await groupOf({ thread, payload: payloadOf(latestOf(item)) }),
+    thread_id: item.thread_id,
+  })))
+  await db.insertInto('inbox_thread').values(rows)
+    .onConflict((conflict) => conflict.columns(['source_id', 'group_key']).doNothing())
+    .execute()
+}
+
+async function groupOf({ thread, payload }: { thread: string | null; payload: unknown }): Promise<string> {
+  return (thread ? keyOf(await evaluate(thread, payload)) : undefined) ?? ''
 }
 
 async function callRow({ source, item }: { source: string | null; item: Pending }): Promise<WebhookCallRow> {
