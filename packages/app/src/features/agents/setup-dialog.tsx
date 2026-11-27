@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { AiBrain01Icon, Analytics01Icon, ArrowRight01Icon, BookOpen01Icon, Cancel01Icon, Delete02Icon, HistoryIcon, Globe02Icon, Key01Icon, Link01Icon, Notification01Icon, PencilEdit02Icon, PlusSignIcon, Settings02Icon, SourceCodeIcon, UserIcon, WebhookIcon } from '@hugeicons/core-free-icons'
+import { AiBrain01Icon, Analytics01Icon, ArrowRight01Icon, BookOpen01Icon, Cancel01Icon, Delete02Icon, Globe02Icon, HistoryIcon, Key01Icon, Link01Icon, Notification01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SourceCodeIcon, StopIcon, WebhookIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { ChannelKind } from '@openhut/common/channels/channel.ts'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,7 @@ import { AccessPicker } from '@/features/agents/access'
 import { Face } from '@/features/agents/face'
 import { MemoryEditor } from '@/features/agents/memory-dialog'
 import { SkillsBrowser, type Crumb } from '@/features/agents/skills-dialog'
-import { useChannels, useCreateGrant, useDeleteAgent, useDeleteChannel, useDeleteGrant, useGrants, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
+import { useChannels, useCreateGrant, useDeleteAgent, useDeleteChannel, useDeleteGrant, useGrants, useUpdateAgent } from '@/features/agents/api'
 import { ORDER } from '@/features/agents/channel-kinds'
 import { ModelRows } from '@/features/agents/model-rows'
 import { RunsOnRow } from '@/features/agents/move'
@@ -139,6 +139,7 @@ function GeneralPane({ agent }: { agent: Agent }) {
       <div className={GROUP}>
         <Go icon={Analytics01Icon} label="Activity" to="activity" />
         <Go icon={Key01Icon} label="Keys" to="keys" />
+        {agent.canEdit && <StopStart agent={agent} />}
         {agent.canEdit && agent.canManage && <DeleteAgent agent={agent} />}
       </div>
     </Body>
@@ -150,6 +151,16 @@ function NotifyLine({ agent }: { agent: Agent }) {
   if (notify.isError) return null
   const place = notify.data?.default
   return <Go icon={Notification01Icon} label="Notify me" value={notify.data && <span className="truncate">{place ? placeName(place) : 'Here'}</span>} to="notify" />
+}
+
+function StopStart({ agent }: { agent: Agent }) {
+  const updateAgent = useUpdateAgent(agent.id)
+  const running = agent.wanted === 'running'
+  return <Button type="button" variant="bare" className={cn(LINE, 'rounded-md hover:bg-hover -mx-2.5 w-[calc(100%+20px)] px-2.5')} disabled={updateAgent.isPending}
+    onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}>
+    <I icon={running ? StopIcon : PlayIcon} size={15} className={running ? 'text-hue-red' : 'text-hue-green'} />{running ? 'Stop' : 'Start'}
+    <span className={VALUE}>{running ? 'Running' : 'Stopped'}</span>
+  </Button>
 }
 
 function DeleteAgent({ agent }: { agent: Agent }) {
