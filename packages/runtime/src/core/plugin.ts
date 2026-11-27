@@ -49,7 +49,7 @@ export type Plugin = {
   migrate?: (db: Kysely<Database>) => Promise<void>
   routes?: () => Record<string, FastifyPluginAsyncZod>
   connectorCall?: (x: { agentId: string; kind: string; tool: string; args: Record<string, unknown> }) => Promise<Record<string, unknown>>
-  afterTurn?: (x: { agentId: string; since: Date }) => Promise<{ type: `data-${string}`; data: unknown } | undefined>
+  afterTurn?: (x: { agentId: string; threadId: string; since: Date }) => Promise<{ type: `data-${string}`; data: unknown } | undefined>
   slackAction?: { prefix: string; run: (x: { agent: GatewayAgent; body: unknown; action: { action_id: string; value?: string } }) => Promise<{ text: string; origin: Origin } | undefined> }
 }
 

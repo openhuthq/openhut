@@ -13,7 +13,7 @@ test('two plugins with the same tool name fail at boot', () => {
 test('every openhut tool comes from exactly one plugin', () => {
   const names = plugins().flatMap((plugin) => Object.keys(plugin.tools ?? {}))
   assert.equal(new Set(names).size, names.length)
-  assert.equal(names.length, 18)
+  assert.equal(names.length, 22)
 })
 
 test('two plugins serving one route prefix fail at boot', () => {
@@ -25,9 +25,9 @@ test('migrate makes the core tables, then each plugin\'s, in list order', async 
   await migrate()
   await migrate()
   const tables = (await sql<{ name: string }>`select table_name as name from information_schema.tables where table_schema = 'public'`.execute(db)).rows.map((row) => row.name)
-  for (const table of ['person', 'agent', 'record', 'channel', 'telegram_code', 'connection', 'connection_grant', 'connection_event', 'tool_permission', 'agent_secret', 'ask', 'inbox_source', 'inbox_item', 'github_face', 'github_thread']) assert.ok(tables.includes(table), table)
+  for (const table of ['person', 'agent', 'record', 'channel', 'telegram_code', 'connection', 'connection_grant', 'connection_event', 'tool_permission', 'agent_secret', 'ask', 'inbox_source', 'inbox_item', 'github_face', 'github_thread', 'artifact', 'artifact_file']) assert.ok(tables.includes(table), table)
   const owners = plugins().filter((plugin) => plugin.migrate).map((plugin) => plugin.name)
-  assert.deepEqual(owners, ['chat', 'channels', 'connections', 'keys', 'asks', 'inbox', 'github'])
+  assert.deepEqual(owners, ['chat', 'channels', 'connections', 'keys', 'asks', 'inbox', 'github', 'artifacts'])
 })
 
 test('the plugins serve their own API routes', () => {
@@ -35,5 +35,6 @@ test('the plugins serve their own API routes', () => {
   assert.deepEqual(served.inbox, ['/api/routines', '/api/webhooks', '/api/delivery-targets', '/inbox', '/api/agents/:id/webhooks'])
   assert.deepEqual(served.chat, ['/api/threads', '/api/agents/:id/notify'])
   assert.deepEqual(served.github, ['/api/agent-faces', '/api/github-app'])
+  assert.deepEqual(served.artifacts, ['/api/artifacts', '/api/share', '/a'])
   assert.ok(served.connections.includes('/api/grants'))
 })

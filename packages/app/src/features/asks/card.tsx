@@ -7,14 +7,14 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Key01Icon } from '@hugeicons/core-free-icons'
-import { Face } from '@/features/agents/face'
-import { AppIcon } from '@/features/connections/asks'
-import { connectionBrand } from '@/features/connections/catalog'
-import { RequestCard } from '@/features/agents/request-card'
+import { Face } from '@/components/agent-face'
+import { AppIcon } from '@/components/app-icon'
+import { connectionBrand } from '@/config/catalog'
+import { RequestCard } from '@/components/request-card'
 import { plainKey } from '@/lib/tool-label'
 import { cn } from '@/lib/utils'
-import { cards, custom, extras } from '@/features/asks/custom'
-import { useAnswer, useAsks } from '@/features/asks/api'
+import type { AskExtra, AskKinds } from '@/lib/asks'
+import { useAnswer, useAsks } from '@/lib/queries/asks'
 
 const LONG = 1000
 const HIDDEN = new Set(['id', 'connectionId', 'botToken', 'tool', 'action'])
@@ -22,42 +22,41 @@ const Field = z.object({ type: z.optional(z.string()), maxLength: z.optional(z.n
 const Form = z.object({ properties: z._default(z.record(z.string(), Field), {}) })
 type Field = z.infer<typeof Field>
 
-export function AskCards({ agent, ids }: { agent: Agent; ids: string[] }) {
+export function AskCards({ agent, ids, kinds }: { agent: Agent; ids: string[]; kinds: AskKinds }) {
   const asks = useAsks(agent.id).data ?? []
   const shown = ids.flatMap((id) => asks.filter((each) => each.id === id))
-  return <AskList agent={agent} asks={shown} />
+  return <AskList agent={agent} asks={shown} kinds={kinds} />
 }
 
-export function PendingAsks({ agent, shown }: { agent: Agent; shown: Set<string> }) {
+export function PendingAsks({ agent, shown, kinds }: { agent: Agent; shown: Set<string>; kinds: AskKinds }) {
   const open = (useAsks(agent.id).data ?? []).filter((each) => each.status === 'open' && !shown.has(each.id))
   if (!open.length) return null
-  return <div className="mx-auto flex w-full max-w-[720px] flex-col gap-2 px-5 pt-3"><AskList agent={agent} asks={open} /></div>
+  return <div className="mx-auto flex w-full max-w-[720px] flex-col gap-2 px-5 pt-3"><AskList agent={agent} asks={open} kinds={kinds} /></div>
 }
 
-function AskList({ agent, asks }: { agent: Agent; asks: Ask[] }) {
-  const rows = asks.filter((each) => custom[each.kind])
+function AskList({ agent, asks, kinds }: { agent: Agent; asks: Ask[]; kinds: AskKinds }) {
+  const rows = asks.filter((each) => kinds.rows[each.kind])
   const done = rows.filter((each) => each.status !== 'open').length
   const all = done === rows.length
   return <>
     {rows.length > 0 && <div className={cn('flex max-w-[560px] min-w-0 flex-col rounded-xl bg-sidebar', all ? 'gap-0.5 px-4 py-2.5' : 'gap-1 p-2')} data-checklist>
       {rows.map((ask) => {
-        const Row = custom[ask.kind]
+        const Row = kinds.rows[ask.kind]
         return Row && <Row key={ask.id} agent={agent} ask={ask} compact={all} />
       })}
       {!all && <p className="m-0 mt-1 border-t border-hair px-2 pt-2.5 pb-1 text-[12.5px] text-mute"><span className="text-ink">{done} of {rows.length} done</span> · {agent.name} continues when the rest are done</p>}
     </div>}
-    {asks.filter((each) => !custom[each.kind]).map((ask) => {
-      const Card = cards[ask.kind] ?? AskCard
-      return <Card key={ask.id} agent={agent} ask={ask} />
+    {asks.filter((each) => !kinds.rows[each.kind]).map((ask) => {
+      const Card = kinds.cards[ask.kind]
+      return Card ? <Card key={ask.id} agent={agent} ask={ask} /> : <AskCard key={ask.id} agent={agent} ask={ask} extra={kinds.extras[ask.kind]} />
     })}
   </>
 }
 
-function AskCard({ agent, ask }: { agent: Agent; ask: Ask }) {
+function AskCard({ agent, ask, extra: Extra }: { agent: Agent; ask: Ask; extra: AskExtra | undefined }) {
   const answer = useAnswer(agent.id)
   const [declining, setDeclining] = useState(false)
   const [editing, setEditing] = useState(false)
-  const Extra = extras[ask.kind]
   const fields = Object.entries(z.safeParse(Form, ask.form ?? {}).data?.properties ?? {})
   const details = Object.entries(ask.input).filter(([key, value]) => !HIDDEN.has(key) && !fields.some(([name]) => name === key) && value !== undefined)
   const approve = (event: FormEvent<HTMLFormElement>) => {

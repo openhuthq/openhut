@@ -1,18 +1,10 @@
-import { BubbleChatIcon, Tick02Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
+import { Tick02Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import type { DeliveryTarget } from '@openhut/common/webhooks/webhook.ts'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Glyph } from '@/components/glyph'
-import { I } from '@/components/kit'
-import { FIELD_MENU, SOFT_TRIGGER } from '@/features/models/model-picker'
+import { I, FIELD_MENU, SOFT_TRIGGER } from '@/components/kit'
 import { useDeliveryTargets } from '@/features/routines/api'
+import { PlaceIcon } from '@/components/place-icon'
 import { cn } from '@/lib/utils'
-
-const GLYPHS = ['slack', 'whatsapp', 'telegram', 'discord'] as const
-
-export function PlaceIcon({ platform, size = 14 }: { platform: string; size?: number }) {
-  const glyph = GLYPHS.find((each) => each === platform)
-  return glyph ? <Glyph name={glyph} size={size} /> : <I icon={BubbleChatIcon} size={size} className="text-hue-blue" />
-}
 
 export function TargetPicker({ agentId, value, place, platform, disabled, onPick }: { agentId: string; value: string; place: string; platform: string; disabled?: boolean; onPick: (target: DeliveryTarget) => void }) {
   const targets = useDeliveryTargets(agentId).data ?? []

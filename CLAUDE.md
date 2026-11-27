@@ -41,7 +41,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   the notes the agent gets, the sweep that expires them, and one wake per chat once nothing there is open or 30 s after its last answer). Every ask carries a `description` (`AskDescription` in `core/plugin.ts`: one sentence for the owner, 3 to 120 characters), shown under the title on every card and on the answered line; app asks (connect, approval, key) show the app's logo, not the agent's face. Its whole API is `asks.create` (returns the text for the agent) and
   `asks.approve` (owner-checked and idempotent); `run` may run twice after a crash, so keep it repeatable.
   The app builds each ask's card from its `title`, `why` and `form` (the JSON schema of `answer`); a kind with its own row exports it from
-  `features/<feature>/asks.tsx` as `rows` (found by `features/asks/custom.ts`), like `connect_app`'s checklist row and connect dialog, a kind that only adds to the card exports `extras`, like `update_self`'s instructions diff, `add_webhook`'s address and secret and `add_channel`'s QR step, and a kind with its own card exports `cards`, like `call_tool`'s Allow / Always allow / Not now card (no Always allow for a destructive action). A form field longer than 1000 characters folds the card's fields behind **Edit**. A sign-in
+  `features/<feature>/asks.tsx` as `rows` (found by `app/asks.ts`, which hands them to the ask cards), like `connect_app`'s checklist row and connect dialog, a kind that only adds to the card exports `extras`, like `update_self`'s instructions diff, `add_webhook`'s address and secret and `add_channel`'s QR step, and a kind with its own card exports `cards`, like `call_tool`'s Allow / Always allow / Not now card (no Always allow for a destructive action). A form field longer than 1000 characters folds the card's fields behind **Edit**. A sign-in
   started for an ask carries its id, and the callback calls `asks.approve` with the new connection.
   Changes reach a running agent live: Hermes re-reads `config.yaml` and `.env` every turn, and agentd runs `hermes sessions refresh-prompts` when `SOUL.md` changes.
   An `agent()` part may set `restart` to what in it needs a restart (default: its config, env and auth; a prompt never does), and `render.ts` hashes
@@ -69,7 +69,11 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   is the tests' fake (`OPENHUT_FAKE_SANDBOX=1`). `agents.ts` and `commands.ts` know no Hermes: the container spec, home layout,
   conf files and `state.db` are `adapters/hermes/` (`hermesBox`), and the firewall, fence, link, subnets and ports are `network/`. Tests mirror them in `test/server/` and `test/agentd/`.
 - **`packages/app`** — `@openhut/app`, the App: the React dashboard (Vite to `dist`, built into the image and served by the runtime on the same origin, TanStack Query). Tailwind v4 with shared
-  components in `src/components/ui` (shadcn on Base UI); screens use those, not their own styles.
+  components in `src/components/ui` (shadcn on Base UI); screens use those, not their own styles. Laid out like bulletproof-react:
+  `app/` (`provider.tsx`, `routes/`, `layout/`) composes the features; a feature (`features/<name>/`, the big ones split into `api/`
+  and `components/`, agents' channel dialogs in `agents/channels/`) never imports `app/` or another feature, and gets another
+  feature's piece as a slot or children from its route; shared code is `components/`, `lib/` (shared reads in `lib/queries/`, every
+  query key in `lib/query-keys.ts`) and `config/` (paths, the app catalog), and imports neither. `test/boundaries.test.ts` enforces it.
 - **`packages/common`** — `@openhut/common`, the API contract: Zod Mini request schemas and response types.
 - **`packages/site`** — openhut.dev: the home page, the brand page and `/` for curl, served by a Cloudflare Worker with static assets
   (`wrangler.jsonc`, `src/worker.ts`) that `.github/workflows/deploy.yml` deploys after CI passes on `main`. Its own npm package

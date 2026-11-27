@@ -4,18 +4,18 @@ import { LIVE_BEAT_MS, LiveEvent } from '@openhut/common/live.ts'
 import { openChannel, type Channel } from '@/lib/live-socket'
 import { liveThreads, ThreadEvent, type LiveAgentBoard } from '@/lib/thread-live'
 import type { OpenHutAgent } from '@/lib/openhut'
-import { AGENTS_KEY, COMPUTERS_KEY, CONNECTIONS_KEY, GRANTS_KEY, PROVIDERS_KEY, THREADS_KEY } from '@/lib/query-keys'
+import { agentKey, AGENTS_KEY, ASKS_KEY, CHANNELS_KEY, COMPUTERS_KEY, CONNECTIONS_KEY, GRANTS_KEY, MEMORY_KEY, PROVIDERS_KEY, ROUTINES_KEY, SKILL_KEY, SKILLS_KEY, THREAD_KEY, threadKey, THREADS_KEY } from '@/lib/query-keys'
 
 const FILTERS: Record<string, QueryFilters[]> = {
   agent: [{ queryKey: AGENTS_KEY }],
-  thread: [{ queryKey: THREADS_KEY, exact: true }, { queryKey: [...THREADS_KEY, 'thread'] }],
-  channel: [{ queryKey: ['channels'] }],
+  thread: [{ queryKey: THREADS_KEY, exact: true }, { queryKey: THREAD_KEY }],
+  channel: [{ queryKey: CHANNELS_KEY }],
   connection: [{ queryKey: CONNECTIONS_KEY }],
   grant: [{ queryKey: GRANTS_KEY }],
-  skill: [{ queryKey: ['skills'] }, { queryKey: ['skill'] }],
-  memory: [{ queryKey: ['memory'] }],
-  routine: [{ queryKey: ['routines'] }],
-  ask: [{ queryKey: ['asks'] }],
+  skill: [{ queryKey: SKILLS_KEY }, { queryKey: SKILL_KEY }],
+  memory: [{ queryKey: MEMORY_KEY }],
+  routine: [{ queryKey: ROUTINES_KEY }],
+  ask: [{ queryKey: ASKS_KEY }],
   provider: [{ queryKey: PROVIDERS_KEY }],
   admin: [{ queryKey: COMPUTERS_KEY }],
 }
@@ -34,7 +34,7 @@ export function followEvents(client: QueryClient): void {
   let flush: ReturnType<typeof setTimeout> | undefined
   liveThreads.connect({
     send: (message) => follow.channel?.send(JSON.stringify(message)),
-    refetch: (thread) => client.invalidateQueries({ queryKey: [...THREADS_KEY, 'thread', thread] }),
+    refetch: (thread) => client.invalidateQueries({ queryKey: threadKey(thread) }),
   })
 
   const invalidate = (filters: QueryFilters[]) => {
@@ -115,7 +115,7 @@ function syncAgents({ client, agents }: { client: QueryClient; agents: LiveAgent
     const live = byId.get(each.id)
     return live ? { ...each, status: live.status, health: live.health } : each
   }))
-  for (const live of changed) void client.invalidateQueries({ queryKey: [...AGENTS_KEY, live.id], exact: true })
+  for (const live of changed) void client.invalidateQueries({ queryKey: agentKey(live.id), exact: true })
 }
 
 function parsed(line: string): unknown {

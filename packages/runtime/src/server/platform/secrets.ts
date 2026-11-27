@@ -27,6 +27,7 @@ export function unseal(sealed: string): string {
   return Buffer.concat([decipher.update(bytes.subarray(28)), decipher.final()]).toString('utf8')
 }
 
+export const keyFor = (purpose: string): Buffer => createHash('sha256').update(secret).update(purpose).digest()
 export const sha = (value: string): string => createHash('sha256').update(value).digest('hex')
 export const newId = (prefix: string): string => `${prefix}_${randomBytes(6).toString('base64url').replace(/[-_]/g, 'x').toLowerCase()}`
 export const newToken = (prefix: string): string => `${prefix}_${randomBytes(24).toString('base64url')}`

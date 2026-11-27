@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { Place } from '@openhut/common/channels/channel.ts'
 import { Cancel01Icon, Delete02Icon, RefreshIcon, Tick02Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
@@ -9,19 +10,20 @@ import { Tooltip } from '@/components/ui/tooltip'
 import { CopyButton } from '@/components/copy-button'
 import { useConfirming } from '@/components/confirm-button'
 import { ErrorNote } from '@/components/error-note'
-import { DialogCard, I, Loading, TINY_ICON } from '@/components/kit'
-import { Details, Quiet } from '@/features/agents/request-card'
-import { PlacePicker } from '@/features/agents/notify'
-import { SOFT_TRIGGER } from '@/features/models/model-picker'
-import { PreviewCard } from '@/features/webhooks/call-card'
-import { pretty } from '@/features/webhooks/call'
-import { useCreateWebhook, useDeleteWebhook, useRotateWebhook, useUpdateWebhook, useWebhooks, type Webhook } from '@/features/webhooks/api'
+import { DialogCard, I, Loading, TINY_ICON, SOFT_TRIGGER } from '@/components/kit'
+import { Details, Quiet } from '@/components/request-card'
+import { PreviewCard } from '@/components/call-card'
+import { pretty } from '@/lib/webhook-call'
+import { useCreateWebhook, useDeleteWebhook, useRotateWebhook, useUpdateWebhook } from '@/features/webhooks/api'
+import { useWebhooks, type Webhook } from '@/lib/queries/webhooks'
 import { ago } from '@/lib/format'
 import { formValues } from '@/lib/form'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
-export function WebhooksDialog({ agent, onClose }: { agent: Agent; onClose: () => void }) {
+export type PlaceSlot = (props: { value: Place | null; disabled: boolean; onPick: (place: Place | null) => void }) => ReactNode
+
+export function WebhooksDialog({ agent, placePicker, onClose }: { agent: Agent; placePicker: PlaceSlot; onClose: () => void }) {
   const webhooks = useWebhooks(agent.id)
   const create = useCreateWebhook(agent.id)
   return <DialogCard onClose={onClose} className="max-h-[min(680px,calc(100vh-48px))] w-[560px] gap-0 overflow-hidden p-0">
@@ -33,7 +35,7 @@ export function WebhooksDialog({ agent, onClose }: { agent: Agent; onClose: () =
       <ErrorNote message={webhooks.error?.message} />
       {!webhooks.data && !webhooks.error && <Loading />}
       {webhooks.data && (webhooks.data.length
-        ? webhooks.data.map((webhook) => <WebhookItem key={webhook.id} agent={agent} webhook={webhook} />)
+        ? webhooks.data.map((webhook) => <WebhookItem key={webhook.id} agent={agent} webhook={webhook} placePicker={placePicker} />)
         : <Quiet agent={agent} line={`No webhooks yet. Add one here, or ask ${agent.name} for one.`} />)}
     </div>
     <form className="flex items-center gap-2 border-t border-hair px-6 py-4" onSubmit={(event) => {
@@ -48,7 +50,7 @@ export function WebhooksDialog({ agent, onClose }: { agent: Agent; onClose: () =
   </DialogCard>
 }
 
-function WebhookItem({ agent, webhook }: { agent: Agent; webhook: Webhook }) {
+function WebhookItem({ agent, webhook, placePicker }: { agent: Agent; webhook: Webhook; placePicker: PlaceSlot }) {
   const update = useUpdateWebhook(agent.id)
   const rotate = useRotateWebhook(agent.id)
   const remove = useDeleteWebhook(agent.id)
@@ -64,7 +66,7 @@ function WebhookItem({ agent, webhook }: { agent: Agent; webhook: Webhook }) {
       <CopyButton text={webhook.secret} label="Copy" variant="ghost" />
       <Button type="button" variant="ghost" size="sm" disabled={rotate.isPending} onClick={() => rotate.mutate(webhook.id, { onError: toastError })}><I icon={RefreshIcon} size={13} className="text-hue-amber" />New secret</Button>
     </Field>
-    <Field label="Runs in"><PlacePicker agentId={agent.id} value={webhook.channel === 'app' ? null : webhook.channel ?? null} none="Here in the web app" label="Runs in" className="w-[260px]" disabled={update.isPending} onPick={(place) => update.mutate({ id: webhook.id, channel: place ?? 'app' }, { onError: toastError })} /></Field>
+    <Field label="Runs in">{placePicker({ value: webhook.channel === 'app' ? null : webhook.channel ?? null, disabled: update.isPending, onPick: (place) => update.mutate({ id: webhook.id, channel: place ?? 'app' }, { onError: toastError }) })}</Field>
     <Field label="Threads"><ThreadsPicker value={webhook.threads} disabled={update.isPending} onPick={(threads) => update.mutate({ id: webhook.id, threads }, { onError: toastError })} /></Field>
     {webhook.filter && <div className="flex min-w-0 items-start gap-2 text-[13px]"><span className="w-16 shrink-0 pt-1.5 text-mute">Wakes on</span>
       <span className="grid min-w-0 flex-1 gap-1.5"><code className="rounded-md bg-soft px-2 py-1.5 font-mono text-[12px]/[1.5] whitespace-pre-wrap text-ink [overflow-wrap:anywhere]">{webhook.filter}</code>
