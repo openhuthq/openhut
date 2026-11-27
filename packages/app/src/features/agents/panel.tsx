@@ -39,8 +39,8 @@ export function Panel({ agent, naming, watching, collapsed = false }: { agent: A
   const memory = useMemoryCount(agent)
   useGitHubFace(agent)
   const skills = skillsNote(useSkills(agent.id).data)
-  return <aside data-details inert={collapsed} className={cn('still flex shrink-0 justify-end overflow-hidden border-hair transition-[width] duration-[240ms] ease-(--ease-spring) phone:w-full phone:flex-1 phone:border-l-0', collapsed ? 'w-0' : 'w-[280px] border-l-[0.5px]', GLASS)}>
-    <div className={cn('flex w-[280px] shrink-0 flex-col gap-4 overflow-auto px-4 pt-4 pb-4 [scrollbar-gutter:stable] transition-[opacity,translate] duration-[160ms] ease-out phone:w-full', collapsed && 'translate-x-2 opacity-0')}>
+  return <aside data-details inert={collapsed} className={cn('still flex shrink-0 justify-end overflow-hidden border-hair transition-[width] duration-[240ms] ease-(--ease-spring) phone:w-full phone:flex-1 phone:border-l-0', collapsed ? 'w-0' : 'w-[320px] border-l-[0.5px]', GLASS)}>
+    <div className={cn('flex w-[320px] shrink-0 flex-col gap-4 overflow-auto px-4 pt-4 pb-4 [scrollbar-gutter:stable] transition-[opacity,translate] duration-[160ms] ease-out phone:w-full', collapsed && 'translate-x-2 opacity-0')}>
     <div className={'flex items-center gap-3'}>
       <div className="relative shrink-0">{agent.canEdit ? <a href={agentPath({ agentId: agent.id, dialog: 'customize' })} aria-label={`Customize ${agent.name}`} title="Customize" className="relative block shrink-0">
         <Face agent={agent} size={48} tile />
