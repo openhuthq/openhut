@@ -20,6 +20,7 @@ export const ROW_VALUE = 'ml-auto inline-flex min-w-0 items-center gap-1.5 text-
 export const PICKED = 'bg-picked hover:bg-picked'
 export const SURFACE = 'border border-solid border-hair bg-card text-ink no-underline hover:bg-[color-mix(in_oklch,var(--card),black_3.5%)]'
 export const PILL = 'h-[26px] rounded-full px-2.5 text-[12px] font-normal'
+export const HEADER_ACTION = 'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border-0 bg-transparent px-2 text-[13px] font-normal text-ink no-underline hover:bg-hover disabled:opacity-50'
 export const TINY_ICON = 'grid size-7 shrink-0 place-items-center rounded-md border-0 bg-transparent p-0 text-ink hover:bg-hover disabled:opacity-50'
 export const ICON_BUTTON = 'grid size-8 shrink-0 place-items-center rounded-lg border-0 bg-transparent p-0 text-body no-underline shadow-none outline-offset-0 hover:bg-hover hover:text-ink'
 export const HINT = 'm-0 text-[12px]/[16px] text-mute [&_b]:font-medium [&_b]:text-body [&_code]:font-mono [&_code]:text-[11.5px] [&_code]:text-ink'

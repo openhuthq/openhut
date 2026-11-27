@@ -4,8 +4,8 @@ import type { Connection } from '@openhut/common/connections/connection.ts'
 
 const APP = `http://127.0.0.1:${process.env.PORT ?? 8797}`
 const AGENTS = [
-  ['Dev', 'Answers engineering questions in the team channel. Looks up orders and schema in the Orders DB.', 'claude:sonnet', 'running'],
-  ['Sales', 'Posts the weekly pipeline report and answers questions about deals.', 'claude:sonnet', 'stopped'],
+  ['Ops', 'Answers engineering questions in the team channel. Looks up orders and schema in the Orders DB.', 'claude:sonnet', 'running'],
+  ['Growth', 'Posts the weekly pipeline report and answers questions about deals.', 'claude:sonnet', 'stopped'],
   ['Support', 'Answers customers in #support. Looks the customer up before replying.', 'claude:haiku', 'running'],
 ]
 const DSN = process.env.SEED_POSTGRES_DSN
@@ -17,7 +17,7 @@ for (const [name, about, model, wanted] of AGENTS) {
   ids[name] = agent.id
   await api('PATCH', `/api/agents/${agent.id}`, { model, wanted })
 }
-if (orders) for (const agentId of [ids.Dev, ids.Support]) await api('POST', '/api/grants', { agentId, connectionId: orders.id })
+if (orders) for (const agentId of [ids.Ops, ids.Support]) await api('POST', '/api/grants', { agentId, connectionId: orders.id })
 console.log(JSON.stringify({ agents: ids, connection: orders?.id ?? null }))
 
 async function api<T>(method: string, path: string, body?: unknown) {

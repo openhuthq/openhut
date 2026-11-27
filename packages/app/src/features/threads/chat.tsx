@@ -24,9 +24,10 @@ import { useOwner } from '@/features/people/api'
 import { personName } from '@/lib/format'
 import { SidebarContext } from '@/features/agents/sidebar'
 import { agentState } from '@/components/status-badge'
-import { troubleOf } from '@/features/agents/status'
+import { RetryApply, troubleOf } from '@/features/agents/status'
 import { useAgents, useUpdateAgent } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
+import { agentPath } from '@/app/routes'
 import { deleteUpload, saveFile, stopThread, threadPath, uploadFile, useClearChat, useHomeFiles, useThread, useThumb, useTouchThread, type ThreadWithMessages } from '@/features/threads/api'
 import { replyOf, replyText } from '@openhut/common/threads/reply.ts'
 import { Notified, PLATFORM_WORD, placeName, startedIn, type SourcedThread } from '@/features/threads/places'
@@ -98,9 +99,10 @@ function ThreadView({ thread, fetchedAt, agent, actions, tools, onTitle }: { thr
   const waiting = busy && chat.status !== 'streaming' && !(last?.role === 'assistant' && last.id === thread.activeTurn)
   const mine = [...shown].reverse().find((message) => message.role === 'user' && !webhookOf(message.metadata) && (z.safeParse(Authored, message.metadata).data?.author ?? me) === me)
   const said = saidAfter(shown)
-  const clear = agent.canEdit && chat.messages.length > 0 && !busy && !attachments.uploading && <ClearChat agent={agent} threadId={thread.id} attachments={attachments} />
+  const clear = agent.canEdit && <ClearChat agent={agent} threadId={thread.id} attachments={attachments} disabled={!chat.messages.length || busy || attachments.uploading} />
   return <ChatFiles value={files}><CardReply value={thread.readOnly ? undefined : (text) => { if (busy) return false; send(text); return true }}><ChatFrame agent={agent} thread={thread} tools={<>{actions}{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={thread.readOnly ? <ContinueBar thread={thread} /> : <Composer agent={agent} threadId={thread.id} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void stopThread({ agentId: agent.id, threadId: thread.id }).catch(toastError)} />}>
     {shown.length ? <>
+      <Welcome agent={agent} />
       <Day iso={thread.updatedAt} />
       {shown.map((message, index) => <Message key={message.id} agent={agent} thread={thread} message={message} said={(text) => said(index, text)} seen={message === mine} live={chat.status === 'streaming' && message === last} onRetry={!busy && !thread.readOnly && message === last ? () => void chat.regenerate() : undefined} />)}
     </> : !waiting && <ChatEmpty agent={agent} />}
@@ -193,15 +195,18 @@ function ChatFrame({ agent, thread, composer, tools, onTitle, onFiles, children 
   }
   return <section className="flex min-w-0 flex-1 flex-col bg-card" onDragOver={dragOver} onDrop={drop}>
     <title>{`${agent.name} · OpenHut`}</title>
-    <div className={cn('still flex h-[52px] shrink-0 items-center gap-2 px-4 phone:grid phone:h-16 phone:grid-cols-[1fr_auto_1fr] phone:px-3', sidebar?.collapsed && 'pl-[94px] phone:pl-3')}>
+    <div className={cn('still relative flex h-[116px] shrink-0 items-start gap-2 px-4 pt-3 phone:grid phone:items-center phone:pt-0 phone:h-16 phone:grid-cols-[1fr_auto_1fr] phone:px-3', sidebar?.collapsed && 'pl-[94px] phone:pl-3')}>
       <Button type="button" variant="bare" aria-label="All agents" className={cn(ICON_BUTTON, 'float hidden size-10 justify-self-start rounded-full bg-card text-ink phone:grid')} onClick={back}><I icon={ArrowLeft01Icon} size={20} /></Button>
       {onTitle
         ? <Button type="button" variant="bare" className="float flex h-10 min-w-0 items-center gap-2 rounded-full bg-card pr-4 pl-1.5 text-ink" onClick={onTitle}><Face agent={agent} size={28} /><span className="truncate text-[16px] font-semibold">{agent.name}</span></Button>
-        : <><Face agent={agent} size={26} /><span className="shrink-0 text-[14px] font-semibold">{agent.name}</span>{thread && <span className="min-w-0 truncate text-[13px] text-mute">· {thread.id === agent.id ? 'Main thread' : thread.title}</span>}{thread && <ThreadSource thread={thread} />}</>}
+        : <>{thread && thread.id !== agent.id && <span className="min-w-0 truncate text-[13px] text-mute">{thread.title}</span>}{thread && <ThreadSource thread={thread} />}{agent.applyError && <RetryApply agent={agent} />}</>}
+      {!onTitle && <a href={agentPath({ agentId: agent.id, dialog: 'setup', detail: 'general' })} aria-label={`Set up ${agent.name}`} className="group absolute top-3 left-1/2 flex max-w-[50%] -translate-x-1/2 flex-col items-center gap-2 text-ink no-underline phone:hidden">
+        <Face agent={agent} size={56} /><span className="max-w-full truncate rounded-full bg-soft px-3.5 py-1 text-[14px] font-medium group-hover:bg-mid">{agent.name}</span>
+      </a>}
       <span className="float ml-auto flex items-center gap-0.5 phone:h-10 phone:justify-self-end phone:rounded-full phone:bg-card phone:px-1">{thread && <PresenceFaces agent={agent} threadId={thread.id} />}{tools}</span>
     </div>
-    <div ref={log} className="fade-t flex flex-1 flex-col overflow-auto px-8 py-5 phone:px-4" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80 }}>
-      <div className="mx-auto flex w-full max-w-[840px] flex-1 flex-col justify-end gap-4">{children}</div>
+    <div ref={log} className="fade-t flex flex-1 flex-col overflow-auto px-8 py-5 transition-[padding] group-data-[threads]/chat:pr-[396px] phone:px-4" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80 }}>
+      <div className="mx-auto flex w-full max-w-[840px] flex-1 flex-col gap-4">{children}</div>
     </div>
     {composer}
   </section>
@@ -218,7 +223,7 @@ function ThreadSource({ thread }: { thread: SourcedThread }) {
 function ContinueBar({ thread }: { thread: SourcedThread }) {
   const place = thread.place
   const where = place ? PLATFORM_WORD[place.platform] ?? place.platform : 'the other app'
-  return <div className="shrink-0 px-8 pb-5 phone:px-3 phone:pb-3">
+  return <div className="shrink-0 px-8 pb-5 transition-[padding] group-data-[threads]/chat:pr-[396px] phone:px-3 phone:pb-3">
     <div className="mx-auto flex max-w-[840px] items-center gap-2.5 rounded-xl bg-sidebar py-2.5 pr-2.5 pl-3.5 text-[13.5px] text-body phone:flex-wrap">
       {place && <PlaceIcon platform={place.platform} size={16} />}
       <span className="min-w-0 flex-1">This conversation continues in {place?.chat_name ? placeName(place) : where}</span>
@@ -239,7 +244,7 @@ function Day({ iso }: { iso: string }) {
 }
 
 function ComposerSkeleton() {
-  return <div className="shrink-0 px-8 pb-5 phone:px-3 phone:pb-3"><div className="mx-auto h-[51px] max-w-[840px] rounded-xl border border-[oklch(0%_0_0/.12)] bg-card" /></div>
+  return <div className="shrink-0 px-8 pb-5 transition-[padding] group-data-[threads]/chat:pr-[396px] phone:px-3 phone:pb-3"><div className="mx-auto h-[108px] max-w-[840px] rounded-[22px] border border-hair bg-sidebar" /></div>
 }
 
 function Composer({ agent, threadId, busy, quiet, attachments, onSend, onStop }: { agent: Agent; threadId: string; busy: boolean; quiet: boolean; attachments: Attachments; onSend: (text: string) => void; onStop: () => void }) {
@@ -272,18 +277,18 @@ function Composer({ agent, threadId, busy, quiet, attachments, onSend, onStop }:
     event.preventDefault()
     attachments.add(Array.from(event.clipboardData.files))
   }
-  return <div className="shrink-0 px-8 pb-5 phone:px-3 phone:pb-3">
+  return <div className="shrink-0 px-8 pb-5 transition-[padding] group-data-[threads]/chat:pr-[396px] phone:px-3 phone:pb-3">
     {(!ready || state === 'not_answering') && !busy && !quiet && <NotReady agent={agent} />}
     {starting && <p className={cn(HINT, 'mx-auto mb-2 flex max-w-[840px] items-center gap-1.5')} role="status"><Spinner className="mt-0 size-3" />Starting… your message will send.</p>}
-    <form className="mx-auto flex max-w-[840px] flex-col gap-2 rounded-xl border border-[oklch(0%_0_0/.12)] bg-card p-2 focus-within:border-mid" onSubmit={submit}>
+    <form className="mx-auto flex max-w-[840px] flex-col gap-2 rounded-[22px] border border-ink bg-sidebar px-3 pt-3 pb-2.5 shadow-[0_6px_24px_-12px_oklch(0%_0_0/.18)] transition-[border-color,box-shadow] focus-within:shadow-[0_8px_28px_-12px_oklch(0%_0_0/.26)]" onSubmit={submit}>
       {attachments.items.length > 0 && <div className="flex flex-wrap gap-1.5">{attachments.items.map((each) => <FileChip key={each.key} name={each.name} image={each.image} thumb={each.thumb} busy={!each.file} onRemove={() => attachments.remove(each.key)} />)}</div>}
-      <div className="flex items-end gap-1">
-        <Input ref={picker} type="file" multiple hidden onChange={(event) => { attachments.add(Array.from(event.currentTarget.files ?? [])); event.currentTarget.value = '' }} />
-        <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Attach files" title="Attach files" disabled={!ready} onClick={() => picker.current?.click()}><I icon={Attachment01Icon} size={16} /></Button>
-        <Textarea variant="composer" name="text" rows={1} aria-label="Message" placeholder={placeholderOf(agent)} disabled={!ready} autoFocus={!touch}
-          className="min-h-0 flex-1 py-1.5 text-[14px]" onKeyDown={enter} onPaste={paste} onBlur={typing.stop}
+      <Input ref={picker} type="file" multiple hidden onChange={(event) => { attachments.add(Array.from(event.currentTarget.files ?? [])); event.currentTarget.value = '' }} />
+      <Textarea variant="composer" name="text" rows={2} aria-label="Message" placeholder={placeholderOf(agent)} disabled={!ready} autoFocus={!touch}
+          className="min-h-[48px] w-full px-1.5 py-0.5 text-[15px]/[1.55]" onKeyDown={enter} onPaste={paste} onBlur={typing.stop}
           onInput={(event) => { const box = event.currentTarget; setEmpty(!box.value.trim()); if (box.value.trim()) typing.ping(); else typing.stop(); box.style.height = 'auto'; box.style.height = `${Math.min(box.scrollHeight, 240)}px` }} />
-        <Button type="submit" variant="send" onMouseDown={(event) => event.preventDefault()} className={cn(!busy && nothing && 'bg-transparent text-mute disabled:opacity-100')} aria-label={busy ? 'Stop' : 'Send'} title={busy ? 'Stop' : 'Send (Enter). Shift+Enter for a new line'} disabled={!busy && (!ready || nothing || attachments.uploading)}>{busy ? <span className="size-2.5 rounded-[2px] bg-white" /> : <I icon={ArrowUp02Icon} />}</Button>
+      <div className="flex items-center gap-1">
+        <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Attach files" title="Attach files" disabled={!ready} onClick={() => picker.current?.click()}><I icon={Attachment01Icon} size={16} /></Button>
+        <span className="ml-auto"><Button type="submit" variant="send" className="rounded-full" onMouseDown={(event) => event.preventDefault()} aria-label={busy ? 'Stop' : 'Send'} title={busy ? 'Stop' : 'Send (Enter). Shift+Enter for a new line'} disabled={!busy && (!ready || nothing || attachments.uploading)}>{busy ? <span className="size-2.5 rounded-[2px] bg-white" /> : <I icon={ArrowUp02Icon} className="text-white" />}</Button></span>
       </div>
     </form>
   </div>
@@ -312,10 +317,10 @@ function NotReady({ agent }: { agent: Agent }) {
   return <Alert variant="warning" className="max-w-[840px]" role="status" title={agent.healthDetail || undefined}><b>{agent.name} isn't ready.</b> {reason} {state === 'no_seat' && <a href="/settings/models">Open Settings › Models</a>}</Alert>
 }
 
-function ClearChat({ agent, threadId, attachments }: { agent: Agent; threadId: string; attachments: Attachments }) {
+function ClearChat({ agent, threadId, attachments, disabled }: { agent: Agent; threadId: string; attachments: Attachments; disabled: boolean }) {
   const clearChat = useClearChat({ agentId: agent.id, threadId })
   const uploads = attachments.items.flatMap((item) => item.file ? [item.file.path] : [])
-  return <ConfirmIcon label="Clear chat" icon={EraserIcon} question="Clear this chat? Memory stays; files you sent are deleted." action="Clear" busy={clearChat.isPending}
+  return <ConfirmIcon label="Clear chat" text="Clear chat" disabled={disabled} icon={EraserIcon} question="Clear this chat? Memory stays; files you sent are deleted." action="Clear" busy={clearChat.isPending}
     onConfirm={(done) => clearChat.mutate({ uploads }, { onSuccess: () => { attachments.clear(); done() }, onError: toastError })} />
 }
 
@@ -460,22 +465,28 @@ function shortUrl(href: string) {
 function ChatEmpty({ agent }: { agent: Agent }) {
   const state = agentState(agent)
   const offline = useOffline(agent)
-  const copy = offline
-    ? [`${agent.name}'s computer is offline`, 'It answers again as soon as its computer is back online.']
-    : {
-      running: [`Say hello to ${agent.name}`, 'Ask it anything, or tell it what its job is.'],
-      starting: [`Starting ${agent.name}`, 'It takes about a minute the first time. You can type as soon as it answers.'],
-      no_seat: [`${agent.name} is asleep until it has a model`, 'Connect Claude, ChatGPT or an API key, and it starts answering.'],
-      setup_failed: [`${agent.name} couldn't start${agent.runsHere ? '' : ` on ${agent.runsOnName ?? 'its computer'}`}`, 'OpenHut keeps trying. If it stays like this, stop it and start it again.'],
-      not_answering: [`${agent.name} isn't answering`, 'It restarts on its own. You can also stop it and start it again.'],
-      stopped: ['', ''],
-      missing: [`${agent.name} stopped unexpectedly`, 'It comes back by itself within 30 seconds.'],
-    }[state]
+  const note = offline ? `${agent.name}'s computer is offline. It answers when it's back.` : {
+    running: '',
+    starting: `Starting ${agent.name}. You can type now.`,
+    no_seat: `${agent.name} needs a model to answer.`,
+    setup_failed: `${agent.name} couldn't start. OpenHut keeps trying.`,
+    not_answering: `${agent.name} isn't answering. It restarts on its own.`,
+    stopped: '',
+    missing: `${agent.name} stopped. It comes back within 30 seconds.`,
+  }[state]
   const detail = state === 'not_answering' || state === 'setup_failed' ? agent.healthDetail : ''
-  return <Centered agent={agent} title={copy[0]} line={copy[1]} pulse={state === 'starting'}>
-    {state === 'no_seat' && <a href="/settings/models" className="text-ink underline underline-offset-2">Connect a model</a>}
-    {detail && <Details text={detail} />}
-  </Centered>
+  return <Welcome agent={agent}>{note && <p className="m-0 flex flex-wrap items-center gap-x-2 text-[13px] text-mute">{note}{state === 'no_seat' && <a href="/settings/models" className="text-ink underline underline-offset-2">Connect a model</a>}</p>}{detail && <Details text={detail} />}</Welcome>
+}
+
+function Welcome({ agent, children }: { agent: Agent; children?: ReactNode }) {
+  return <div className="grid grid-cols-[34px_minmax(0,1fr)] gap-3">
+    <Face agent={agent} size={34} />
+    <div className="flex min-w-0 flex-col gap-2 pt-1.5 text-[15px]/[1.6] text-ink">
+      <p className="m-0">Hey! I’m {agent.name}.</p>
+      <p className="m-0">{agent.summary || 'Ask me anything, or tell me what my job is.'}</p>
+      {children}
+    </div>
+  </div>
 }
 
 function Asleep({ agent }: { agent: Agent }) {

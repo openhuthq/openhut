@@ -14,10 +14,11 @@ const LABEL = 'Dev'
 const shared = { ...process.env, PORT: String(PORT), OPENHUT_GATEWAY_PORT: String(GATEWAY_PORT), AGENTD_SOCK: SOCK }
 
 rmSync(SOCK, { force: true })
-const agentd = spawn(process.execPath, ['packages/runtime/src/agentd/agentd.ts'], { env: { ...shared, AGENTD_DATA: `${DATA}/agentd` }, stdio: 'inherit' })
+const FAKE = process.env.OPENHUT_FAKE_SANDBOX ?? String(process.platform !== 'linux')
+const agentd = spawn(process.execPath, ['packages/runtime/src/agentd/agentd.ts'], { env: { ...shared, AGENTD_DATA: `${DATA}/agentd`, OPENHUT_FAKE_SANDBOX: FAKE }, stdio: 'inherit' })
 while (!existsSync(SOCK) && agentd.exitCode === null) await sleep(100)
 const app = spawn(process.execPath, ['--no-node-snapshot', '--env-file-if-exists=.env', 'packages/runtime/src/server/app.ts'], {
-  env: { ...shared, OPENHUT_DATA: DATA, OPENHUT_DEV_KEY_SHA256: createHash('sha256').update('dev').digest('hex') },
+  env: { ...shared, OPENHUT_DATA: DATA, OPENHUT_DEV_KEY_SHA256: createHash('sha256').update('dev').digest('hex'), ...(FAKE === 'true' && { OPENHUT_FAKE_AGENTS: 'true', OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? 'test' }) },
   stdio: 'inherit',
 })
 const vite = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'packages/app'], { env: { ...shared, OPENHUT_DEV_LABEL: LABEL }, stdio: 'inherit' })
@@ -27,7 +28,7 @@ console.log([
   'OpenHut Dev',
   '  App      http://localhost:5173 (or the next free port Vite prints), with the dev key',
   `  Runtime  http://127.0.0.1:${PORT}, gateway on ${GATEWAY_PORT}, data in ${DATA}`,
-  '  Agents   Docker containers (gVisor where runsc works); they start only where the agents firewall applies (Linux as root)',
+  FAKE === 'true' ? '  Agents   in memory (not Linux): the test model echoes replies. OPENHUT_FAKE_SANDBOX=false for Docker' : '  Agents   Docker containers (gVisor where runsc works); they start only where the agents firewall applies (Linux as root)',
   '  Reset    npm run reset wipes .data. Ctrl-C stops everything.',
   '',
 ].join('\n'))

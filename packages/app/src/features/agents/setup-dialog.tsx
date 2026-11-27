@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { AiBrain01Icon, Analytics01Icon, ArrowRight01Icon, BookOpen01Icon, Cancel01Icon, Delete02Icon, HistoryIcon, Globe02Icon, Key01Icon, Link01Icon, Notification01Icon, PlusSignIcon, Settings02Icon, SourceCodeIcon, UserIcon, WebhookIcon } from '@hugeicons/core-free-icons'
+import { AiBrain01Icon, Analytics01Icon, ArrowRight01Icon, BookOpen01Icon, Cancel01Icon, Delete02Icon, HistoryIcon, Globe02Icon, Key01Icon, Link01Icon, Notification01Icon, PencilEdit02Icon, PlusSignIcon, Settings02Icon, SourceCodeIcon, UserIcon, WebhookIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { ChannelKind } from '@openhut/common/channels/channel.ts'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,8 @@ import { Glyph } from '@/components/glyph'
 import { I, PILL, ROW, Status } from '@/components/kit'
 import { agentPath } from '@/app/routes'
 import { AccessPicker } from '@/features/agents/access'
+import { MemoryEditor } from '@/features/agents/memory-dialog'
+import { SkillsBrowser } from '@/features/agents/skills-dialog'
 import { useChannels, useCreateGrant, useDeleteAgent, useDeleteChannel, useDeleteGrant, useGrants, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
 import { ORDER } from '@/features/agents/channel-kinds'
 import { ModelRows } from '@/features/agents/model-rows'
@@ -31,13 +33,13 @@ import { cn } from '@/lib/utils'
 import { useMoreBelow } from '@/lib/more-below'
 
 const SETUP_TABS = [
-  { slug: 'general', name: 'General', icon: Settings02Icon },
-  { slug: 'connections', name: 'Connections', icon: Link01Icon },
-  { slug: 'channels', name: 'Channels', icon: Notification01Icon },
-  { slug: 'memory', name: 'Memory', icon: AiBrain01Icon },
-  { slug: 'skills', name: 'Skills', icon: BookOpen01Icon },
-  { slug: 'routines', name: 'Routines', icon: HistoryIcon },
-  { slug: 'webhooks', name: 'Webhooks', icon: WebhookIcon },
+  { slug: 'general', name: 'General', icon: Settings02Icon, hue: 'text-hue-slate' },
+  { slug: 'connections', name: 'Connections', icon: Link01Icon, hue: 'text-hue-red' },
+  { slug: 'channels', name: 'Channels', icon: Notification01Icon, hue: 'text-hue-blue' },
+  { slug: 'memory', name: 'Memory', icon: AiBrain01Icon, hue: 'text-hue-violet' },
+  { slug: 'skills', name: 'Skills', icon: BookOpen01Icon, hue: 'text-hue-amber' },
+  { slug: 'routines', name: 'Routines', icon: HistoryIcon, hue: 'text-hue-green' },
+  { slug: 'webhooks', name: 'Webhooks', icon: WebhookIcon, hue: 'text-hue-sky' },
 ] as const
 
 const LINE = 'flex h-[42px] w-full items-center gap-3 text-[13.5px] text-ink no-underline'
@@ -48,16 +50,16 @@ const KINDS: Record<ChannelKind, string> = { slack: 'Slack', discord: 'Discord',
 
 export function SetupDialog({ agent, tab, onClose, children }: { agent: Agent; tab: string | undefined; onClose: () => void; children?: ReactNode }) {
   const current = SETUP_TABS.find((each) => each.slug === tab) ?? SETUP_TABS[0]
-  return <Dialog label={`Setup · ${agent.name}`} onClose={onClose} className="flex h-[min(560px,calc(100vh-48px))] w-[min(820px,calc(100vw-32px))] overflow-hidden phone:flex-col">
-    <nav role="tablist" aria-orientation="vertical" aria-label="Setup" className="flex w-[200px] shrink-0 flex-col gap-0.5 bg-sidebar px-3 py-[22px] phone:w-full phone:flex-row phone:overflow-x-auto phone:py-3">
-      <DialogTitle className="truncate px-2.5 pb-4 text-[15px]/[20px] font-semibold phone:hidden">{agent.name}</DialogTitle>
-      {SETUP_TABS.map(({ slug, name, icon }) => <Button key={slug} type="button" variant="bare" role="tab" aria-selected={slug === current.slug}
+  return <Dialog size="window" label={`Setup · ${agent.name}`} onClose={onClose} className="flex overflow-hidden phone:flex-col">
+    <nav role="tablist" aria-orientation="vertical" aria-label="Setup" className="no-scrollbar flex w-[198px] shrink-0 flex-col gap-0.5 overflow-y-auto bg-sidebar px-3 py-4 phone:w-full phone:flex-row phone:overflow-x-auto phone:py-3">
+      <DialogTitle className="sr-only">{`Setup · ${agent.name}`}</DialogTitle>
+      {SETUP_TABS.map(({ slug, name, icon, hue }) => <Button key={slug} type="button" variant="bare" role="tab" aria-selected={slug === current.slug}
         onClick={() => navigate(agentPath({ agentId: agent.id, dialog: 'setup', detail: slug }), true)}
-        className="flex h-9 shrink-0 items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] text-body hover:bg-hover aria-selected:bg-picked aria-selected:font-medium aria-selected:text-ink [&_svg]:text-mute aria-selected:[&_svg]:text-ink">
-        <I icon={icon} size={15} />{name}
+        className="flex shrink-0 items-center gap-[9px] rounded-lg px-[9px] py-[7px] text-[13px]/[18px] text-ink hover:bg-hover aria-selected:bg-picked">
+        <I icon={icon} size={18} className={hue} />{name}
       </Button>)}
     </nav>
-    <section role="tabpanel" aria-label={current.name} className="relative flex min-h-0 min-w-0 flex-1 flex-col pt-[22px] pb-6 pl-8">
+    <section role="tabpanel" aria-label={current.name} className="relative flex min-h-0 min-w-0 flex-1 flex-col pt-[26px] pb-6 pl-[34px]">
       <Button type="button" size="icon" aria-label="Close" title="Close (Esc)" className="absolute top-2.5 right-2.5 z-10 rounded-full text-mute" onClick={onClose}><I icon={Cancel01Icon} size={16} /></Button>
       <Pane agent={agent} tab={current.slug} />
     </section>
@@ -77,16 +79,17 @@ function Pane({ agent, tab }: { agent: Agent; tab: typeof SETUP_TABS[number]['sl
   }
 }
 
-function Head({ title, count, action }: { title: string; count?: string; action?: ReactNode }) {
-  return <div className="mb-3.5 flex min-h-8 shrink-0 items-center gap-3 pr-[72px]">
-    <h2 className="m-0 text-[17px]/[24px] font-semibold">{title}</h2>
-    {count && <span className="text-[13px] text-mute">{count}</span>}
-    {action && <span className="ml-auto">{action}</span>}
+function Head({ title, subtitle, count, action }: { title: string; subtitle: string; count?: string; action?: ReactNode }) {
+  return <div className="flex shrink-0 flex-col">
+    <h2 className="m-0 pr-[52px] text-[15px]/[22px] font-medium">{title}</h2>
+    <p className="m-0 pr-[52px] text-[12.5px]/[18px] text-mute">{subtitle}</p>
+    {(count || action) && <div className="mt-[18px] mb-1.5 flex min-h-[26px] items-center pr-8 text-[12px]/[16px] text-mute">{count}<span className="ml-auto">{action}</span></div>}
+    {!count && !action && <div className="h-[18px]" />}
   </div>
 }
 
 function Add({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
-  return <Button type="button" variant="secondary" className="h-[30px] gap-1.5 rounded-lg px-3 text-[13px] font-medium" disabled={disabled} onClick={onClick}><I icon={PlusSignIcon} size={13} />{label}</Button>
+  return <Button type="button" variant="primary" className={cn(PILL, 'gap-1')} disabled={disabled} onClick={onClick}><I icon={PlusSignIcon} size={14} />{label}</Button>
 }
 
 function Body({ children }: { children: ReactNode }) {
@@ -107,9 +110,10 @@ function GeneralPane({ agent }: { agent: Agent }) {
   const change = (patch: Parameters<typeof updateAgent.mutate>[0]) => updateAgent.mutate(patch, { onError: toastError })
   const browser = features.browser || agent.browser
   return <>
-    <Head title="General" />
+    <Head title="General" subtitle={`How ${agent.name} works and who can use it`} />
     <Body>
       <div className={GROUP}>
+        <Go icon={PencilEdit02Icon} label="What it does" value={<span className="max-w-[300px] truncate">{agent.summary || 'Not set yet'}</span>} to="does" />
         <div className={REUSED}>
           <ModelRows agent={agent} />
           <RunsOnRow agent={agent} />
@@ -158,10 +162,9 @@ function ConnectionsPane({ agent }: { agent: Agent }) {
   const deleteGrant = useDeleteGrant()
   const busy = createGrant.isPending || deleteGrant.isPending
   return <>
-    <Head title="Connections" action={agent.canEdit && <Add label="Add app" onClick={() => open('add-app')} />} />
+    <Head title="Connections" subtitle={`Apps ${agent.name} can read and use`} count={connections.data ? (connections.data.length ? countOf(grants.data?.length ?? 0, 'app on', 'apps on') : 'No apps yet') : undefined} action={agent.canEdit && <Add label="Add app" onClick={() => open('add-app')} />} />
     <Body>
       <ErrorNote message={(connections.error ?? grants.error)?.message} />
-      {connections.data && !connections.data.length && <p className="m-0 py-2 text-[13px] text-mute">No apps yet</p>}
       {byName(connections.data ?? [], (each) => each.name).map((connection) => {
         const grant = grants.data?.find((each) => each.connectionId === connection.id)
         const label = <><span className="truncate text-[14px] font-medium">{connection.name}</span><span className="truncate text-[12.5px] text-mute">{integration(connection.kind)?.short ?? kindNote(connection)}</span></>
@@ -185,17 +188,17 @@ function ChannelsPane({ agent }: { agent: Agent }) {
   const [leaving, setLeaving] = useState<ChannelKind>()
   const gone = channels.data?.find((each) => each.kind === leaving)
   return <>
-    <Head title="Channels" />
+    <Head title="Channels" subtitle={`Where people talk to ${agent.name}`} count={channels.data ? countOf(channels.data.filter((each) => each.status === 'connected').length, 'connected', 'connected') : undefined} />
     <Body>
       <ErrorNote message={channels.error?.message} />
-      {ORDER.filter((kind) => kind !== 'whatsapp' || features.whatsapp).map((kind) => {
+      {ORDER.map((kind) => {
         const channel = channels.data?.find((each) => each.kind === kind)
         return <div key={kind} className={LINE}>
           <Glyph name={kind} size={18} /><span className="min-w-0 flex-1 truncate">{KINDS[kind]}</span>
           {channel?.offline && <span title={channel.offline}><Status tone="bad">Offline</Status></span>}
-          {channel?.status === 'connected'
-            ? <Switch checked aria-label={`Disconnect ${KINDS[kind]}`} disabled={!agent.canEdit} onCheckedChange={() => setLeaving(kind)} />
-            : <Button type="button" variant="secondary" className="h-[30px] rounded-full px-3.5 text-[13px] font-medium" disabled={!agent.canEdit} onClick={() => open(kind)}>{channel ? 'Finish' : 'Connect'}</Button>}
+          {channel?.status === 'connected' && <Switch checked aria-label={`Disconnect ${KINDS[kind]}`} disabled={!agent.canEdit} onCheckedChange={() => setLeaving(kind)} />}
+          {channel?.status !== 'connected' && kind === 'whatsapp' && !features.whatsapp && <span className="text-[12.5px] text-mute" title="This computer can’t run the WhatsApp bridge.">Not on this computer</span>}
+          {channel?.status !== 'connected' && (kind !== 'whatsapp' || features.whatsapp) && <Button type="button" variant="ghost" size="sm" disabled={!agent.canEdit} onClick={() => open(kind)}>{channel ? 'Finish' : 'Connect'}</Button>}
         </div>
       })}
     </Body>
@@ -205,33 +208,17 @@ function ChannelsPane({ agent }: { agent: Agent }) {
 }
 
 function MemoryPane({ agent }: { agent: Agent }) {
-  const memory = useMemory(agent.id)
-  const people = memory.data?.people.entries ?? []
-  const notes = memory.data?.notes.entries ?? []
-  const count = people.length + notes.length
   return <>
-    <Head title="Memory" count={memory.data ? (count === 1 ? '1 note' : `${count} notes`) : undefined} action={agent.canEdit && <Add label="Add note" onClick={() => open('memory')} />} />
-    <Body>
-      <ErrorNote message={memory.error?.message} />
-      {memory.data && !count && <Empty icon={AiBrain01Icon} title="Nothing saved yet" />}
-      {[...people.map((text) => ({ text, icon: UserIcon })), ...notes.map((text) => ({ text, icon: AiBrain01Icon }))].map(({ text, icon }, index) =>
-        <Go key={index} icon={icon} label={text} to="memory" chevron="none" />)}
-    </Body>
+    <Head title="Memory" subtitle={`What ${agent.name} remembers`} />
+    <div className="-mb-6 flex min-h-0 flex-1 flex-col"><MemoryEditor agent={agent} /></div>
   </>
 }
 
 function SkillsPane({ agent }: { agent: Agent }) {
   const skills = useSkills(agent.id)
-  const all = skills.data ?? []
-  const learned = all.filter((skill) => !skill.builtIn)
-  const builtIn = all.length - learned.length
   return <>
-    <Head title="Skills" count={skills.data ? String(all.length) : undefined} />
-    <Body>
-      <ErrorNote message={skills.error?.message} />
-      {learned.length > 0 && <div className={GROUP}>{learned.map((skill) => <Go key={skill.id} icon={BookOpen01Icon} label={skill.name} value={<span className="text-[12.5px] text-mute">Learned</span>} to={`skills:${skill.id.slice(agent.id.length + 1)}`} chevron="none" />)}</div>}
-      {skills.data && <div className={GROUP}><Go icon={BookOpen01Icon} label="Built-in skills" value={String(builtIn)} to="skills" /></div>}
-    </Body>
+    <Head title="Skills" subtitle={`What ${agent.name} knows how to do`} count={skills.data ? countOf(skills.data.length, 'skill', 'skills') : undefined} />
+    <div className="-mb-6 flex min-h-0 flex-1 flex-col"><SkillsBrowser agent={agent} /></div>
   </>
 }
 
@@ -239,7 +226,7 @@ function RoutinesPane({ agent }: { agent: Agent }) {
   const routines = useRoutines(agent.id)
   const now = new Date()
   return <>
-    <Head title="Routines" count={routines.data?.length ? String(routines.data.length) : undefined} />
+    <Head title="Routines" subtitle={`What ${agent.name} does on a schedule`} count={routines.data ? countOf(routines.data.length, 'routine', 'routines') : undefined} />
     <Body>
       <ErrorNote message={routines.error?.message} />
       {routines.data && !routines.data.length && <Empty icon={HistoryIcon} title="No routines yet" />}
@@ -253,14 +240,18 @@ function WebhooksPane({ agent }: { agent: Agent }) {
   const webhooks = useWebhooks(agent.id, agent.canEdit)
   const add = agent.canEdit && <Add label="Add webhook" onClick={() => open('webhooks')} />
   return <>
-    <Head title="Webhooks" action={!!webhooks.data?.length && add} />
+    <Head title="Webhooks" subtitle={`Apps that start a thread with ${agent.name}`} count={webhooks.data ? countOf(webhooks.data.length, 'webhook', 'webhooks') : undefined} action={add} />
     <Body>
       <ErrorNote message={webhooks.error?.message} />
-      {webhooks.data && !webhooks.data.length && <Empty icon={WebhookIcon} title="No webhooks yet" action={add} />}
+      {webhooks.data && !webhooks.data.length && <Empty icon={WebhookIcon} title="No webhooks yet" />}
       {webhooks.data?.map((webhook) => <Go key={webhook.id} icon={WebhookIcon} label={webhook.name} to="webhooks" chevron="none"
         value={<span className="text-[12.5px] text-mute">{webhook.lastAt ? `Called ${ago(webhook.lastAt)} ago` : 'Not called yet'}</span>} />)}
     </Body>
   </>
+}
+
+function countOf(n: number, one: string, many: string) {
+  return n === 1 ? `1 ${one}` : `${n} ${many}`
 }
 
 function Empty({ icon, title, action }: { icon: IconSvgElement; title: string; action?: ReactNode }) {
