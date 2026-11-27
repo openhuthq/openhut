@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { AiBrain01Icon, Analytics01Icon, ArrowRight01Icon, BookOpen01Icon, Cancel01Icon, Delete02Icon, HistoryIcon, Globe02Icon, Key01Icon, Link01Icon, Notification01Icon, PencilEdit02Icon, PlusSignIcon, Settings02Icon, SourceCodeIcon, UserIcon, WebhookIcon } from '@hugeicons/core-free-icons'
+import { AiBrain01Icon, Analytics01Icon, ArrowRight01Icon, BookOpen01Icon, Cancel01Icon, Delete02Icon, HistoryIcon, Globe02Icon, Key01Icon, Link01Icon, Notification01Icon, PlusSignIcon, Settings02Icon, SourceCodeIcon, UserIcon, WebhookIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { ChannelKind } from '@openhut/common/channels/channel.ts'
 import { Button } from '@/components/ui/button'
@@ -110,7 +110,6 @@ function GeneralPane({ agent }: { agent: Agent }) {
     <Head title="General" />
     <Body>
       <div className={GROUP}>
-        <Go icon={PencilEdit02Icon} label="What it does" value={<span className="max-w-[300px] truncate">{agent.summary || 'Not set yet'}</span>} to="does" />
         <div className={REUSED}>
           <ModelRows agent={agent} />
           <RunsOnRow agent={agent} />
