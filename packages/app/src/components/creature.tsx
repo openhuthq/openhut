@@ -3,7 +3,14 @@ import { cn } from '@/lib/utils'
 
 export function Creature({ look, id = '', about = '', size, label, tile, className }: { look?: Look; id?: string; about?: string; size: number; label?: string; tile?: boolean; className?: string }) {
   const accessible = label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true }
-  return <svg data-slot="creature" className={cn('block shrink-0', className)} width={size} height={size} viewBox={FULL_VIEW} {...accessible} dangerouslySetInnerHTML={{ __html: faceArt({ look: look ?? randomLook({ seed: id, about }), tile }) }} />
+  return <svg data-slot="creature" className={cn('block shrink-0', className)} width={size} height={size} viewBox={FULL_VIEW} ref={centerArt} {...accessible} dangerouslySetInnerHTML={{ __html: faceArt({ look: look ?? randomLook({ seed: id, about }), tile }) }} />
+}
+
+function centerArt(svg: SVGSVGElement | null) {
+  if (!svg) return
+  svg.setAttribute('viewBox', FULL_VIEW)
+  const art = svg.getBBox()
+  if (art.height > 0) svg.setAttribute('viewBox', `4 ${art.y + art.height / 2 - 50} 100 100`)
 }
 
 export async function avatarPng(look: Look, size = 1024): Promise<string> {
