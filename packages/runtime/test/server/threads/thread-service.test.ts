@@ -117,7 +117,7 @@ test('a turn streams the agent\'s reply in order, with one work part that stores
   assert.match(String(seen.body?.messages[0].content), /saved in \/opt\/data\/home\/uploads/)
   assert.equal(seen.body?.stream, true)
   const types = res.body.split('\n\n').filter((line) => line.startsWith('data: {')).map((line) => JSON.parse(line.slice(6)).type)
-  assert.deepEqual(types, ['start', 'text-start', 'text-delta', 'text-end', 'data-work', 'data-work', 'data-work', 'data-work', 'text-start', 'text-delta', 'text-end', 'data-work', 'finish'])
+  assert.deepEqual(types, ['start', 'text-start', 'text-delta', 'text-end', 'data-step', 'data-work', 'data-work', 'data-work', 'data-work', 'text-start', 'text-delta', 'text-end', 'data-work', 'finish'])
   const saved = (await app.inject({ method: 'GET', url: `/api/threads/${thread.id}`, headers: as() })).json()
   assert.deepEqual(saved.messages.map((message: { role: string }) => message.role), ['user', 'assistant'])
   const answer = saved.messages[1].parts
@@ -201,10 +201,10 @@ test('a full Hermes queue for the session moves the chat to a fresh session too'
 test('a webhook turn whose session is lost carries on in a fresh one, and a turn lost again fails as LostTurn', async () => {
   await db.insertInto('agent').values({ id: 'ag_chatlost', name: 'Loser', owner_id: 'usr_chatownr', instructions: '# Loser', model: 'sonnet', net: 77, channel_key: seal('k'.repeat(48)), wanted: 'running', workspace: WS }).execute()
   const id = await threadService.open({ agentId: 'ag_chatlost', title: 'CI', origin: { platform: 'webhook', label: 'CI' } })
-  assert.equal(await threadService.runRoutine({ agentId: 'ag_chatlost', threadId: id, text: 'first call' }), 'Let me check.214 orders.')
+  assert.equal(await threadService.runRoutine({ agentId: 'ag_chatlost', threadId: id, text: 'first call' }), '214 orders.')
   const old = seen.session ?? ''
   full.add(old)
-  assert.equal(await threadService.runRoutine({ agentId: 'ag_chatlost', threadId: id, text: 'second call' }), 'Let me check.214 orders.')
+  assert.equal(await threadService.runRoutine({ agentId: 'ag_chatlost', threadId: id, text: 'second call' }), '214 orders.')
   assert.match(String(seen.session), new RegExp(`^${old}\\.`))
   assert.match(JSON.stringify(seen.body?.messages.at(-1)), /Earlier in this chat/)
   full.clear()
@@ -424,7 +424,7 @@ test('messages sort by their ids, and a routine\'s output becomes a message', as
   assert.deepEqual((await messagesOf('ag_chatsort')).map((message) => message.parts[0].text), ['first', 'second'])
   const updatedAt = async () => (await app.inject({ method: 'GET', url: '/api/threads/ag_chatsort', headers: as() })).json().updatedAt as string
   const before = await updatedAt()
-  assert.equal(await threadService.runRoutine({ agentId: 'ag_chatsort', text: 'Daily summary' }), 'Let me check.214 orders.')
+  assert.equal(await threadService.runRoutine({ agentId: 'ag_chatsort', text: 'Daily summary' }), '214 orders.', 'the reply is the text after the last tool step')
   const last = (await messagesOf('ag_chatsort')).at(-1)
   assert.deepEqual([last?.role, last?.parts.filter((part: { type: string }) => part.type === 'text').map((part) => part.text).join('')], ['assistant', 'Let me check.214 orders.'])
   assert.equal(last?.parts.find((part: { type: string }) => part.type === 'data-work')?.data?.calls?.[0].past, 'Searched the web')
@@ -450,13 +450,13 @@ test('a webhook turn whose channel is Discord runs in its own thread, read only 
   const place = { platform: 'discord', chat_id: '111', chat_name: '#alerts' }
   const id = await threadService.open({ agentId: 'ag_chathook', title: 'DO alerts', origin: { platform: 'webhook', label: 'DO alerts' }, place })
   const metadata = { source: { kind: 'webhook', id: 'wh_chatdoal', name: 'DO alerts' }, payload: { data: { alert_rule_name: 'CPU' } } }
-  assert.equal(await threadService.runRoutine({ agentId: 'ag_chathook', threadId: id, text: 'Webhook called: cpu 99%', metadata }), 'Let me check.214 orders.')
+  assert.equal(await threadService.runRoutine({ agentId: 'ag_chathook', threadId: id, text: 'Webhook called: cpu 99%', metadata }), '214 orders.')
   assert.equal(seen.session, id, 'the Hermes session is the thread id')
   assert.equal(posted.mock.callCount(), 0, 'nothing is posted until the saved reply is delivered')
   await chat.flush(id)
   assert.deepEqual((await messagesOf(id))[0].metadata, { ...metadata, author: 'DO alerts' })
   assert.deepEqual((await messagesOf(id)).map((message) => [message.role, message.parts.filter((part) => part.type === 'text').map((part) => part.text).join('')]), [['user', 'Webhook called: cpu 99%'], ['assistant', 'Let me check.214 orders.']])
-  assert.deepEqual(posted.mock.calls.map((call) => call.arguments[0]), [{ agentId: 'ag_chathook', place, text: 'Let me check.214 orders.', startThread: 'DO alerts' }])
+  assert.deepEqual(posted.mock.calls.map((call) => call.arguments[0]), [{ agentId: 'ag_chathook', place, text: '214 orders.', startThread: 'DO alerts' }])
   const listed = (await app.inject({ method: 'GET', url: '/api/threads', headers: as() })).json().data as { id: string; agentId: string; origin: { platform: string }; readOnly: boolean; continueUrl: string }[]
   assert.deepEqual(listed.filter((thread) => thread.agentId === 'ag_chathook').map((thread) => [thread.id, thread.origin.platform, thread.readOnly, thread.continueUrl]), [[id, 'webhook', true, 'https://discord.com/channels/1/777']])
   assert.equal(await threadService.bySession({ agentId: 'ag_chathook', session: id }), id, 'a routine set in this thread runs here again')

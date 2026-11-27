@@ -7,7 +7,8 @@ import { DialogCard } from '@/components/kit'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { I } from '@/components/kit'
 import { cn } from '@/lib/utils'
-import { brandColor, clockOf, initialsOf, payloadOf, pretty, statusLabel, tileOf, toneOf, type Call, type CallCard, type CallRow, type Tone } from '@/features/webhooks/call'
+import { initialsOf } from '@/lib/format'
+import { brandColor, clockOf, payloadOf, pretty, statusLabel, tileOf, toneOf, type Call, type CallCard, type CallRow, type Tone } from '@/features/webhooks/call'
 
 const TONE: Record<Tone, string> = {
   green: 'bg-tone-green-subtle text-tone-green',
@@ -26,7 +27,7 @@ function Pill({ tone = 'grey', dot, children }: { tone?: Tone; dot?: boolean; ch
 
 function Tile({ card, name }: { card: CallCard; name: string }) {
   const color = card.icon && brandColor(card.icon.hex)
-  if (!card.icon || !color) return <span className="grid size-[30px] place-items-center rounded-lg bg-soft text-[11px] font-semibold text-body" aria-hidden>{initialsOf(name)}</span>
+  if (!card.icon || !color) return <span className="grid size-[30px] place-items-center rounded-lg bg-soft text-[11px] font-semibold text-body" aria-hidden>{initialsOf({ name })}</span>
   return <span className="grid size-[30px] place-items-center rounded-lg" style={{ background: tileOf(color) }} aria-hidden>
     <svg viewBox="0 0 24 24" width={17} height={17}><path d={card.icon.path} fill={color} /></svg>
   </span>

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { brandColor, callOf, initialsOf, payloadOf, pretty, statusLabel, tileOf, toneOf } from '../../../src/features/webhooks/call.ts'
+import { brandColor, callOf, payloadOf, pretty, statusLabel, tileOf, toneOf } from '../../../src/features/webhooks/call.ts'
 
 test('a webhook call shows its label and keeps the payload behind the first blank line', () => {
   assert.deepEqual(callOf({ author: 'DigitalOcean alerts', call: { webhookId: 'wh_1', label: 'Triggered · 80%' } }), { webhookId: 'wh_1', label: 'Triggered · 80%' })
@@ -31,14 +31,12 @@ test('a status picks its colour and reads as a word', () => {
   assert.equal(statusLabel('success'), 'Success')
 })
 
-test('a logo tile tints the brand colour, grey for dark logos, initials without one', () => {
+test('a logo tile tints the brand colour, grey for dark logos', () => {
   assert.equal(brandColor('0080FF'), '#0080ff')
   assert.equal(brandColor('#181717'), '#181717')
   assert.equal(brandColor('red; background: url(x)'), undefined)
   assert.equal(tileOf('#181717'), '#f3f3f4')
   assert.equal(tileOf('#0080ff'), 'color-mix(in srgb, #0080ff 10%, white)')
-  assert.equal(initialsOf('DigitalOcean Postgres alerts'), 'DP')
-  assert.equal(initialsOf(''), '?')
 })
 
 test('pretty indents a JSON payload and leaves anything else as sent', () => {

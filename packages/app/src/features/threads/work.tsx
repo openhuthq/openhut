@@ -17,7 +17,7 @@ import { durationOf, kindOf, splitLive, summaryOf, troubleOf } from '@/features/
 
 const LIVE = 'text-mute'
 
-export function WorkLine({ agent, work: all, live, answered, onRetry }: { agent: Agent; work: Work; live: boolean; answered: boolean; onRetry?: () => void }) {
+export function WorkLine({ agent, work: all, notes = [], live, answered, onRetry }: { agent: Agent; work: Work; notes?: string[]; live: boolean; answered: boolean; onRetry?: () => void }) {
   const { finished: work, running } = splitLive({ work: all, live })
   const { failed, blocked } = troubleOf(work)
   const marks = [...new Map(work.calls.map((call) => [call.connectionId ?? kindOf(call.tool), call])).values()].slice(0, 3)
@@ -37,6 +37,7 @@ export function WorkLine({ agent, work: all, live, answered, onRetry }: { agent:
         <I icon={ArrowRight01Icon} size={12} className="shrink-0 text-mute-2 [transition:transform_.15s] group-data-panel-open/work:rotate-90" />
       </CollapsibleTrigger>
       <CollapsibleContent><ul className="mt-1 mr-0 mb-0.5 ml-[9px] flex list-none flex-col gap-0.5 border-l-[1.5px] border-hair py-0.5 pr-0 pl-3">
+        {notes.map((note, index) => <li key={`note-${index}`} className="py-[3px] [overflow-wrap:anywhere] whitespace-pre-wrap text-mute">{note}</li>)}
         {work.calls.map((call) => <Row key={call.id} call={call} />)}
         {work.error !== undefined && answered && <li className="flex flex-wrap items-center gap-2 py-1 text-body"><I icon={Alert02Icon} size={12} className="text-fail" />{work.error}{onRetry && <RetryButton onRetry={onRetry} />}</li>}
       </ul></CollapsibleContent>

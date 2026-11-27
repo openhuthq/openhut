@@ -7,6 +7,7 @@ import * as z from 'zod/mini'
 import { AGENT_HOME, ChatMessage, fileInHome, MAX_FILES, MessageValue, ToolProgress, UPLOADS, uploadName, Work, type ChatCall, type ChatFile, type HomeFile, type SendChat, type Thread, type ThreadOrigin, type ThreadWithMessages, type UploadFile } from '@openhut/common/threads/thread.ts'
 import type { Place } from '@openhut/common/channels/channel.ts'
 import type { ThreadLive } from '@openhut/common/live.ts'
+import { replyText, STEP } from '@openhut/common/threads/reply.ts'
 import type { Deleted } from '@openhut/common/api.ts'
 import { agent as autonomous } from '../../core/agent.ts'
 import { db, findRow } from '../platform/db.ts'
@@ -448,7 +449,7 @@ function isWaiting({ id, said, waiting }: { id: string; said: Said[]; waiting: A
 }
 
 function textOf(message: UIMessage | ChatMessage): string {
-  return message.parts.map((part) => part.type === 'text' && 'text' in part && typeof part.text === 'string' ? part.text : '').join('')
+  return replyText(message.parts)
 }
 
 function workspaceOf(agent: AgentRow): string {
@@ -595,6 +596,7 @@ async function relay({ agent, session, message, writer, signal, work, retry = fa
     if (event.type === 'done') ({ finish, ended } = event)
     if (event.type === 'tool') {
       if (open) writer.write({ type: 'text-end', id: `t${text}` })
+      if (open) writer.write({ type: STEP, data: {} })
       open = false
       const shown = await work?.tool(z.safeParse(ToolProgress, event.progress).data ?? {})
       if (shown) writer.write({ type: 'data-work', id: 'work', data: shown })

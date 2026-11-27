@@ -13,3 +13,8 @@ export function personName(email: string): string {
   const first = (email.split('@')[0] ?? '').split(/[._+-]/)[0] ?? ''
   return first.charAt(0).toUpperCase() + first.slice(1)
 }
+
+export function initialsOf({ name, count = 2 }: { name: string; count?: number }): string {
+  const firsts = name.split(/[\s@._-]+/).flatMap((word) => /[\p{L}\p{N}]/u.exec(word)?.[0] ?? [])
+  return firsts.slice(0, count).join('').toUpperCase() || '?'
+}

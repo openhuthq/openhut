@@ -8,6 +8,7 @@ import { Glyph } from '@/components/glyph'
 import { ConfirmButton } from '@/components/confirm-button'
 import { I, PILL, SetupSheet } from '@/components/kit'
 import { Field } from '@/features/connections/sheet'
+import { initialsOf } from '@/lib/format'
 import { appName, avatarUrl, ownerSuggestions, rememberOwner, setupStage, slugOf, type Owner } from '@/features/settings/github-setup'
 import { Autocomplete, AutocompleteInput, AutocompleteItem, ComboboxContent, ComboboxList } from '@/components/ui/combobox'
 import { Row, Rows } from '@/features/settings/kit'
@@ -72,7 +73,7 @@ function repos(count: number | null, before: string): string {
 export function Avatar({ url, name, org, size = 24 }: { url: string; name: string; org: boolean; size?: number }) {
   const [broken, setBroken] = useState(false)
   const shape = org ? 'rounded-[5px]' : 'rounded-full'
-  if (broken || !url) return <span className={cn(SIZES[size] ?? 'size-6', 'grid shrink-0 place-items-center bg-ink text-[11px] font-semibold text-card', shape)}>{name[0]?.toUpperCase()}</span>
+  if (broken || !url) return <span className={cn(SIZES[size] ?? 'size-6', 'grid shrink-0 place-items-center bg-ink text-[11px] font-semibold text-card', shape)}>{initialsOf({ name, count: 1 })}</span>
   return <img src={url} alt="" width={size} height={size} onError={() => setBroken(true)} className={cn('shrink-0 object-cover shadow-[0_0_0_1px_var(--hair)]', shape)} />
 }
 

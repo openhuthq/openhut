@@ -28,6 +28,7 @@ import { troubleOf } from '@/features/agents/status'
 import { useAgents, useUpdateAgent } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
 import { deleteUpload, saveFile, threadPath, uploadFile, useClearChat, useHomeFiles, useThread, useThumb, useTouchThread, type ThreadWithMessages } from '@/features/threads/api'
+import { replyOf, replyText } from '@openhut/common/threads/reply.ts'
 import { Notified, PLATFORM_WORD, placeName, startedIn, type SourcedThread } from '@/features/threads/places'
 import { PlaceIcon } from '@/features/routines/target-picker'
 import { doneText, WebhookSetup, WebhookSetupCard } from '@/features/webhooks/setup-card'
@@ -52,7 +53,7 @@ import { CallText, webhookOf, WebhookMessage } from '@/features/webhooks/message
 import { callOf } from '@/features/webhooks/call'
 import { CallCardMessage } from '@/features/webhooks/call-card'
 
-type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; work: Work; spec: SpecDataPart; asks: string[]; notified: Notified; 'webhook-setup': WebhookSetup }>
+type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; work: Work; spec: SpecDataPart; asks: string[]; notified: Notified; 'webhook-setup': WebhookSetup; step: Record<string, never> }>
 type AgentPart = AgentMessage['parts'][number]
 type Attachment = { key: string; name: string; image: boolean; thumb?: string; file?: ChatFile }
 
@@ -371,7 +372,7 @@ function AgentReply({ agent, threadId: liveThread, step, message, said, live, on
     <span className={live ? 'talking' : undefined}><Face agent={agent} size={34} /></span>
     <CopyMenu text={textOf(message)}><div className="flex min-w-0 flex-col gap-2 pt-1.5 pointer-coarse:select-none">
       {live && liveThread && <LiveTitle threadId={liveThread} />}
-      {work && <WorkLine agent={agent} work={work} live={live} answered={blocks.length > 0} onRetry={onRetry} />}
+      {work && <WorkLine agent={agent} work={work} notes={replyOf(message.parts).notes} live={live} answered={blocks.length > 0} onRetry={onRetry} />}
       {step && !work && <span className="flex min-w-0 items-center gap-2 text-[12.5px] text-mute" role="status">{!blocks.length && <Spinner className="mt-0 size-3.5 shrink-0" />}<span className="truncate">{step}</span></span>}
       {blocks.map((block, index) => block.type === 'text'
         ? <div key={index} className={cn('msg-t', live && index === blocks.length - 1 && 'caret')}><Markdown remarkPlugins={plugins} components={{ a: ChatLink, code: FileCode, pre: CodeBlock, input: TaskBox, table: WideTable }}>{live ? settled(bullets(block.text)) : bullets(block.text)}</Markdown></div>
@@ -457,7 +458,7 @@ type Block = { type: 'text'; text: string } | { type: 'card' }
 
 function blocksOf(message: AgentMessage): Block[] {
   const blocks: Block[] = []
-  for (const part of message.parts) {
+  for (const part of replyOf(message.parts).reply) {
     if (part.type === 'data-spec' && !blocks.some((block) => block.type === 'card')) blocks.push({ type: 'card' })
     if (part.type === 'text' && part.text) blocks.push({ type: 'text', text: part.text })
   }
@@ -541,16 +542,17 @@ function uiMessageOf(message: ChatMessage): AgentMessage {
     if (part.type === 'data-webhook-setup') return z.safeParse(WebhookSetup, part.data).data ? [{ type: 'data-webhook-setup', data: z.parse(WebhookSetup, part.data) }] : []
     if (part.type === 'data-notified') return z.safeParse(Notified, part.data).data ? [{ type: 'data-notified', data: z.parse(Notified, part.data) }] : []
     if (part.type === 'data-spec') return [{ type: 'data-spec', data: part.data as SpecDataPart }]
+    if (part.type === 'data-step') return [{ type: 'data-step', data: {} }]
     if (part.type === 'file' && typeof part.url === 'string' && typeof part.mediaType === 'string') return [{ type: 'file', url: part.url, mediaType: part.mediaType, filename: typeof part.filename === 'string' ? part.filename : undefined }]
     return []
   }) }
 }
 
 function withStream({ message, text }: { message: AgentMessage; text: string }): AgentMessage {
-  if (textOf(message).length >= text.length) return message
+  if (message.parts.map((part) => part.type === 'text' ? part.text : '').join('').length >= text.length) return message
   return { ...message, parts: [...message.parts.filter((part) => part.type !== 'text'), { type: 'text', text }] }
 }
 
 function textOf(message: AgentMessage) {
-  return message.parts.map((part) => part.type === 'text' ? part.text : '').join('')
+  return replyText(message.parts)
 }
