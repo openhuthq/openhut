@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { faceArt, parseLook } from '../../src/lib/face.ts'
-import { folkFace } from '../../src/lib/folk-face.ts'
+import { spriteFace } from '../../src/lib/sprite-face.ts'
 
 const HOSTILE = [
   '<script>alert(1)</script>',
@@ -36,9 +36,9 @@ test('a hostile synced face only ever picks from the built-in parts', () => {
   }
 })
 
-test('a hostile email only picks a built-in person face', () => {
+test('a hostile email only picks a built-in sprite', () => {
   for (const text of HOSTILE) {
-    const svg = folkFace(text)
+    const svg = spriteFace(text)
     assert.equal(svg.includes(text), false)
     assert.doesNotMatch(svg, /<script|\son\w+=|javascript:/i)
   }

@@ -126,9 +126,9 @@ A dropdown trigger (Model, Computer) follows the secondary button: soft fill, no
 
 ### Person avatars (owner, 2026-11-26)
 
-Every person, everywhere (People, the sidebar, chat, Access, New agent, Telegram), is `PersonFace` (`components/custom/person-face.tsx`), never a hand-made circle or initials: a doodle person drawn by `folkFace` (`lib/folk-face.ts`) from the email, so a person looks the same on every screen. A white face with the ink outline, a calm smile or wink, natural or muted hair in one of 9 gender-neutral shapes (short, spiky, curly, wavy, fringe, side part, swoop, messy, bald; no long hair, bob, bun, ponytail or pigtails, owner 2026-11-27: people must not read as a boy or a girl, and we never ask), a palette collar, glasses, freckles or headphones on some, on a soft tinted circle.
+Every person, everywhere (People, the sidebar, chat, Access, New agent, Telegram), is `PersonFace` (`components/custom/person-face.tsx`), never a hand-made circle or initials: a sprite drawn by `spriteFace` (`lib/sprite-face.ts`) from the email, so a person looks the same on every screen (owner, 2026-11-27). Sprites are little spirits made of an element (water drop, leaf, flame, cloud, star, pebble, snowball, sprouting seed, bubble, crystal) with tiny arms, some holding a matching item, in the agents' own style: saturated swatch colours with their shades, the 3px ink outline, white highlights, the same eyes, mouths and blush, on a light tint of a contrasting swatch. They have no hair, skin or animal features, so a face never says anything about gender, race or religion, and no costume hats, so a person never looks like an agent.
 
-People faces (owner, 2026-11-27): a person must never be mistaken for an agent, and a face says nothing about race, religion or culture. Faces are white, never a skin tone or a colour (coloured faces read as aliens); no head coverings, religious or cultural symbols, or flags; no open mouths, teeth or blush (they read as creepy).
+People faces (owner, 2026-11-27): a person must never be mistaken for an agent, and a face says nothing about gender, race, religion or culture. Drawn humans failed every way: coloured faces read as aliens, detailed faces as creepy, hairstyles as boy or girl, so people are sprites, never humans or animals.
 
 ### Tabs and filters (owner, 2026-11-26)
 
