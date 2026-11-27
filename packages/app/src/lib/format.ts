@@ -5,7 +5,10 @@ export function ago(iso: string, now = Date.now()) {
   if (seconds < 60) return `${seconds}s`
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`
-  return `${Math.floor(seconds / 86400)}d`
+  const days = Math.floor(seconds / 86400)
+  if (days < 7) return `${days}d`
+  if (days < 30) return `${Math.floor(days / 7)}w`
+  return `${Math.floor(days / 30)}mo`
 }
 const WEEKDAY = new Intl.DateTimeFormat('en-US', { weekday: 'short' })
 const DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })

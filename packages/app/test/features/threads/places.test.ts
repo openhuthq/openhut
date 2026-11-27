@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { placeKey, placeName, samePlace, sourceOf, startedIn, threadsOf, type SourcedThread } from '../../../src/features/threads/places.ts'
 
-const thread = (origin?: SourcedThread['origin']): SourcedThread => ({ id: 'th_1', object: 'thread', agentId: 'ag_1', title: 'Disk full', createdAt: '2026-11-26T10:00:00Z', updatedAt: '2026-11-26T10:00:00Z', origin, mirrors: [] })
+const thread = (origin?: SourcedThread['origin']): SourcedThread => ({ id: 'th_1', object: 'thread', agentId: 'ag_1', title: 'Disk full', preview: '', createdAt: '2026-11-26T10:00:00Z', updatedAt: '2026-11-26T10:00:00Z', origin, mirrors: [] })
 
 test('every thread says where it came from, in the words people know', () => {
   assert.deepEqual(sourceOf(thread({ platform: 'discord', label: 'agents-humans', url: 'https://discord.com/x' })), { platform: 'discord', word: 'Discord', label: '#agents-humans' })

@@ -1,13 +1,13 @@
 import type { MouseEvent, ReactElement } from 'react'
-import { ArchiveIcon, ArrowRight01Icon, Clock01Icon, GlobalIcon, WebhookIcon } from '@hugeicons/core-free-icons'
+import { ArchiveIcon, Clock01Icon, GlobalIcon, PlusSignIcon, WebhookIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { Glyph } from '@/components/glyph'
 import { ErrorNote } from '@/components/error-note'
-import { HOVER, I, PICKED, Section } from '@/components/kit'
+import { HOVER, I, PICKED } from '@/components/kit'
 import { agentPath, threadRoute } from '@/app/routes'
-import { useArchiveThread, useThreads } from '@/features/threads/api'
-import { PREVIEW_THREADS, sourceOf, startedIn, threadsOf, type SourcedThread } from '@/features/threads/places'
+import { useArchiveThread, useCreateThread, useThreads } from '@/features/threads/api'
+import { sourceOf, startedIn, threadsOf, type SourcedThread } from '@/features/threads/places'
 import { ago } from '@/lib/format'
 import { navigate } from '@/lib/router'
 import { usePresence } from '@/lib/thread-live'
@@ -45,11 +45,11 @@ export function ThreadRow({ agentId, thread, active }: { agentId: string; thread
     archive.mutate(undefined, { onSuccess: () => active && navigate(agentPath({ agentId })), onError: toastError })
   }
   return <div className="group/thread relative">
-    <a href={threadRoute({ agentId, threadId: thread.id })} aria-current={active ? 'page' : undefined} className={cn('flex h-8 items-center gap-2.5 rounded-md px-2.5 text-[13px] text-ink no-underline', HOVER, active && PICKED)}>
+    <a href={threadRoute({ agentId, threadId: thread.id })} aria-current={active ? 'page' : undefined} className={cn('flex h-[38px] items-center gap-2.5 rounded-md px-2.5 text-[13px] text-ink no-underline', HOVER, active && PICKED)}>
       <ThreadMark status={status} />
       <span className="min-w-0 flex-1 truncate">{title}</span>
       <span className={cn('flex shrink-0 items-center gap-1.5 text-[12px] text-mute tabular-nums', !main && 'group-hover/thread:invisible group-focus-within/thread:invisible')}>
-        <span role="img" aria-label={where} title={where} className="grid place-items-center">{source.platform === 'discord' ? <Glyph name="discord" size={13} /> : <I icon={SOURCE_ICON[source.platform]} size={13} />}</span>
+        <SourceIcon thread={thread} size={13} label={where} />
         <span className="min-w-6 text-right">{ago(thread.updatedAt)}</span>
       </span>
     </a>
@@ -60,17 +60,24 @@ export function ThreadRow({ agentId, thread, active }: { agentId: string; thread
   </div>
 }
 
-export function ThreadsSection({ agent, threadId }: { agent: Agent; threadId: string | undefined }) {
+export function SourceIcon({ thread, size, label }: { thread: SourcedThread; size: number; label: string }) {
+  const { platform } = sourceOf(thread)
+  return <span role="img" aria-label={label} title={label} className="grid place-items-center text-mute">{platform === 'discord' ? <Glyph name="discord" size={size} /> : <I icon={SOURCE_ICON[platform]} size={size} />}</span>
+}
+
+export function PanelThreads({ agent, threadId }: { agent: Agent; threadId: string | undefined }) {
   const threads = useThreads()
+  const create = useCreateThread(agent.id)
   const mine = threadsOf(threads.data ?? [], agent.id)
   const open = threadId ?? agent.id
-  return <Section title="Threads">
+  return <div className="flex min-h-0 flex-1 flex-col gap-2.5">
+    <div className="flex items-center text-[12px]/[16px] text-mute">Threads<span className="ml-auto flex gap-3.5">
+      <Button type="button" variant="bare" className="inline-flex h-auto items-center gap-1 p-0 text-[12px] font-medium text-ink hover:underline" disabled={create.isPending || !agent.canEdit} onClick={() => create.mutate(undefined, { onError: toastError })}><I icon={PlusSignIcon} size={12} />New</Button>
+      <a href={agentPath({ agentId: agent.id, dialog: 'threads' })} className="text-[12px] font-medium text-ink no-underline hover:underline">View all</a>
+    </span></div>
     <ErrorNote message={threads.error?.message} />
-    <div className="-mx-2.5 flex flex-col gap-px">
-      {mine.slice(0, PREVIEW_THREADS).map((thread) => <ThreadRow key={thread.id} agentId={agent.id} thread={thread} active={thread.id === open} />)}
-      {mine.length > PREVIEW_THREADS && <a href={agentPath({ agentId: agent.id, dialog: 'threads' })} className={cn('flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] text-body no-underline', HOVER)}>
-        Show all {mine.length}<I icon={ArrowRight01Icon} size={12} className="text-mute" />
-      </a>}
+    <div className="no-scrollbar -mx-2.5 flex min-h-0 flex-1 flex-col gap-px overflow-y-auto [mask-image:linear-gradient(to_bottom,#000_calc(100%-56px),transparent)] pb-10">
+      {mine.map((thread) => <ThreadRow key={thread.id} agentId={agent.id} thread={thread} active={thread.id === open} />)}
     </div>
-  </Section>
+  </div>
 }

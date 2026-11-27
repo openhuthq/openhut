@@ -26,6 +26,7 @@ export const Thread = z.object({
   readOnly: z.boolean(),
   continueUrl: z.nullable(z.string()),
   waiting: z.boolean(),
+  preview: z.string(),
   archivedAt: z.nullable(Timestamp),
   createdAt: Timestamp,
   updatedAt: Timestamp,
@@ -119,6 +120,9 @@ export function fileInHome(path: string): string | undefined {
   const segments = full.slice(AGENT_HOME.length + 1).split('/')
   return segments.length <= MAX_HOME_DEPTH && segments.every((segment) => segment && segment !== '.' && segment !== '..' && !segment.includes('\0')) ? segments.join('/') : undefined
 }
+
+export const CreateThread = z.object({ agentId: z.string().check(z.maxLength(64)) })
+export type CreateThread = z.infer<typeof CreateThread>
 
 export const ListThreads = z.object({ archived: z.optional(z.enum(['true', 'false'])) })
 export type ListThreads = z.infer<typeof ListThreads>

@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
-import { InformationCircleIcon } from '@hugeicons/core-free-icons'
+import { InformationCircleIcon, SidebarRightIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
-import type { IconSvgElement } from '@hugeicons/react'
-import { GLASS, I, ICON_BUTTON } from '@/components/kit'
+import { GLASS, I, ICON_BUTTON, TINY_ICON } from '@/components/kit'
 import { cn } from '@/lib/utils'
 import { Tooltip } from '@/components/ui/tooltip'
 import { ErrorNote } from '@/components/error-note'
@@ -49,19 +48,17 @@ export function AgentView({ agentId, threadId, dialog, detail }: { agentId: stri
   if (away) return <Redirect to={away} />
   if (!agent.data) return <>
     <section className="grid flex-1 place-items-center bg-card">{!gone && <ErrorNote message={agent.error?.message} />}</section>
-    {!phone && open && <aside className={cn('w-[320px] shrink-0 border-l-[0.5px] border-hair', GLASS)} />}
+    {!phone && open && <aside className={cn('w-[340px] shrink-0 border-l-[0.5px] border-hair', GLASS)} />}
   </>
   const label = open ? 'Hide panel' : 'Show panel'
-  const toggle = phone && !open && <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Show details" title="Show details" onClick={() => setShown(true)}><I icon={InformationCircleIcon} size={20} /></Button>
+  const toggle = phone
+    ? !open && <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Show details" title="Show details" onClick={() => setShown(true)}><I icon={InformationCircleIcon} size={20} /></Button>
+    : <Tooltip label={label}><Button type="button" variant="bare" aria-label={label} aria-pressed={open} onClick={() => setShown(!open)} className={cn(TINY_ICON, 'aria-pressed:bg-picked')}><I icon={SidebarRightIcon} size={16} /></Button></Tooltip>
   const dialogs = <Dialogs agent={agent.data} dialog={dialog} detail={detail} />
-  const panel = <Panel agent={agent.data} threadId={threadId} naming={dialog === 'name'} watching={dialog === 'browser'} collapsed={!open} />
+  const panel = <Panel agent={agent.data} threadId={threadId} naming={dialog === 'name'} collapsed={!open} />
   return <>
     <div className="relative flex min-w-0 flex-1">
       <Chat key={threadId} agent={agent.data} threadId={threadId ?? agent.data.id} tools={toggle} onTitle={phone ? () => setShown(true) : undefined} />
-      {!phone && <Tooltip label={label}><Button type="button" variant="bare" aria-label={label} aria-expanded={open} onClick={() => setShown(!open)}
-        className={cn('absolute top-1/2 z-10 grid size-7 -translate-y-1/2 place-items-center rounded-full border-[0.5px] border-hair bg-card p-0 text-mute shadow-pop transition-[right,translate,color] duration-[240ms] ease-(--ease-spring) hover:-translate-y-[calc(50%+1px)] hover:text-ink', open ? '-right-3.5' : 'right-2')}>
-        <I icon={CHEVRONS} size={14} className={cn('transition-[rotate] duration-[240ms] ease-(--ease-spring)', !open && 'rotate-180')} />
-      </Button></Tooltip>}
     </div>
     {phone ? <>{open && <Dialog size="window" label={`${agent.data.name}'s details`} className="phone:bg-sidebar" onClose={() => setShown(false)}>{panel}</Dialog>}{dialogs}</> : <>{panel}{dialogs}</>}
   </>
@@ -90,12 +87,6 @@ function Dialogs({ agent, dialog, detail }: { agent: Agent; dialog: AgentDialog 
     default: return null
   }
 }
-
-const CHEVRONS: IconSvgElement = [
-  ['path', { key: 'a', d: 'M4 7l5 5-5 5', stroke: 'currentColor', strokeLinecap: 'round', strokeLinejoin: 'round' }],
-  ['path', { key: 'b', d: 'M9.5 7l5 5-5 5', stroke: 'currentColor', strokeLinecap: 'round', strokeLinejoin: 'round' }],
-  ['path', { key: 'c', d: 'M15 7l5 5-5 5', stroke: 'currentColor', strokeLinecap: 'round', strokeLinejoin: 'round' }],
-]
 
 const NARROW = '(max-width: 1100px)'
 const SHOWN_KEY = 'openhut.details.shown'

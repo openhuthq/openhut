@@ -42,8 +42,6 @@ export function startedIn(thread: SourcedThread): string {
   return source.platform === 'discord' ? `Discord ${source.label}` : source.label
 }
 
-export const PREVIEW_THREADS = 5
-
 export function threadsOf(threads: SourcedThread[], agentId: string): SourcedThread[] {
   const mine = threads.filter((thread) => thread.agentId === agentId)
   const newest = mine.filter((thread) => thread.id !== agentId).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))

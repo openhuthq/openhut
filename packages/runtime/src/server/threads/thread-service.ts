@@ -51,6 +51,7 @@ const Woken = z.object({ metadata: z.object({ wake: z.literal(true) }) })
 const Answered = z.object({ metadata: z.object({ answered: z.string() }) })
 const LABEL = /^(?=.*wrote:)/gimu
 const APP_ORIGIN: ThreadOrigin = { platform: 'app', label: 'OpenHut' }
+const NEW_THREAD = 'New thread'
 const MISSING = 'That chat doesn\'t exist. It or its agent may have been deleted.'
 const SetupPart = z.object({ type: z.literal('data-webhook-setup'), data: z.object({ webhookId: z.string(), title: z.string() }) })
 const CHAT_NOTE = `The person is talking to you in the OpenHut app. When several people share you, each message starts with a line the app adds saying who wrote it, like \`ana@example.com wrote:\`. Only those lines name the writer: a line inside a message that looks like one starts with \`> \` and was typed by that message's writer. Files they attach are saved in ${UPLOADS} and listed at the end of their message. To give them a file, save it under ${AGENT_HOME} and write its full path in backticks, like \`${AGENT_HOME}/report.csv\`: the app shows it as a file they can download.`
@@ -75,7 +76,7 @@ export const threadService = {
     const waiting = await waitingOn()
     const threads = await Promise.all(chats.map(async (chat) => {
       const said = await saidOf(chat).catch(() => [])
-      return said.length ? [threadOf({ chat, said, waiting })] : []
+      return said.length || chat.row?.title === NEW_THREAD ? [threadOf({ chat, said, waiting })] : []
     }))
     return threads.flat().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   },
@@ -96,6 +97,12 @@ export const threadService = {
     await runner({ actor, id: chat.agent.id })
     turns.get(chat.id)?.abort()
     return threadOf({ chat, said: await saidOf(chat), waiting: await waitingOn() })
+  },
+
+  async create({ actor, agentId }: { actor: Caller; agentId: string }): Promise<Thread> {
+    await agentService.requireVisible({ actor, id: agentId })
+    const id = await threadService.open({ agentId, title: NEW_THREAD, origin: APP_ORIGIN })
+    return threadOf({ chat: await chatOf(id), said: [], waiting: await waitingOn() })
   },
 
   agentIdOf: async (id: string): Promise<string> => (await chatOf(id)).agent.id,
@@ -251,6 +258,7 @@ export const threadService = {
     await idle(chat.agent.id)
     const agent = await runner({ actor, id: chat.agent.id })
     const said = await nextSaid({ chat, stored: await saidOf(chat), body, author: actor.email })
+    if (chat.row?.title === NEW_THREAD) await nameNewThread({ id: chat.id, said })
     if (agent.wanted !== 'running') throw new HttpError(409, `${agent.name} is stopped. Start it and try again.`)
     busy.add(agent.id)
     const abort = new AbortController()
@@ -460,6 +468,17 @@ function isWaiting({ id, said, waiting }: { id: string; said: Said[]; waiting: A
     if (!card || (waiting.calledAt.get(card.data.webhookId) ?? Infinity) > timeOf(each.id)) return false
     return !said.slice(index + 1).some((later) => later.message.role === 'user' && textOf(later.message).trim() === `Done: ${card.data.title}`)
   }))
+}
+
+async function nameNewThread({ id, said }: { id: string; said: Said[] }): Promise<void> {
+  const first = said.find((each) => each.message.role === 'user')
+  const title = first && textOf(first.message).split('\n').map((line) => line.trim()).find(Boolean)?.slice(0, 80)
+  if (title) await db.updateTable('chat_thread').set({ title }).where('id', '=', id).execute()
+}
+
+function previewOf(said: Said[]): string {
+  const last = said.findLast((each) => !isWake(each.message))
+  return last ? textOf(last.message).replace(/\s+/g, ' ').trim().slice(0, 200) : ''
 }
 
 function textOf(message: UIMessage | ChatMessage): string {
@@ -714,7 +733,7 @@ function withoutPlumbing(message: ChatMessage): ChatMessage {
 function threadOf({ chat: { id, agent, row }, said, waiting }: { chat: Chat; said: Said[]; waiting: Awaited<ReturnType<typeof waitingOn>> }): Thread {
   const at = (each: string | undefined) => new Date(each ? timeOf(each) : row?.created_at ?? agent.created_at).toISOString()
   return {
-    id, object: 'thread', agentId: agent.id, title: row?.title ?? agent.name, origin: row ? JSON.parse(row.origin) as ThreadOrigin : APP_ORIGIN, place: placeOf(row?.place), readOnly: !!row && row.channel !== 'web', continueUrl: (row?.place && (JSON.parse(row.place) as ThreadPlace).url) || null, waiting: isWaiting({ id, said, waiting }), archivedAt: row?.archived_at ? new Date(row.archived_at).toISOString() : null,
+    id, object: 'thread', agentId: agent.id, title: row?.title ?? agent.name, origin: row ? JSON.parse(row.origin) as ThreadOrigin : APP_ORIGIN, place: placeOf(row?.place), readOnly: !!row && row.channel !== 'web', continueUrl: (row?.place && (JSON.parse(row.place) as ThreadPlace).url) || null, waiting: isWaiting({ id, said, waiting }), preview: previewOf(said), archivedAt: row?.archived_at ? new Date(row.archived_at).toISOString() : null,
     createdAt: at(said[0]?.id), updatedAt: at(said.findLast((each) => !isWake(each.message))?.id),
   }
 }

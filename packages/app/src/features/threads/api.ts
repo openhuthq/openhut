@@ -4,6 +4,8 @@ import * as z from 'zod/mini'
 import { ChatFile, ChatMessage, HomeFile } from '@openhut/common/threads/thread.ts'
 import { request, requestBlob } from '@/lib/api-client'
 import { THREADS_KEY } from '@/lib/query-keys'
+import { navigate } from '@/lib/router'
+import { threadRoute } from '@/app/routes'
 import { RASTER } from '@/features/threads/files'
 import { SourcedThread } from '@/features/threads/places'
 
@@ -40,6 +42,17 @@ export function useClearChat({ agentId, threadId }: { agentId: string; threadId:
   return useMutation({
     mutationFn: ({ uploads }: { uploads: string[] }) => request({ schema: Deleted('thread'), of: agentId, path: threadPath(threadId), method: 'DELETE', body: { uploads } }),
     onSuccess: () => client.setQueryData<ThreadWithMessages>([...THREADS_KEY, 'thread', threadId], (thread) => thread && { ...thread, messages: [] }),
+  })
+}
+
+export function useCreateThread(agentId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => request({ schema: SourcedThread, of: agentId, path: '/api/threads', method: 'POST', body: { agentId } }),
+    onSuccess: (thread) => {
+      client.setQueryData<SourcedThread[]>(THREADS_KEY, (threads) => threads && [thread, ...threads])
+      navigate(threadRoute({ agentId, threadId: thread.id }))
+    },
   })
 }
 

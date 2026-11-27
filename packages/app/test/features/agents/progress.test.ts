@@ -10,9 +10,10 @@ test('an agent row shows waiting over working, and nothing when idle', () => {
   assert.equal(summaryOf({ working: 0, waiting: 0, activity: 'idle' }), undefined)
 })
 
-test('an agent row previews its newest thread, or what it does when that is the main chat', () => {
-  const threads = [{ id: 'ag_1', title: 'Ops', updatedAt: '2026-11-27T09:00:00Z' }, { id: 'th_a', title: 'Stripe payout failed', updatedAt: '2026-11-27T10:00:00Z' }]
-  assert.deepEqual(previewOf({ agentId: 'ag_1', summary: 'Checks invoices', threads }), { text: 'Stripe payout failed', at: '2026-11-27T10:00:00Z' })
+test('an agent row previews the newest message across its threads, else that thread\'s title or what the agent does', () => {
+  const threads = [{ id: 'ag_1', title: 'Ops', preview: '', updatedAt: '2026-11-27T09:00:00Z' }, { id: 'th_a', title: 'Stripe payout failed', preview: 'Checking the payout…', updatedAt: '2026-11-27T10:00:00Z' }]
+  assert.deepEqual(previewOf({ agentId: 'ag_1', summary: 'Checks invoices', threads }), { text: 'Checking the payout…', at: '2026-11-27T10:00:00Z' })
+  assert.deepEqual(previewOf({ agentId: 'ag_1', summary: 'Checks invoices', threads: [{ ...threads[1], preview: '' }] }).text, 'Stripe payout failed')
   assert.deepEqual(previewOf({ agentId: 'ag_1', summary: 'Checks invoices', threads: threads.slice(0, 1) }), { text: 'Checks invoices', at: '2026-11-27T09:00:00Z' })
   assert.deepEqual(previewOf({ agentId: 'ag_1', summary: '', threads: [] }), { text: 'Say hello', at: undefined })
 })

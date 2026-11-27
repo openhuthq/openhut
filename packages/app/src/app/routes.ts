@@ -1,4 +1,4 @@
-export const AGENT_DIALOGS = ['new', 'does', 'name', 'customize', 'memory', 'skills', 'routines', 'slack', 'whatsapp', 'telegram', 'discord', 'browser', 'apps', 'activity', 'keys', 'webhooks', 'notify', 'threads'] as const
+export const AGENT_DIALOGS = ['new', 'does', 'name', 'customize', 'memory', 'skills', 'routines', 'slack', 'whatsapp', 'telegram', 'discord', 'browser', 'apps', 'activity', 'keys', 'webhooks', 'notify', 'threads', 'setup'] as const
 export type AgentDialog = typeof AGENT_DIALOGS[number]
 
 export type Route =
@@ -8,7 +8,7 @@ export type Route =
   | { page: 'settings'; tab: string }
   | { page: 'missing' }
 
-const DETAILED = new Set<AgentDialog>(['skills', 'routines', 'apps'])
+const DETAILED = new Set<AgentDialog>(['skills', 'routines', 'apps', 'setup'])
 
 const MISSING: Route = { page: 'missing' }
 
