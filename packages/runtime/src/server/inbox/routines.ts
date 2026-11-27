@@ -18,7 +18,7 @@ import type { Caller } from '../team/identity.ts'
 
 const TICK_MS = 60_000
 const PICKUP_MS = 5 * 60_000
-const REPORT_MS = 30 * 60_000
+export const REPORT_MS = 30 * 60_000
 const MIN_GAP_MS = 15 * 60_000
 const MAX_DAYS = 90
 const DAY_MS = 86_400_000

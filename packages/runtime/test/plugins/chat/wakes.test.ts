@@ -1,4 +1,4 @@
-import { test } from 'node:test'
+import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { wakes } from '../../../src/core/wakes.ts'
 import { asks } from '../../../src/core/asks.ts'
@@ -22,10 +22,16 @@ const app = { platform: 'api_server', chat_id: 'openhut-msg_appwchat' }
 const whatsapp = { platform: 'whatsapp', chat_id: '15550005555@s.whatsapp.net', chat_type: 'dm' }
 let fail = 0
 const picked: (Date | null)[] = []
+const slow: number[] = []
 const { told, deliver, settled } = appWakes({
   reply: async ({ text }) => {
     const run = /inbox:(ru_[a-z0-9]+)/.exec(text)?.[1]
     if (run) picked.push((await db.selectFrom('inbox_source').select('run_picked_at').where('run_id', '=', run).executeTakeFirstOrThrow()).run_picked_at)
+    if (text.includes('Slow job')) {
+      slow.push(Date.now())
+      mock.timers.tick(15 * 60_000)
+      throw new Error('fetch failed: ECONNRESET')
+    }
     if (fail-- > 0) throw new Error('The agent didn\'t answer.')
     return 'Acme paid.'
   },
@@ -87,4 +93,30 @@ test('every webhook call runs on the server in a web thread of its own, its mess
   ])
   assert.equal(runsOnServer({ id: 'inbox:ru_x', text: '', origin: whatsapp }), false)
   assert.equal(runsOnServer({ id: 'inbox:ru_x', text: '', origin: { platform: 'discord', chat_id: '1' } }), true)
+})
+
+test('a routine run whose turns keep failing stops retrying at its report window, so the agent is free for the next due run', async () => {
+  const ids: string[] = []
+  for (const [name, cron, ago] of [['Slow job', '0 9 * * *', 120_000], ['Next job', '0 10 * * *', 60_000]] as const) {
+    const id = /rt_[a-z0-9]+/.exec(await routineService.schedule({ agentId: 'ag_appwagnt', input: { name, plan: 'Stripe.', cron, origin: app } }))?.[0] ?? ''
+    await db.updateTable('inbox_source').set({ next_run_at: new Date(Date.now() - ago) }).where('id', '=', id).execute()
+    ids.push(id)
+  }
+  await inboxService.tick()
+  const before = told.length
+  mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() })
+  const start = Date.now()
+  deliver('ag_appwagnt')
+  for (let i = 0; i < 50 && !told.slice(before).some((each) => each.text.includes('Next job')); i++) {
+    await new Promise((resolve) => setImmediate(resolve))
+    mock.timers.tick(30_000)
+  }
+  const next = Date.now() - start
+  mock.timers.reset()
+  await settled()
+  assert.equal(slow.length, 2)
+  assert.ok(next < 35 * 60_000, `the next run waited ${next / 60_000} minutes`)
+  const row = await db.selectFrom('inbox_source').select(['run_status', 'run_text']).where('id', '=', ids[1]).executeTakeFirstOrThrow()
+  assert.deepEqual(row, { run_status: 'told', run_text: 'Acme paid.' })
+  for (const id of ids) await routineService.cancel({ agentId: 'ag_appwagnt', id, reason: 'done' })
 })

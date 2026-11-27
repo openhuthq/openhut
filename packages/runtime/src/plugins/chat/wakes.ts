@@ -5,6 +5,7 @@ import { log } from '../../server/platform/events.ts'
 import { messageOf } from '../../server/platform/http-error.ts'
 import { threadService } from '../../server/threads/thread-service.ts'
 import { inboxService } from '../../server/inbox/inbox-service.ts'
+import { REPORT_MS } from '../../server/inbox/routines.ts'
 
 const TICK_MS = 15_000
 const RETRY_MS = 30_000
@@ -45,6 +46,7 @@ export async function deliver(agentId: string): Promise<void> {
 async function run({ agentId, wake }: { agentId: string; wake: Wake }): Promise<void> {
   const item = wake.id.startsWith('inbox:') ? wake.id.slice('inbox:'.length) : undefined
   await wakes.report({ agentId, id: wake.id, body: { picked: true } })
+  const deadline = Date.now() + REPORT_MS
   const threadId = item ? await inboxService.threadFor({ agentId, id: item }) : await threadService.bySession({ agentId, session: wake.origin.chat_id })
   const metadata = item ? await inboxService.webhookCall({ agentId, id: item }) : undefined
   for (let attempt = 0; ; attempt++) {
@@ -56,7 +58,7 @@ async function run({ agentId, wake }: { agentId: string; wake: Wake }): Promise<
       return
     } catch (err) {
       log.warn({ event: 'wake.run_failed', agent: agentId, wake: wake.id, attempt, error: messageOf(err) })
-      if (attempt >= RETRIES) return
+      if (attempt >= RETRIES || Date.now() + RETRY_MS >= deadline) return
       await new Promise((resolve) => setTimeout(resolve, RETRY_MS).unref())
     }
   }
