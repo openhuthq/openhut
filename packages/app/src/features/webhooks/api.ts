@@ -4,8 +4,14 @@ import * as z from 'zod/mini'
 import { Webhook as BaseWebhook, type CreateWebhook, type UpdateWebhook } from '@openhut/common/webhooks/webhook.ts'
 import { Place } from '@openhut/common/channels/channel.ts'
 import { request } from '@/lib/api-client'
+import { CallCard } from '@/features/webhooks/call'
 
-export const Webhook = z.extend(BaseWebhook, { channel: z.optional(z.union([z.literal('app'), Place])) })
+export const Webhook = z.extend(BaseWebhook, {
+  channel: z.optional(z.union([z.literal('app'), Place])),
+  preview: z.optional(z.nullable(CallCard)),
+  filter: z.optional(z.nullable(z.string())),
+  skipped: z.optional(z.number()),
+})
 export type Webhook = z.infer<typeof Webhook>
 
 const WEBHOOK_LIST = List(Webhook)

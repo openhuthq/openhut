@@ -51,6 +51,7 @@ import { useThreadLive, useTyping } from '@/lib/thread-live'
 import { busyAgent, LiveTitle, PresenceFaces, SeenBy, TypingNow } from '@/features/threads/live'
 import { CallText, webhookOf, WebhookMessage } from '@/features/webhooks/message'
 import { callOf } from '@/features/webhooks/call'
+import { CallCardMessage } from '@/features/webhooks/call-card'
 
 type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; work: Work; spec: SpecDataPart; asks: string[]; notified: Notified; 'webhook-setup': WebhookSetup }>
 type AgentPart = AgentMessage['parts'][number]
@@ -408,7 +409,8 @@ function UserMessage({ message, mirrors, seen }: { message: AgentMessage; mirror
     <PersonFace name={personName(author)} email={author} size={28} />
     <span className="grid min-w-0 gap-1"><span className="text-[12px] text-mute">{personName(author)}</span>
       {files.length > 0 && <span className="flex flex-wrap gap-1.5">{files.map((file) => <SentFile key={file.url} name={file.filename ?? nameOf(file.url)} path={file.url} mediaType={file.mediaType} />)}</span>}
-      {text && <CopyMenu text={text}><span className="max-w-[420px] rounded-[4px_12px_12px_12px] bg-soft px-3.5 py-2 text-[14px]/[1.5] [overflow-wrap:anywhere] whitespace-pre-wrap text-ink pointer-coarse:select-none">{body}</span></CopyMenu>}
+      {call?.card && <CallCardMessage call={call} card={call.card} name={author} text={text} />}
+      {text && !call?.card && <CopyMenu text={text}><span className="max-w-[420px] rounded-[4px_12px_12px_12px] bg-soft px-3.5 py-2 text-[14px]/[1.5] [overflow-wrap:anywhere] whitespace-pre-wrap text-ink pointer-coarse:select-none">{body}</span></CopyMenu>}
     </span>
   </div>
   return <div className="flex flex-col items-end gap-1.5">

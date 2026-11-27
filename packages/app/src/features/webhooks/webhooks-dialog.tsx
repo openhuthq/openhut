@@ -14,6 +14,7 @@ import { agentPath } from '@/app/routes'
 import { Details, Quiet } from '@/features/agents/request-card'
 import { PlacePicker } from '@/features/agents/notify'
 import { SOFT_TRIGGER } from '@/features/models/model-picker'
+import { PreviewCard } from '@/features/webhooks/call-card'
 import { useCreateWebhook, useDeleteWebhook, useRotateWebhook, useUpdateWebhook, useWebhooks, type Webhook } from '@/features/webhooks/api'
 import { ago } from '@/lib/format'
 import { formValues } from '@/lib/form'
@@ -74,8 +75,14 @@ function WebhookItem({ agent, webhook }: { agent: Agent; webhook: Webhook }) {
     </Field>
     <Field label="Runs in"><PlacePicker agentId={agent.id} value={webhook.channel === 'app' ? null : webhook.channel ?? null} none="Here in the web app" label="Runs in" className="w-[260px]" disabled={update.isPending} onPick={(place) => update.mutate({ id: webhook.id, channel: place ?? 'app' }, { onError: toastError })} /></Field>
     <Field label="Threads"><ThreadsPicker value={webhook.threads} disabled={update.isPending} onPick={(threads) => update.mutate({ id: webhook.id, threads }, { onError: toastError })} /></Field>
-    <p className="-mt-1.5 mb-0 pl-[72px] text-[12.5px] text-mute">{THREADS[webhook.threads].hint}</p>
-    {webhook.lastPayload !== null && <Details label="Last call"><pre className="m-0 max-h-56 overflow-auto font-mono text-[11.5px]/[1.5] whitespace-pre-wrap text-ink">{pretty(webhook.lastPayload)}</pre></Details>}
+    {webhook.filter && <div className="flex min-w-0 items-start gap-2 text-[13px]"><span className="w-16 shrink-0 pt-1.5 text-mute">Wakes on</span>
+      <span className="grid min-w-0 flex-1 gap-1.5"><code className="rounded-md bg-soft px-2 py-1.5 font-mono text-[12px]/[1.5] whitespace-pre-wrap text-ink [overflow-wrap:anywhere]">{webhook.filter}</code>
+        {Boolean(webhook.skipped) && <span className="text-[12.5px] text-mute">{webhook.skipped} skipped since the last wake</span>}</span>
+    </div>}
+    {(webhook.lastPayload !== null || webhook.preview) && <div className="flex min-w-0 items-start gap-2">
+      <div className="min-w-0 flex-1">{webhook.lastPayload !== null && <Details label="Last call"><pre className="m-0 max-h-56 overflow-auto font-mono text-[11.5px]/[1.5] whitespace-pre-wrap text-ink">{pretty(webhook.lastPayload)}</pre></Details>}</div>
+      {webhook.preview && <PreviewCard card={webhook.preview} name={webhook.name} />}
+    </div>}
     {confirming && <div className="flex items-center gap-2 text-[13px]">
       <span>Calls to this address stop reaching {agent.name}.</span>
       <span className="ml-auto flex gap-2"><Button type="button" variant="secondary" size="sm" autoFocus onClick={() => setConfirming(false)}>Cancel</Button>
@@ -86,9 +93,9 @@ function WebhookItem({ agent, webhook }: { agent: Agent; webhook: Webhook }) {
 
 type Threads = Webhook['threads']
 
-const THREADS: Record<Threads, { name: string; note: string; hint: string }> = {
-  group: { name: 'Keep related together', note: 'An alert and its recovery share a thread', hint: 'Calls about the same alert share one thread.' },
-  each: { name: 'New thread each call', note: 'For forms, orders, signups', hint: 'Every call starts its own thread.' },
+const THREADS: Record<Threads, { name: string; note: string }> = {
+  group: { name: 'Keep related together', note: 'An alert and its recovery share a thread' },
+  each: { name: 'New thread each call', note: 'For forms, orders, signups' },
 }
 
 function ThreadsPicker({ value, disabled, onPick }: { value: Threads; disabled: boolean; onPick: (threads: Threads) => void }) {
