@@ -73,7 +73,7 @@ test('a computer without agent-browser refuses the browser switch before changin
 })
 
 const owner = { id: 'usr_tokenown', email: 'tokenowner@example.com', role: 'owner' as const }
-const mate = { id: 'usr_teammate', email: 'teammate@example.com', role: 'owner' as const }
+const mate = { id: 'usr_teammate', email: 'teammate@example.com', role: 'member' as const }
 
 test('a new agent is two records, runs here, and only its owner changes it, even shared: a teammate chats', async () => {
   const made = await agentService.create({ actor: owner, name: 'Juniper' })

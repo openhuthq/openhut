@@ -63,7 +63,7 @@ test('a bot token alone makes a linking channel with a one-time Start link, and 
   const code = /^https:\/\/t\.me\/juniper_test_bot\?start=([\w-]{22})$/.exec(made.qr ?? '')?.[1] ?? ''
   assert.ok(code, made.qr ?? 'no link')
   assert.equal((await channelService.get({ actor, id: made.id })).qr, made.qr)
-  const stranger = { ...actor, email: 'someone@example.com' }
+  const stranger = { ...actor, email: 'someone@example.com', role: 'member' as const }
   assert.equal((await channelService.get({ actor: stranger, id: made.id })).qr, null)
 
   queue.push(message(1, '/start not-the-right-code-at-all', 555551111, 'Eve'), message(2, `/start ${code}`, 123456789, 'Sam'))

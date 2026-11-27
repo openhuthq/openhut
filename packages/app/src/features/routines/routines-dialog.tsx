@@ -24,7 +24,7 @@ export function RoutinesDialog({ agent, open, onClose }: { agent: Agent; open: s
   return <DialogCard onClose={onClose} className={cn(SPLIT_DIALOG, 'flex-col')}>
     <div className="flex items-center gap-3 border-b border-hair px-5 py-3">
       <Face agent={agent} size={40} />
-      <DialogTitle className="min-w-0 flex-1 text-[15px]/[22px] font-medium">{agent.name}'s routines</DialogTitle>
+      <DialogTitle className="min-w-0 flex-1 text-[15px]/[22px] font-medium">Routines</DialogTitle>
       <Button type="button" size="icon-sm" aria-label="Close" title="Close" tabIndex={-1} className="-mr-1" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
     </div>
     <ErrorNote className="mx-5 mt-3" message={routines.error?.message} />
@@ -116,7 +116,7 @@ function saidOf(last: NonNullable<Routine['last']>): string {
 }
 
 function Empty({ agent }: { agent: Agent }) {
-  return <EmptyState className="flex-1 justify-center" line={`No routines yet. ${agent.name} adds one when something needs a follow-up.`} />
+  return <EmptyState className="flex-1 justify-center" line="No routines yet" />
 }
 
 function Settings({ agent, routine }: { agent: Agent; routine: Routine }) {

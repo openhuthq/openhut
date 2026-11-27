@@ -86,7 +86,7 @@ export function recordIdOf({ agentId, path }: { agentId: string; path: string })
 
 async function editable({ actor, agentId }: { actor: Caller; agentId: string }): Promise<AgentFacts> {
   const facts = await agentService.find({ id: agentId })
-  if (!mayEdit({ facts, actor })) throw new HttpError(403, `Only ${facts.owner} can change ${facts.value.name}'s skills.`)
+  if (!mayEdit({ facts, actor })) throw new HttpError(403, `Only ${facts.owner} or an admin can change ${facts.value.name}'s skills.`)
   return facts
 }
 

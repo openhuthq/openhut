@@ -36,7 +36,7 @@ export function DiscordDialog({ agent, channel, onClose }: { agent: Agent; chann
       const field = formValues(event)
       createChannel.mutate({ kind: 'discord', agentId: agent.id, botToken: field('botToken'), allowed: [] })
     }}>
-      <Step n={1} title={`Make ${agent.name}’s bot`} state={channel ? 'done' : 'now'} tag={channel?.account ?? undefined}>
+      <Step n={1} title="Make the bot" state={channel ? 'done' : 'now'} tag={channel?.account ?? undefined}>
         {!channel && <>
           <div><a className={cn(buttonVariants({ variant: 'secondary' }), PILL)} href="https://discord.com/developers/applications" target="_blank" rel="noreferrer"><I icon={LinkSquare02Icon} size={12} />Open Discord</a></div>
           <p className={HINT}>In Discord: <b>New Application</b>, call it {agent.name}. On <b>Bot</b>, turn <b>Public Bot</b> off and <b>Message Content Intent</b> on, then <b>Reset Token</b>.</p>

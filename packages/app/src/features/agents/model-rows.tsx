@@ -15,7 +15,7 @@ export function ModelRows({ agent }: { agent: Agent }) {
   const providers = theirs ?? mine
   const update = useUpdateAgent(agent.id)
   const model = (update.isPending ? update.variables.model : undefined) ?? agent.model
-  return <ModelPicker providers={providers} value={model} onPick={(key) => key && update.mutate({ model: key }, { onError: toastError })} disabled={!agent.canEdit} className={ROW} label="Model" title={`${agent.name} thinks with`}>
+  return <ModelPicker providers={providers} value={model} onPick={(key) => key && update.mutate({ model: key }, { onError: toastError })} disabled={!agent.canEdit} className={ROW} label="Model" title="Model">
     <ModelIcon value={model} providers={providers} />Model<span className={ROW_VALUE}><ModelValue providers={providers} value={model} known={model === agent.model ? agent.modelName : null} /></span>
   </ModelPicker>
 }

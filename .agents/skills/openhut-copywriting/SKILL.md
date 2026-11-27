@@ -7,6 +7,7 @@ Use this before writing or changing any text a person reads in the app or on ope
 **The test:** would a non-technical person understand it at a glance? If not, rewrite it. Short is good; cryptic is not. "Private / Even from us" failed this test; "End-to-end encrypted / We can't read your data" passes.
 
 **In the app**
+- Labels, buttons and titles are short words, never sentences, and don't repeat the agent's name: "Delete", "What it does", "Memory", not "Delete Ops" or "What Ops does" (owner, 2026-11-27). The name goes in the `aria-label` ("Delete Ops"). Drop helper lines under a title or a field unless they prevent a mistake; the one place for a full sentence is a confirm's consequence line ("Delete Ops? Its chats, memory and skills go with it.").
 - Titles, labels and benefits are short words or phrases ("Backups", "Teams"), not sentences. But a line someone reads to understand a consequence is a full, plain sentence a person would say out loud: "Your agents and chats stay on this computer. You can't undo this.", not "This Mac keeps its agents and chats. Can't be undone."
 - One call to action per screen, a plain verb ("Enable cloud", "Add a computer", "Restart now"). The button says exactly what happens.
 - Name things the way people know them: OpenHut Cloud, Cloud, agent, computer, team. Not internal words (record, relay, vault, key, hash, token, workspace key, PRF).

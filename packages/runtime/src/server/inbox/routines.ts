@@ -363,7 +363,7 @@ function changed({ name, agentId, routineId, properties }: { name: string; agent
 
 async function editable({ actor, id }: { actor: Caller; id: string }): Promise<AgentFacts> {
   const facts = await agentService.find({ id })
-  if (!mayEdit({ facts, actor })) throw new HttpError(403, `Only ${facts.owner} can see and stop ${facts.value.name}'s routines.`)
+  if (!mayEdit({ facts, actor })) throw new HttpError(403, `Only ${facts.owner} or an admin can see and stop ${facts.value.name}'s routines.`)
   return facts
 }
 

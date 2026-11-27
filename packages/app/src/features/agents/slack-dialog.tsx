@@ -42,7 +42,7 @@ export function SlackDialog({ agent, channel, onClose }: { agent: Agent; channel
     : createChannel.isPending ? <Busy label="Checking with Slack…" /> : <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
   return <SetupSheet brand="slack" title={channel ? `${agent.name} on Slack` : `Connect ${agent.name} to Slack`} blurb={live ? `${channel.account ?? 'Its app'} is live.` : `${agent.name} gets its own Slack app.`} eta={channel ? undefined : '3 minutes'}
     safe="Only people in its channels can talk to it." error={formError(createChannel.error, [])} foot={foot} onClose={onClose}>
-    <Step n={1} title={`Create ${agent.name}’s Slack app`} state={channel || opened ? 'done' : 'now'}>
+    <Step n={1} title="Create the Slack app" state={channel || opened ? 'done' : 'now'}>
       {!channel && !opened && <>
         <div className="flex flex-wrap gap-1.5">
           <a className={cn(buttonVariants({ variant: 'secondary' }), PILL)} href={slackCreateUrl(agent.name)} target="_blank" rel="noreferrer" onClick={() => setOpened(true)}><I icon={LinkSquare02Icon} size={12} />Create the Slack app</a>

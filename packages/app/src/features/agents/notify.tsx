@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { SparklesIcon, Tick02Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
+import { Tick02Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import { List } from '@openhut/common/api.ts'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
@@ -94,7 +94,6 @@ function NotifyForm({ agent, settings, onClose }: { agent: Agent; settings: Noti
     </div>
     <ErrorNote message={save.error?.message} />
     <div className="flex items-center gap-2">
-      <span className="inline-flex min-w-0 items-center gap-1.5 text-[13px] text-mute"><I icon={SparklesIcon} size={13} />Plain words are fine.</span>
       <span className="ml-auto flex shrink-0 gap-2"><Button type="button" variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" variant="primary" disabled={save.isPending}>Save</Button></span>
     </div>
   </form>

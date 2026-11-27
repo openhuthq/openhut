@@ -26,7 +26,7 @@ export function WebhooksDialog({ agent, onClose }: { agent: Agent; onClose: () =
   const create = useCreateWebhook(agent.id)
   return <DialogCard onClose={onClose} className="max-h-[min(680px,calc(100vh-48px))] w-[560px] gap-0 overflow-hidden p-0">
     <div className="flex items-center gap-3 px-6 pt-6 pb-4">
-      <DialogTitle className="min-w-0 flex-1 text-[15px]/[22px] font-medium">{agent.name}'s webhooks</DialogTitle>
+      <DialogTitle className="min-w-0 flex-1 text-[15px]/[22px] font-medium">Webhooks</DialogTitle>
       <Button type="button" size="icon-sm" aria-label="Close" title="Close" tabIndex={-1} className="-mr-2" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
     </div>
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-6 pb-4">

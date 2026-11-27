@@ -84,7 +84,7 @@ function AgentRow({ agent, threads, active, phone }: { agent: OpenHutAgent; thre
   const live = useAgentsLive().get(agent.id)
   const working = agentWorking(live)
   const waiting = live?.activity === 'waiting' || threads.some((each) => each.waiting)
-  const preview = previewOf({ agentId: agent.id, summary: agent.summary, threads })
+  const preview = previewOf({ agent, threads })
   const trouble = agent.online ? troubleOf(agent) : 'Offline'
   return <RowMenu agent={agent}><a href={agentPath({ agentId: agent.id })} aria-current={active ? 'page' : undefined}
     className={cn('row grid w-full shrink-0 grid-cols-[48px_minmax(0,1fr)] items-center gap-3 rounded-[10px] px-3 py-2.5 text-left text-inherit no-underline data-popup-open:bg-picked phone:rounded-2xl', HOVER, !phone && active && PICKED)}

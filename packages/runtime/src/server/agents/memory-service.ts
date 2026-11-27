@@ -20,7 +20,7 @@ export const memoryService = {
 
   async update({ actor, agentId, patch }: { actor: Caller; agentId: string; patch: UpdateMemory }): Promise<Memory> {
     const facts = await agentService.find({ id: agentId })
-    if (!mayEdit({ facts, actor })) throw new HttpError(403, `Only ${facts.owner} can change ${facts.value.name}'s memory.`)
+    if (!mayEdit({ facts, actor })) throw new HttpError(403, `Only ${facts.owner} or an admin can change ${facts.value.name}'s memory.`)
     const raw = await rawOf(facts)
     const current = memoryOf({ agentId, raw })
     const next: MemoryRecord = { ...raw }

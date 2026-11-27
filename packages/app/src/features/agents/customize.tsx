@@ -17,7 +17,7 @@ export function CustomizeDialog({ agent, onClose }: { agent: Agent; onClose: () 
       updateAgent.mutate({ name: field('name').trim(), face: field('face') }, { onSuccess: onClose })
     }}>
       <Button type="button" size="icon-sm" aria-label="Close" title="Close" className="absolute top-3 right-3 rounded-full" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
-      <DialogTitle className="text-[15px]/[22px] font-medium">Customize {agent.name}</DialogTitle>
+      <DialogTitle className="text-[15px]/[22px] font-medium">Customize</DialogTitle>
       <FacePicker initial={agent.face ?? JSON.stringify(lookOf(agent))} />
       <Input name="name" autoComplete="off" required maxLength={40} defaultValue={agent.name} aria-label="Name" className="h-10 rounded-lg text-center text-base font-medium" />
       <Button type="submit" variant="primary" size="lg" className="h-10 w-full justify-center" disabled={updateAgent.isPending}>{updateAgent.isPending ? 'Saving…' : 'Save'}</Button>

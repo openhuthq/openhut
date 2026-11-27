@@ -78,7 +78,7 @@ export const agentService = {
 
   async requireOwner({ actor, id }: { actor: Caller; id: string }): Promise<AgentFacts> {
     const facts = await agentService.find({ id })
-    if (!mayEdit({ facts, actor })) throw new HttpError(403, `Only ${facts.owner} can change ${facts.value.name}, its tools, keys and token, or answer its requests. You can chat with it.`)
+    if (!mayEdit({ facts, actor })) throw new HttpError(403, `Only ${facts.owner} or an admin can change ${facts.value.name}, its tools, keys and token, or answer its requests. You can chat with it.`)
     return facts
   },
 
@@ -104,7 +104,7 @@ export const agentService = {
 
   async delete({ actor, id }: { actor: Caller; id: string }): Promise<Deleted<'agent'>> {
     const facts = await agentService.find({ id })
-    if (facts.owner !== actor.email) throw new HttpError(403, `Only ${facts.value.name}'s owner or an admin of this team can delete it.`)
+    if (!mayEdit({ facts, actor })) throw new HttpError(403, `Only ${facts.value.name}'s owner or an admin of this team can delete it.`)
     const children = (await Promise.all(CHILDREN.map((collection) => recordsService.list({ collection, workspace: facts.workspace, parent: id })))).flat()
     for (const child of [...children, { collection: 'memory' as const, id }, { collection: 'control' as const, id }]) {
       await recordsService.remove({ collection: child.collection, workspace: facts.workspace, id: child.id }).catch((err: unknown) => log.warn({ event: 'agent.child_not_removed', agent: id, error: messageOf(err) }))
@@ -210,7 +210,7 @@ export const agentService = {
 }
 
 export function mayEdit({ facts, actor }: { facts: AgentFacts; actor: Caller }): boolean {
-  return facts.owner === actor.email
+  return facts.owner === actor.email || isAdmin(actor)
 }
 
 function modelNameOf(key: string): string | null {
@@ -245,8 +245,8 @@ async function updated({ actor, id, patch }: { actor: Caller; id: string; patch:
   const found = await agentService.find({ id })
   const { codeExecution, browser, model, runsHere, runsOn, shared, people, sidebars, ...fields } = patch
   const controls = codeExecution !== undefined || browser !== undefined || model !== undefined || runsHere !== undefined || runsOn !== undefined || shared !== undefined || people !== undefined || sidebars !== undefined
-  if (controls && found.owner !== actor.email) throw new HttpError(403, `Only ${found.owner} can change where ${found.value.name} runs, its model, what it can run, or who can use it.`, { param: Object.keys(patch)[0] })
-  if (!controls && !mayEdit({ facts: found, actor })) throw new HttpError(403, `Only ${found.owner} can change ${found.value.name}. You can chat with it.`)
+  if (controls && !mayEdit({ facts: found, actor })) throw new HttpError(403, `Only ${found.owner} or an admin can change where ${found.value.name} runs, its model, what it can run, or who can use it.`, { param: Object.keys(patch)[0] })
+  if (!controls && !mayEdit({ facts: found, actor })) throw new HttpError(403, `Only ${found.owner} or an admin can change ${found.value.name}. You can chat with it.`)
   requireModel(model === found.control?.model ? undefined : model)
   const from = found.control?.runsOn ?? HERE
   const target = runsHere ? HERE : runsOn ?? from
@@ -294,7 +294,7 @@ function restartWhenQuiet(id: string): void {
 
 async function requireOwner({ actor, id }: { actor: Caller; id: string }): Promise<AgentFacts> {
   const facts = await agentService.find({ id })
-  if (facts.owner !== actor.email) throw new HttpError(403, `Only ${facts.owner} can change what ${facts.value.name} can use.`)
+  if (!mayEdit({ facts, actor })) throw new HttpError(403, `Only ${facts.owner} or an admin can change what ${facts.value.name} can use.`)
   return facts
 }
 
@@ -401,14 +401,13 @@ async function agentOf({ facts, actor, states }: { facts: AgentFacts; actor: Cal
   const { value, control, row } = facts
   const here = !!row
   const health = here ? await healthOf({ row, state: states?.[facts.id] }) : { health: null, detail: '' }
-  const mine = facts.owner === actor.email
   return {
     id: facts.id, object: 'agent', name: value.name, ownerId: facts.owner, ownerName: facts.owner, model: control?.model ?? DEFAULT_MODEL, modelName: modelNameOf(control?.model ?? DEFAULT_MODEL), wanted: value.wanted,
     status: here ? statusOf(states?.[facts.id]) : 'missing', health: health.health, healthDetail: health.detail, summary: summaryOf(value.instructions), net: here ? row.net : 0,
     instructions: value.instructions, codeExecution: control?.codeExecution ?? true, browser: control?.browser ?? false, face: value.face, canEdit: mayEdit({ facts, actor }),
     runsHere: here, runsNowhere: !here, runsOn: control?.runsOn ?? null, runsOnName: null, runsOnServer: false,
     changedBy: null, workspace: null, shared: !facts.personal, people: facts.control?.people ?? [], sidebars: facts.control?.sidebars ?? [], inSidebar: inSidebar(accessOf(facts), actor.email), owner: facts.owner,
-    canManage: mine, ...apply.state(facts.id), createdAt: value.createdAt,
+    canManage: mayEdit({ facts, actor }), ...apply.state(facts.id), createdAt: value.createdAt,
   }
 }
 

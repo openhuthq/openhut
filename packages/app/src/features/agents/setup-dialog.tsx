@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { AiBrain01Icon, Analytics01Icon, ArrowRight01Icon, BookOpen01Icon, Cancel01Icon, Delete02Icon, HistoryIcon, Globe02Icon, Key01Icon, Link01Icon, Notification01Icon, PencilEdit02Icon, PlusSignIcon, Settings02Icon, SourceCodeIcon, UserIcon, WebhookIcon } from '@hugeicons/core-free-icons'
+import { AiBrain01Icon, Analytics01Icon, ArrowRight01Icon, BookOpen01Icon, Cancel01Icon, Delete02Icon, HistoryIcon, Globe02Icon, Key01Icon, Link01Icon, Notification01Icon, PlusSignIcon, Settings02Icon, SourceCodeIcon, UserIcon, WebhookIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { ChannelKind } from '@openhut/common/channels/channel.ts'
 import { Button } from '@/components/ui/button'
@@ -50,7 +50,7 @@ export function SetupDialog({ agent, tab, onClose, children }: { agent: Agent; t
   const current = SETUP_TABS.find((each) => each.slug === tab) ?? SETUP_TABS[0]
   return <Dialog label={`Setup · ${agent.name}`} onClose={onClose} className="flex h-[min(560px,calc(100vh-48px))] w-[min(820px,calc(100vw-32px))] overflow-hidden phone:flex-col">
     <nav role="tablist" aria-orientation="vertical" aria-label="Setup" className="flex w-[200px] shrink-0 flex-col gap-0.5 bg-sidebar px-3 py-[22px] phone:w-full phone:flex-row phone:overflow-x-auto phone:py-3">
-      <DialogTitle className="truncate px-2.5 pb-4 text-[15px]/[20px] font-semibold phone:hidden">Setup · {agent.name}</DialogTitle>
+      <DialogTitle className="truncate px-2.5 pb-4 text-[15px]/[20px] font-semibold phone:hidden">{agent.name}</DialogTitle>
       {SETUP_TABS.map(({ slug, name, icon }) => <Button key={slug} type="button" variant="bare" role="tab" aria-selected={slug === current.slug}
         onClick={() => navigate(agentPath({ agentId: agent.id, dialog: 'setup', detail: slug }), true)}
         className="flex h-9 shrink-0 items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] text-body hover:bg-hover aria-selected:bg-picked aria-selected:font-medium aria-selected:text-ink [&_svg]:text-mute aria-selected:[&_svg]:text-ink">
@@ -110,7 +110,6 @@ function GeneralPane({ agent }: { agent: Agent }) {
     <Head title="General" />
     <Body>
       <div className={GROUP}>
-        <Go icon={PencilEdit02Icon} label="What it does" value={<span className="max-w-[300px] truncate">{agent.summary || 'Not set yet'}</span>} to="does" />
         <div className={REUSED}>
           <ModelRows agent={agent} />
           <RunsOnRow agent={agent} />
@@ -144,9 +143,9 @@ function NotifyLine({ agent }: { agent: Agent }) {
 function DeleteAgent({ agent }: { agent: Agent }) {
   const deleteAgent = useDeleteAgent(agent.id)
   const { confirming, setConfirming, box } = useConfirming()
-  if (!confirming) return <Button type="button" variant="bare" className="mt-1.5 inline-flex h-9 items-center gap-2 self-start text-[13.5px] text-fail" onClick={() => setConfirming(true)}><I icon={Delete02Icon} size={15} />Delete {agent.name}</Button>
+  if (!confirming) return <Button type="button" variant="bare" aria-label={`Delete ${agent.name}`} className="mt-1.5 inline-flex h-9 items-center gap-2 self-start text-[13.5px] text-fail" onClick={() => setConfirming(true)}><I icon={Delete02Icon} size={15} />Delete</Button>
   return <div ref={box} className="mt-1.5 flex min-h-9 items-center gap-2">
-    <span className="min-w-0 flex-1 text-[13px] text-body">Its chats, memory and skills go with it.</span>
+    <span className="min-w-0 flex-1 text-[13px]/[18px] text-body">Delete {agent.name}? Its chats, memory and skills go with it.</span>
     <Button type="button" variant="secondary" className={PILL} autoFocus onClick={() => setConfirming(false)}>Cancel</Button>
     <Button type="button" variant="destructive" className={PILL} disabled={deleteAgent.isPending} onClick={() => deleteAgent.mutate(undefined, { onError: toastError })}>Delete</Button>
   </div>
@@ -160,17 +159,16 @@ function ConnectionsPane({ agent }: { agent: Agent }) {
   const busy = createGrant.isPending || deleteGrant.isPending
   return <>
     <Head title="Connections" action={agent.canEdit && <Add label="Add app" onClick={() => open('add-app')} />} />
-    <p className="m-0 -mt-1.5 mb-3.5 text-[13px] text-mute">What {agent.name} can read and use</p>
     <Body>
       <ErrorNote message={(connections.error ?? grants.error)?.message} />
-      {connections.data && !connections.data.length && <p className="m-0 py-2 text-[13px] text-mute">No apps yet. Add one and {agent.name} can use it.</p>}
+      {connections.data && !connections.data.length && <p className="m-0 py-2 text-[13px] text-mute">No apps yet</p>}
       {byName(connections.data ?? [], (each) => each.name).map((connection) => {
         const grant = grants.data?.find((each) => each.connectionId === connection.id)
         const label = <><span className="truncate text-[14px] font-medium">{connection.name}</span><span className="truncate text-[12.5px] text-mute">{integration(connection.kind)?.short ?? kindNote(connection)}</span></>
         return <div key={connection.id} className="flex min-h-[54px] items-center gap-3.5">
           <Glyph name={connectionBrand(connection)} size={22} />
           {grant
-            ? <Button type="button" variant="bare" className="grid min-w-0 flex-1 gap-0.5 text-left" onClick={() => open(`apps:${connection.id}`)} title={`What ${agent.name} may do`}>{label}</Button>
+            ? <Button type="button" variant="bare" className="grid min-w-0 flex-1 gap-0.5 text-left" onClick={() => open(`apps:${connection.id}`)} title="Permissions">{label}</Button>
             : <span className="grid min-w-0 flex-1 gap-0.5">{label}</span>}
           <Switch checked={!!grant} aria-label={`${agent.name} can use ${connection.name}`} disabled={!agent.canEdit || busy}
             onCheckedChange={(on) => on ? createGrant.mutate({ agentId: agent.id, connectionId: connection.id }, { onError: toastError }) : grant && deleteGrant.mutate(grant, { onError: toastError })} />
@@ -215,7 +213,7 @@ function MemoryPane({ agent }: { agent: Agent }) {
     <Head title="Memory" count={memory.data ? (count === 1 ? '1 note' : `${count} notes`) : undefined} action={agent.canEdit && <Add label="Add note" onClick={() => open('memory')} />} />
     <Body>
       <ErrorNote message={memory.error?.message} />
-      {memory.data && !count && <Empty icon={AiBrain01Icon} title="Nothing saved yet" text={`${agent.name} saves what it learns about you and your team here.`} />}
+      {memory.data && !count && <Empty icon={AiBrain01Icon} title="Nothing saved yet" />}
       {[...people.map((text) => ({ text, icon: UserIcon })), ...notes.map((text) => ({ text, icon: AiBrain01Icon }))].map(({ text, icon }, index) =>
         <Go key={index} icon={icon} label={text} to="memory" chevron="none" />)}
     </Body>
@@ -244,7 +242,7 @@ function RoutinesPane({ agent }: { agent: Agent }) {
     <Head title="Routines" count={routines.data?.length ? String(routines.data.length) : undefined} />
     <Body>
       <ErrorNote message={routines.error?.message} />
-      {routines.data && !routines.data.length && <Empty icon={HistoryIcon} title="Nothing on the list yet" text={`${agent.name} adds routines here when something needs a follow-up.`} />}
+      {routines.data && !routines.data.length && <Empty icon={HistoryIcon} title="No routines yet" />}
       {routines.data?.map((routine) => <Go key={routine.id} icon={HistoryIcon} label={routine.name} to={`routines:${routine.id}`} chevron="none"
         value={<span className="truncate text-[12.5px] text-mute">{routine.stopped ? 'Stopped' : routine.nextRunAt ? nextOf({ at: new Date(routine.nextRunAt), now }) : ''}</span>} />)}
     </Body>
@@ -258,18 +256,17 @@ function WebhooksPane({ agent }: { agent: Agent }) {
     <Head title="Webhooks" action={!!webhooks.data?.length && add} />
     <Body>
       <ErrorNote message={webhooks.error?.message} />
-      {webhooks.data && !webhooks.data.length && <Empty icon={WebhookIcon} title="No webhooks yet" text={`Let another app start a thread with ${agent.name}, like when a payment fails.`} action={add} />}
+      {webhooks.data && !webhooks.data.length && <Empty icon={WebhookIcon} title="No webhooks yet" action={add} />}
       {webhooks.data?.map((webhook) => <Go key={webhook.id} icon={WebhookIcon} label={webhook.name} to="webhooks" chevron="none"
         value={<span className="text-[12.5px] text-mute">{webhook.lastAt ? `Called ${ago(webhook.lastAt)} ago` : 'Not called yet'}</span>} />)}
     </Body>
   </>
 }
 
-function Empty({ icon, title, text, action }: { icon: IconSvgElement; title: string; text: string; action?: ReactNode }) {
+function Empty({ icon, title, action }: { icon: IconSvgElement; title: string; action?: ReactNode }) {
   return <div className="flex flex-1 flex-col items-center justify-center gap-2 pb-10 text-center">
     <span className="mb-1.5 grid size-11 place-items-center rounded-xl bg-soft text-body"><I icon={icon} size={20} /></span>
     <b className="text-[15px] font-semibold">{title}</b>
-    <p className="m-0 max-w-[320px] text-[13px]/[19px] text-mute">{text}</p>
     {action && <span className="mt-2.5">{action}</span>}
   </div>
 }
