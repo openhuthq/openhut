@@ -32,13 +32,11 @@ export function ThreadMark({ status, size = 16 }: { status: ThreadStatus; size?:
 const SOURCE_ICON = { app: GlobalIcon, webhook: WebhookIcon, routine: Clock01Icon }
 
 export function ThreadRow({ agentId, thread, active }: { agentId: string; thread: SourcedThread; active: boolean }) {
-  const source = sourceOf(thread)
-  const busy = usePresence(thread.id).agent.state !== 'idle'
   const archive = useArchiveThread(thread)
   const main = thread.id === agentId
   const where = startedIn(thread)
-  const title = main ? 'Main thread' : thread.title
-  const status: ThreadStatus = thread.waiting ? 'waiting' : busy ? 'working' : main ? 'main' : 'idle'
+  const title = titleOf({ agentId, thread })
+  const status = useThreadStatus({ agentId, thread })
   const onArchive = (event: MouseEvent) => {
     event.preventDefault()
     event.stopPropagation()
@@ -58,6 +56,17 @@ export function ThreadRow({ agentId, thread, active }: { agentId: string; thread
       <I icon={ArchiveIcon} size={14} />
     </Button>}
   </div>
+}
+
+export function titleOf({ agentId, thread }: { agentId: string; thread: SourcedThread }): string {
+  return thread.id === agentId ? 'Main thread' : thread.title
+}
+
+export function useThreadStatus({ agentId, thread }: { agentId: string; thread: SourcedThread }): ThreadStatus {
+  const busy = usePresence(thread.id).agent.state !== 'idle'
+  if (thread.waiting) return 'waiting'
+  if (busy) return 'working'
+  return thread.id === agentId ? 'main' : 'idle'
 }
 
 export function SourceIcon({ thread, size, label }: { thread: SourcedThread; size: number; label: string }) {

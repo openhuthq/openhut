@@ -27,7 +27,7 @@ import { navigate, open } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
-export const SETUP_TABS = [
+const SETUP_TABS = [
   { slug: 'general', name: 'General', icon: Settings02Icon },
   { slug: 'connections', name: 'Connections', icon: Link01Icon },
   { slug: 'channels', name: 'Channels', icon: Notification01Icon },
