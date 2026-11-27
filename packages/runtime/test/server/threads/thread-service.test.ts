@@ -506,6 +506,13 @@ test('a thread waits on someone while it shows a webhook setup card for a webhoo
   assert.equal(await waiting(), false, 'a call after the card clears it too')
 })
 
+test('reply text streams as it is written, a chunk per piece, before the turn finishes', async () => {
+  await db.insertInto('agent').values({ id: 'ag_chatflow', name: 'Flow', owner_id: 'usr_chatownr', instructions: '# Flow', model: 'sonnet', net: 32, channel_key: seal('k'.repeat(48)), wanted: 'running', workspace: WS }).execute()
+  const events = (await say('ag_chatflow', 'slow')).body.split('\n').flatMap((line) => line.startsWith('data: {') ? [JSON.parse(line.slice(6)) as { type: string; delta?: string }] : [])
+  const finish = events.findIndex((each) => each.type === 'finish')
+  assert.deepEqual(events.slice(0, finish).flatMap((each) => each.type === 'text-delta' ? [each.delta] : []), ['Halfway, ', 'then done.'])
+})
+
 test('a turn keeps going when the person leaves mid-reply and is saved whole; only stop ends it early', async () => {
   await db.insertInto('agent').values({ id: 'ag_chatgone', name: 'Gone', owner_id: 'usr_chatownr', instructions: '# Gone', model: 'sonnet', net: 31, channel_key: seal('k'.repeat(48)), wanted: 'running', workspace: WS }).execute()
   const url = await app.listen({ port: 0, host: '127.0.0.1' })
