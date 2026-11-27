@@ -57,7 +57,7 @@ Two sizes. 32px (default) in page headers, dialog and popover footers, empty sta
 10. A header shows at most three buttons. A fourth sends everything but the primary and one secondary into ⋯. A ⋯ menu holds at least two items.
 11. The trash icon means the thing is gone for good (Delete, Remove a person). Disconnect, Revoke and Unlink never use it.
 12. Dialog footers: Cancel (secondary) left, the committing action (primary or danger fill) rightmost.
-13. A state toggle (Stop/Start) is one button named for what it will do, with a swapping icon. As an icon in a header its glyph is tinted for what it does (owner, 2026-11-18): Stop in `--hue-amber`, Start in `--hue-green`.
+13. A state toggle (Stop/Start) is one button named for what it will do, with a swapping icon. As an icon in a header its glyph is tinted for what it does (owner, 2026-11-18): Stop in `--hue-red` (owner, 2026-11-27, was amber), Start in `--hue-green`.
 14. A button that fires a mutation is disabled while it is pending. One that waits on an outside service also changes its label to "Connecting…".
 15. Actions inside a sentence are links, never buttons.
 16. **Banned: confirming in a popover** (owner, 2026-11-18). A confirm never floats over the trigger. A small action (an icon in a header, a row's pill) confirms in place, as Settings › Computers does: the trigger turns into a grey Cancel and a red action pill where it stood (red text, no fill, unless rule 7 calls for the fill), the line under it says what happens, and Esc or a click elsewhere cancels (`useConfirming` and `ConfirmIcon` in `components/confirm-button.tsx`). Where the line can't fit beside the pills (the agent panel), the status line under the name says it instead. Bigger destructive actions keep the `AlertDialog`.

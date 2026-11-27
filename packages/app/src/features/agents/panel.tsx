@@ -42,7 +42,7 @@ export function AgentActions({ agent, threads, onBrowser }: { agent: Agent; thre
     {threads}
     <a href={agentPath({ agentId: agent.id, dialog: 'setup', detail: 'general' })} aria-label={`Set up ${agent.name}`} className={HEADER_ACTION}><I icon={Settings02Icon} size={15} />Setup</a>
     <Button type="button" variant="bare" className={HEADER_ACTION} aria-label={`${toggle} ${agent.name}`} disabled={!agent.canEdit || updateAgent.isPending}
-      onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}><I icon={running ? StopIcon : PlayIcon} size={15} className={running ? 'text-hue-amber' : 'text-hue-green'} />{toggle}</Button>
+      onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}><I icon={running ? StopIcon : PlayIcon} size={15} className={running ? 'text-hue-red' : 'text-hue-green'} />{toggle}</Button>
   </>
 }
 
