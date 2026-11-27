@@ -52,7 +52,7 @@ export function AccessPicker({ owner, value, onChange, disabled = false, title, 
 function Stack({ members }: { members: Member[] }) {
   const more = members.length - SHOWN
   return <span className="flex shrink-0 items-center">
-    {members.slice(0, SHOWN).map((member, index) => <PersonFace key={member.email} name={member.name} email={member.email} size={20} className={cn('ring-2 ring-soft', index > 0 && '-ml-1')} />)}
-    {more > 0 && <span className="-ml-1 grid h-5 min-w-5 place-items-center rounded-full bg-mid px-1 text-[10px] font-medium text-ink ring-2 ring-soft">+{more}</span>}
+    {members.slice(0, SHOWN).map((member, index) => <PersonFace key={member.email} name={member.name} email={member.email} size={20} className={cn('ring-2 ring-card', index > 0 && '-ml-1')} />)}
+    {more > 0 && <span className="-ml-1 grid h-5 min-w-5 place-items-center rounded-full bg-mid px-1 text-[10px] font-medium text-ink ring-2 ring-card">+{more}</span>}
   </span>
 }
