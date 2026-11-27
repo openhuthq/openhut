@@ -30,6 +30,12 @@
   --color-warning-foreground: #a15c00;
   --color-warning-strong: #7a4500;
   --color-amber: #d98314;
+  --color-tone-green: #15803d;
+  --color-tone-green-subtle: #e7f6ec;
+  --color-tone-red: #b91c1c;
+  --color-tone-red-subtle: #fdecec;
+  --color-tone-amber: #a16207;
+  --color-tone-amber-subtle: #fdf3dc;
   --animate-grow: grow .18s cubic-bezier(.2, .8, .2, 1);
   --animate-sheetin: sheetin .2s ease-in-out;
   --animate-spin: spin .8s linear infinite;
