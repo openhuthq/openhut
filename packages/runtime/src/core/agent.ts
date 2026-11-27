@@ -26,7 +26,7 @@ export type AgentPart = {
 export type Source = { platform: string; chatId?: string; threadId?: string; userId?: string; userName?: string }
 export type ContentKind = 'instructions' | 'memory' | 'skill' | 'file' | 'upload' | 'session'
 export type ContentRef = { kind: ContentKind; name: string }
-export type ChatEvent = { type: 'text'; delta: string } | { type: 'tool'; progress: unknown } | { type: 'error'; message: string; lost: boolean } | { type: 'dropped' } | { type: 'done'; finish: string | null | undefined; ended: boolean }
+export type ChatEvent = { type: 'text'; delta: string } | { type: 'tool'; progress: unknown } | { type: 'status'; text: string } | { type: 'error'; message: string; lost: boolean } | { type: 'dropped' } | { type: 'done'; finish: string | null | undefined; ended: boolean }
 export type AgentStatus = 'running' | 'exited' | 'created'
 
 export type AgentEvents = {

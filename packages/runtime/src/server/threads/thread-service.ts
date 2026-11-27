@@ -532,7 +532,7 @@ function together({ asked, shared }: { asked: ChatMessage[]; shared: boolean }):
 }
 
 function answerStream({ live, ...input }: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal; work: TurnWork; retry?: boolean; live: LiveTurnHandle }): ReadableStream<UIMessageChunk> {
-  const tapped = pipeJsonRender(relayed(input)).pipeThrough(new TransformStream<UIMessageChunk, UIMessageChunk>({
+  const tapped = pipeJsonRender(relayed({ ...input, live })).pipeThrough(new TransformStream<UIMessageChunk, UIMessageChunk>({
     transform: (chunk, controller) => {
       toLive({ live, chunk })
       controller.enqueue(chunk)
@@ -546,7 +546,7 @@ async function afterTurn({ agentId, threadId, since }: { agentId: string; thread
   return parts.flatMap((part) => part ? [part as UIMessageChunk] : [])
 }
 
-function relayed(input: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal; work: TurnWork; retry?: boolean }): ReadableStream<UIMessageChunk> {
+function relayed(input: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal; work: TurnWork; retry?: boolean; live: LiveTurnHandle }): ReadableStream<UIMessageChunk> {
   return new ReadableStream({
     start: (controller) => {
       const writer = { write: (chunk: UIMessageChunk) => controller.enqueue(chunk) }
@@ -600,7 +600,7 @@ function foldCard(message: UIMessage): UIMessage {
   }) }
 }
 
-async function relay({ agent, session, message, writer, signal, work, retry = false }: { agent: AgentRow; session: string; message: ChatMessage; writer: { write: (chunk: UIMessageChunk) => void }; signal: AbortSignal; work?: TurnWork; retry?: boolean }): Promise<string | undefined> {
+async function relay({ agent, session, message, writer, signal, work, retry = false, live }: { agent: AgentRow; session: string; message: ChatMessage; writer: { write: (chunk: UIMessageChunk) => void }; signal: AbortSignal; work?: TurnWork; retry?: boolean; live?: LiveTurnHandle }): Promise<string | undefined> {
   await apply.settled(agent.id)
   const asked = await openAiOf({ agentId: agent.id, message })
   let text = 0
@@ -612,6 +612,7 @@ async function relay({ agent, session, message, writer, signal, work, retry = fa
     if (event.type === 'error' && event.lost && !text) throw new LostTurn()
     if (event.type === 'error') throw new Error(modelFailure({ name: agent.name, message: event.message }))
     if (event.type === 'done') ({ finish, ended } = event)
+    if (event.type === 'status') live?.step(event.text)
     if (event.type === 'tool') {
       if (open) writer.write({ type: 'text-end', id: `t${text}` })
       if (open) writer.write({ type: STEP, data: {} })
