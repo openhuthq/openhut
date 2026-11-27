@@ -47,6 +47,7 @@ export function PresenceFaces({ agent, threadId }: { agent: Agent; threadId: str
           <i className="absolute -right-px -bottom-px size-2 rounded-full border-[1.5px] border-card bg-pass" />
           {person.state === 'typing' && <Bubble />}
         </span>)}
+        <span className={cn('relative -ml-1.5', busyAgent(live) && 'animate-pulse')}><Face agent={agent} size={24} /></span>
       </span>
       {people.length} here
     </PopoverTrigger>
