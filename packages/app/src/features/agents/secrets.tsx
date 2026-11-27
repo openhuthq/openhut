@@ -8,8 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ConfirmButton } from '@/components/confirm-button'
 import { ErrorNote } from '@/components/error-note'
-import { I, Loading } from '@/components/kit'
-import { EmptyScene } from '@/components/empty-art'
+import { I } from '@/components/kit'
+import { EmptyScene, SceneLoading } from '@/components/empty-art'
 import { request } from '@/lib/api-client'
 import { formValues } from '@/lib/form'
 import { ago } from '@/lib/format'
@@ -43,10 +43,10 @@ export function KeysList({ agent }: { agent: Agent }) {
   const secrets = useSecrets(agent.id)
   return <>
       <ErrorNote message={secrets.error?.message} />
-      {!secrets.data && !secrets.error && <Loading />}
+      {!secrets.data && !secrets.error && <SceneLoading />}
       {secrets.data && (secrets.data.length
         ? secrets.data.map((secret) => <KeyRow key={secret.id} agent={agent} secret={secret} />)
-        : <EmptyScene kind="vault" title="The vault is empty" line={`When ${agent.name} needs a key, it asks in the chat and keeps it here.`} />)}
+        : <EmptyScene kind="vault" title="Nothing here yet" line={`When ${agent.name} needs a password or API key, it asks you in the chat.`} />)}
   </>
 }
 

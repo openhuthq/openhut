@@ -10,7 +10,7 @@ Use this before writing or changing any text a person reads in the app or on ope
 - Labels, buttons and titles are short words, never sentences, and don't repeat the agent's name: "Delete", "What it does", "Memory", not "Delete Ops" or "What Ops does" (owner, 2026-11-27). The name goes in the `aria-label` ("Delete Ops"). Drop helper lines under a title or a field unless they prevent a mistake; the one place for a full sentence is a confirm's consequence line ("Delete Ops? Its chats, memory and skills go with it.").
 - Titles, labels and benefits are short words or phrases ("Backups", "Teams"), not sentences. But a line someone reads to understand a consequence is a full, plain sentence a person would say out loud: "Your agents and chats stay on this computer. You can't undo this.", not "This Mac keeps its agents and chats. Can't be undone."
 - One call to action per screen, a plain verb ("Enable cloud", "Add a computer", "Restart now"). The button says exactly what happens.
-- Name things the way people know them: OpenHut Cloud, Cloud, agent, computer, team. Not internal words (record, relay, vault, key, hash, token, workspace key, PRF).
+- Name things the way people know them: OpenHut Cloud, Cloud, agent, computer, team. Not internal words (record, relay, hash, token, workspace key, PRF). One exception the owner chose (2026-11-27): an agent's saved passwords and API keys live in its **Vault** tab; inside it, say "password or API key".
 - Errors say what went wrong and what to do next, no apology, no codes.
 - Keep the same word for the same thing everywhere (one name per feature, matching Settings and the docs).
 - No faces in option rows; plain icons. Characters are for big pictures and for agents and people.
