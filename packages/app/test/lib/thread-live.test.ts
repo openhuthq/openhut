@@ -1,6 +1,6 @@
 import { beforeEach, test } from 'node:test'
 import assert from 'node:assert/strict'
-import { liveReplyText, liveThreads, namesLine, presenceOf, typingLine, type LiveSnapshot } from '../../src/lib/thread-live.ts'
+import { agentWorking, busyOf, liveReplyText, liveThreads, namesLine, presenceOf, typingLine, type LiveSnapshot } from '../../src/lib/thread-live.ts'
 
 const sent: object[] = []
 let snapshot: LiveSnapshot = { turnId: null, seq: 0, text: '', agent: { state: 'idle' } }
@@ -115,4 +115,16 @@ test('a turn that starts before the last one refetched keeps the last text until
   await done
   assert.deepEqual(liveThreads.get('th_1').ending, [])
   assert.equal(liveThreads.get('th_1').stream?.text, 'Second')
+})
+
+test('a thread is working when its own presence or the agents board says so, and the agent works only while one of its threads does', () => {
+  const idle = { state: 'idle' as const }
+  const working = { state: 'working' as const }
+  assert.equal(busyOf({ live: { people: [], agent: idle }, board: { id: 'th_1', agent: working, typing: [] } }), true)
+  assert.equal(busyOf({ live: { people: [], agent: working }, board: undefined }), true)
+  assert.equal(busyOf({ live: undefined, board: { id: 'th_1', agent: idle, typing: [] } }), false)
+  const agent = (state: 'idle' | 'working') => ({ id: 'ag_1', activity: 'idle' as const, status: 'running' as const, health: null, subagents: [], threads: [{ id: 'th_1', agent: { state }, typing: [] }] })
+  assert.equal(agentWorking(agent('working')), true)
+  assert.equal(agentWorking(agent('idle')), false)
+  assert.equal(agentWorking(undefined), false)
 })

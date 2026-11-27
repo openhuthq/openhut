@@ -24,7 +24,7 @@ import { PHONE, useMedia } from '@/lib/media'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
-import { useAgentsLive } from '@/lib/thread-live'
+import { agentWorking, useAgentsLive } from '@/lib/thread-live'
 import { previewOf } from '@/features/agents/progress'
 
 const ROUND = 'float phone:size-10 phone:rounded-full phone:bg-card phone:text-ink'
@@ -82,7 +82,7 @@ export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew }: {
 
 function AgentRow({ agent, threads, active, phone }: { agent: OpenHutAgent; threads: SourcedThread[]; active: boolean; phone: boolean }) {
   const live = useAgentsLive().get(agent.id)
-  const working = live?.activity === 'working' || !!live?.subagents?.some((child) => child.status === 'working')
+  const working = agentWorking(live)
   const waiting = live?.activity === 'waiting' || threads.some((each) => each.waiting)
   const preview = previewOf({ agentId: agent.id, summary: agent.summary, threads })
   const trouble = agent.online ? troubleOf(agent) : 'Offline'

@@ -9,6 +9,8 @@ import { useConnections } from '@/features/connections/api'
 import { INTEGRATIONS, type Integration } from '@/features/connections/catalog'
 import { ConnectSheet, useQuickConnect } from '@/features/connections/connect-sheets'
 import { useMe } from '@/features/people/api'
+import { useMoreBelow } from '@/lib/more-below'
+import { cn } from '@/lib/utils'
 
 export function AddAppDialog({ onClose }: { onClose: () => void }) {
   const connected = new Set((useConnections().data ?? []).map((connection) => connection.kind))
@@ -16,6 +18,7 @@ export function AddAppDialog({ onClose }: { onClose: () => void }) {
   const me = useMe().data
   const [query, setQuery] = useState('')
   const [connecting, setConnecting] = useState<Integration>()
+  const list = useMoreBelow<HTMLDivElement>()
   const words = query.trim().toLowerCase()
   const items = INTEGRATIONS.filter((item) => (item.name === 'mcp' || !connected.has(item.name)) && `${item.title} ${item.short}`.toLowerCase().includes(words))
   const connect = (item: Integration) => quick.direct(item) ? quick.connect(item) : setConnecting(item)
@@ -28,7 +31,7 @@ export function AddAppDialog({ onClose }: { onClose: () => void }) {
       <I icon={Search01Icon} size={16} />
       <Input type="search" autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search apps" aria-label="Search apps" className="h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-[14px] focus:border-0" />
     </label>
-    <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto pb-6 [mask-image:linear-gradient(to_bottom,#000_calc(100%-32px),transparent)]">
+    <div ref={list.ref} className={cn('no-scrollbar min-h-0 flex-1 overflow-y-auto pb-3', list.more && 'fade-b-lg')}>
       {items.map((item) => <div key={item.name} className="flex min-h-[54px] items-center gap-3.5">
         <Glyph name={item.name} size={28} />
         <span className="grid min-w-0 flex-1 gap-0.5"><b className="truncate text-[14px] font-medium">{item.title}</b><small className="truncate text-[12.5px] text-mute">{item.short}</small></span>

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
-import { AiBrain01Icon, Analytics01Icon, ArrowRight01Icon, BookOpen01Icon, Cancel01Icon, Clock01Icon, Delete02Icon, Globe02Icon, Key01Icon, Link01Icon, Notification01Icon, PencilEdit02Icon, PlusSignIcon, Settings02Icon, SourceCodeIcon, UserIcon, WebhookIcon } from '@hugeicons/core-free-icons'
+import { AiBrain01Icon, Analytics01Icon, ArrowRight01Icon, BookOpen01Icon, Cancel01Icon, Delete02Icon, HistoryIcon, Globe02Icon, Key01Icon, Link01Icon, Notification01Icon, PencilEdit02Icon, PlusSignIcon, Settings02Icon, SourceCodeIcon, UserIcon, WebhookIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { ChannelKind } from '@openhut/common/channels/channel.ts'
 import { Button } from '@/components/ui/button'
@@ -21,11 +21,14 @@ import { useConnections } from '@/features/connections/api'
 import { byName, connectionBrand, integration, kindNote } from '@/features/connections/catalog'
 import { useRoutines } from '@/features/routines/api'
 import { nextOf } from '@/features/routines/when'
+import { useNotify } from '@/features/agents/notify'
+import { placeName } from '@/features/threads/places'
 import { useWebhooks } from '@/features/webhooks/api'
 import { ago } from '@/lib/format'
 import { navigate, open } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
+import { useMoreBelow } from '@/lib/more-below'
 
 const SETUP_TABS = [
   { slug: 'general', name: 'General', icon: Settings02Icon },
@@ -33,7 +36,7 @@ const SETUP_TABS = [
   { slug: 'channels', name: 'Channels', icon: Notification01Icon },
   { slug: 'memory', name: 'Memory', icon: AiBrain01Icon },
   { slug: 'skills', name: 'Skills', icon: BookOpen01Icon },
-  { slug: 'routines', name: 'Routines', icon: Clock01Icon },
+  { slug: 'routines', name: 'Routines', icon: HistoryIcon },
   { slug: 'webhooks', name: 'Webhooks', icon: WebhookIcon },
 ] as const
 
@@ -87,7 +90,8 @@ function Add({ label, onClick, disabled }: { label: string; onClick: () => void;
 }
 
 function Body({ children }: { children: ReactNode }) {
-  return <div className="no-scrollbar fade-b flex min-h-0 flex-1 flex-col overflow-y-auto pr-8 pb-4">{children}</div>
+  const { ref, more } = useMoreBelow<HTMLDivElement>()
+  return <div ref={ref} className={cn('no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto pr-8 pb-2', more && 'fade-b')}>{children}</div>
 }
 
 function Go({ icon, label, value, to, chevron = 'go' }: { icon: IconSvgElement; label: string; value?: ReactNode; to: string; chevron?: 'go' | 'none' }) {
@@ -116,9 +120,10 @@ function GeneralPane({ agent }: { agent: Agent }) {
       </div>
       <div className={GROUP}>
         {agent.canManage && <label className={LINE}><I icon={SourceCodeIcon} size={15} className="text-mute" />Run code<Switch className="ml-auto" checked={agent.codeExecution} aria-label="Run code" disabled={!agent.canEdit || updateAgent.isPending} onCheckedChange={() => change({ codeExecution: !agent.codeExecution })} /></label>}
-        <label className={LINE}><I icon={Globe02Icon} size={15} className="text-mute" />Browser<Switch className="ml-auto" checked={agent.browser} aria-label="Browser" disabled={!browser || !agent.canEdit || updateAgent.isPending} onCheckedChange={() => change({ browser: !agent.browser })} /></label>
-        {!browser && <span className="-mt-1.5 pb-1 pl-[27px] text-[12px]/[16px] text-mute">This computer can’t give agents a browser.</span>}
-        {agent.canEdit && <Go icon={Notification01Icon} label="Notify me" to="notify" />}
+        <label className={LINE} title={browser ? undefined : 'This computer can’t give agents a browser.'}><I icon={Globe02Icon} size={15} className="text-mute" />Browser
+          {!browser && <span className="ml-auto text-[12.5px] text-mute">Not on this computer</span>}
+          <Switch className={cn(browser && 'ml-auto')} checked={agent.browser} aria-label="Browser" disabled={!browser || !agent.canEdit || updateAgent.isPending} onCheckedChange={() => change({ browser: !agent.browser })} /></label>
+        {agent.canEdit && <NotifyLine agent={agent} />}
       </div>
       <div className={GROUP}>
         <Go icon={Analytics01Icon} label="Activity" to="activity" />
@@ -127,6 +132,13 @@ function GeneralPane({ agent }: { agent: Agent }) {
       </div>
     </Body>
   </>
+}
+
+function NotifyLine({ agent }: { agent: Agent }) {
+  const notify = useNotify(agent.id)
+  if (notify.isError) return null
+  const place = notify.data?.default
+  return <Go icon={Notification01Icon} label="Notify me" value={notify.data && <span className="truncate">{place ? placeName(place) : 'Here'}</span>} to="notify" />
 }
 
 function DeleteAgent({ agent }: { agent: Agent }) {
@@ -185,7 +197,7 @@ function ChannelsPane({ agent }: { agent: Agent }) {
           {channel?.offline && <span title={channel.offline}><Status tone="bad">Offline</Status></span>}
           {channel?.status === 'connected'
             ? <Switch checked aria-label={`Disconnect ${KINDS[kind]}`} disabled={!agent.canEdit} onCheckedChange={() => setLeaving(kind)} />
-            : <Button type="button" variant="ghost" className={PILL} disabled={!agent.canEdit} onClick={() => open(kind)}>{channel ? 'Finish' : 'Connect'}</Button>}
+            : <Button type="button" variant="secondary" className="h-[30px] rounded-full px-3.5 text-[13px] font-medium" disabled={!agent.canEdit} onClick={() => open(kind)}>{channel ? 'Finish' : 'Connect'}</Button>}
         </div>
       })}
     </Body>
@@ -232,8 +244,8 @@ function RoutinesPane({ agent }: { agent: Agent }) {
     <Head title="Routines" count={routines.data?.length ? String(routines.data.length) : undefined} />
     <Body>
       <ErrorNote message={routines.error?.message} />
-      {routines.data && !routines.data.length && <Empty icon={Clock01Icon} title="Nothing on the list yet" text={`${agent.name} adds routines here when something needs a follow-up.`} />}
-      {routines.data?.map((routine) => <Go key={routine.id} icon={Clock01Icon} label={routine.name} to={`routines:${routine.id}`} chevron="none"
+      {routines.data && !routines.data.length && <Empty icon={HistoryIcon} title="Nothing on the list yet" text={`${agent.name} adds routines here when something needs a follow-up.`} />}
+      {routines.data?.map((routine) => <Go key={routine.id} icon={HistoryIcon} label={routine.name} to={`routines:${routine.id}`} chevron="none"
         value={<span className="truncate text-[12.5px] text-mute">{routine.stopped ? 'Stopped' : routine.nextRunAt ? nextOf({ at: new Date(routine.nextRunAt), now }) : ''}</span>} />)}
     </Body>
   </>

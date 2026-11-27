@@ -28,7 +28,7 @@ function usePlaces(agentId: string) {
   })
 }
 
-function useNotify(agentId: string, enabled = true) {
+export function useNotify(agentId: string, enabled = true) {
   return useQuery({
     queryKey: notifyKey(agentId),
     enabled,

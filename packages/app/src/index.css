@@ -247,6 +247,7 @@
 @utility no-scrollbar { scrollbar-width: none; &::-webkit-scrollbar { display: none } }
 @utility fade-t { mask-image: linear-gradient(to bottom, transparent, #000 24px) }
 @utility fade-b { mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent) }
+@utility fade-b-lg { mask-image: linear-gradient(to bottom, #000 calc(100% - 48px), transparent) }
 @utility fade-r { mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent) }
 @utility fade-y { mask-image: linear-gradient(to bottom, transparent, #000 12px, #000 calc(100% - 16px), transparent) }
 

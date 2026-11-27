@@ -1,5 +1,5 @@
 import type { MouseEvent, ReactElement } from 'react'
-import { ArchiveIcon, Clock01Icon, GlobalIcon, PlusSignIcon, WebhookIcon } from '@hugeicons/core-free-icons'
+import { ArchiveIcon, GlobalIcon, HistoryIcon, PlusSignIcon, WebhookIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { Glyph } from '@/components/glyph'
@@ -10,9 +10,10 @@ import { useArchiveThread, useCreateThread, useThreads } from '@/features/thread
 import { sourceOf, startedIn, threadsOf, type SourcedThread } from '@/features/threads/places'
 import { ago } from '@/lib/format'
 import { navigate } from '@/lib/router'
-import { usePresence } from '@/lib/thread-live'
+import { useWorking } from '@/lib/thread-live'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
+import { useMoreBelow } from '@/lib/more-below'
 
 export type ThreadStatus = 'main' | 'working' | 'waiting' | 'idle'
 
@@ -29,7 +30,7 @@ export function ThreadMark({ status, size = 16 }: { status: ThreadStatus; size?:
   return <svg role="img" aria-label={MARK_LABEL[status]} width={size} height={size} viewBox="0 0 16 16" className={cn('block shrink-0', status === 'working' && 'animate-spin motion-reduce:animate-none')}>{MARK[status]}</svg>
 }
 
-const SOURCE_ICON = { app: GlobalIcon, webhook: WebhookIcon, routine: Clock01Icon }
+const SOURCE_ICON = { app: GlobalIcon, webhook: WebhookIcon, routine: HistoryIcon }
 
 export function ThreadRow({ agentId, thread, active }: { agentId: string; thread: SourcedThread; active: boolean }) {
   const archive = useArchiveThread(thread)
@@ -63,9 +64,9 @@ export function titleOf({ agentId, thread }: { agentId: string; thread: SourcedT
 }
 
 export function useThreadStatus({ agentId, thread }: { agentId: string; thread: SourcedThread }): ThreadStatus {
-  const busy = usePresence(thread.id).agent.state !== 'idle'
+  const working = useWorking(thread.id)
   if (thread.waiting) return 'waiting'
-  if (busy) return 'working'
+  if (working) return 'working'
   return thread.id === agentId ? 'main' : 'idle'
 }
 
@@ -77,15 +78,16 @@ export function SourceIcon({ thread, size, label }: { thread: SourcedThread; siz
 export function PanelThreads({ agent, threadId }: { agent: Agent; threadId: string | undefined }) {
   const threads = useThreads()
   const create = useCreateThread(agent.id)
-  const mine = threadsOf(threads.data ?? [], agent.id)
+  const mine = threadsOf({ threads: threads.data ?? [], agent })
   const open = threadId ?? agent.id
+  const list = useMoreBelow<HTMLDivElement>()
   return <div className="flex min-h-0 flex-1 flex-col gap-2.5">
     <div className="flex items-center text-[12px]/[16px] text-mute">Threads<span className="ml-auto flex gap-3.5">
       <Button type="button" variant="bare" className="inline-flex h-auto items-center gap-1 p-0 text-[12px] font-medium text-ink hover:underline" disabled={create.isPending || !agent.canEdit} onClick={() => create.mutate(undefined, { onError: toastError })}><I icon={PlusSignIcon} size={12} />New</Button>
       <a href={agentPath({ agentId: agent.id, dialog: 'threads' })} className="text-[12px] font-medium text-ink no-underline hover:underline">View all</a>
     </span></div>
     <ErrorNote message={threads.error?.message} />
-    <div className="no-scrollbar -mx-2.5 flex min-h-0 flex-1 flex-col gap-px overflow-y-auto [mask-image:linear-gradient(to_bottom,#000_calc(100%-56px),transparent)] pb-10">
+    <div ref={list.ref} className={cn('no-scrollbar -mx-2.5 flex min-h-0 flex-1 flex-col gap-px overflow-y-auto', list.more && 'fade-b-lg')}>
       {mine.map((thread) => <ThreadRow key={thread.id} agentId={agent.id} thread={thread} active={thread.id === open} />)}
     </div>
   </div>

@@ -26,5 +26,9 @@ test('a place is named with a # in chat apps and matched by chat and thread', ()
 test('the thread list starts with the main thread, then the newest', () => {
   const at = (id: string, agentId: string, minutes: number) => ({ ...thread(), id, agentId, updatedAt: new Date(Date.UTC(2026, 10, 26, 10, minutes)).toISOString() })
   const list = [at('th_old', 'ag_1', 1), at('ag_1', 'ag_1', 0), at('th_other', 'ag_2', 9), at('th_new', 'ag_1', 5)]
-  assert.deepEqual(threadsOf(list, 'ag_1').map((each) => each.id), ['ag_1', 'th_new', 'th_old'])
+  const agent = { id: 'ag_1', createdAt: '2026-11-20T10:00:00Z' }
+  assert.deepEqual(threadsOf({ threads: list, agent }).map((each) => each.id), ['ag_1', 'th_new', 'th_old'])
+  const listed = threadsOf({ threads: list.filter((each) => each.id !== 'ag_1'), agent })
+  assert.deepEqual(listed.map((each) => each.id), ['ag_1', 'th_new', 'th_old'], 'the main thread is pinned first even before it has a message')
+  assert.equal(listed[0]?.updatedAt, agent.createdAt)
 })
