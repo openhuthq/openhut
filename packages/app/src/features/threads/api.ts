@@ -5,7 +5,7 @@ import { ChatFile, ChatMessage, HomeFile } from '@openhut/common/threads/thread.
 import { request, requestBlob } from '@/lib/api-client'
 import { THREADS_KEY } from '@/lib/query-keys'
 import { navigate } from '@/lib/router'
-import { threadRoute } from '@/app/routes'
+import { threadRoute } from '@/config/paths'
 import { RASTER } from '@/features/threads/files'
 import { SourcedThread } from '@/features/threads/places'
 

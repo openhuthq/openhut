@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button'
-import { agentPath } from '@/app/routes'
+import { agentPath } from '@/config/paths'
 import type { AskExtra } from '@/features/asks/custom'
 import { lineDiff, needsQrScan } from '@/features/asks/extras'
 import { navigate } from '@/lib/router'
