@@ -228,7 +228,7 @@ function ChatFrame({ agent, thread, composer, tools, onTitle, onFiles, children 
       <Button type="button" variant="bare" aria-label="All agents" className={cn(ICON_BUTTON, 'float hidden size-10 justify-self-start rounded-full bg-card text-ink phone:grid')} onClick={back}><I icon={ArrowLeft01Icon} size={20} /></Button>
       {onTitle
         ? <Button type="button" variant="bare" className="float flex h-10 min-w-0 items-center gap-2 rounded-full bg-card pr-4 pl-1.5 text-ink" onClick={onTitle}><Face agent={agent} size={28} /><span className="truncate text-[16px] font-semibold">{agent.name}</span></Button>
-        : <><Face agent={agent} size={26} /><span className="shrink-0 text-[14px] font-semibold">{agent.name}</span>{thread && <ThreadSource thread={thread} />}</>}
+        : <><Face agent={agent} size={26} /><span className="shrink-0 text-[14px] font-semibold">{agent.name}</span>{thread && <span className="min-w-0 truncate text-[13px] text-mute">· {thread.id === agent.id ? 'Main thread' : thread.title}</span>}{thread && <ThreadSource thread={thread} />}</>}
       <span className="float ml-auto flex items-center gap-0.5 phone:h-10 phone:justify-self-end phone:rounded-full phone:bg-card phone:px-1">{thread && <PresenceFaces agent={agent} threadId={thread.id} />}{tools}</span>
     </div>
     <div ref={log} className="fade-t flex flex-1 flex-col overflow-auto px-8 py-5 phone:px-4" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80 }}>

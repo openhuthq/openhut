@@ -24,6 +24,7 @@ import { KeysRow } from '@/features/agents/secrets'
 import { WebhooksRow } from '@/features/webhooks/webhooks-dialog'
 import { NotifyRow } from '@/features/agents/notify'
 import { ModelRows } from '@/features/agents/model-rows'
+import { ThreadsSection } from '@/features/threads/thread-list'
 import { RunsOnRow } from '@/features/agents/move'
 import { AgentStatus } from '@/features/agents/status'
 import { useGitHubFace } from '@/features/agents/github-face'
@@ -35,7 +36,7 @@ import { cn } from '@/lib/utils'
 
 const VALUE = ROW_VALUE
 
-export function Panel({ agent, naming, watching, collapsed = false }: { agent: Agent; naming: boolean; watching: boolean; collapsed?: boolean }) {
+export function Panel({ agent, threadId, naming, watching, collapsed = false }: { agent: Agent; threadId: string | undefined; naming: boolean; watching: boolean; collapsed?: boolean }) {
   const memory = useMemoryCount(agent)
   useGitHubFace(agent)
   const skills = skillsNote(useSkills(agent.id).data)
@@ -51,6 +52,7 @@ export function Panel({ agent, naming, watching, collapsed = false }: { agent: A
       <span className="flex items-center text-[12px]/[16px] text-mute">What it does<span className="ml-auto text-mute opacity-0 group-hover:opacity-100"><I icon={PencilEdit02Icon} size={13} /></span></span>
       <span className={cn('line-clamp-2 text-left text-[13px]/[1.45]', agent.summary ? 'text-ink' : 'text-body')}>{agent.summary || `Tell ${agent.name} what its job is.`}</span>
     </Button></div>
+    <ThreadsSection agent={agent} threadId={threadId} />
     <div className="-mx-2.5 flex flex-col gap-px">
       <ModelRows agent={agent} />
       <RunsOnRow agent={agent} />

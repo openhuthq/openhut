@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { placeKey, placeName, samePlace, sourceOf, startedIn, firstThreads, type SourcedThread } from '../../../src/features/threads/places.ts'
+import { placeKey, placeName, samePlace, sourceOf, startedIn, threadsOf, type SourcedThread } from '../../../src/features/threads/places.ts'
 
 const thread = (origin?: SourcedThread['origin']): SourcedThread => ({ id: 'th_1', object: 'thread', agentId: 'ag_1', title: 'Disk full', createdAt: '2026-11-26T10:00:00Z', updatedAt: '2026-11-26T10:00:00Z', origin, mirrors: [] })
 
@@ -23,9 +23,8 @@ test('a place is named with a # in chat apps and matched by chat and thread', ()
   assert.equal(placeKey({ ...room, thread_id: '9' }), 'discord:1180:9')
 })
 
-test('the sidebar shows every waiting thread, then the newest up to three', () => {
-  const list = ['a', 'b', 'c', 'd', 'e'].map((id) => ({ ...thread(), id, waiting: id === 'd' }))
-  assert.deepEqual(firstThreads(list).map((each) => each.id), ['d', 'a', 'b'])
-  const busy = list.map((each) => ({ ...each, waiting: each.id !== 'a' }))
-  assert.deepEqual(firstThreads(busy).map((each) => each.id), ['b', 'c', 'd', 'e'])
+test('the thread list starts with the main thread, then the newest', () => {
+  const at = (id: string, agentId: string, minutes: number) => ({ ...thread(), id, agentId, updatedAt: new Date(Date.UTC(2026, 10, 26, 10, minutes)).toISOString() })
+  const list = [at('th_old', 'ag_1', 1), at('ag_1', 'ag_1', 0), at('th_other', 'ag_2', 9), at('th_new', 'ag_1', 5)]
+  assert.deepEqual(threadsOf(list, 'ag_1').map((each) => each.id), ['ag_1', 'th_new', 'th_old'])
 })

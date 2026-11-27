@@ -41,7 +41,7 @@ export function Shell({ route, overlay }: { route: ShellRoute; overlay: 'setting
   order.current = contacts.map(({ agent }) => agent.id)
   return <SidebarContext value={{ collapsed: hidden }}><div className="relative flex h-dvh overflow-hidden bg-card pt-[env(safe-area-inset-top)] phone:bg-sidebar pb-[env(safe-area-inset-bottom)] text-left">
     {hidden && <ShowSidebar onExpand={() => setCollapsed(false)} onNew={newAgent} />}
-    <Sidebar contacts={agents.data && contacts} activeId={activeId} threadId={route.page === 'agent' ? route.threadId : undefined} collapsed={hidden} onCollapse={() => setCollapsed((on) => !on)} onNew={newAgent} />
+    <Sidebar contacts={agents.data && contacts} activeId={activeId} collapsed={hidden} onCollapse={() => setCollapsed((on) => !on)} onNew={newAgent} />
     {route.page === 'agent' && (phone
       ? <PhonePage key={route.agentId}><AgentView agentId={route.agentId} threadId={route.threadId} dialog={route.dialog} detail={route.detail} /></PhonePage>
       : <AgentView key={route.agentId} agentId={route.agentId} threadId={route.threadId} dialog={route.dialog} detail={route.detail} />)}

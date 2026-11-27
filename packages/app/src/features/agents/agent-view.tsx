@@ -54,7 +54,7 @@ export function AgentView({ agentId, threadId, dialog, detail }: { agentId: stri
   const label = open ? 'Hide panel' : 'Show panel'
   const toggle = phone && !open && <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Show details" title="Show details" onClick={() => setShown(true)}><I icon={InformationCircleIcon} size={20} /></Button>
   const dialogs = <Dialogs agent={agent.data} dialog={dialog} detail={detail} />
-  const panel = <Panel agent={agent.data} naming={dialog === 'name'} watching={dialog === 'browser'} collapsed={!open} />
+  const panel = <Panel agent={agent.data} threadId={threadId} naming={dialog === 'name'} watching={dialog === 'browser'} collapsed={!open} />
   return <>
     <div className="relative flex min-w-0 flex-1">
       <Chat key={threadId} agent={agent.data} threadId={threadId ?? agent.data.id} tools={toggle} onTitle={phone ? () => setShown(true) : undefined} />
