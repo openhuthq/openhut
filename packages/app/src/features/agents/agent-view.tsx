@@ -15,7 +15,7 @@ import { BrowserCard, BrowserDialog } from '@/features/agents/browser'
 import { ChannelDialog } from '@/features/agents/channels'
 import { CustomizeDialog } from '@/features/agents/customize'
 import { NewAgentDialog } from '@/features/agents/new-agent'
-import { AgentActions, DoesDialog, FloatingThreads } from '@/features/agents/panel'
+import { AgentActions, DoesDialog, FloatingThreads, SyncFace } from '@/features/agents/panel'
 import { RoutinesDialog } from '@/features/routines/routines-dialog'
 import { ToolPermissionsDialog } from '@/features/agents/tool-permissions'
 import { ActivityDialog } from '@/features/agents/activity-dialog'
@@ -56,6 +56,7 @@ export function AgentView({ agentId, threadId, dialog, detail }: { agentId: stri
   const browserToggle = hasBrowser && <Tooltip label="Browser"><Button type="button" variant="bare" aria-label="Browser" aria-pressed={side === 'browser'} onClick={() => flip('browser')} className={cn(TINY_ICON, 'relative aria-pressed:bg-picked')}><I icon={Globe02Icon} size={16} />{browsing && <i aria-label="Live" className="absolute top-[5px] right-[5px] size-1.5 rounded-full bg-pass shadow-[0_0_0_2px_var(--card)]" />}</Button></Tooltip>
   const actions = <AgentActions agent={agent.data} threads={<>{browserToggle}{threadsToggle}</>} />
   return <>
+    <SyncFace agent={agent.data} />
     <div className="group/chat relative flex min-w-0 flex-1" data-threads={!phone && side ? '' : undefined}>
       <Chat key={threadId} agent={agent.data} threadId={threadId ?? agent.data.id} actions={actions}
         tools={phone && <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Details" title="Details" onClick={() => setDetails(true)}><I icon={InformationCircleIcon} size={20} /></Button>}
