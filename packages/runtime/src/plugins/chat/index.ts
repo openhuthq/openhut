@@ -4,6 +4,7 @@ import { AGENT_API_PORT, AGENT_API_PORT_BASE } from '../../agentd/network/ports.
 import { deliverAppWakes } from './wakes.ts'
 import { chat as hub } from '../../server/chat/index.ts'
 import { threadController } from '../../server/threads/thread-controller.ts'
+import { threadService } from '../../server/threads/thread-service.ts'
 import { createTables } from './tables.ts'
 import { notified, notifyController, notifyPrompt, notifyTool } from './notify.ts'
 
@@ -25,8 +26,8 @@ export const chat = definePlugin({
       },
     },
   }),
-  start: () => {
+  start: () => void threadService.recover().finally(() => {
     deliverAppWakes()
     hub.start()
-  },
+  }),
 })

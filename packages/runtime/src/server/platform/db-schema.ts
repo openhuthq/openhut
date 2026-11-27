@@ -29,6 +29,8 @@ export interface Database {
   tool_permission: { agent_id: string; connection_id: string; tool: string; state: 'allow' | 'ask' | 'deny'; changed_by: string; changed_at: Generated<Date> }
   record: { key: string; collection: string; id: string; workspace: string; parent: string | null; ver: number; value: string; secret: string | null; personal: boolean; deleted: boolean }
   chat_thread: { id: string; agent_id: string; key: string | null; title: string; origin: string; channel: Generated<string>; place: ColumnType<string | null, string | null | undefined, string | null>; archived_at: ColumnType<Date | null, Date | null | undefined, Date | null>; created_at: Generated<Date> }
+  thread_turn: { id: string; thread_id: string; created_at: Generated<Date> }
+  thread_chunk: { turn_id: string; seq: number; chunk: ColumnType<unknown, string, string> }
   github_face: { agent_id: string; sha256: string; png: string; url: string | null }
   github_thread: { agent_id: string; thread: string }
   github_install_wait: { ask_id: string; actor: string; permissions: string; known: string; created_at: Generated<Date> }

@@ -2,9 +2,8 @@ import type { QueryClient, QueryFilters } from '@tanstack/react-query'
 import * as z from 'zod/mini'
 import { LIVE_BEAT_MS, LiveEvent } from '@openhut/common/live.ts'
 import { openChannel, type Channel } from '@/lib/live-socket'
-import { liveThreads, LiveSnapshot, ThreadEvent, type LiveAgentBoard } from '@/lib/thread-live'
+import { liveThreads, ThreadEvent, type LiveAgentBoard } from '@/lib/thread-live'
 import type { OpenHutAgent } from '@/lib/openhut'
-import { request } from '@/lib/api-client'
 import { AGENTS_KEY, COMPUTERS_KEY, CONNECTIONS_KEY, GRANTS_KEY, PROVIDERS_KEY, THREADS_KEY } from '@/lib/query-keys'
 
 const FILTERS: Record<string, QueryFilters[]> = {
@@ -35,7 +34,6 @@ export function followEvents(client: QueryClient): void {
   let flush: ReturnType<typeof setTimeout> | undefined
   liveThreads.connect({
     send: (message) => follow.channel?.send(JSON.stringify(message)),
-    fetchLive: (thread) => request({ schema: LiveSnapshot, path: `/api/threads/${encodeURIComponent(thread)}/live` }),
     refetch: (thread) => client.invalidateQueries({ queryKey: [...THREADS_KEY, 'thread', thread] }),
   })
 
@@ -96,6 +94,7 @@ export function followEvents(client: QueryClient): void {
 
   const wake = () => {
     if (document.visibilityState !== 'visible') return
+    liveThreads.refresh()
     check()
     if (!follow.channel && follow.retry && follow.heard) open()
   }

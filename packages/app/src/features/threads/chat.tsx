@@ -47,8 +47,8 @@ import { usePhoneBack } from '@/app/phone-page'
 import { TOUCH, useMedia } from '@/lib/media'
 import { cn } from '@/lib/utils'
 import { ICONS } from '@/components/icons'
-import { liveReplyText, liveThreads, useThreadLive, useTyping } from '@/lib/thread-live'
-import { busyAgent, LiveTitle, PresenceFaces, SeenBy, TypingNow } from '@/features/threads/live'
+import { useJoinThread, useTyping } from '@/lib/thread-live'
+import { LiveTitle, PresenceFaces, SeenBy, TypingNow } from '@/features/threads/live'
 import { CallText, webhookOf, WebhookMessage } from '@/features/webhooks/message'
 import { callOf } from '@/features/webhooks/call'
 import { CallCardMessage } from '@/features/webhooks/call-card'
@@ -59,92 +59,56 @@ type Attachment = { key: string; name: string; image: boolean; thumb?: string; f
 
 const ChatFiles = createContext<{ agentId: string; threadId: string; save: (path: string) => void }>({ agentId: '', threadId: '', save: () => undefined })
 const IMAGE = /\.(png|jpe?g|gif|webp)$/i
-const RETRY_MS = 2000
-const RETRY_TRIES = 45
 
 export function Chat({ agent, threadId, tools, onTitle }: { agent: Agent; threadId: string; tools?: ReactNode; onTitle?: () => void }) {
   const thread = useThread({ agentId: agent.id, threadId })
   if (agentState(agent) === 'stopped') return <ChatFrame agent={agent} tools={tools} onTitle={onTitle}><Asleep agent={agent} /></ChatFrame>
   if (!thread.data) return <ChatFrame agent={agent} tools={tools} onTitle={onTitle} composer={<ComposerSkeleton />}><div className="m-auto"><ErrorNote message={thread.error?.message} /></div></ChatFrame>
-  return <ThreadView key={thread.data.id} thread={thread.data} agent={agent} tools={tools} onTitle={onTitle} />
+  return <ThreadView key={thread.data.id} thread={thread.data} fetchedAt={thread.dataUpdatedAt} agent={agent} tools={tools} onTitle={onTitle} />
 }
 
-function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessages; agent: Agent; tools: ReactNode; onTitle?: () => void }) {
+function ThreadView({ thread, fetchedAt, agent, tools, onTitle }: { thread: ThreadWithMessages; fetchedAt: number; agent: Agent; tools: ReactNode; onTitle?: () => void }) {
   const touch = useTouchThread()
   const transport = useMemo(() => new DefaultChatTransport<AgentMessage>({
     api: `${threadPath(thread.id)}/chat`,
     fetch: (url, init) => openhut.fetch({ path: String(url), init }),
     prepareSendMessagesRequest: ({ messages, trigger }) => ({ body: { trigger, message: trigger === 'submit-message' ? messages.at(-1) : undefined } }),
+    prepareReconnectToStreamRequest: () => ({ api: `${threadPath(thread.id)}/stream` }),
   }), [thread.id, agent.id])
   const chat = useChat<AgentMessage>({ id: thread.id, messages: thread.messages.map(uiMessageOf), transport, onFinish: () => touch(thread) })
   const attachments = useAttachments({ agentId: agent.id, threadId: thread.id })
   const files = useMemo(() => ({ agentId: agent.id, threadId: thread.id, save: (path: string) => void saveFile({ agentId: agent.id, threadId: thread.id, path }).catch(toastError) }), [agent.id, thread.id])
-  const busy = chat.status === 'submitted' || chat.status === 'streaming'
-  const live = useThreadLive(thread.id)
+  const streaming = chat.status === 'submitted' || chat.status === 'streaming'
+  const ready = !streaming
+  const busy = streaming || !!thread.activeTurn
+  useJoinThread(thread.id)
   const me = useOwner()
-  const retrying = useRetryOnce({ status: chat.status, error: chat.error, retry: async () => {
-    const answer = chat.messages.at(-1)
-    if (answer?.role === 'assistant' && (await liveThreads.catchUp(thread.id))?.turnId === answer.id) return chat.clearError()
-    void chat.regenerate()
-  } })
-  useEffect(() => { if (!busy) chat.setMessages(thread.messages.map(uiMessageOf)) }, [thread.messages])
+  useEffect(() => { if (ready) chat.setMessages(thread.messages.map(uiMessageOf)) }, [thread.messages])
+  useEffect(() => { if (ready && thread.activeTurn) void chat.resumeStream() }, [thread.activeTurn, fetchedAt, ready])
   const send = (text: string) => {
     touch(thread)
     const files = attachments.items.flatMap(({ file }) => file ? [{ type: 'file' as const, mediaType: file.mediaType, filename: file.name, url: file.path }] : [])
     void chat.sendMessage(files.length ? { text, files } : { text })
     attachments.clear()
   }
-  const listed = agent.runsHere ? chat.messages : chat.messages.filter((message) => message.role === 'user' || message.parts.some((part) => part.type !== 'step-start'))
-  const own = liveReplyText({ busy, live, lastId: listed.at(-1)?.id })
-  const shown = own ? listed.map((message, index) => index === listed.length - 1 && message.role === 'assistant' ? withStream({ message, text: own }) : message) : listed
+  const retry = () => void (thread.activeTurn ? chat.resumeStream() : chat.regenerate())
+  const shown = agent.runsHere ? chat.messages : chat.messages.filter((message) => message.role === 'user' || message.parts.some((part) => part.type !== 'step-start'))
   const last = shown.at(-1)
+  const waiting = busy && chat.status !== 'streaming' && !(last?.role === 'assistant' && last.id === thread.activeTurn)
   const mine = [...shown].reverse().find((message) => message.role === 'user' && !webhookOf(message.metadata) && (z.safeParse(Authored, message.metadata).data?.author ?? me) === me)
-  const watching = !busy && (live.streaming || busyAgent(live.agent)) && !shown.some((message) => message.id === (live.streaming?.turnId ?? live.agent.turnId))
   const said = saidAfter(shown)
   const clear = agent.canEdit && chat.messages.length > 0 && !busy && !attachments.uploading && <ClearChat agent={agent} threadId={thread.id} attachments={attachments} />
   return <ChatFiles value={files}><CardReply value={thread.readOnly ? undefined : (text) => { if (busy) return false; send(text); return true }}><ChatFrame agent={agent} thread={thread} tools={<>{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={thread.readOnly ? <ContinueBar thread={thread} /> : <Composer agent={agent} threadId={thread.id} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void stopThread({ agentId: agent.id, threadId: thread.id }).catch(toastError)} />}>
     {shown.length ? <>
       <Day iso={thread.updatedAt} />
-      {shown.map((message, index) => <Message key={message.id} agent={agent} thread={thread} message={message} said={(text) => said(index, text)} seen={message === mine} live={(busy || own !== undefined) && message === last} onRetry={!busy && !thread.readOnly && message === last ? () => void chat.regenerate() : undefined} />)}
-    </> : !watching && <ChatEmpty agent={agent} />}
-    {!busy && live.ending.filter((stream) => !shown.some((message) => message.id === stream.turnId)).map((stream) => <AgentReply key={stream.turnId} agent={agent} message={{ id: stream.turnId, role: 'assistant', parts: [{ type: 'text', text: stream.text }] }} live={false} />)}
-    {watching && <AgentReply agent={agent} threadId={thread.id} step={live.agent.step} message={{ id: live.streaming?.turnId ?? 'live', role: 'assistant', parts: live.streaming?.text ? [{ type: 'text', text: live.streaming.text }] : [] }} live />}
-    {chat.status === 'submitted' && last?.role === 'user' && <AgentReply agent={agent} threadId={thread.id} message={withStream({ message: { id: 'waiting', role: 'assistant', parts: [] }, text: own ?? '' })} live />}
+      {shown.map((message, index) => <Message key={message.id} agent={agent} thread={thread} message={message} said={(text) => said(index, text)} seen={message === mine} live={chat.status === 'streaming' && message === last} onRetry={!busy && !thread.readOnly && message === last ? () => void chat.regenerate() : undefined} />)}
+    </> : !waiting && <ChatEmpty agent={agent} />}
+    {waiting && <AgentReply agent={agent} threadId={thread.id} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
     <PendingAsks agent={agent} shown={new Set(chat.messages.flatMap(changesOf))} />
-    {!agent.runsHere && chat.status !== 'submitted' && last?.role === 'user' && !troubleOf(agent) && <p className="m-0 text-right text-[12.5px] text-mute">{agent.runsNowhere ? `No computer runs ${agent.name} now. ${agent.canManage ? 'Run it here to get an answer.' : `Ask an admin to run ${agent.name} on their computer.`}` : `Sent to ${agent.runsOnName ?? 'your other computer'}. ${agent.name} answers when it’s on.`}</p>}
-    {retrying && <AgentReply agent={agent} message={{ id: 'retrying', role: 'assistant', parts: [] }} live />}
+    {!agent.runsHere && !busy && last?.role === 'user' && !troubleOf(agent) && <p className="m-0 text-right text-[12.5px] text-mute">{agent.runsNowhere ? `No computer runs ${agent.name} now. ${agent.canManage ? 'Run it here to get an answer.' : `Ask an admin to run ${agent.name} on their computer.`}` : `Sent to ${agent.runsOnName ?? 'your other computer'}. ${agent.name} answers when it’s on.`}</p>}
     {!thread.readOnly && <TypingNow threadId={thread.id} />}
-    {chat.error && !retrying && !(last && workOf(last)?.error) && <Alert variant="error-outline" role="alert"><span>{plainError(chat.error.message)}</span><Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={() => void chat.regenerate()}>Try again</Button></Alert>}
+    {chat.error && !busy && !(last && workOf(last)?.error) && <Alert variant="error-outline" role="alert"><span>{plainError(chat.error.message)}</span><Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={retry}>Try again</Button></Alert>}
   </ChatFrame></CardReply></ChatFiles>
-}
-
-function useRetryOnce({ status, error, retry }: { status: string; error: Error | undefined; retry: () => Promise<void> }) {
-  const [retrying, setRetrying] = useState(false)
-  const retried = useRef(false)
-  useEffect(() => {
-    if (status === 'ready') retried.current = false
-    if (!error || retried.current) return
-    retried.current = true
-    setRetrying(true)
-    let live = true
-    void serverBack().then(() => {
-      if (!live) return
-      setRetrying(false)
-      void retry()
-    })
-    return () => {
-      live = false
-      setRetrying(false)
-    }
-  }, [status, error])
-  return retrying
-}
-
-async function serverBack() {
-  for (let tries = 0; tries < RETRY_TRIES; tries++) {
-    await new Promise((resolve) => setTimeout(resolve, RETRY_MS))
-    if (await openhut.fetch({ path: '/health' }).then((res) => res.ok, () => false)) return
-  }
 }
 
 function useAttachments({ agentId, threadId }: { agentId: string; threadId: string }) {
@@ -554,11 +518,6 @@ function uiMessageOf(message: ChatMessage): AgentMessage {
     if (part.type === 'file' && typeof part.url === 'string' && typeof part.mediaType === 'string') return [{ type: 'file', url: part.url, mediaType: part.mediaType, filename: typeof part.filename === 'string' ? part.filename : undefined }]
     return []
   }) }
-}
-
-function withStream({ message, text }: { message: AgentMessage; text: string }): AgentMessage {
-  if (message.parts.map((part) => part.type === 'text' ? part.text : '').join('').length >= text.length) return message
-  return { ...message, parts: [...message.parts.filter((part) => part.type !== 'text'), { type: 'text', text }] }
 }
 
 function textOf(message: AgentMessage) {

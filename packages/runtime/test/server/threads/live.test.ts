@@ -32,31 +32,18 @@ test('typing shows on everyone\'s presence and ends by itself 5 s after the last
   }
 })
 
-test('deltas are batched every 40 ms with rising seq, catch-up has what was sent, and a new text part starts a new paragraph', () => {
-  mock.timers.enable({ apis: ['setTimeout'] })
-  try {
-    const ana = viewer('ana')
-    liveThreads.join({ thread: 'th_batch', agentId: 'ag_live', ...ana })
-    const turn = liveThreads.turn({ thread: 'th_batch', agentId: 'ag_live', turnId: 'msg_1', answering: ['ana@example.com'] })
-    turn.delta({ part: 't1', text: 'Hel' })
-    turn.delta({ part: 't1', text: 'lo' })
-    assert.equal(ana.heard.filter((each) => each.type === 'delta').length, 0)
-    mock.timers.tick(40)
-    turn.step('Search the web')
-    turn.delta({ part: 't2', text: 'Done.' })
-    mock.timers.tick(40)
-    const deltas = ana.heard.filter((each) => each.type === 'delta')
-    assert.deepEqual(deltas.map((each) => [each.seq, each.text]), [[1, 'Hello'], [2, '\n\nDone.']])
-    assert.deepEqual(liveThreads.catchUp('th_batch'), { object: 'thread_live', thread: 'th_batch', turnId: 'msg_1', seq: 2, text: 'Hello\n\nDone.', agent: { state: 'replying', turnId: 'msg_1', answering: ['ana@example.com'] } })
-    turn.end()
-    const agents = ana.heard.flatMap((each) => each.type === 'presence' ? [[each.agent.state, each.agent.step].filter(Boolean).join(':')] : [])
-    assert.deepEqual(agents, ['idle', 'thinking', 'replying', 'working:Search the web', 'replying', 'idle'])
-    assert.deepEqual(ana.heard.at(-2), { type: 'turn', thread: 'th_batch', turnId: 'msg_1', state: 'done' })
-    assert.deepEqual(liveThreads.catchUp('th_batch'), { object: 'thread_live', thread: 'th_batch', turnId: null, seq: 0, text: '', agent: { state: 'idle' } })
-    liveThreads.drop(ana.key)
-  } finally {
-    mock.timers.reset()
-  }
+test('a turn shows thinking, working and replying to viewers, and idle once it ends', () => {
+  const ana = viewer('ana')
+  liveThreads.join({ thread: 'th_batch', agentId: 'ag_live', ...ana })
+  const turn = liveThreads.turn({ thread: 'th_batch', agentId: 'ag_live', turnId: 'msg_1', answering: ['ana@example.com'] })
+  turn.replying()
+  turn.replying()
+  turn.step('Search the web')
+  turn.replying()
+  turn.end()
+  const agents = ana.heard.flatMap((each) => each.type === 'presence' ? [[each.agent.state, each.agent.step].filter(Boolean).join(':')] : [])
+  assert.deepEqual(agents, ['idle', 'thinking', 'replying', 'working:Search the web', 'replying', 'idle'])
+  liveThreads.drop(ana.key)
 })
 
 test('the board lists each agent\'s busy or typed-in threads and its sub-agents, and tells watchers when it changes', () => {

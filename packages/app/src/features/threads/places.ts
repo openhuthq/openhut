@@ -47,7 +47,7 @@ export function threadsOf({ threads, agent }: { threads: SourcedThread[]; agent:
   const newest = mine.filter((thread) => thread.id !== agent.id).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
   const main = mine.find((thread) => thread.id === agent.id) ?? {
     id: agent.id, object: 'thread', agentId: agent.id, title: '', origin: { platform: 'app', label: '' }, place: null, readOnly: false, continueUrl: null,
-    waiting: false, preview: '', archivedAt: null, createdAt: agent.createdAt, updatedAt: agent.createdAt,
+    waiting: false, activeTurn: null, preview: '', archivedAt: null, createdAt: agent.createdAt, updatedAt: agent.createdAt,
   }
   return [main, ...newest]
 }

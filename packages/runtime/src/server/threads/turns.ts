@@ -1,0 +1,128 @@
+import { readUIMessageStream, type UIMessage, type UIMessageChunk } from 'ai'
+import { db } from '../platform/db.ts'
+import { emit, log } from '../platform/events.ts'
+import { messageOf } from '../platform/http-error.ts'
+
+const SAVE_MS = 1000
+
+type Listener = (chunk?: UIMessageChunk) => void
+type Turn = { id: string; thread: string; agentId: string; chunks: UIMessageChunk[]; saved: number; saving: Promise<void>; ended: boolean; abort: AbortController; listeners: Set<Listener> }
+export type TurnRun = { signal: AbortSignal; write: (chunk: UIMessageChunk) => void }
+export type TurnEnd = { message: UIMessage; failed: boolean }
+
+const active = new Map<string, Turn[]>()
+const lanes = new Map<string, Promise<void>>()
+
+export const turns = {
+  start({ id, thread, agentId, run, save }: { id: string; thread: string; agentId: string; run: (turn: TurnRun) => Promise<void>; save: (end: TurnEnd) => Promise<void> }): Promise<void> {
+    const turn: Turn = { id, thread, agentId, chunks: [], saved: 0, saving: Promise.resolve(), ended: false, abort: new AbortController(), listeners: new Set() }
+    active.set(thread, [...active.get(thread) ?? [], turn])
+    changed(turn)
+    const queued = db.insertInto('thread_turn').values({ id, thread_id: thread }).execute()
+      .catch((err: unknown) => log.warn({ event: 'turn.queue_failed', thread, error: messageOf(err) }))
+    const done = Promise.all([queued, lanes.get(agentId)]).then(() => go({ turn, run, save }))
+    const lane = done.catch(() => undefined)
+    lanes.set(agentId, lane)
+    void lane.then(() => { if (lanes.get(agentId) === lane) lanes.delete(agentId) })
+    return done
+  },
+
+  subscribe({ thread, id, signal }: { thread: string; id?: string; signal?: AbortSignal }): ReadableStream<UIMessageChunk> | null {
+    const turn = id ? active.get(thread)?.find((each) => each.id === id) : active.get(thread)?.[0]
+    if (!turn) return null
+    let listener: Listener | undefined
+    return new ReadableStream<UIMessageChunk>({
+      start(controller) {
+        for (const chunk of turn.chunks) controller.enqueue(chunk)
+        if (turn.ended) return controller.close()
+        const each: Listener = (chunk) => {
+          if (chunk) return controller.enqueue(chunk)
+          turn.listeners.delete(each)
+          controller.close()
+        }
+        listener = each
+        turn.listeners.add(each)
+        signal?.addEventListener('abort', () => turn.listeners.delete(each))
+      },
+      cancel() {
+        if (listener) turn.listeners.delete(listener)
+      },
+    })
+  },
+
+  current: (thread: string): string | null => active.get(thread)?.[0]?.id ?? null,
+
+  stop(thread: string): void {
+    for (const turn of active.get(thread) ?? []) turn.abort.abort()
+  },
+
+  async recover(save: (input: { thread: string; id: string; message: UIMessage }) => Promise<void>): Promise<void> {
+    const rows = await db.selectFrom('thread_turn').select(['id', 'thread_id']).orderBy('id').execute()
+    const running = new Set([...active.values()].flat().map((turn) => turn.id))
+    for (const row of rows.filter((each) => !running.has(each.id))) {
+      const chunks = await db.selectFrom('thread_chunk').select('chunk').where('turn_id', '=', row.id).orderBy('seq').execute()
+      await save({ thread: row.thread_id, id: row.id, message: await fold({ id: row.id, chunks: chunks.map((each) => each.chunk as UIMessageChunk) }) })
+        .catch((err: unknown) => log.warn({ event: 'turn.recover_failed', thread: row.thread_id, error: messageOf(err) }))
+      await db.deleteFrom('thread_turn').where('id', '=', row.id).execute()
+    }
+  },
+}
+
+async function go({ turn, run, save }: { turn: Turn; run: (turn: TurnRun) => Promise<void>; save: (end: TurnEnd) => Promise<void> }): Promise<void> {
+  const timer = setInterval(() => { turn.saving = turn.saving.then(() => persist(turn)) }, SAVE_MS).unref()
+  let failed = false
+  try {
+    await run({
+      signal: turn.abort.signal,
+      write: (chunk) => {
+        turn.chunks.push(chunk)
+        for (const listener of turn.listeners) listener(chunk)
+      },
+    })
+  } catch (err) {
+    failed = true
+    const chunk: UIMessageChunk = { type: 'error', errorText: messageOf(err) }
+    turn.chunks.push(chunk)
+    for (const listener of turn.listeners) listener(chunk)
+    throw err
+  } finally {
+    clearInterval(timer)
+    await end({ turn, save, failed })
+  }
+}
+
+async function end({ turn, save, failed }: { turn: Turn; save: (end: TurnEnd) => Promise<void>; failed: boolean }): Promise<void> {
+  await turn.saving
+  try {
+    if (turn.chunks.length) await save({ message: await fold({ id: turn.id, chunks: turn.chunks }), failed })
+  } catch (err) {
+    log.warn({ event: 'turn.save_failed', thread: turn.thread, error: messageOf(err) })
+  }
+  await db.deleteFrom('thread_turn').where('id', '=', turn.id).execute().catch((err: unknown) => log.warn({ event: 'turn.clear_failed', thread: turn.thread, error: messageOf(err) }))
+  turn.ended = true
+  const left = (active.get(turn.thread) ?? []).filter((each) => each !== turn)
+  if (left.length) active.set(turn.thread, left)
+  else active.delete(turn.thread)
+  for (const listener of turn.listeners) listener()
+  changed(turn)
+}
+
+async function persist(turn: Turn): Promise<void> {
+  const from = turn.saved
+  const chunks = turn.chunks.slice(from)
+  if (!chunks.length) return
+  turn.saved = turn.chunks.length
+  await db.insertInto('thread_chunk').values(chunks.map((chunk, index) => ({ turn_id: turn.id, seq: from + index, chunk: JSON.stringify(chunk) }))).execute()
+    .catch((err: unknown) => log.warn({ event: 'turn.persist_failed', thread: turn.thread, error: messageOf(err) }))
+}
+
+async function fold({ id, chunks }: { id: string; chunks: UIMessageChunk[] }): Promise<UIMessage> {
+  let message: UIMessage = { id, role: 'assistant', parts: [] }
+  const stream = ReadableStream.from(chunks.filter((chunk) => chunk.type !== 'error'))
+  for await (const each of readUIMessageStream({ message, stream })) message = each
+  return { ...message, id }
+}
+
+function changed(turn: Turn): void {
+  emit({ name: 'thread.updated', target: { type: 'thread', id: turn.thread, agentId: turn.agentId } })
+}

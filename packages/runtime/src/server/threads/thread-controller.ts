@@ -20,7 +20,7 @@ export const threadController: FastifyPluginAsyncZod = async (app) => {
     return threadService.get({ id: req.params.id })
   })
 
-  app.get('/:id/live', { schema: { params: IdParams } }, async (req) => threadService.live({ actor: await who(req), id: req.params.id }))
+  app.get('/:id/stream', { schema: { params: IdParams } }, async (req, reply) => threadService.stream({ actor: await who(req), id: req.params.id, reply }))
 
   app.delete('/:id', DeleteRequest, async (req) => threadService.delete({ actor: await who(req), id: req.params.id, uploads: req.body?.uploads ?? [] }))
 
