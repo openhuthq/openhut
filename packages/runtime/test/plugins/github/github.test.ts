@@ -67,8 +67,8 @@ test('only the agent\'s first comment in a thread is signed', async () => {
 test('agents with GitHub are told to add the OpenHut-Agent trailer to their commits', () => {
   const agent = { id: 'ag_ghsignag', name: 'Database', instructions: '', slots: {} as never, net: 71, code_execution: true, web_browser: false }
   const ctx = { agent, gateway: '', token: '', channelKey: '', channels: [], secrets: [] }
-  assert.match(github.hermes({ ...ctx, connections: [{ name: 'GitHub', kind: 'github' }] }).prompt ?? '', /git commit --trailer "OpenHut-Agent: Database"/)
-  assert.equal(github.hermes({ ...ctx, connections: [{ name: 'Linear', kind: 'linear' }] }).prompt, '')
+  assert.match(github.agent({ ...ctx, connections: [{ name: 'GitHub', kind: 'github' }] }).instructions ?? '', /git commit --trailer "OpenHut-Agent: Database"/)
+  assert.equal(github.agent({ ...ctx, connections: [{ name: 'Linear', kind: 'linear' }] }).instructions, '')
 })
 
 test('with signing turned off in Admin, bodies go to GitHub as written', async () => {

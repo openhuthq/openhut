@@ -1,5 +1,5 @@
 import { Memory, MemoryRecord, MEMORY_DELIMITER, MEMORY_LIMITS, memoryLength, type MemoryBlock, type MemoryTarget, type UpdateMemory } from '@openhut/common/agents/memory.ts'
-import { agentd } from '../platform/agentd.ts'
+import { agent } from '../../core/agent.ts'
 import { db } from '../platform/db.ts'
 import { emit } from '../platform/events.ts'
 import { HttpError } from '../platform/http-error.ts'
@@ -9,7 +9,7 @@ import { agentService, mayEdit, placeOf, type AgentFacts } from './agent-service
 
 const TARGETS: MemoryTarget[] = ['notes', 'people']
 const LABEL: Record<MemoryTarget, string> = { notes: 'Notes', people: 'What it knows about people' }
-const FILE: Record<MemoryTarget, string> = { notes: 'memories/MEMORY.md', people: 'memories/USER.md' }
+const FILE: Record<MemoryTarget, string> = { notes: 'MEMORY', people: 'USER' }
 const BARE_DELIMITER = /(^|\n)§(\n|$)/
 const sent = new Map<string, string>()
 
@@ -56,7 +56,7 @@ export const memoryService = {
     const now = await disk(agentId)
     for (const target of TARGETS) {
       const text = value[target]
-      if (text !== null && text !== now[target]) await agentd.write({ id: agentId, path: FILE[target], body: text, create: true })
+      if (text !== null && text !== now[target]) await agent.content.write({ id: agentId, ref: { kind: 'memory', name: FILE[target] }, body: text, by: 'person', create: true })
     }
     sent.set(agentId, JSON.stringify({ ...now, ...Object.fromEntries(TARGETS.filter((target) => value[target] !== null).map((target) => [target, value[target]])) }))
   },
@@ -69,7 +69,7 @@ async function rawOf(facts: AgentFacts): Promise<MemoryRecord> {
 }
 
 async function disk(agentId: string): Promise<MemoryRecord> {
-  const [notes, people] = await Promise.all(TARGETS.map((target) => agentd.read({ id: agentId, path: FILE[target] })))
+  const [notes, people] = await Promise.all(TARGETS.map((target) => agent.content.read(agentId, { kind: 'memory', name: FILE[target] })))
   return { notes: notes?.toString('utf8') ?? null, people: people?.toString('utf8') ?? null }
 }
 

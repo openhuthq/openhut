@@ -1,4 +1,5 @@
-import { pairWhatsapp, type Stream } from '../platform/agentd.ts'
+import { agent } from '../../core/agent.ts'
+import type { Stream } from '../platform/agentd.ts'
 
 const PAIR_MS = 5 * 60_000
 const pairings = new Map<string, Following>()
@@ -13,8 +14,9 @@ export const whatsappPairing = {
       fail(following.pairing, 'nobody scanned the code within 5 minutes')
       following.stream?.close()
     }, PAIR_MS)
-    following.stream = pairWhatsapp({
+    following.stream = agent.attach({
       id: agentId,
+      what: 'whatsapp-pairing',
       onLine: (line) => {
         read({ pairing: following.pairing, line })
         if (following.pairing.status === 'linked' && !following.told) {

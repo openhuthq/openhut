@@ -1,18 +1,20 @@
 import { createHash } from 'node:crypto'
-import type { AgentFiles } from '../server/platform/agentd.ts'
-import { config } from '../server/platform/config.ts'
-import { HttpError } from '../server/platform/http-error.ts'
-import { agentSubnet } from '../server/platform/network.ts'
-import { manifest } from './hooks.ts'
-import type { HermesCtx } from './plugin.ts'
-import { plugins } from './plugins.ts'
+import type { AgentCtx, AgentPart } from '../../core/agent.ts'
+import { plugins } from '../../core/plugins.ts'
+import type { AgentFiles } from '../../server/platform/agentd.ts'
+import { config } from '../../server/platform/config.ts'
+import { HttpError } from '../../server/platform/http-error.ts'
+import { agentSubnet } from '../../server/platform/network.ts'
+import { manifest } from './events.ts'
 
 const EMPTY_AUTH = { version: 1, providers: {} }
 const PYTHON_PLUGIN = 'openhut'
 
-export function hermesFiles(input: Omit<HermesCtx, 'gateway'>): AgentFiles {
+type HermesPart = { prompt?: string; config?: Record<string, unknown>; env?: Record<string, string>; auth?: object; restart?: unknown }
+
+export function render(input: Omit<AgentCtx, 'gateway'>): AgentFiles {
   const ctx = { ...input, gateway: config.agentGateway ?? `http://${agentSubnet(input.agent.net)}.1:${config.gatewayPort}` }
-  const parts = plugins().map((plugin) => plugin.hermes?.(ctx) ?? {})
+  const parts = plugins().map((plugin) => hermesPart(plugin.agent?.(ctx) ?? {}))
   const merged = merge([...parts.map((part) => part.config ?? {}), {
     mcp_servers: { openhut: { url: `${ctx.gateway}/api/v1/mcp`, headers: { Authorization: `Agent ${ctx.token}` } } },
     plugins: { enabled: [PYTHON_PLUGIN], entries: { [PYTHON_PLUGIN]: { allow_gateway_injection: true, settings: manifest() } } },
@@ -25,6 +27,19 @@ export function hermesFiles(input: Omit<HermesCtx, 'gateway'>): AgentFiles {
     'SOUL.md': `${parts.flatMap((part) => part.prompt?.trim() || []).join('\n\n')}\n`,
     'auth.json': `${JSON.stringify(parts.find((part) => part.auth)?.auth ?? EMPTY_AUTH)}\n`,
     'restart.key': `${restart}\n`,
+  }
+}
+
+function hermesPart(part: AgentPart): HermesPart {
+  const native = part.native?.hermes ?? {}
+  const subagents = part.limits?.subagents
+  const delegation = subagents && { delegation: { max_spawn_depth: subagents.depth, max_concurrent_children: subagents.concurrent } }
+  return {
+    prompt: part.instructions,
+    config: delegation || native.config ? merge([delegation ?? {}, native.config ?? {}]) : undefined,
+    env: part.secrets || native.env ? { ...native.env, ...part.secrets } : undefined,
+    auth: part.model?.auth,
+    ...'restart' in part && { restart: part.restart },
   }
 }
 

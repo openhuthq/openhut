@@ -16,14 +16,14 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   `src/server/` is the API (Fastify, Kysely on PGlite), grouped by domain: `platform/` (config, db, secrets, settings,
   errors, evlog logging, the typed agentd client), `team/`, `agents/` (agents, grants), `channels/`,
   `connections/`, `gateway/` (the agents' MCP gateway and key broker on :8081), `admin/`, and `integrations/<service>/`.
-  What an agent's Hermes gets comes from plugins: `src/plugins/<name>/index.ts` is `definePlugin({ name, hermes, tools, asks, hooks, slackAction, wakes, start, migrate, routes, afterTurn, connectorCall })`,
-  where `hermes()` returns that feature's SOUL.md paragraph, config and env, and `tools` its MCP tools (zod `input` and
+  What an agent's Hermes gets comes from plugins: `src/plugins/<name>/index.ts` is `definePlugin({ name, agent, tools, asks, on, slackAction, wakes, start, migrate, routes, afterTurn, connectorCall })`,
+  where `agent()` returns that feature's `AgentPart` (instructions, secrets, model auth, sub-agent limits, and Hermes-only config and env under `native.hermes`), and `tools` its MCP tools (zod `input` and
   `run(input, { agent, origin })`). `src/core/` holds no feature code: `plugins.ts` is the ordered list (its order is the
-  SOUL.md order; two plugins with one tool name fail at boot), `hermes.ts` merges the parts into `config.yaml` (written as
-  JSON), `.env`, `SOUL.md` and `auth.json`, and `mcp.ts` serves every plugin's tools on the gateway's MCP server. A tool
-  with `local: true` runs inside Hermes instead, `hooks` maps Hermes hook names to handlers, and `slackAction` takes Slack
-  buttons by prefix: the one Hermes plugin, `vendor/hermes-plugins/openhut`, registers what `core/hooks.ts`'s manifest
-  lists and calls the gateway's `/tools/<name>`, `/hooks/<hook>` and `/slack-actions` for each (hooks whose answer Hermes ignores, everything but `pre_*` and `transform_*`, are sent from a background thread, so a slow gateway never holds the agent). `wakes` are turns the
+  SOUL.md order; two plugins with one tool name fail at boot), `agent.ts` is `AutonomousAgent`, the only agent interface the server uses (`agent.setup`, `chat`, `content`, `status`, `attach`, `activity`), implemented by
+  the Hermes driver in `src/adapters/hermes/`, whose `render.ts` merges the parts into `config.yaml` (written as JSON), `.env`, `SOUL.md` and `auth.json`, and `mcp.ts` serves every plugin's tools on the gateway's MCP server. A tool
+  with `local: true` runs inside Hermes instead, `on` maps agent events (`message.arriving`, `reply.drafted`, `subagent.started`, `subagent.stopped`, `content.written`) to handlers, and `slackAction` takes Slack
+  buttons by prefix: the one Hermes plugin, `vendor/hermes-plugins/openhut`, registers what `adapters/hermes/events.ts`'s manifest
+  lists and calls the gateway's `/tools/<name>`, `/hooks/<hook>` (its `EVENTS` maps each Hermes hook to an agent event) and `/slack-actions` for each (hooks whose answer Hermes ignores, everything but `pre_*` and `transform_*`, are sent from a background thread, so a slow gateway never holds the agent). `wakes` are turns the
   runtime wants the agent to take (routine runs and webhook calls from inbox, answered asks):
   `core/wakes.ts` lists every plugin's due wakes as `[OpenHut <plugin>:<id>] <text>`. The chat plugin runs on the server every app wake and every
   inbox wake for the app or Discord (`runsOnServer`, `nudge(agentId)` runs them at once). The Hermes plugin polls `/wakes` only for the rest (asks answered in Slack, Telegram or WhatsApp, and their inbox wakes).
@@ -35,7 +35,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   A webhook or routine that posts in Discord gets a Discord thread; a webhook's first delivered answer starts the Discord thread. `post_message` and `notify` to Discord go through `chat.send`. Threads besides an agent's own app chat (id = agent id) are `chat_thread` rows (`th_*`). Every turn, chat or wake, streams to whoever has the thread open: the app's `/api/events` socket sends `join`/`leave`/`typing` (`common/src/live.ts`), and `threads/live.ts` keeps each thread's viewers, typing (5 s), agent state and the turn in flight in memory, sending `presence`, `delta` (every 40 ms, by `seq`) and `turn`; `GET /api/threads/:id/live` is the text so far for a late joiner. Every socket also gets `agents` (on connect, then at most every 250 ms when something changes): each agent the person can use with its activity (idle, working, waiting on an ask), status, health, busy or typed-in threads and running sub-agents, so the sidebar never polls. A webhook's message carries `metadata.source` and `metadata.payload`, which `common/src/webhooks/summary.ts` turns into a card. `start()` runs at boot.
   A plugin also owns its tables (`migrate`, run by `platform/db.ts` after the core tables, in list order), its API
   (`routes: () => ({ '/api/<prefix>': controller })`, registered by `app.ts`; two plugins with one prefix fail at boot)
-  and a part under the app chat's reply (`afterTurn`, like asks' `data-asks`). The subagents plugin keeps each agent's running sub-agents in memory from the `subagent_start`/`subagent_stop` hooks and serves them at `/api/agents/:id/subagents` for the sidebar.
+  and a part under the app chat's reply (`afterTurn`, like asks' `data-asks`). The subagents plugin keeps each agent's running sub-agents in memory from the `subagent.started`/`subagent.stopped` events and serves them at `/api/agents/:id/subagents` for the sidebar.
   Anything an agent needs its owner's OK for is an ask: a plugin declares its kinds as `asks: { <kind>: defineAsk({ input, title, run,
   tool?, answer?, declined? }) }`, and `core/asks.ts` owns the rest (the `ask` table, `/api/asks`, an MCP tool per kind with `tool`,
   the notes the agent gets, the sweep that expires them, and one wake per chat once nothing there is open or 30 s after its last answer). Every ask carries a `description` (`AskDescription` in `core/plugin.ts`: one sentence for the owner, 3 to 120 characters), shown under the title on every card and on the answered line; app asks (connect, approval, key) show the app's logo, not the agent's face. Its whole API is `asks.create` (returns the text for the agent) and
@@ -44,7 +44,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   `features/<feature>/asks.tsx` as `rows` (found by `features/asks/custom.ts`), like `connect_app`'s checklist row and connect dialog, a kind that only adds to the card exports `extras`, like `update_self`'s instructions diff, `add_webhook`'s address and secret and `add_channel`'s QR step, and a kind with its own card exports `cards`, like `call_tool`'s Allow / Always allow / Not now card (no Always allow for a destructive action). A form field longer than 1000 characters folds the card's fields behind **Edit**. A sign-in
   started for an ask carries its id, and the callback calls `asks.approve` with the new connection.
   Changes reach a running agent live: Hermes re-reads `config.yaml` and `.env` every turn, and agentd runs `hermes sessions refresh-prompts` when `SOUL.md` changes.
-  A `hermes()` part may set `restart` to what in it needs a restart (default: its config, env and auth; a prompt never does), and `core/hermes.ts` hashes
+  An `agent()` part may set `restart` to what in it needs a restart (default: its config, env and auth; a prompt never does), and `render.ts` hashes
   that with the version, gateway and token into `restart.key`. agentd restarts only when that file changes or a key left `.env` (Hermes never unsets one), and
   with `restart: false` answers `pending` instead; `agentService` then restarts once the agent's gateway has been quiet for `config.quietMs` (10 s; tests
   shorten it), the one path every restart takes (moves and the browser toggle too), and `wakes.due` holds that agent's wakes until it has.

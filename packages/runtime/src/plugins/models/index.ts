@@ -10,12 +10,11 @@ const TEST_CONTEXT = 200_000
 export const models = definePlugin({
   name: 'models',
   routes: () => ({ '/api/providers': providerController }),
-  hermes: ({ agent, gateway, token }) => {
+  agent: ({ agent, gateway, token }) => {
     const setup = providers[agent.slots.primary.provider].setup({ gateway, token })
     return {
-      config: { ...modelConfig({ gateway, token, slot: agent.slots.primary }), ...setup.config },
-      env: config.modelMode === 'test' ? {} : setup.env,
-      auth: config.modelMode === 'claude' ? setup.auth : undefined,
+      model: { auth: config.modelMode === 'claude' ? setup.auth : undefined },
+      native: { hermes: { config: { ...modelConfig({ gateway, token, slot: agent.slots.primary }), ...setup.config }, env: config.modelMode === 'test' ? {} : setup.env } },
       restart: agent.slots.primary.provider,
     }
   },

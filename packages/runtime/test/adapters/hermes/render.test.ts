@@ -3,13 +3,13 @@ import assert from 'node:assert/strict'
 import { WEBHOOK_SETUP_PROMPT } from '@openhut/common/webhooks/webhook.ts'
 import { CARD_PROMPT } from '@openhut/common/cards/card.ts'
 import { ASK_PROMPT, INTERVIEW_PROMPT, starterInstructions } from '@openhut/common/asks/ask.ts'
-import { TALK_PROMPT } from '../../src/plugins/base/index.ts'
-import { hermesFiles, merge } from '../../src/core/hermes.ts'
-import { manifest } from '../../src/core/hooks.ts'
-import type { HermesCtx } from '../../src/core/plugin.ts'
-import type { RenderedChannel } from '../../src/plugins/channels/index.ts'
-import { config } from '../../src/server/platform/config.ts'
-import { resolveSlots } from '../../src/server/models/model-slots.ts'
+import { TALK_PROMPT } from '../../../src/plugins/base/index.ts'
+import { render, merge } from '../../../src/adapters/hermes/render.ts'
+import { manifest } from '../../../src/adapters/hermes/events.ts'
+import type { AgentCtx } from '../../../src/core/agent.ts'
+import type { RenderedChannel } from '../../../src/plugins/channels/index.ts'
+import { config } from '../../../src/server/platform/config.ts'
+import { resolveSlots } from '../../../src/server/models/model-slots.ts'
 
 const on = (id: string, tier: 'big' | 'fast' = 'big', contextLength: number | null = null) => ({ id, name: id, on: true, tier, note: null, contextLength, inputPrice: null, outputPrice: null })
 const catalogs = {
@@ -24,26 +24,26 @@ const slots = (model = 'claude:sonnet') => resolveSlots({ model, catalog: (provi
 const agent = { id: 'ag_chantest', name: 'Dev', instructions: '# Dev', slots: slots(), net: 3, code_execution: true, web_browser: false }
 const AUXILIARY = ['approval', 'compression', 'title_generation', 'background_review']
 
-function files(over: Partial<Omit<HermesCtx, 'gateway'>> = {}) {
-  const out = hermesFiles({ agent, token: 'ag_chantest.token', channelKey: 'k'.repeat(32), channels: [], connections: [], secrets: [], ...over })
+function files(over: Partial<Omit<AgentCtx, 'gateway'>> = {}) {
+  const out = render({ agent, token: 'ag_chantest.token', channelKey: 'k'.repeat(32), channels: [], connections: [], secrets: [], ...over })
   const env = Object.fromEntries(out['.env'].trim().split('\n').map((line) => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)]))
   return { config: JSON.parse(out['config.yaml']), env, soul: out['SOUL.md'], auth: JSON.parse(out['auth.json']) }
 }
-const render = (channels: RenderedChannel[]) => files({ channels })
+const withChannels = (channels: RenderedChannel[]) => files({ channels })
 const claudeMode = (t: { after: (fn: () => void) => void }) => {
   config.modelMode = 'claude'
   t.after(() => { config.modelMode = 'test' })
 }
 
 test('no channels: approvals are off, no Slack or WhatsApp settings', () => {
-  const { config: yaml, env } = render([])
+  const { config: yaml, env } = withChannels([])
   assert.deepEqual(yaml.approvals, { mode: 'off' })
   for (const key of ['slack', 'whatsapp', 'telegram', 'discord', 'platforms']) assert.equal(yaml[key], undefined)
   assert.ok(!Object.keys(env).some((key) => /SLACK_|WHATSAPP_/.test(key)))
 })
 
 test('the base Hermes settings, the app chat and the openhut MCP server and plugin', () => {
-  const { config: yaml, env } = render([])
+  const { config: yaml, env } = withChannels([])
   assert.deepEqual(yaml.terminal, { backend: 'local' })
   assert.equal(yaml.agent.api_max_retries, 30)
   assert.deepEqual(yaml.tools, { tool_search: { enabled: 'off' } })
@@ -56,7 +56,7 @@ test('the base Hermes settings, the app chat and the openhut MCP server and plug
 })
 
 test('Slack in picked channels: stand-in tokens through the gateway, everyone in them, only those channels', () => {
-  const { config: yaml, env } = render([{ kind: 'slack', audience: { ownerAddress: '', open: false, allowed: ['C012ABCDEF', 'G034GHIJKL'] } }])
+  const { config: yaml, env } = withChannels([{ kind: 'slack', audience: { ownerAddress: '', open: false, allowed: ['C012ABCDEF', 'G034GHIJKL'] } }])
   assert.match(env.SLACK_BOT_TOKEN, /^xoxb-oh-ag_[a-z0-9]+\./)
   assert.match(env.SLACK_APP_TOKEN, /^xapp-oh-ag_[a-z0-9]+\./)
   assert.equal(env.OPENHUT_SLACK_API, 'http://10.200.3.1:8081/u/slack/api/')
@@ -69,17 +69,17 @@ test('Slack in picked channels: stand-in tokens through the gateway, everyone in
 })
 
 test('Slack before any channel is picked: no Slack settings, so it answers nowhere', () => {
-  assert.ok(!Object.keys(render([{ kind: 'slack', audience: { ownerAddress: '', open: false, allowed: [] } }]).env).some((key) => key.startsWith('SLACK_')))
+  assert.ok(!Object.keys(withChannels([{ kind: 'slack', audience: { ownerAddress: '', open: false, allowed: [] } }]).env).some((key) => key.startsWith('SLACK_')))
 })
 
 test('Discord stays on the server: Hermes gets no bot token and no Discord settings', () => {
-  const { config: yaml, env } = render([{ kind: 'discord', audience: { ownerAddress: '', open: false, allowed: ['1234567890123456789'] } }])
+  const { config: yaml, env } = withChannels([{ kind: 'discord', audience: { ownerAddress: '', open: false, allowed: ['1234567890123456789'] } }])
   assert.ok(!Object.keys(env).some((key) => key.startsWith('DISCORD_')))
   assert.equal(yaml.discord, undefined)
 })
 
 test('WhatsApp open to anyone: bot mode, everyone allowed, approvals still off', () => {
-  const { config: yaml, env } = render([{ kind: 'whatsapp', audience: { ownerAddress: '+15551234567', open: true, allowed: [] } }])
+  const { config: yaml, env } = withChannels([{ kind: 'whatsapp', audience: { ownerAddress: '+15551234567', open: true, allowed: [] } }])
   assert.equal(env.WHATSAPP_ENABLED, 'true')
   assert.equal(env.WHATSAPP_MODE, 'bot')
   assert.equal(env.WHATSAPP_ALLOWED_USERS, '*')
@@ -90,7 +90,7 @@ test('WhatsApp open to anyone: bot mode, everyone allowed, approvals still off',
 test('on the host network the app chat and the WhatsApp bridge get the agent\'s own ports', (t) => {
   config.agentHostNet = true
   t.after(() => { config.agentHostNet = false })
-  const { config: yaml, env } = render([{ kind: 'whatsapp', audience: { ownerAddress: '+15551234567', open: true, allowed: [] } }])
+  const { config: yaml, env } = withChannels([{ kind: 'whatsapp', audience: { ownerAddress: '+15551234567', open: true, allowed: [] } }])
   assert.deepEqual(yaml.whatsapp, { gateway_restart_notification: false, bridge_port: 19603 })
   assert.equal(env.API_SERVER_HOST, '127.0.0.1')
   assert.equal(env.API_SERVER_PORT, '18603')
@@ -150,16 +150,16 @@ test('test mode: the test model at the gateway, the provider\'s env left out', (
 })
 
 test('code execution is on unless the agent switches it off; Hermes\'s own browser is always off', () => {
-  assert.deepEqual(render([]).config.agent.disabled_toolsets, ['browser', 'cronjob', 'connections'])
+  assert.deepEqual(withChannels([]).config.agent.disabled_toolsets, ['browser', 'cronjob', 'connections'])
   assert.deepEqual(files({ agent: { ...agent, code_execution: false } }).config.agent.disabled_toolsets, ['browser', 'cronjob', 'connections', 'code_execution'])
 })
 
 test('sub-agents are on: one level deep, no cap on how many run at once, and the chat waits for them', () => {
-  assert.deepEqual(render([]).config.delegation, { max_spawn_depth: 1, max_concurrent_children: 1000, gateway_mode: 'inline' })
+  assert.deepEqual(withChannels([]).config.delegation, { max_spawn_depth: 1, max_concurrent_children: 1000, gateway_mode: 'inline' })
 })
 
 test('with the browser switched on, the agent is told how to use agent-browser and not to trust page text', () => {
-  assert.doesNotMatch(render([]).soul, /agent-browser/)
+  assert.doesNotMatch(withChannels([]).soul, /agent-browser/)
   const browsing = files({ agent: { ...agent, web_browser: true } })
   assert.deepEqual(browsing.config.agent.disabled_toolsets, ['browser', 'cronjob', 'connections'])
   assert.match(browsing.soul, /## Web browser/)
@@ -169,7 +169,7 @@ test('with the browser switched on, the agent is told how to use agent-browser a
 })
 
 test('Telegram for listed people: the agent token stands in for the bot token, the gateway is the Bot API, numeric IDs with the owner, strangers reach pre_gateway_dispatch so an invite can land', () => {
-  const { config: yaml, env } = render([{ kind: 'telegram', audience: { ownerAddress: '111222333', open: false, allowed: ['444555666'] } }])
+  const { config: yaml, env } = withChannels([{ kind: 'telegram', audience: { ownerAddress: '111222333', open: false, allowed: ['444555666'] } }])
   assert.equal(env.TELEGRAM_BOT_TOKEN, 'ag_chantest.token')
   assert.deepEqual(yaml.platforms, { telegram: { extra: { base_url: 'http://10.200.3.1:8081/u/telegram/bot', base_file_url: 'http://10.200.3.1:8081/u/telegram/file/bot' } } })
   assert.equal(env.TELEGRAM_ALLOWED_USERS, '111222333,444555666')
@@ -180,13 +180,13 @@ test('Telegram for listed people: the agent token stands in for the bot token, t
 })
 
 test('Telegram open to anyone: everyone allowed', () => {
-  const { env } = render([{ kind: 'telegram', audience: { ownerAddress: '111222333', open: true, allowed: [] } }])
+  const { env } = withChannels([{ kind: 'telegram', audience: { ownerAddress: '111222333', open: true, allowed: [] } }])
   assert.equal(env.TELEGRAM_ALLOW_ALL_USERS, 'true')
   assert.equal(env.TELEGRAM_ALLOWED_USERS, undefined)
 })
 
 test('SOUL.md names the connected apps in one line, and adds only the ask and card guides when there are none', () => {
-  assert.equal(render([]).soul, `${TALK_PROMPT}\n\n# Dev\n${ASK_PROMPT}\n${WEBHOOK_SETUP_PROMPT}\n${CARD_PROMPT}`)
+  assert.equal(withChannels([]).soul, `${TALK_PROMPT}\n\n# Dev\n${ASK_PROMPT}\n${WEBHOOK_SETUP_PROMPT}\n${CARD_PROMPT}`)
   const { soul } = files({ connections: [{ name: 'Excalidraw', kind: 'excalidraw' }, { name: 'Orders\nDB', kind: 'postgres' }] })
   assert.equal(soul, `${TALK_PROMPT}\n\n# Dev\n\n## Connected apps\n\nThe openhut tools reach: Excalidraw, Orders DB (postgres). Call list_tools to see what each one does, and use it before doing the same work by hand.\n${ASK_PROMPT}\n${WEBHOOK_SETUP_PROMPT}\n${CARD_PROMPT}`)
 })
@@ -203,14 +203,14 @@ test('a new agent with its starter instructions is told to interview the person 
   assert.equal(fresh.soul, `${TALK_PROMPT}\n\n${starterInstructions('Pulse')}\n${INTERVIEW_PROMPT}${ASK_PROMPT}\n${WEBHOOK_SETUP_PROMPT}\n${CARD_PROMPT}`)
   assert.match(INTERVIEW_PROMPT, /update_self/)
   assert.match(INTERVIEW_PROMPT, /connect_app/)
-  assert.doesNotMatch(render([]).soul, /Your first chat/)
+  assert.doesNotMatch(withChannels([]).soul, /Your first chat/)
 })
 
 test('the gateway is the agent\'s subnet address, or the agent gateway when one is set', (t) => {
-  assert.equal(render([]).config.mcp_servers.openhut.url, 'http://10.200.3.1:8081/api/v1/mcp')
+  assert.equal(withChannels([]).config.mcp_servers.openhut.url, 'http://10.200.3.1:8081/api/v1/mcp')
   config.agentGateway = 'http://host.microsandbox.internal:8081'
   t.after(() => { config.agentGateway = undefined })
-  const { config: yaml } = render([])
+  const { config: yaml } = withChannels([])
   assert.equal(yaml.mcp_servers.openhut.url, 'http://host.microsandbox.internal:8081/api/v1/mcp')
   assert.equal(yaml.model.base_url, 'http://host.microsandbox.internal:8081/test-llm/v1')
   assert.doesNotMatch(JSON.stringify(yaml), /10\.200\./)
@@ -223,7 +223,7 @@ test('plugins\' config merges deeply, lists add up, and two different values for
 })
 
 test('SOUL.md opens with how the agent talks, before and overridden by the owner\'s instructions', () => {
-  const { soul } = render([])
+  const { soul } = withChannels([])
   assert.equal(soul.indexOf(TALK_PROMPT), 0)
   assert.ok(soul.indexOf('# Dev') > TALK_PROMPT.length)
   assert.equal(TALK_PROMPT, `## How you talk
@@ -240,7 +240,7 @@ Your owner's instructions below override this section.
 })
 
 test('the restart key moves only for what Hermes reads at boot: the token, the provider and the channel set, not the prompt, Discord, model, grants, keys or run-code', () => {
-  const key = (over: Partial<Omit<HermesCtx, 'gateway'>> = {}) => hermesFiles({ agent, token: 'ag_chantest.token', channelKey: 'k'.repeat(32), channels: [], connections: [], secrets: [], ...over })['restart.key']
+  const key = (over: Partial<Omit<AgentCtx, 'gateway'>> = {}) => render({ agent, token: 'ag_chantest.token', channelKey: 'k'.repeat(32), channels: [], connections: [], secrets: [], ...over })['restart.key']
   const telegram = (allowed: string[]): RenderedChannel => ({ kind: 'telegram', audience: { open: false, ownerAddress: '123456789', allowed } })
   const base = key()
   assert.match(base, /^[0-9a-f]{64}\n$/)
