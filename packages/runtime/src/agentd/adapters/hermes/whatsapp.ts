@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs'
 import type { Duplex } from 'node:stream'
-import { config } from './config.ts'
-import { box } from './host.ts'
-import type { Mount } from './sandbox/sandbox.ts'
+import { config } from '../../config.ts'
+import { box } from '../../host.ts'
+import type { Mount } from '../../sandbox/sandbox.ts'
 
 const BRIDGE = box.name === 'memory' ? `${config.data}/whatsapp-bridge` : '/var/lib/openhut/whatsapp-bridge'
 const PAIR_COMMAND = ['node', '/opt/data/scripts/whatsapp-bridge/bridge.js', '--pair-only', '--pair-json', '--session', '/opt/data/platforms/whatsapp/session']

@@ -63,7 +63,8 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   instead, a key that acts as the owner. The server also serves the built App (`platform/web-app.ts`).
   `src/agentd/` is the root helper on a Unix socket in openhut-runtime, the only process that starts agents: `sandbox/docker.ts` runs each one
   as a container (`--runtime runsc` when a probe at boot finds gVisor works; health says `gvisor`), `sandbox/memory.ts`
-  is the tests' fake (`OPENHUT_FAKE_SANDBOX=1`). Tests mirror them in `test/server/` and `test/agentd/`.
+  is the tests' fake (`OPENHUT_FAKE_SANDBOX=1`). `agents.ts` and `commands.ts` know no Hermes: the container spec, home layout,
+  conf files and `state.db` are `adapters/hermes/` (`hermesBox`), and the firewall, fence, link, subnets and ports are `network/`. Tests mirror them in `test/server/` and `test/agentd/`.
 - **`packages/app`** — `@openhut/app`, the App: the React dashboard (Vite to `dist`, built into the image and served by the runtime on the same origin, TanStack Query). Tailwind v4 with shared
   components in `src/components/ui` (shadcn on Base UI); screens use those, not their own styles.
 - **`packages/common`** — `@openhut/common`, the API contract: Zod Mini request schemas and response types.

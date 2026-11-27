@@ -1,18 +1,14 @@
 import type { Duplex } from 'node:stream'
-import { agents, FILES, RESTART_KEY, type AgentFiles } from './agents.ts'
+import { hermesBox as runtime, type Kind } from './adapters/hermes/index.ts'
+import { agents } from './agents.ts'
 import { browser, MAX_FPS } from './browser.ts'
-import { newMessages, usage } from './hermes-db.ts'
-import { agentHome, type Kind } from './home/home.ts'
-import { MAX_FILE_BASE64 } from './home/uploads.ts'
 import { config } from './config.ts'
-import { box, home, scratchSpec } from './host.ts'
+import { MAX_FILE_BASE64 } from './home/uploads.ts'
+import { box, scratchSpec } from './host.ts'
 import { fenceLines, proveFence, type FenceReport } from './network/fence.ts'
 import { firewall } from './network/firewall.ts'
 import { ID, RESOLV } from './network/ports.ts'
-import { isRecord } from './util.ts'
-import { whatsapp } from './whatsapp.ts'
 
-const MAX_FILE = 200_000
 const MAX_LISTED = 200
 const READABLE: Kind[] = ['skill', 'memory', 'file', 'upload']
 const WRITABLE: Kind[] = ['skill', 'memory', 'upload']
@@ -25,7 +21,7 @@ export const commands = {
     parse: () => ({}),
     run: async () => ({
       firewall: await firewall.recent(), image: config.image, ...await box.health(config.image),
-      features: { whatsapp: whatsapp.installed(), browser: browser.installed() },
+      features: { whatsapp: runtime.whatsapp.installed(), browser: browser.installed() },
     }),
   },
   ps: {
@@ -41,7 +37,7 @@ export const commands = {
     run: async (): Promise<FenceReport> => fence && (await fence).ok ? fence : checkFence(),
   },
   apply: {
-    parse: (v: Fields) => ({ id: agentId(v.id), net: netOf(v.net), files: filesOf(v.files), browser: v.browser === true, running: v.running === true, force: v.force === true, restart: v.restart !== false }),
+    parse: (v: Fields) => ({ id: agentId(v.id), net: netOf(v.net), files: runtime.validateFiles(v.files), browser: v.browser === true, running: v.running === true, force: v.force === true, restart: v.restart !== false }),
     run: agents.apply,
   },
   stop: {
@@ -54,37 +50,37 @@ export const commands = {
   },
   skills: {
     parse: (v: Fields) => ({ id: agentId(v.id) }),
-    run: async ({ id }: { id: string }) => agentHome.skills(id),
+    run: async ({ id }: { id: string }) => runtime.home.skills(id),
   },
   read: {
     parse: (v: Fields) => ({ id: agentId(v.id), path: pathOf({ value: v.path, kinds: READABLE }) }),
-    run: async ({ id, path }: { id: string; path: string }) => ({ body: agentHome.read({ id, path })?.toString('base64') ?? null }),
+    run: async ({ id, path }: { id: string; path: string }) => ({ body: runtime.home.read({ id, path })?.toString('base64') ?? null }),
   },
   write: {
     body: MAX_FILE_BASE64,
     parse: (v: Fields) => ({ id: agentId(v.id), path: pathOf({ value: v.path, kinds: WRITABLE }), create: v.create === true, replace: v.replace === true }),
-    run: async ({ id, path, body, create, replace }: { id: string; path: string; body: string; create: boolean; replace: boolean }) => ({ path: agentHome.write({ id, path, create, replace, body: Buffer.from(body, 'base64') }) }),
+    run: async ({ id, path, body, create, replace }: { id: string; path: string; body: string; create: boolean; replace: boolean }) => ({ path: runtime.home.write({ id, path, create, replace, body: Buffer.from(body, 'base64') }) }),
   },
   delete: {
     parse: (v: Fields) => ({ id: agentId(v.id), paths: pathsOf({ value: v.paths, kinds: REMOVABLE }) }),
     run: async ({ id, paths }: { id: string; paths: string[] }) => {
-      const uploads = paths.filter((path) => agentHome.kindOf(path) === 'upload')
-      const removed = uploads.length ? agentHome.removeUploads({ id, paths: uploads }) : []
+      const uploads = paths.filter((path) => runtime.home.kindOf(path) === 'upload')
+      const removed = uploads.length ? runtime.home.removeUploads({ id, paths: uploads }) : []
       for (const guest of paths.filter((path) => !uploads.includes(path))) await agents.removeInside({ id, guest })
       return { removed: [...removed, ...paths.filter((path) => !uploads.includes(path))] }
     },
   },
   stat: {
     parse: (v: Fields) => ({ id: agentId(v.id), paths: pathsOf({ value: v.paths, kinds: ['file', 'upload'] }) }),
-    run: async ({ id, paths }: { id: string; paths: string[] }) => ({ files: agentHome.stat({ id, paths }) }),
+    run: async ({ id, paths }: { id: string; paths: string[] }) => ({ files: runtime.home.stat({ id, paths }) }),
   },
   usage: {
     parse: (v: Fields) => ({ since: sinceOf(v.since) }),
-    run: async ({ since }: { since: number }) => ({ usage: usage({ agents: stateDbs(), since }) }),
+    run: async ({ since }: { since: number }) => ({ usage: runtime.usage(since) }),
   },
   messages: {
     parse: (v: Fields) => ({ since: sinceOf(v.since) }),
-    run: async ({ since }: { since: number }) => ({ messages: newMessages({ agents: stateDbs(), since }) }),
+    run: async ({ since }: { since: number }) => ({ messages: runtime.messages(since) }),
   },
   'browser-live': {
     stream: true,
@@ -94,7 +90,7 @@ export const commands = {
   'wa-pair': {
     stream: true,
     parse: (v: Fields) => ({ id: agentId(v.id) }),
-    run: async ({ id }: { id: string }, { sock, queue }: Stream) => whatsapp.pair({
+    run: async ({ id }: { id: string }, { sock, queue }: Stream) => runtime.whatsapp.pair({
       id, sock, running: await agents.isRunning(id),
       ended: () => queue(async () => {
         if (await agents.isRunning(id)) await agents.restart(id)
@@ -118,20 +114,8 @@ function sinceOf(value: unknown): number {
   return value
 }
 
-function filesOf(value: unknown): AgentFiles {
-  if (!isRecord(value)) throw new Error('missing files')
-  const files: Partial<AgentFiles> = {}
-  for (const name of FILES) {
-    const body = value[name]
-    if (typeof body !== 'string' || body.length > MAX_FILE) throw new Error(`missing or oversized ${name}`)
-    files[name] = body
-  }
-  if (typeof value[RESTART_KEY] === 'string') files[RESTART_KEY] = value[RESTART_KEY].slice(0, 200)
-  return files as AgentFiles
-}
-
 function pathOf({ value, kinds }: { value: unknown; kinds: Kind[] }): string {
-  const kind = agentHome.kindOf(value)
+  const kind = runtime.home.kindOf(value)
   if (typeof value !== 'string' || !kind || !kinds.includes(kind)) throw new Error('bad path')
   return value
 }
@@ -139,10 +123,6 @@ function pathOf({ value, kinds }: { value: unknown; kinds: Kind[] }): string {
 function pathsOf({ value, kinds }: { value: unknown; kinds: Kind[] }): string[] {
   if (!Array.isArray(value) || value.length > MAX_LISTED) throw new Error('bad paths')
   return value.map((each) => pathOf({ value: each, kinds }))
-}
-
-function stateDbs() {
-  return agents.ids().map((id) => ({ id, file: `${home(id)}/state.db` }))
 }
 
 export function checkFence(): Promise<FenceReport> {

@@ -1,6 +1,7 @@
-import { chmodSync, chownSync, existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { chmodSync, chownSync, existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { config } from './config.ts'
+import { ID } from './network/ports.ts'
 import { docker } from './sandbox/docker.ts'
 import { memory } from './sandbox/memory.ts'
 import type { Mount, Sandboxes, SandboxSpec } from './sandbox/sandbox.ts'
@@ -16,6 +17,10 @@ export const box: Sandboxes = config.fakeSandbox ? memory : docker
 
 export function home(id: string): string {
   return `${config.data}/agents/${id}`
+}
+
+export function agentIds(): string[] {
+  return readdirSync(`${config.data}/agents`).filter((name) => ID.test(name))
 }
 
 export function realHome(id: string): string {

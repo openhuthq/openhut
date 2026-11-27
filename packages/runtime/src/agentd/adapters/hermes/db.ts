@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
-import { errorText } from './util.ts'
+import { errorText } from '../../util.ts'
 
 type NewMessage = { agentId: string; source: string; at: number }
 type Agents = { id: string; file: string }[]

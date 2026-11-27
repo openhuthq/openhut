@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { DatabaseSync } from 'node:sqlite'
-import { newMessages } from '../../src/agentd/hermes-db.ts'
+import { newMessages } from '../../../../src/agentd/adapters/hermes/db.ts'
 
 const dir = mkdtempSync(`${tmpdir()}/messages-`)
 

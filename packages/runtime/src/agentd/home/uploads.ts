@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { closeSync, constants, existsSync, fchownSync, fstatSync, lstatSync, mkdirSync, openSync, readlinkSync, readSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { openInside } from './skills.ts'
+import { openInside } from './safe-fs.ts'
 
 export const MAX_FILE_BYTES = 25 << 20
 export const MAX_FILE_BASE64 = Math.ceil(MAX_FILE_BYTES / 3) * 4
