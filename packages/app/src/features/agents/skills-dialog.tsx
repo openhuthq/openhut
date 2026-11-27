@@ -47,12 +47,13 @@ export function SkillsBrowser({ agent, head }: { agent: Agent; head: (crumb?: Cr
     {!skills.data && !skills.error && <Loading />}
     {skills.data && !all.length && <EmptyState className="flex-1 justify-center pb-10" line="No skills yet" />}
     {all.length > 0 && <nav aria-label="Skills" className="no-scrollbar -ml-2.5 flex min-h-0 flex-1 flex-col overflow-y-auto pr-8 pb-2">
-      {groups.filter(([, list]) => list.length).map(([label, list]) => <section key={label} className="flex flex-col not-first:mt-4">
+      {groups.filter(([, list]) => list.length).map(([label, list]) => <section key={label} className="flex flex-col not-first:mt-3">
         <h3 className="m-0 px-2.5 pb-1 text-[12px] font-medium text-mute">{label}</h3>
         {list.map((skill) => <Button key={skill.id} type="button" variant="bare" onClick={() => setPicked(skill)}
-          className="flex h-[52px] w-full shrink-0 items-center gap-3 rounded-md px-2.5 text-left hover:bg-hover">
+          className="flex h-[42px] w-full shrink-0 items-center gap-3 rounded-md px-2.5 text-left hover:bg-hover">
           <SkillMark skill={skill} />
-          <span className="grid min-w-0 flex-1"><span className="truncate text-[13.5px] font-medium text-ink">{skill.name}</span><span className="truncate text-[12.5px] text-mute">{skill.description || skill.path}</span></span>
+          <span className="shrink-0 text-[13.5px] text-ink">{skill.name}</span>
+          <span className="min-w-0 flex-1 truncate text-[12.5px] text-mute">{skill.description}</span>
           {skill.id in drafts && <span className="size-1.5 shrink-0 rounded-full bg-ink" title="Unsaved changes" aria-label="Unsaved changes" />}
         </Button>)}
       </section>)}
@@ -61,10 +62,10 @@ export function SkillsBrowser({ agent, head }: { agent: Agent; head: (crumb?: Cr
 }
 
 function SkillMark({ skill }: { skill: Skill }) {
-  if (!skill.builtIn) return <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-ink text-white"><I icon={SparklesIcon} size={15} /></span>
+  if (!skill.builtIn) return <span className="grid size-4 shrink-0 place-items-center text-mute"><I icon={SparklesIcon} size={15} /></span>
   const brand = skill.name.split('-')[0]
-  if (isBrand(brand)) return <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-card shadow-[inset_0_0_0_1px_var(--hair)]"><Glyph name={brand} size={16} /></span>
-  return <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-soft text-body">{skillIcon(skill.path.split('/').at(-2) ?? '')}</span>
+  if (isBrand(brand)) return <span className="grid size-4 shrink-0 place-items-center"><Glyph name={brand} size={15} /></span>
+  return <span className="grid size-4 shrink-0 place-items-center text-mute [&_svg]:size-[15px]">{skillIcon(skill.path.split('/').at(-2) ?? '')}</span>
 }
 
 function SkillDetail({ agent, skillId, draft, setDraft, onDeleted }: { agent: Agent; skillId: string; draft: string | undefined; setDraft: (body: string | undefined) => void; onDeleted: () => void }) {
