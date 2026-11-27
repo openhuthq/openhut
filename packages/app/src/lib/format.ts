@@ -10,17 +10,6 @@ export function ago(iso: string, now = Date.now()) {
   if (days < 30) return `${Math.floor(days / 7)}w`
   return `${Math.floor(days / 30)}mo`
 }
-const WEEKDAY = new Intl.DateTimeFormat('en-US', { weekday: 'short' })
-const DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
-
-export function lastSeenOf({ at, now = new Date() }: { at: string; now?: Date }): string {
-  const then = new Date(at)
-  const days = Math.round((new Date(now).setHours(0, 0, 0, 0) - new Date(then).setHours(0, 0, 0, 0)) / 86_400_000)
-  if (days <= 0) return ago(at, now.getTime())
-  if (days === 1) return 'Yesterday'
-  if (days < 7) return WEEKDAY.format(then)
-  return DAY.format(then)
-}
 export const longDate = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 
 export function personName(email: string): string {

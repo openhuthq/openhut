@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { ago, initialsOf, lastSeenOf } from '../../src/lib/format.ts'
+import { ago, initialsOf } from '../../src/lib/format.ts'
 
 test('initials take each word\'s first letter and never cut an emoji in half', () => {
   assert.equal(initialsOf({ name: 'Mo 🇵🇸' }), 'M')
@@ -14,14 +14,6 @@ test('a name that is only an emoji, or nothing, shows a question mark', () => {
   assert.equal(initialsOf({ name: '🇵🇸' }), '?')
   assert.equal(initialsOf({ name: '🔥 🚀' }), '?')
   assert.equal(initialsOf({ name: '' }), '?')
-})
-
-test('the sidebar says when an agent was last heard from like a chat list', () => {
-  const now = new Date(2026, 10, 27, 15, 0)
-  assert.equal(lastSeenOf({ at: new Date(2026, 10, 27, 14, 58).toISOString(), now }), '2m')
-  assert.equal(lastSeenOf({ at: new Date(2026, 10, 26, 23, 0).toISOString(), now }), 'Yesterday')
-  assert.equal(lastSeenOf({ at: new Date(2026, 10, 24, 9, 0).toISOString(), now }), 'Tue')
-  assert.equal(lastSeenOf({ at: new Date(2026, 10, 3, 9, 0).toISOString(), now }), 'Nov 3')
 })
 
 test('ages count weeks after a week and months after thirty days', () => {
