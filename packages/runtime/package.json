@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node --no-node-snapshot src/server/app.ts",
     "typecheck": "tsc -p .",
-    "test": "node --no-node-snapshot --test --test-force-exit --test-concurrency=1 --import ./test/server/env.ts \"test/server/**/*.test.ts\" \"test/core/**/*.test.ts\" \"test/plugins/**/*.test.ts\" && node --no-node-snapshot --test --test-force-exit --import ./test/tmp.ts \"test/agentd/**/*.test.ts\""
+    "test": "node --no-node-snapshot --test --test-force-exit --test-concurrency=1 --import ./test/server/env.ts \"test/server/**/*.test.ts\" \"test/core/**/*.test.ts\" \"test/plugins/**/*.test.ts\" \"test/adapters/**/*.test.ts\" && node --no-node-snapshot --test --test-force-exit --import ./test/tmp.ts \"test/agentd/**/*.test.ts\""
   },
   "dependencies": {
     "@electric-sql/pglite": "0.5.8",
