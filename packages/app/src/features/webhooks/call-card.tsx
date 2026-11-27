@@ -1,10 +1,13 @@
 import { useState, type ReactNode } from 'react'
-import { ArrowUpRight01Icon, ViewIcon } from '@hugeicons/core-free-icons'
+import { ArrowUpRight01Icon, Cancel01Icon, ViewIcon } from '@hugeicons/core-free-icons'
 import { Button } from '@/components/ui/button'
+import { DialogTitle } from '@/components/ui/dialog'
+import { CopyButton } from '@/components/copy-button'
+import { DialogCard } from '@/components/kit'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { I } from '@/components/kit'
 import { cn } from '@/lib/utils'
-import { brandColor, clockOf, initialsOf, payloadOf, statusLabel, tileOf, toneOf, type Call, type CallCard, type CallRow, type Tone } from '@/features/webhooks/call'
+import { brandColor, clockOf, initialsOf, payloadOf, pretty, statusLabel, tileOf, toneOf, type Call, type CallCard, type CallRow, type Tone } from '@/features/webhooks/call'
 
 const TONE: Record<Tone, string> = {
   green: 'bg-tone-green-subtle text-tone-green',
@@ -58,15 +61,29 @@ function CallLine({ row }: { row: CallRow }) {
   </>
 }
 
-export function CallCardMessage({ call, card, name, text }: { call: Call; card: CallCard; name: string; text: string }) {
+export function PayloadButton({ title, text }: { title: string; text: string }) {
   const [open, setOpen] = useState(false)
+  const json = pretty(payloadOf(text))
+  return <>
+    <Button type="button" variant="bare" className="h-auto cursor-pointer p-0 text-[13.5px] text-mute underline underline-offset-2 hover:text-ink" onClick={() => setOpen(true)}>Show payload</Button>
+    {open && <DialogCard onClose={() => setOpen(false)} className="max-h-[min(680px,calc(100vh-48px))] w-[640px]">
+      <div className="flex items-center gap-2">
+        <DialogTitle className="min-w-0 flex-1 truncate text-[15px]/[22px]">{title}</DialogTitle>
+        <CopyButton text={json} label="Copy" />
+        <Button type="button" size="icon-sm" aria-label="Close" title="Close" tabIndex={-1} className="-mr-2" onClick={() => setOpen(false)}><I icon={Cancel01Icon} size={15} /></Button>
+      </div>
+      <pre className="m-0 min-h-0 flex-1 overflow-auto rounded-lg bg-soft p-3 font-mono text-[12px]/[1.5] whitespace-pre-wrap text-body [overflow-wrap:anywhere]">{json}</pre>
+    </DialogCard>}
+  </>
+}
+
+export function CallCardMessage({ call, card, name, text }: { call: Call; card: CallCard; name: string; text: string }) {
   return <div className="w-fit max-w-[440px] min-w-[280px] rounded-xl border border-hair bg-card px-3.5 py-3 text-[13.5px]/[1.5]">
     <CallCardBody card={card} name={name} seen={call.seen} calls={call.calls}>
       <span className="mt-1 flex flex-wrap items-center gap-x-3">
         {card.link && <a href={card.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-[13.5px] text-mute underline underline-offset-2 hover:text-ink">Open run<I icon={ArrowUpRight01Icon} size={12} /></a>}
-        <Button type="button" variant="bare" className="h-auto cursor-pointer p-0 text-[13.5px] text-mute underline underline-offset-2 hover:text-ink" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Hide payload' : 'Show payload'}</Button>
+        <PayloadButton title={`${name} payload`} text={text} />
       </span>
-      {open && <pre className="m-0 mt-1 max-h-[320px] overflow-auto rounded-lg bg-soft p-3 font-mono text-[12px]/[1.5] whitespace-pre-wrap text-body">{payloadOf(text)}</pre>}
     </CallCardBody>
   </div>
 }

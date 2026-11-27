@@ -27,6 +27,14 @@ export function callOf(metadata: unknown): Call | undefined {
   return z.safeParse(Called, metadata).data?.call
 }
 
+export function pretty(payload: string): string {
+  try {
+    return JSON.stringify(JSON.parse(payload), null, 2)
+  } catch {
+    return payload
+  }
+}
+
 export function payloadOf(text: string): string {
   const gap = text.indexOf('\n\n')
   return gap < 0 ? text : text.slice(gap + 2)

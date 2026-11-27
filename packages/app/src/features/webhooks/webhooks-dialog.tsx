@@ -15,6 +15,7 @@ import { Details, Quiet } from '@/features/agents/request-card'
 import { PlacePicker } from '@/features/agents/notify'
 import { SOFT_TRIGGER } from '@/features/models/model-picker'
 import { PreviewCard } from '@/features/webhooks/call-card'
+import { pretty } from '@/features/webhooks/call'
 import { useCreateWebhook, useDeleteWebhook, useRotateWebhook, useUpdateWebhook, useWebhooks, type Webhook } from '@/features/webhooks/api'
 import { ago } from '@/lib/format'
 import { formValues } from '@/lib/form'
@@ -117,11 +118,3 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   return <div className="flex min-h-8 min-w-0 items-center gap-2 text-[13px]"><span className="w-16 shrink-0 text-mute">{label}</span>{children}</div>
 }
 
-
-function pretty(payload: string): string {
-  try {
-    return JSON.stringify(JSON.parse(payload), null, 2)
-  } catch {
-    return payload
-  }
-}
