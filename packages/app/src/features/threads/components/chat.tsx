@@ -74,7 +74,7 @@ function ThreadView({ thread, fetchedAt, agent, asks, actions, tools, onTitle }:
     {shown.length ? <>
       <Welcome agent={agent} />
       <Day iso={thread.updatedAt} />
-      {shown.map((message, index) => <Message key={message.id} agent={agent} thread={thread} message={message} said={(text) => said(index, text)} seen={message === mine} live={streaming && message === last} step={streaming && message === last ? status || undefined : undefined} onRetry={!busy && !thread.readOnly && message === last ? () => void chat.regenerate() : undefined} />)}
+      {shown.map((message, index) => <Message key={message.id} agent={agent} thread={thread} message={message} said={(text) => said(index, text)} seen={message === mine} live={message === last && (chat.status === 'streaming' || (busy && message.role === 'assistant'))} step={message === last && status ? status : undefined} onRetry={!busy && !thread.readOnly && message === last ? () => void chat.regenerate() : undefined} />)}
     </> : !waiting && <ChatEmpty agent={agent} />}
     {waiting && <AgentReply agent={agent} threadId={thread.id} message={{ id: 'waiting', role: 'assistant', parts: [] }} step={status || undefined} live />}
     <asks.Pending agent={agent} shown={new Set(chat.messages.flatMap(changesOf))} />

@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Spinner } from '@/components/ui/spinner'
 import { Dots } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { Face } from '@/components/agent-face'
@@ -87,4 +88,31 @@ export function useLiveLine(threadId: string): ReactNode {
   if (agent.state === 'replying') return <span className="min-w-0 truncate text-success-foreground">{agent.answering?.length ? `Answering ${answeringLine({ answering: agent.answering, people })}` : 'Answering…'}</span>
   if (others.length) return <span className="flex min-w-0 items-center gap-1.5"><span className="truncate">{typingLine(others.map((person) => nameOf(person)))}</span><span className="shrink-0 opacity-60"><Dots /></span></span>
   return null
+}
+
+const STARTED = new Map<string, number>()
+const STATE_WORD: Record<AgentLive['state'], string> = { idle: 'Working', thinking: 'Thinking', working: 'Working', replying: 'Writing' }
+
+export function WorkStatus({ threadId }: { threadId: string }) {
+  const { agent } = usePresence(threadId)
+  const key = agent.turnId ?? threadId
+  if (!STARTED.has(key)) STARTED.set(key, Date.now())
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+  const seconds = Math.max(0, Math.floor((now - (STARTED.get(key) ?? now)) / 1000))
+  return <span className="flex min-w-0 items-center gap-2 pt-1 text-[13px] text-mute" role="status">
+    <Spinner className="mt-0 size-3.5 shrink-0" />
+    <span className="truncate text-body">{agent.step ?? STATE_WORD[agent.state]}…</span>
+    <span className="shrink-0 tabular-nums">{elapsed(seconds)}</span>
+  </span>
+}
+
+function elapsed(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ${seconds % 60}s`
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
 }

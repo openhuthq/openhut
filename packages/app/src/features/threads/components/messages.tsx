@@ -30,7 +30,7 @@ import { toast } from '@/lib/toast'
 import { TOUCH, useMedia } from '@/lib/media'
 import { cn } from '@/lib/utils'
 import { ICONS } from '@/components/icons'
-import { LiveTitle, SeenBy } from '@/features/threads/components/live'
+import { LiveTitle, SeenBy, WorkStatus } from '@/features/threads/components/live'
 import { CallText, webhookOf, WebhookMessage } from '@/features/threads/components/webhook-message'
 import { callOf } from '@/lib/webhook-call'
 import { CallCardMessage } from '@/components/call-card'
@@ -94,7 +94,7 @@ export function AgentReply({ agent, threadId: liveThread, step, message, said, l
       {message.parts.map((part, index) => part.type === 'data-webhook-setup' && <WebhookSetupCard key={index} agentId={agentId} card={part.data} done={said?.(doneText(part.data)) ?? false} />)}
       {message.parts.map((part, index) => part.type === 'data-artifact' && <parts.Artifact key={index} agentId={agentId} threadId={threadId} data={part.data} />)}
       {message.parts.flatMap((part, index) => part.type === 'data-notified' ? part.data.map((each, at) => <NotifiedRow key={`${index}-${at}`} notified={each} />) : [])}
-      {live && !blocks.length && !step && !work?.calls.some((call) => call.status === 'running') && <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>}
+      {live && !blocks.length && !step && !work?.calls.some((call) => call.status === 'running') && (liveThread ? <WorkStatus threadId={liveThread} /> : <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>)}
       {!live && error !== undefined && <span className="flex flex-wrap items-center gap-2 text-[13.5px] text-mute-2 italic">{error}{onRetry && <RetryButton onRetry={onRetry} />}</span>}
     </div></CopyMenu>
   </div>
