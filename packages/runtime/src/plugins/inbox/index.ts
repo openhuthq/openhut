@@ -8,6 +8,7 @@ import { createTables } from './tables.ts'
 import { WEBHOOK_SETUP_PROMPT } from '@openhut/common/webhooks/webhook.ts'
 import { setupCard, setupController, showWebhookSetup } from './setup.ts'
 
+const FUNCTION = z.string().max(2000)
 const THREADS = z.enum(WebhookThreads.options).describe('group (the default) keeps related calls in one thread: alerts, CI runs, pull requests, reports. each starts a new thread per call: forms, orders, signups.')
 
 export const inbox = definePlugin({
@@ -31,13 +32,14 @@ export const inbox = definePlugin({
       run: (input, { agent, origin }) => routineService.schedule({ agentId: agent.id, input: { ...input, origin } }),
     }),
     set_webhook_threads: defineTool({
-      description: 'Set how one of your webhooks files its calls into threads. threads: group keeps related calls in one thread (alerts and their recovery, CI runs, pull requests, reports); each starts a new thread per call (forms, orders, signups). The templates come from what its payloads look like: text with {dotted.path} holes into the JSON payload, like {data.alert_rule_name}. An empty string clears one.',
+      description: 'Set how one of your webhooks handles its calls, with plain JavaScript functions of the payload (p => …) written from what its payloads look like. threads: group keeps related calls in one thread (alerts and their recovery, CI runs, pull requests); each starts a new thread per call (forms, orders, signups). An empty string clears a function. The reply tries all four on the last call.',
       input: {
         id: z.string().max(40).describe('The webhook\'s id, like wh_ab12cd34.'),
         threads: THREADS.optional(),
-        groupBy: z.string().max(200).optional().describe('What calls about the same thing have in common, so they share a thread: DigitalOcean "{subject}/{data.alert_rule_name}". Leave it empty to keep every call in one thread.'),
-        titleBy: z.string().max(200).optional().describe('A new thread\'s title: "{data.alert_rule_name} · {data.resource_name}".'),
-        labelBy: z.string().max(200).optional().describe('A short line for each call in the thread: "{data.state} · {data.value}%".'),
+        filter: FUNCTION.optional().describe('Truthy keeps a call; the rest are counted as skipped and never wake you: p => p.action === "completed".'),
+        fingerprint: FUNCTION.optional().describe('A string; calls with the same one are one event, counted as seen again instead of waking you: p => `${p.workflow_run.id}/${p.workflow_run.run_attempt}`. The default is the delivery id, else the body.'),
+        thread: FUNCTION.optional().describe('A string; calls with the same one share a thread: DigitalOcean p => `${p.subject}/${p.data.alert_rule_name}`. Leave it empty to keep every call in one thread.'),
+        card: FUNCTION.optional().describe('What a call shows as: p => ({ title, status, details, link, icon }). title also names a new thread; icon is a simple-icons slug like "github" or "digitalocean".'),
       },
       run: (input, { agent }) => inboxService.setThreads({ agentId: agent.id, ...input }),
     }),

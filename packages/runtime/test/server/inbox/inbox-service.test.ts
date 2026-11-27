@@ -9,7 +9,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { gatewayServer } from '../../../src/server/gateway/gateway-server.ts'
 import { asks } from '../../../src/core/asks.ts'
 import { inboxReceiver } from '../../../src/server/inbox/inbox-controller.ts'
-import { deliveryIdOf, inboxService, render } from '../../../src/server/inbox/inbox-service.ts'
+import { deliveryIdOf, iconOf, inboxService, withSeen } from '../../../src/server/inbox/inbox-service.ts'
 import { routineService } from '../../../src/server/inbox/routines.ts'
 import { channelService } from '../../../src/server/channels/channel-service.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
@@ -115,7 +115,7 @@ test('add_webhook waits for approval; approving creates the webhook and tells th
   const client = new Client({ name: 'hermes', version: '1' })
   await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/api/v1/mcp`), { requestInit: { headers: { authorization: `Agent ${token}` } } }))
   const listed = new Map((await client.listTools()).tools.map((tool) => [tool.name, tool.inputSchema]))
-  assert.deepEqual(Object.keys(listed.get('set_webhook_threads')?.properties ?? {}).sort(), ['groupBy', 'id', 'labelBy', 'threads', 'titleBy'])
+  assert.deepEqual(Object.keys(listed.get('set_webhook_threads')?.properties ?? {}).sort(), ['card', 'filter', 'fingerprint', 'id', 'thread', 'threads'])
   assert.deepEqual((listed.get('set_webhook_threads')?.properties?.threads as { enum?: string[] }).enum, ['group', 'each'])
   assert.deepEqual((listed.get('add_webhook')?.properties?.threads as { enum?: string[] }).enum, ['group', 'each'])
   const slack = { platform: 'slack', chat_id: 'C0ALERTS', chat_type: 'group', chat_name: 'db-alerts' }
@@ -206,15 +206,6 @@ const doAlert = ({ id, state, value, time }: { id: string; state: string; value:
 const doPost = ({ hook, body, headers = {} }: { hook: { id: string; secret: string }; body: string; headers?: Record<string, string> }) =>
   post({ id: hook.id, body, headers: { 'x-digitalocean-signature': doSigned({ secret: hook.secret, body }), ...headers } })
 
-test('a template fills its holes from the payload, rounds numbers to one decimal, and is unset when nothing resolves', () => {
-  const payload = JSON.parse(doAlert({ id: 'e1', state: 'STATE_TRIGGERED', value: 93.456, time: 't' }))
-  assert.equal(render({ template: '{subject}/{data.alert_rule_name}', payload }), 'pulse-db/CPU high')
-  assert.equal(render({ template: '{data.state} · {data.value}%', payload }), 'STATE_TRIGGERED · 93.5%')
-  assert.equal(render({ template: '{nope} · {data.missing}', payload }), undefined)
-  assert.equal(render({ template: null, payload }), undefined)
-  assert.equal(render({ template: '{a}', payload: 'not json' }), undefined)
-})
-
 test('the delivery id comes from the sender\'s header, else the payload\'s top-level id', () => {
   assert.equal(deliveryIdOf({ headers: { 'x-github-delivery': 'g1' }, payload: { id: 'p1' } }), 'g1')
   assert.equal(deliveryIdOf({ headers: { 'idempotency-key': 'k1' }, payload: {} }), 'k1')
@@ -223,26 +214,90 @@ test('the delivery id comes from the sender\'s header, else the payload\'s top-l
   assert.equal(deliveryIdOf({ headers: {}, payload: { id: 7 } }), undefined)
 })
 
-test('in group mode an alert and its recovery share a thread; a resend with the same id is skipped; each call gets a labelled message from the webhook', async () => {
+const DO_THREAD = 'p => `${p.subject}/${p.data.alert_rule_name}`'
+const DO_CARD = 'p => ({ title: `${p.data.alert_rule_name} · ${p.data.resource_name}`, status: p.data.state, details: `${p.data.value}%`, link: "https://cloud.digitalocean.com/monitoring", icon: "digitalocean" })'
+
+test('in group mode an alert and its recovery share a thread named by the card; a resend is counted, not woken; each call\'s message carries its card', async () => {
   const hook = await inboxService.createSource({ actor: owner, agentId: 'ag_hookpuls', name: 'DO alerts' })
   assert.equal(hook.threads, 'group')
   const first = told.length
   assert.equal((await doPost({ hook, body: doAlert({ id: 'g-1', state: 'STATE_TRIGGERED', value: 93.4, time: '2026-11-26T10:00:00Z' }) })).json().repeat, false)
   await settle()
   assert.match(told[first].text, /First call set_webhook_threads for wh_/)
-  assert.match(await inboxService.setThreads({ agentId: 'ag_hookpuls', id: hook.id, groupBy: '{subject}/{data.alert_rule_name}', titleBy: '{data.alert_rule_name} · {data.resource_name}', labelBy: '{data.state} · {data.value}%' }), /group "pulse-db\/CPU high", thread title "CPU high · pulse-db"/)
+  const saved = await inboxService.setThreads({ agentId: 'ag_hookpuls', id: hook.id, thread: DO_THREAD, card: DO_CARD, filter: 'p => p.data.value > 50', fingerprint: 'p => p.id' })
+  assert.match(saved, /- filter: keep\n- fingerprint: "g-1"\n- thread: "pulse-db\/CPU high"\n- card: \{"title":"CPU high · pulse-db","status":"STATE_TRIGGERED","details":"93.4%","link":"https:\/\/cloud.digitalocean.com\/monitoring","icon":"found"\}/)
+  const icon = await iconOf('digitalocean')
+  assert.equal(icon?.hex, '0080FF')
+  assert.deepEqual((await inboxService.webhooks({ actor: owner, agentId: 'ag_hookpuls' })).find((each) => each.id === hook.id)?.preview, { title: 'CPU high · pulse-db', status: 'STATE_TRIGGERED', details: '93.4%', link: 'https://cloud.digitalocean.com/monitoring', icon })
   assert.equal((await doPost({ hook, body: doAlert({ id: 'g-2', state: 'STATE_TRIGGERED', value: 95, time: '2026-11-26T10:05:00Z' }) })).json().repeat, false)
-  assert.equal((await doPost({ hook, body: doAlert({ id: 'g-3', state: 'STATE_RECOVERED', value: 40.25, time: '2026-11-26T10:20:00Z' }) })).json().repeat, false)
-  assert.equal((await doPost({ hook, body: doAlert({ id: 'g-3', state: 'STATE_RECOVERED', value: 40.25, time: '2026-11-26T10:21:00Z' }) })).json().repeat, true)
   await settle()
-  const [, triggered, recovered] = told.slice(first)
-  assert.equal(told.length - first, 3)
+  assert.equal((await doPost({ hook, body: doAlert({ id: 'g-3', state: 'STATE_RECOVERED', value: 40.25, time: '2026-11-26T10:20:00Z' }) })).json().skipped, true)
+  assert.equal((await doPost({ hook, body: doAlert({ id: 'g-2', state: 'STATE_TRIGGERED', value: 96, time: '2026-11-26T10:06:00Z' }) })).json().repeat, true)
+  await settle()
+  const [, triggered] = told.slice(first)
+  assert.equal(told.length - first, 2)
   assert.doesNotMatch(triggered.text, /set_webhook_threads/)
-  assert.equal(triggered.threadId, recovered.threadId)
   assert.notEqual(told[first].threadId, triggered.threadId)
-  assert.deepEqual({ author: recovered.metadata?.author, call: recovered.metadata?.call }, { author: 'DO alerts', call: { webhookId: hook.id, label: 'STATE_RECOVERED · 40.3%' } })
+  assert.deepEqual({ author: triggered.metadata?.author, call: triggered.metadata?.call }, { author: 'DO alerts', call: { webhookId: hook.id, card: { title: 'CPU high · pulse-db', status: 'STATE_TRIGGERED', details: '95%', link: 'https://cloud.digitalocean.com/monitoring', icon } } })
   const thread = await db.selectFrom('chat_thread').select('title').where('id', '=', triggered.threadId ?? '').executeTakeFirstOrThrow()
   assert.equal(thread.title, 'CPU high · pulse-db')
+  const item = await db.selectFrom('inbox_item').select(['seen', 'sample', 'thread_id']).where('source_id', '=', hook.id).where('text', 'like', '%g-2%').executeTakeFirstOrThrow()
+  assert.equal(item.seen, 2)
+  assert.match(item.sample ?? '', /"value":96/)
+  assert.equal(item.thread_id, triggered.threadId)
+  const listed = (await inboxService.webhooks({ actor: owner, agentId: 'ag_hookpuls' })).find((each) => each.id === hook.id)
+  assert.equal(listed?.skipped, 1)
+  assert.equal(listed?.filter, 'p => p.data.value > 50')
+  assert.match(listed?.lastPayload ?? '', /"value":96/)
+})
+
+test('a filter that throws or times out drops the call, and an empty string clears a function', async () => {
+  const hook = await inboxService.createSource({ actor: owner, agentId: 'ag_hookpuls', name: 'Strict' })
+  await doPost({ hook, body: '{"n":1}' })
+  await settle()
+  assert.match(await inboxService.setThreads({ agentId: 'ag_hookpuls', id: hook.id, filter: 'p => p.nope.deeper' }), /- filter: error: .*Cannot read properties of undefined/)
+  assert.equal((await doPost({ hook, body: '{"n":2}' })).json().skipped, true)
+  await inboxService.setThreads({ agentId: 'ag_hookpuls', id: hook.id, filter: 'p => { for (;;) {} }' })
+  assert.equal((await doPost({ hook, body: '{"n":3}' })).json().skipped, true)
+  assert.match(await inboxService.setThreads({ agentId: 'ag_hookpuls', id: hook.id, filter: '' }), /- filter: keep \(no filter\)/)
+  assert.equal((await doPost({ hook, body: '{"n":4}' })).json().repeat, false)
+  await settle()
+  assert.equal((await inboxService.webhooks({ actor: owner, agentId: 'ag_hookpuls' })).find((each) => each.id === hook.id)?.skipped, 0)
+})
+
+test('a repeat of a call already told counts on its message, in the batch row and on the card', () => {
+  const metadata = { author: 'CI', call: { webhookId: 'wh_x', card: { title: 'Run' }, calls: [{ status: 'failure', at: '2026-11-26T10:00:00.000Z' }, { status: 'success', at: '2026-11-26T10:01:00.000Z' }] } }
+  assert.deepEqual(withSeen({ metadata, at: '2026-11-26T10:00:00.000Z', seen: 2 }).call, { ...metadata.call, calls: [{ status: 'failure', at: '2026-11-26T10:00:00.000Z', seen: 2 }, metadata.call.calls[1]] })
+  assert.deepEqual(withSeen({ metadata, at: '2026-11-26T10:01:00.000Z', seen: 3 }).call, { ...metadata.call, calls: [metadata.call.calls[0], { status: 'success', at: '2026-11-26T10:01:00.000Z', seen: 3 }], seen: 3 })
+  assert.deepEqual(withSeen({ metadata: { call: { webhookId: 'wh_x' } }, at: 'x', seen: 2 }).call, { webhookId: 'wh_x', seen: 2 })
+})
+
+test('calls that pile up for one thread become one wake with the newest as its id, older calls one line each, and picking it marks them all told', async () => {
+  await db.insertInto('inbox_source').values({ id: 'wh_hookbtch', agent_id: 'ag_hookpuls', kind: 'webhook', name: 'Spike', secret: seal('whsec_spike'), origin: JSON.stringify({ platform: 'slack', chat_id: 'C0ALERTS' }) }).execute()
+  const at = Date.parse('2026-11-26T09:00:00Z')
+  await db.insertInto('inbox_item').values([
+    ...Array.from({ length: 12 }, (_, n) => ({ id: `hd_btch${String(n).padStart(2, '0')}`, source_id: 'wh_hookbtch', agent_id: 'ag_hookpuls', fingerprint: `a${n}`, group_key: 'a', text: `{"n":${n},"big":"${'x'.repeat(n === 11 ? 9000 : 1)}"}`, created_at: new Date(at + n * 1000), ...n === 3 && { seen: 4 } })),
+    { id: 'hd_btchothr', source_id: 'wh_hookbtch', agent_id: 'ag_hookpuls', fingerprint: 'b', group_key: 'b', text: '{"other":true}', created_at: new Date(at + 500) },
+  ]).execute()
+  const due = (await inboxService.due({ agentId: 'ag_hookpuls' })).filter((wake) => wake.id.startsWith('hd_btch'))
+  assert.deepEqual(due.map((wake) => wake.id), ['hd_btch11', 'hd_btchothr'])
+  const text = due[0].text
+  assert.match(text, /was called 12 times while you were busy, oldest first/)
+  assert.match(text, /Earlier calls, one line each:\n- 2026-11-26T09:00:00.000Z: \{"n":0,"big":"x"\}\n- 2026-11-26T09:00:01.000Z: \{"n":1/)
+  assert.doesNotMatch(text, /Call 2 at/)
+  assert.match(text, /Call 4 at 2026-11-26T09:00:03.000Z, seen 4×:\n\{"n":3/)
+  assert.match(text, /Call 12 at 2026-11-26T09:00:11.000Z:\n\{"n":11,"big":"x+…$/)
+  assert.ok(text.length < 8 * 1024 + 4000)
+  assert.match(due[1].text, /was just called\./)
+  await inboxService.picked({ agentId: 'ag_hookpuls', id: 'hd_btch11' })
+  const rows = await db.selectFrom('inbox_item').select(['id', 'told', 'message_id']).where('source_id', '=', 'wh_hookbtch').orderBy('id').execute()
+  assert.deepEqual(rows.map((row) => [row.id, row.told]), [...Array.from({ length: 12 }, (_, n) => [`hd_btch${String(n).padStart(2, '0')}`, true]), ['hd_btchothr', false]])
+  assert.equal(new Set(rows.slice(0, 12).map((row) => row.message_id)).size, 1)
+  const turn = await inboxService.turnFor({ agentId: 'ag_hookpuls', id: 'hd_btch11' })
+  assert.equal(turn.messageId, rows[0].message_id)
+  assert.equal(turn.metadata?.call.calls?.length, 12)
+  assert.deepEqual(turn.metadata?.call.calls?.[3], { at: '2026-11-26T09:00:03.000Z', seen: 4 })
+  await inboxService.picked({ agentId: 'ag_hookpuls', id: 'hd_btchothr' })
 })
 
 test('X-Group-Key picks the thread, and each mode starts a new thread per call', async () => {
@@ -269,7 +324,7 @@ test('a webhook that runs in Discord starts one Discord thread per group: the fi
   let started = 900
   const sent = mock.method(channelService, 'send', async () => ({ url: `https://discord.com/channels/1/${started}`, messageId: '9', threadId: String(started++) }))
   const hook = await inboxService.createSource({ actor: owner, agentId: 'ag_hookpuls', name: 'DO in Discord', channel: humans })
-  await inboxService.setThreads({ agentId: 'ag_hookpuls', id: hook.id, groupBy: '{subject}/{data.alert_rule_name}', titleBy: '{data.alert_rule_name} · {data.resource_name}' })
+  await inboxService.setThreads({ agentId: 'ag_hookpuls', id: hook.id, thread: DO_THREAD, card: DO_CARD })
   const first = told.length
   const one = (await doPost({ hook, body: doAlert({ id: 'd-1', state: 'STATE_TRIGGERED', value: 91, time: '2026-11-26T11:00:00Z' }) })).json().id
   await settle()

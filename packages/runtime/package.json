@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node src/server/app.ts",
+    "start": "node --no-node-snapshot src/server/app.ts",
     "typecheck": "tsc -p .",
-    "test": "node --test --test-force-exit --test-concurrency=1 --import ./test/server/env.ts \"test/server/**/*.test.ts\" \"test/core/**/*.test.ts\" \"test/plugins/**/*.test.ts\" && node --test --test-force-exit --import ./test/tmp.ts \"test/agentd/**/*.test.ts\""
+    "test": "node --no-node-snapshot --test --test-force-exit --test-concurrency=1 --import ./test/server/env.ts \"test/server/**/*.test.ts\" \"test/core/**/*.test.ts\" \"test/plugins/**/*.test.ts\" && node --no-node-snapshot --test --test-force-exit --import ./test/tmp.ts \"test/agentd/**/*.test.ts\""
   },
   "dependencies": {
     "@electric-sql/pglite": "0.5.8",
@@ -21,11 +21,13 @@
     "evlog": "2.29.0",
     "fastify": "5.12.5",
     "fastify-type-provider-zod": "7.0.0",
+    "isolated-vm": "6.2.0",
     "kysely": "0.29.6",
     "nodemailer": "10.6.1",
     "partysocket": "1.3.0",
     "pg": "8.23.0",
     "pg-boss": "^12.40.0",
+    "simple-icons": "16.38.1",
     "undici": "7.30.1",
     "ws": "8.21.0",
     "zod": "4.6.7"

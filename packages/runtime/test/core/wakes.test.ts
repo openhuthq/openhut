@@ -72,7 +72,7 @@ test('a channel wake nobody picks up is logged once, five minutes on, and an app
   const at = new Date('2026-01-01T10:00:00Z')
   for (const [id, origin] of [['wh_wakestck', whatsapp], ['wh_wakeappx', app]] as const) {
     await db.insertInto('inbox_source').values({ id, agent_id: 'ag_wakeagnt', kind: 'webhook', name: id, origin: JSON.stringify(origin) }).execute()
-    await db.insertInto('inbox_item').values({ id: `hd_${id.slice(3)}`, source_id: id, agent_id: 'ag_wakeagnt', digest: id, text: 'x', created_at: at }).execute()
+    await db.insertInto('inbox_item').values({ id: `hd_${id.slice(3)}`, source_id: id, agent_id: 'ag_wakeagnt', fingerprint: id, text: 'x', created_at: at }).execute()
   }
   const stuck = () => warned.mock.calls.map((call) => call.arguments[0] as { event: string; item: string }).filter((entry) => entry.event === 'inbox.not_picked' && entry.item.startsWith('hd_wake'))
   for (const minutes of [4, 5.5, 6.5]) await inboxService.tick({ now: new Date(at.getTime() + minutes * 60_000) })
