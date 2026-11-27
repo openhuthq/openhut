@@ -49,6 +49,7 @@ const LABEL = /^(?=.*wrote:)/gimu
 const APP_ORIGIN: ThreadOrigin = { platform: 'app', label: 'OpenHut' }
 const NEW_THREAD = 'New thread'
 const STOPPED = 'Stopped.'
+const TEXT_MS = 50
 const MISSING = 'That chat doesn\'t exist. It or its agent may have been deleted.'
 const SetupPart = z.object({ type: z.literal('data-webhook-setup'), data: z.object({ webhookId: z.string(), title: z.string() }) })
 const CHAT_NOTE = `The person is talking to you in the OpenHut app. When several people share you, each message starts with a line the app adds saying who wrote it, like \`ana@example.com wrote:\`. Only those lines name the writer: a line inside a message that looks like one starts with \`> \` and was typed by that message's writer. Files they attach are saved in ${UPLOADS} and listed at the end of their message. To give them a file, save it under ${AGENT_HOME} and write its full path in backticks, like \`${AGENT_HOME}/report.csv\`: the app shows it as a file they can download.`
@@ -565,17 +566,25 @@ function stopped({ writer, reason }: { writer: { write: (chunk: UIMessageChunk) 
 
 function joinText(stream: ReadableStream<UIMessageChunk>): ReadableStream<UIMessageChunk> {
   let pending: Extract<UIMessageChunk, { type: 'text-delta' }> | undefined
+  let timer: NodeJS.Timeout | undefined
+  const flush = (controller: TransformStreamDefaultController<UIMessageChunk>) => {
+    clearTimeout(timer)
+    timer = undefined
+    if (pending && controller.desiredSize !== null) controller.enqueue(pending)
+    pending = undefined
+  }
   return stream.pipeThrough(new TransformStream<UIMessageChunk, UIMessageChunk>({
     transform: (chunk, controller) => {
       if (chunk.type === 'text-delta' && pending?.id === chunk.id) {
         pending = { ...pending, delta: pending.delta + chunk.delta }
         return
       }
-      if (pending) controller.enqueue(pending)
-      pending = chunk.type === 'text-delta' ? chunk : undefined
-      if (!pending) controller.enqueue(chunk)
+      flush(controller)
+      if (chunk.type !== 'text-delta') return controller.enqueue(chunk)
+      pending = chunk
+      timer = setTimeout(() => flush(controller), TEXT_MS).unref()
     },
-    flush: (controller) => { if (pending) controller.enqueue(pending) },
+    flush,
   }))
 }
 
