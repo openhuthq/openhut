@@ -22,8 +22,7 @@ export const Thread = z.object({
   agentId: z.string(),
   title: z.string(),
   origin: ThreadOrigin,
-  mirrors: z.array(Place),
-  mirrorPaused: z.boolean(),
+  place: z.nullable(Place),
   readOnly: z.boolean(),
   continueUrl: z.nullable(z.string()),
   waiting: z.boolean(),
@@ -124,8 +123,6 @@ export function fileInHome(path: string): string | undefined {
 export const ListThreads = z.object({ archived: z.optional(z.enum(['true', 'false'])) })
 export type ListThreads = z.infer<typeof ListThreads>
 
-export const MirrorThread = z.object({ paused: z.boolean() })
-export type MirrorThread = z.infer<typeof MirrorThread>
 
 export const NOTIFY_RULES_MAX = 2000
 

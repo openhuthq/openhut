@@ -4,7 +4,7 @@ description: Every conversation an agent has shows up in the web app, wherever i
 icon: ops
 ---
 
-Each conversation an agent has is a **thread**, and every thread shows up in the web app, whether it started there, in Discord, from a webhook or from a routine.
+Each conversation an agent has is a **thread**, and every thread shows up in the web app, whether it started there, in Discord, from a webhook or from a routine. Each thread lives in one place, its channel.
 
 ## Find a thread
 
@@ -14,13 +14,11 @@ Open an agent in the sidebar to see its threads under it. Each one is one line: 
 - The sidebar shows up to three threads per agent, plus every one waiting on you. **Show all** opens the full list, newest first, with search and a filter for Web, Discord, Webhook and Routine.
 - Hover a thread and press **Archive** to take it off the list. The agent's main chat can't be archived.
 
-## Reply from the web
+## Where you reply
 
-Open any thread and type. If the thread started in Discord, the header says **Started in Discord #channel ↗**, and your reply also goes there: it shows **Sent to #channel** under your message.
+A thread stays where it started. A web thread continues in the web app. A Discord thread continues in Discord, and the web app shows it as it happens but has no message box: **Open in Discord ↗** takes you there. A webhook or routine that posts in a Discord channel makes a Discord thread too.
 
-- **Also posting to #channel** in the header means the agent's replies go there too.
-- **Paused posting to #channel · Resume**: replies stay in the web app until you press **Resume**.
-- A thread whose webhook runs in Discord continues there. The web app shows it but has no composer: **Open in Discord ↗** takes you to it.
+Every message is saved in OpenHut before it goes anywhere. If Discord refuses a reply, the reply still stays in the thread.
 
 ## See who's here
 

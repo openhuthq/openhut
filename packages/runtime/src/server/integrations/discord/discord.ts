@@ -43,9 +43,10 @@ export const discord = {
   },
 
   invite(botToken: string): string {
-    const id = Buffer.from(botToken.split('.')[0] ?? '', 'base64').toString('utf8')
-    return `https://discord.com/oauth2/authorize?${new URLSearchParams({ client_id: id, permissions: PERMISSIONS, scope: 'bot' })}`
+    return `https://discord.com/oauth2/authorize?${new URLSearchParams({ client_id: discord.appIdOf(botToken), permissions: PERMISSIONS, scope: 'bot' })}`
   },
+
+  appIdOf: (botToken: string): string => Buffer.from(botToken.split('.')[0] ?? '', 'base64').toString('utf8'),
 
   async conversations({ botToken }: { botToken: string }): Promise<Conversation[]> {
     const guilds = await call({ path: '/users/@me/guilds', botToken })
@@ -87,13 +88,6 @@ export const discord = {
     const base = `https://discord.com/channels/${info.guild_id ?? '@me'}`
     return started ? { url: `${base}/${started}`, messageId: message, threadId: started } : { url: `${base}/${target}/${message}`, messageId: message }
   },
-
-  env({ botToken, channels }: { botToken: string; channels: string[] }): Record<string, string> {
-    if (!channels.length) return {}
-    return { DISCORD_BOT_TOKEN: botToken, DISCORD_ALLOW_ALL_USERS: 'true', DISCORD_ALLOWED_CHANNELS: channels.join(','), DISCORD_HOME_CHANNEL: channels[0] }
-  },
-
-  config: { discord: { require_mention: true, unauthorized_dm_behavior: 'ignore', gateway_restart_notification: false } },
 }
 
 async function call({ path, botToken }: { path: string; botToken: string }): Promise<{ ok: boolean; status: number; body: unknown }> {

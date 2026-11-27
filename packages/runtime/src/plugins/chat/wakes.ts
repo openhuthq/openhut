@@ -5,6 +5,7 @@ import { log } from '../../server/platform/events.ts'
 import { messageOf } from '../../server/platform/http-error.ts'
 import { LostTurn, threadService } from '../../server/threads/thread-service.ts'
 import { inboxService } from '../../server/inbox/inbox-service.ts'
+import { chat } from '../../server/chat/index.ts'
 
 const TICK_MS = 15_000
 const RETRY_MS = 30_000
@@ -50,8 +51,7 @@ async function run({ agentId, wake }: { agentId: string; wake: Wake }): Promise<
     try {
       const said = await threadService.runRoutine({ agentId, threadId, text: wake.text, metadata, messageId })
       await wakes.report({ agentId, id: wake.id, body: { said } })
-      if (wake.id.startsWith('inbox:')) await inboxService.answered({ agentId, id: wake.id.slice('inbox:'.length), threadId, said })
-        .catch((err: unknown) => log.warn({ event: 'wake.post_failed', agent: agentId, wake: wake.id, error: messageOf(err) }))
+      await chat.flush(threadId).catch((err: unknown) => log.warn({ event: 'wake.post_failed', agent: agentId, wake: wake.id, error: messageOf(err) }))
       return
     } catch (err) {
       log.warn({ event: 'wake.run_failed', agent: agentId, wake: wake.id, attempt, error: messageOf(err) })

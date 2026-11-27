@@ -12,6 +12,8 @@ import { inboxReceiver } from '../../../src/server/inbox/inbox-controller.ts'
 import { deliveryIdOf, iconOf, inboxService, withSeen } from '../../../src/server/inbox/inbox-service.ts'
 import { routineService } from '../../../src/server/inbox/routines.ts'
 import { channelService } from '../../../src/server/channels/channel-service.ts'
+import { chat } from '../../../src/server/chat/index.ts'
+import { threadService } from '../../../src/server/threads/thread-service.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
 import { answerErrors } from '../../../src/server/platform/http-error.ts'
 import { agentToken, seal } from '../../../src/server/platform/secrets.ts'
@@ -331,30 +333,39 @@ test('changing thread mid-conversation keeps each thread: its last call\'s new k
   assert.notEqual(told[first + 2].threadId, threadId)
 })
 
-test('a webhook that runs in Discord starts one Discord thread per group: the first call starts it, named by titleBy, and later calls reuse it', async () => {
+test('a webhook that runs in Discord makes a Discord thread, read only on the web; its first answer starts the Discord thread, named by titleBy, and later answers go into it', async () => {
   const humans = { platform: 'discord', chat_id: '777', chat_name: '#agents-humans' }
   const places = mock.method(channelService, 'places', async () => [humans])
   let started = 900
-  const sent = mock.method(channelService, 'send', async () => ({ url: `https://discord.com/channels/1/${started}`, messageId: '9', threadId: String(started++) }))
+  const sent = mock.method(channelService, 'send', async ({ place }: { place: { thread_id?: string } }) => place.thread_id ? { url: '', messageId: '10' } : { url: `https://discord.com/channels/1/${started}`, messageId: '9', threadId: String(started++) })
+  const answer = async (threadId: string, text: string) => {
+    await threadService.post({ threadId, text })
+    await chat.flush(threadId)
+  }
   const hook = await inboxService.createSource({ actor: owner, agentId: 'ag_hookpuls', name: 'DO in Discord', channel: humans })
   await inboxService.setThreads({ agentId: 'ag_hookpuls', id: hook.id, thread: DO_THREAD, card: DO_CARD })
   const first = told.length
-  const one = (await doPost({ hook, body: doAlert({ id: 'd-1', state: 'STATE_TRIGGERED', value: 91, time: '2026-11-26T11:00:00Z' }) })).json().id
+  await doPost({ hook, body: doAlert({ id: 'd-1', state: 'STATE_TRIGGERED', value: 91, time: '2026-11-26T11:00:00Z' }) })
   await settle()
   const threadId = told[first].threadId ?? ''
-  await inboxService.answered({ agentId: 'ag_hookpuls', id: one, threadId, said: 'CPU is high.' })
-  const two = (await doPost({ hook, body: doAlert({ id: 'd-2', state: 'STATE_RECOVERED', value: 30, time: '2026-11-26T11:20:00Z' }) })).json().id
+  assert.equal((await threadService.get({ id: threadId })).readOnly, true)
+  await answer(threadId, 'CPU is high.')
+  await doPost({ hook, body: doAlert({ id: 'd-2', state: 'STATE_RECOVERED', value: 30, time: '2026-11-26T11:20:00Z' }) })
   await settle()
   assert.equal(told[first + 1].threadId, threadId)
-  await inboxService.answered({ agentId: 'ag_hookpuls', id: two, threadId, said: 'Recovered.' })
-  assert.deepEqual(sent.mock.calls.map((call) => call.arguments[0]), [{ agentId: 'ag_hookpuls', place: humans, text: 'CPU is high.', startThread: 'CPU high · pulse-db' }])
-  assert.equal((await db.selectFrom('chat_thread').select('continue_url').where('id', '=', threadId).executeTakeFirstOrThrow()).continue_url, 'https://discord.com/channels/1/900')
+  await answer(threadId, 'Recovered.')
+  const thread = { ...humans, thread_id: '900', url: 'https://discord.com/channels/1/900' }
+  assert.deepEqual(sent.mock.calls.map((call) => call.arguments[0]), [
+    { agentId: 'ag_hookpuls', place: humans, text: 'CPU is high.', startThread: 'CPU high · pulse-db' },
+    { agentId: 'ag_hookpuls', place: thread, text: 'Recovered.' },
+  ])
+  assert.equal((await threadService.get({ id: threadId })).continueUrl, 'https://discord.com/channels/1/900')
   await inboxService.updateWebhook({ actor: owner, id: hook.id, threads: 'each' })
-  const three = (await doPost({ hook, body: doAlert({ id: 'd-3', state: 'STATE_TRIGGERED', value: 92, time: '2026-11-26T12:00:00Z' }) })).json().id
+  await doPost({ hook, body: doAlert({ id: 'd-3', state: 'STATE_TRIGGERED', value: 92, time: '2026-11-26T12:00:00Z' }) })
   await settle()
   assert.notEqual(told[first + 2].threadId, threadId)
-  await inboxService.answered({ agentId: 'ag_hookpuls', id: three, threadId: told[first + 2].threadId ?? '', said: 'High again.' })
-  assert.equal(sent.mock.calls.length, 2)
+  await answer(told[first + 2].threadId ?? '', 'High again.')
+  assert.deepEqual(sent.mock.calls[2]?.arguments[0], { agentId: 'ag_hookpuls', place: humans, text: 'High again.', startThread: 'CPU high · pulse-db' })
   sent.mock.restore()
   places.mock.restore()
 })
