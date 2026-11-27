@@ -46,7 +46,7 @@ const SETUP_TABS = [
 const LINE = 'flex h-[42px] w-full items-center gap-3 text-[13.5px] text-ink no-underline'
 const VALUE = 'ml-auto inline-flex min-w-0 items-center gap-1.5 text-[13.5px] text-body'
 const GROUP = 'flex flex-col [&+&]:mt-2.5 [&+&]:border-t-[0.5px] [&+&]:border-hair [&+&]:pt-2.5'
-const REUSED = '-mx-2.5 flex flex-col [&>*]:h-[42px] [&>*]:text-[13.5px]'
+const REUSED = '-mx-2.5 flex flex-col [&>*]:h-[42px] [&>*]:gap-3 [&>*]:text-[13.5px]'
 const KINDS: Record<ChannelKind, string> = { slack: 'Slack', discord: 'Discord', whatsapp: 'WhatsApp', telegram: 'Telegram' }
 
 export function SetupDialog({ agent, tab, onClose, children }: { agent: Agent; tab: string | undefined; onClose: () => void; children?: ReactNode }) {
@@ -115,35 +115,48 @@ function GeneralPane({ agent }: { agent: Agent }) {
   return <>
     <Head title="General" subtitle={`How ${agent.name} works and who can use it`} />
     <Body>
-      <div className={GROUP}>
+      <div className="mb-3">
         <Button type="button" variant="bare" disabled={!agent.canEdit} onClick={() => open('customize')} className="-mx-2.5 mb-1 flex w-[calc(100%+20px)] items-center gap-3 rounded-md px-2.5 py-2 text-left hover:bg-hover disabled:hover:bg-transparent">
           <Face agent={agent} size={44} />
           <span className="grid min-w-0 flex-1"><span className="truncate text-[15px]/[20px] font-medium text-ink">{agent.name}</span><span className="text-[12.5px] text-mute">Name and picture</span></span>
           {agent.canEdit && <span className={VALUE}>Edit<I icon={ArrowRight01Icon} size={12} className="shrink-0 text-mute" /></span>}
         </Button>
+      </div>
+      <Section title="Job">
         <Go icon={PencilEdit02Icon} label="What it does" value={<span className="max-w-[300px] truncate">{agent.summary || 'Not set yet'}</span>} to="does" />
+        <div className={REUSED}><ModelRows agent={agent} /></div>
+      </Section>
+      <Section title="Access">
         <div className={REUSED}>
-          <ModelRows agent={agent} />
           <RunsOnRow agent={agent} />
           <AccessPicker owner={agent.owner ?? agent.ownerId} value={{ shared: agent.shared, people: agent.people }} title="Who can use it" className={cn(ROW, 'data-disabled:hover:bg-transparent')} disabled={!agent.canManage}
             onChange={(access) => updateAgent.mutate(access, { onError: toastError })} />
         </div>
-      </div>
-      <div className={GROUP}>
+      </Section>
+      <Section title="Abilities">
         {agent.canManage && <label className={LINE}><I icon={SourceCodeIcon} size={15} className="text-mute" />Run code<Switch className="ml-auto" checked={agent.codeExecution} aria-label="Run code" disabled={!agent.canEdit || updateAgent.isPending} onCheckedChange={() => change({ codeExecution: !agent.codeExecution })} /></label>}
         <label className={LINE} title={browser ? undefined : 'This computer can’t give agents a browser.'}><I icon={Globe02Icon} size={15} className="text-mute" />Browser
           {!browser && <span className="ml-auto text-[12.5px] text-mute">Not on this computer</span>}
           <Switch className={cn(browser && 'ml-auto')} checked={agent.browser} aria-label="Browser" disabled={!browser || !agent.canEdit || updateAgent.isPending} onCheckedChange={() => change({ browser: !agent.browser })} /></label>
-        {agent.canEdit && <NotifyLine agent={agent} />}
-      </div>
-      <div className={GROUP}>
-        <Go icon={Analytics01Icon} label="Activity" to="activity" />
         <Go icon={Key01Icon} label="Keys" to="keys" />
-        {agent.canEdit && <StopStart agent={agent} />}
-        {agent.canEdit && agent.canManage && <DeleteAgent agent={agent} />}
-      </div>
+      </Section>
+      <Section title="Activity">
+        {agent.canEdit && <NotifyLine agent={agent} />}
+        <Go icon={Analytics01Icon} label="Activity" to="activity" />
+      </Section>
+      {agent.canEdit && <Section title="Stop or delete">
+        <StopStart agent={agent} />
+        {agent.canManage && <DeleteAgent agent={agent} />}
+      </Section>}
     </Body>
   </>
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return <section className="flex flex-col [&+&]:mt-5">
+    <h3 className="m-0 mb-0.5 text-[12px]/[16px] font-medium text-mute">{title}</h3>
+    {children}
+  </section>
 }
 
 function NotifyLine({ agent }: { agent: Agent }) {
@@ -166,7 +179,7 @@ function StopStart({ agent }: { agent: Agent }) {
 function DeleteAgent({ agent }: { agent: Agent }) {
   const deleteAgent = useDeleteAgent(agent.id)
   const { confirming, setConfirming, box } = useConfirming()
-  if (!confirming) return <Button type="button" variant="bare" aria-label={`Delete ${agent.name}`} className="mt-1.5 inline-flex h-9 items-center gap-2 self-start text-[13.5px] text-fail" onClick={() => setConfirming(true)}><I icon={Delete02Icon} size={15} />Delete</Button>
+  if (!confirming) return <Button type="button" variant="bare" aria-label={`Delete ${agent.name}`} className="inline-flex h-[42px] items-center gap-3 self-start text-[13.5px] text-fail" onClick={() => setConfirming(true)}><I icon={Delete02Icon} size={15} />Delete</Button>
   return <div ref={box} className="mt-1.5 flex min-h-9 items-center gap-2">
     <span className="min-w-0 flex-1 text-[13px]/[18px] text-body">Delete {agent.name}? Its chats, memory and skills go with it.</span>
     <Button type="button" variant="secondary" className={PILL} autoFocus onClick={() => setConfirming(false)}>Cancel</Button>
