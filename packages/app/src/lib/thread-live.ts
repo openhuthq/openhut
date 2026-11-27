@@ -26,7 +26,7 @@ export type ThreadEvent = z.infer<typeof ThreadEvent>
 export type LiveSnapshot = z.infer<typeof LiveSnapshot>
 
 type Stream = { turnId: string; seq: number; text: string; early: Map<number, string> }
-export type ThreadLive = { people: LivePerson[]; agent: AgentLive; stream?: Stream }
+export type ThreadLive = { people: LivePerson[]; agent: AgentLive; stream?: Stream; ending?: Stream[] }
 type Wire = { send: (message: object) => void; fetchLive: (thread: string) => Promise<LiveSnapshot>; refetch: (thread: string) => Promise<unknown> }
 
 const IDLE: AgentLive = { state: 'idle' }
@@ -54,6 +54,11 @@ function notify() {
 function put(thread: string, change: (live: ThreadLive) => ThreadLive) {
   threads.set(thread, change(threads.get(thread) ?? EMPTY))
   notify()
+}
+
+function begin(live: ThreadLive, stream: Stream): ThreadLive {
+  const ended = live.stream?.turnId !== stream.turnId && live.stream?.text ? live.stream : undefined
+  return { ...live, stream, ending: ended ? [...live.ending ?? [], ended] : live.ending }
 }
 
 function drain(stream: Stream): Stream {
@@ -86,12 +91,12 @@ export const liveThreads = {
     }
     const { thread } = event
     if (event.type === 'presence') return put(thread, (live) => ({ ...live, people: event.people, agent: event.agent }))
-    if (event.type === 'turn' && event.state === 'started') return put(thread, (live) => live.stream?.turnId === event.turnId ? live : { ...live, stream: { turnId: event.turnId, seq: 0, text: '', early: new Map() } })
+    if (event.type === 'turn' && event.state === 'started') return put(thread, (live) => live.stream?.turnId === event.turnId ? live : begin(live, { turnId: event.turnId, seq: 0, text: '', early: new Map() }))
     if (event.type === 'turn') return void liveThreads.finish({ thread, turnId: event.turnId })
     put(thread, (live) => {
       const stream = live.stream?.turnId === event.turnId ? live.stream : { turnId: event.turnId, seq: event.seq === 1 ? 0 : -1, text: '', early: new Map<number, string>() }
       if (stream.seq >= 0 && event.seq <= stream.seq) return live
-      return { ...live, stream: drain({ ...stream, early: new Map(stream.early).set(event.seq, event.text) }) }
+      return begin(live, drain({ ...stream, early: new Map(stream.early).set(event.seq, event.text) }))
     })
   },
   async catchUp(thread: string) {
@@ -107,7 +112,7 @@ export const liveThreads = {
   },
   async finish({ thread, turnId }: { thread: string; turnId: string }) {
     await wire?.refetch(thread).catch(() => undefined)
-    put(thread, (live) => live.stream?.turnId === turnId ? { ...live, stream: undefined } : live)
+    put(thread, (live) => ({ ...live, stream: live.stream?.turnId === turnId ? undefined : live.stream, ending: live.ending?.filter((stream) => stream.turnId !== turnId) }))
   },
   join(thread: string) {
     const count = joined.get(thread) ?? 0
@@ -167,13 +172,13 @@ function useLive(thread: string): ThreadLive {
   return useSyncExternalStore(liveThreads.subscribe, () => liveThreads.get(thread))
 }
 
-export function useThreadLive(thread: string): { streaming?: { turnId: string; text: string }; agent: AgentLive } {
+export function useThreadLive(thread: string): { streaming?: { turnId: string; text: string }; ending: { turnId: string; text: string }[]; agent: AgentLive } {
   useEffect(() => {
     liveThreads.join(thread)
     return () => liveThreads.leave(thread)
   }, [thread])
   const live = useLive(thread)
-  return { streaming: live.stream && live.stream.seq >= 0 ? { turnId: live.stream.turnId, text: live.stream.text } : undefined, agent: live.agent }
+  return { streaming: live.stream && live.stream.seq >= 0 ? { turnId: live.stream.turnId, text: live.stream.text } : undefined, ending: live.ending ?? [], agent: live.agent }
 }
 
 export function presenceOf(live: ThreadLive | LiveThreadBoard | undefined): { people: LivePerson[]; typing: LivePerson[]; agent: AgentLive } {
