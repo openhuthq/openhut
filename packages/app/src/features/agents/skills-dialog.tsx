@@ -19,7 +19,6 @@ import { I, Loading } from '@/components/kit'
 import { useDeleteSkill, useSkill, useSkills, useUpdateSkill } from '@/features/agents/api'
 import { readable } from '@/features/agents/skill-text'
 import { toastError } from '@/lib/toast'
-import { cn } from '@/lib/utils'
 
 type View = 'rendered' | 'source'
 type Drafts = Record<string, string>

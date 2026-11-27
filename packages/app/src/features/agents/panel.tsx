@@ -1,25 +1,17 @@
 import { useEffect, type ReactNode } from 'react'
-import { FlashIcon, Globe02Icon, Link01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, Settings02Icon, StopIcon } from '@hugeicons/core-free-icons'
+import { Settings02Icon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { Tooltip } from '@/components/ui/tooltip'
 import { DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
-import { DialogCard, HOVER, I, TINY_ICON } from '@/components/kit'
-import { Glyph } from '@/components/glyph'
+import { DialogCard, I, TINY_ICON } from '@/components/kit'
 import { agentPath } from '@/app/routes'
-import { useChannels, useGrants, useUpdateAgent } from '@/features/agents/api'
-import { listedChannels } from '@/features/agents/channel-kinds'
-import { useConnections } from '@/features/connections/api'
-import { connectionBrand } from '@/features/connections/catalog'
-import { useRoutines } from '@/features/routines/api'
+import { useUpdateAgent } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
 import { PanelThreads } from '@/features/threads/thread-list'
 import { useGitHubFace } from '@/features/agents/github-face'
 import { formValues } from '@/lib/form'
-import { navigate } from '@/lib/router'
-import { toastError } from '@/lib/toast'
-import { cn } from '@/lib/utils'
 
 export function FloatingThreads({ agent, threadId, onClose }: { agent: Agent; threadId: string | undefined; onClose: () => void }) {
   useEffect(() => {
@@ -32,15 +24,15 @@ export function FloatingThreads({ agent, threadId, onClose }: { agent: Agent; th
   </section>
 }
 
+export function SyncFace({ agent }: { agent: Agent }) {
+  useGitHubFace(agent)
+  return null
+}
+
 export function AgentActions({ agent, threads }: { agent: Agent; threads?: ReactNode }) {
-  const updateAgent = useUpdateAgent(agent.id)
-  const running = agent.wanted === 'running'
-  const toggle = running ? 'Stop' : 'Start'
   return <>
     {threads}
     <Tooltip label="Setup"><a href={agentPath({ agentId: agent.id, dialog: 'setup', detail: 'general' })} aria-label={`Set up ${agent.name}`} className={TINY_ICON}><I icon={Settings02Icon} size={16} /></a></Tooltip>
-    <Tooltip label={toggle}><Button type="button" variant="bare" className={TINY_ICON} aria-label={`${toggle} ${agent.name}`} disabled={!agent.canEdit || updateAgent.isPending}
-      onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}><I icon={running ? StopIcon : PlayIcon} size={16} className={running ? 'text-hue-red' : 'text-hue-green'} /></Button></Tooltip>
   </>
 }
 
