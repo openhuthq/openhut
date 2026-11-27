@@ -291,18 +291,21 @@ export const threadService = {
       },
       onError: messageOf,
       onEnd: async ({ messages: answered, isAborted }) => {
-        const answer = z.safeParse(ChatMessage, answered.map(foldCard).find((each) => each.role === 'assistant')).data
-        if (answer?.parts.some((part) => part.type !== 'step-start')) await write({ chat, message: { ...answer, id: answerId, metadata: { answered: waiting.at(-1)?.id } }, session })
-        live.end()
-        turns.delete(chat.id)
-        busy.delete(agent.id)
+        try {
+          const answer = z.safeParse(ChatMessage, answered.map(foldCard).find((each) => each.role === 'assistant')).data
+          if (answer?.parts.some((part) => part.type !== 'step-start')) await write({ chat, message: { ...answer, id: answerId, metadata: { answered: waiting.at(-1)?.id } }, session })
+        } finally {
+          live.end()
+          turns.delete(chat.id)
+          busy.delete(agent.id)
+        }
         log.info({ event: 'agent.chat', agent: agent.id, ms: Date.now() - started, aborted: isAborted || abort.signal.aborted })
       },
     })
     const [toClient, toServer] = stream.tee()
     void toServer.pipeTo(new WritableStream())
     reply.hijack()
-    pipeUIMessageStreamToResponse({ response: reply.raw, stream: toClient })
+    await pipeUIMessageStreamToResponse({ response: reply.raw, stream: toClient })
   },
 
   newMessageId: (): string => nextId(),
