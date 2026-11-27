@@ -60,14 +60,15 @@ type Attachment = { key: string; name: string; image: boolean; thumb?: string; f
 const ChatFiles = createContext<{ agentId: string; threadId: string; save: (path: string) => void }>({ agentId: '', threadId: '', save: () => undefined })
 const IMAGE = /\.(png|jpe?g|gif|webp)$/i
 
-export function Chat({ agent, threadId, tools, onTitle }: { agent: Agent; threadId: string; tools?: ReactNode; onTitle?: () => void }) {
+export function Chat({ agent, threadId, actions, tools: after, onTitle }: { agent: Agent; threadId: string; actions?: ReactNode; tools?: ReactNode; onTitle?: () => void }) {
+  const tools = <>{actions}{after}</>
   const thread = useThread({ agentId: agent.id, threadId })
   if (agentState(agent) === 'stopped') return <ChatFrame agent={agent} tools={tools} onTitle={onTitle}><Asleep agent={agent} /></ChatFrame>
   if (!thread.data) return <ChatFrame agent={agent} tools={tools} onTitle={onTitle} composer={<ComposerSkeleton />}><div className="m-auto"><ErrorNote message={thread.error?.message} /></div></ChatFrame>
-  return <ThreadView key={thread.data.id} thread={thread.data} fetchedAt={thread.dataUpdatedAt} agent={agent} tools={tools} onTitle={onTitle} />
+  return <ThreadView key={thread.data.id} thread={thread.data} fetchedAt={thread.dataUpdatedAt} agent={agent} actions={actions} tools={after} onTitle={onTitle} />
 }
 
-function ThreadView({ thread, fetchedAt, agent, tools, onTitle }: { thread: ThreadWithMessages; fetchedAt: number; agent: Agent; tools: ReactNode; onTitle?: () => void }) {
+function ThreadView({ thread, fetchedAt, agent, actions, tools, onTitle }: { thread: ThreadWithMessages; fetchedAt: number; agent: Agent; actions: ReactNode; tools: ReactNode; onTitle?: () => void }) {
   const touch = useTouchThread()
   const transport = useMemo(() => new DefaultChatTransport<AgentMessage>({
     api: `${threadPath(thread.id)}/chat`,
@@ -98,7 +99,7 @@ function ThreadView({ thread, fetchedAt, agent, tools, onTitle }: { thread: Thre
   const mine = [...shown].reverse().find((message) => message.role === 'user' && !webhookOf(message.metadata) && (z.safeParse(Authored, message.metadata).data?.author ?? me) === me)
   const said = saidAfter(shown)
   const clear = agent.canEdit && chat.messages.length > 0 && !busy && !attachments.uploading && <ClearChat agent={agent} threadId={thread.id} attachments={attachments} />
-  return <ChatFiles value={files}><CardReply value={thread.readOnly ? undefined : (text) => { if (busy) return false; send(text); return true }}><ChatFrame agent={agent} thread={thread} tools={<>{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={thread.readOnly ? <ContinueBar thread={thread} /> : <Composer agent={agent} threadId={thread.id} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void stopThread({ agentId: agent.id, threadId: thread.id }).catch(toastError)} />}>
+  return <ChatFiles value={files}><CardReply value={thread.readOnly ? undefined : (text) => { if (busy) return false; send(text); return true }}><ChatFrame agent={agent} thread={thread} tools={<>{actions}{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={thread.readOnly ? <ContinueBar thread={thread} /> : <Composer agent={agent} threadId={thread.id} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void stopThread({ agentId: agent.id, threadId: thread.id }).catch(toastError)} />}>
     {shown.length ? <>
       <Day iso={thread.updatedAt} />
       {shown.map((message, index) => <Message key={message.id} agent={agent} thread={thread} message={message} said={(text) => said(index, text)} seen={message === mine} live={chat.status === 'streaming' && message === last} onRetry={!busy && !thread.readOnly && message === last ? () => void chat.regenerate() : undefined} />)}
@@ -195,8 +196,8 @@ function ChatFrame({ agent, thread, composer, tools, onTitle, onFiles, children 
     <div className={cn('still flex h-[52px] shrink-0 items-center gap-2 px-4 phone:grid phone:h-16 phone:grid-cols-[1fr_auto_1fr] phone:px-3', sidebar?.collapsed && 'pl-[94px] phone:pl-3')}>
       <Button type="button" variant="bare" aria-label="All agents" className={cn(ICON_BUTTON, 'float hidden size-10 justify-self-start rounded-full bg-card text-ink phone:grid')} onClick={back}><I icon={ArrowLeft01Icon} size={20} /></Button>
       {onTitle
-        ? <Button type="button" variant="bare" className="float flex h-10 min-w-0 items-center gap-2 rounded-full bg-card px-4 text-ink" onClick={onTitle}><span className="truncate text-[16px] font-semibold">{agent.name}</span></Button>
-        : <><span className="shrink-0 text-[14px] font-semibold">{agent.name}</span>{thread && <span className="min-w-0 truncate text-[13px] text-mute">· {thread.id === agent.id ? 'Main thread' : thread.title}</span>}{thread && <ThreadSource thread={thread} />}</>}
+        ? <Button type="button" variant="bare" className="float flex h-10 min-w-0 items-center gap-2 rounded-full bg-card pr-4 pl-1.5 text-ink" onClick={onTitle}><Face agent={agent} size={28} /><span className="truncate text-[16px] font-semibold">{agent.name}</span></Button>
+        : <><Face agent={agent} size={26} /><span className="shrink-0 text-[14px] font-semibold">{agent.name}</span>{thread && <span className="min-w-0 truncate text-[13px] text-mute">· {thread.id === agent.id ? 'Main thread' : thread.title}</span>}{thread && <ThreadSource thread={thread} />}</>}
       <span className="float ml-auto flex items-center gap-0.5 phone:h-10 phone:justify-self-end phone:rounded-full phone:bg-card phone:px-1">{thread && <PresenceFaces agent={agent} threadId={thread.id} />}{tools}</span>
     </div>
     <div ref={log} className="fade-t flex flex-1 flex-col overflow-auto px-8 py-5 phone:px-4" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80 }}>
@@ -340,8 +341,9 @@ function AgentReply({ agent, threadId: liveThread, step, message, said, live, on
   const paths = live ? [] : homePathsIn(blocks.flatMap((block) => block.type === 'text' ? [block.text] : []).join('\n'))
   const found = useHomeFiles({ agentId, threadId, paths })
   const plugins = found?.size ? [remarkGfm, linkHomeFiles(found)] : [remarkGfm]
-  return <div>
-    <CopyMenu text={textOf(message)}><div className="flex min-w-0 flex-col gap-2 pointer-coarse:select-none">
+  return <div className="grid grid-cols-[34px_minmax(0,1fr)] gap-3">
+    <span className={live ? 'talking' : undefined}><Face agent={agent} size={34} /></span>
+    <CopyMenu text={textOf(message)}><div className="flex min-w-0 flex-col gap-2 pt-1.5 pointer-coarse:select-none">
       {live && liveThread && <LiveTitle threadId={liveThread} />}
       {work && <WorkLine agent={agent} work={work} notes={replyOf(message.parts).notes} live={live} answered={blocks.length > 0} onRetry={onRetry} />}
       {step && !work && <span className="flex min-w-0 items-center gap-2 text-[12.5px] text-mute" role="status">{!blocks.length && <Spinner className="mt-0 size-3.5 shrink-0" />}<span className="truncate">{step}</span></span>}

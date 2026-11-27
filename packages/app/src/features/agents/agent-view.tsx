@@ -15,7 +15,7 @@ import { ChannelDialog } from '@/features/agents/channels'
 import { CustomizeDialog } from '@/features/agents/customize'
 import { MemoryDialog } from '@/features/agents/memory-dialog'
 import { NewAgentDialog } from '@/features/agents/new-agent'
-import { DoesDialog, Panel } from '@/features/agents/panel'
+import { AgentActions, DoesDialog, Panel } from '@/features/agents/panel'
 import { SkillsDialog } from '@/features/agents/skills-dialog'
 import { RoutinesDialog } from '@/features/routines/routines-dialog'
 import { ToolPermissionsDialog } from '@/features/agents/tool-permissions'
@@ -60,10 +60,11 @@ export function AgentView({ agentId, threadId, dialog, detail }: { agentId: stri
     ? !open && <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Show details" title="Show details" onClick={() => setShown(true)}><I icon={InformationCircleIcon} size={20} /></Button>
     : <Tooltip label={label}><Button type="button" variant="bare" aria-label={label} aria-pressed={open} onClick={() => setShown(!open)} className={cn(TINY_ICON, 'aria-pressed:bg-picked')}><I icon={SidebarRightIcon} size={16} /></Button></Tooltip>
   const dialogs = <Dialogs agent={agent.data} dialog={dialog} detail={detail} />
-  const panel = <Panel agent={agent.data} threadId={threadId} naming={dialog === 'name'} collapsed={!open} onBrowser={browsing && pipClosed ? () => setPipClosed(false) : undefined} />
+  const panel = <Panel agent={agent.data} threadId={threadId} collapsed={!open} />
+  const actions = <AgentActions agent={agent.data} onBrowser={browsing && pipClosed ? () => setPipClosed(false) : undefined} />
   return <>
     <div className="relative flex min-w-0 flex-1">
-      <Chat key={threadId} agent={agent.data} threadId={threadId ?? agent.data.id} tools={toggle} onTitle={phone ? () => setShown(true) : undefined} />
+      <Chat key={threadId} agent={agent.data} threadId={threadId ?? agent.data.id} actions={actions} tools={toggle} onTitle={phone ? () => setShown(true) : undefined} />
       {agent.data.browser && agent.data.canEdit && dialog !== 'browser' && <BrowserPip agent={agent.data} hidden={pipClosed} onClose={() => setPipClosed(true)} onBrowsing={setBrowsing} />}
     </div>
     {phone ? <>{open && <Dialog size="window" label={`${agent.data.name}'s details`} className="phone:bg-sidebar" onClose={() => setShown(false)}>{panel}</Dialog>}{dialogs}</> : <>{panel}{dialogs}</>}

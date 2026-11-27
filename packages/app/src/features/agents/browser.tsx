@@ -29,14 +29,14 @@ export function BrowserPip({ agent, hidden, onClose, onBrowsing }: { agent: Agen
   const address = addressOf(live.page.url)
   const last = live.actions[0]
   const doing = last ? `${ACTION_WORDS[last.action] ?? last.action}${live.page.title ? ` · ${live.page.title}` : ''}` : live.page.title || address.host
-  return <section aria-label={`${agent.name}'s browser`} hidden={hidden || !live.busy} style={{ translate: `${moved.x}px ${moved.y}px` }}
+  return <section aria-label="Browser" hidden={hidden || !live.busy} style={{ translate: `${moved.x}px ${moved.y}px` }}
     className="absolute right-6 bottom-[104px] z-20 w-80 overflow-hidden rounded-xl bg-card shadow-[0_16px_40px_-12px_oklch(0%_0_0/.32),0_2px_6px_oklch(0%_0_0/.08)]">
     <div className="flex h-8 cursor-grab touch-none items-center gap-2 bg-[oklch(98.4%_0_0)] pr-1 pl-2.5 active:cursor-grabbing"
       onPointerDown={(event) => { if (event.target instanceof Element && event.target.closest('a,button')) return; event.currentTarget.setPointerCapture(event.pointerId); grab.current = { x: event.clientX - moved.x, y: event.clientY - moved.y } }}
       onPointerMove={(event) => { if (grab.current) setMoved({ x: event.clientX - grab.current.x, y: event.clientY - grab.current.y }) }}
       onPointerUp={() => { grab.current = null }} onPointerCancel={() => { grab.current = null }}>
       <span aria-hidden className="grid size-4 shrink-0 place-items-center rounded-[4px] bg-ink text-[9.5px] font-bold text-white uppercase">{address.host.replace(/^www\./, '').charAt(0)}</span>
-      <span className="min-w-0 truncate text-[12.5px] font-medium">{address.host.replace(/^www\./, '')}</span>
+      <span className="min-w-0 truncate text-[13px] font-medium">Browser<span className="font-normal text-mute"> · {address.host.replace(/^www\./, '')}</span></span>
       <i aria-label="Live" className="size-1.5 shrink-0 rounded-full bg-pass" />
       <span className="ml-auto flex gap-0.5">
         <a href={agentPath({ agentId: agent.id, dialog: 'browser' })} aria-label="Open full size" title="Open full size" className={cn(TINY_ICON, 'size-6')}><I icon={ArrowExpand01Icon} size={14} /></a>
@@ -101,10 +101,10 @@ export function BrowserDialog({ agent, onClose }: { agent: Agent; onClose: () =>
   }
   const address = addressOf(live.page.url)
   const left = Math.max(0, HOLD_IDLE_S - Math.round((now - lastInput) / 1000))
-  return <Dialog label={`${name}'s browser`} onClose={onClose} onEscape={mine ? () => undefined : undefined} className="flex h-[min(860px,calc(100vh-48px))] w-[min(1320px,calc(100vw-48px))] flex-col overflow-hidden">
+  return <Dialog label="Browser" onClose={onClose} onEscape={mine ? () => undefined : undefined} className="flex h-[min(860px,calc(100vh-48px))] w-[min(1320px,calc(100vw-48px))] flex-col overflow-hidden">
     <header className="flex h-14 shrink-0 items-center gap-2.5 border-b border-hair px-4">
       <Face agent={agent} size={30} />
-      <DialogTitle className="min-w-0 truncate text-[15px] font-semibold">{name}'s browser</DialogTitle>
+      <DialogTitle className="min-w-0 truncate text-[15px] font-semibold">Browser</DialogTitle>
       {mine ? <Badge variant="pill-ink">You're in control</Badge>
         : <Badge variant="pill"><i className={cn('size-[7px] rounded-full', live.state === 'live' ? 'animate-[blive_1.6s_ease-in-out_infinite] bg-fail' : 'bg-mute-2')} />{live.state === 'live' ? 'Live' : live.state === 'closed' ? 'No page open' : 'Connecting'}</Badge>}
       <span className="flex-1" />
@@ -112,7 +112,7 @@ export function BrowserDialog({ agent, onClose }: { agent: Agent; onClose: () =>
       <Button type="button" size="icon-sm" aria-label="Close" title={mine ? 'Close (hands back)' : 'Close (Esc)'} onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
     </header>
     <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_260px] gap-4 bg-sidebar p-4 max-[900px]:grid-cols-[minmax(0,1fr)]">
-      <section className={cn('flex min-h-0 flex-col self-start overflow-hidden rounded-lg border bg-card', mine ? 'border-ink shadow-[0_0_0_1px_var(--ink),0_12px_40px_oklch(0%_0_0/.12)]' : 'border-mid shadow-[0_1px_2px_oklch(0%_0_0/.06),0_12px_40px_oklch(0%_0_0/.08)]')} aria-label={`${name}'s browser window`}>
+      <section className={cn('flex min-h-0 flex-col self-start overflow-hidden rounded-lg border bg-card', mine ? 'border-ink shadow-[0_0_0_1px_var(--ink),0_12px_40px_oklch(0%_0_0/.12)]' : 'border-mid shadow-[0_1px_2px_oklch(0%_0_0/.06),0_12px_40px_oklch(0%_0_0/.08)]')} aria-label="Browser window">
         <div className="flex h-11 min-w-0 shrink-0 items-center border-b border-hair bg-card px-2">
           <div className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded-lg bg-soft px-2.5 font-mono text-[12.5px]" title={live.page.title}>
             <span className={cn('inline-flex shrink-0', address.secure ? 'text-pass' : 'text-mute')} aria-label={address.secure ? 'Secure connection' : undefined}>{address.secure ? ICONS.lock : ICONS.globe}</span>
