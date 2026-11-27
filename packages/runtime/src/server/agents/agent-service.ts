@@ -502,6 +502,7 @@ async function healthOf({ row, state }: { row: AgentRow; state: string | undefin
     probes.delete(row.id)
     return { health: null, detail: '' }
   }
+  if (config.fakeAgents) return { health: 'answering', detail: '' }
   const last = await probe({ row, fresh: false })
   if (!last.detail) return { health: 'answering', detail: '' }
   return { health: last.detail === PORT_TAKEN || Date.now() - last.failingSince > STARTING_MS ? 'not_answering' : 'starting', detail: last.detail }

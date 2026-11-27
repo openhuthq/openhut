@@ -35,7 +35,7 @@ export function AddAppDialog({ onClose }: { onClose: () => void }) {
       {items.map((item) => <div key={item.name} className="flex min-h-[54px] items-center gap-3.5">
         <Glyph name={item.name} size={28} />
         <span className="grid min-w-0 flex-1 gap-0.5"><b className="truncate text-[14px] font-medium">{item.title}</b><small className="truncate text-[12.5px] text-mute">{item.short}</small></span>
-        <Button type="button" variant="ghost" className="h-[30px] rounded-lg px-3 text-[13px] font-medium" disabled={quick.pending} onClick={() => connect(item)}>Connect</Button>
+        <Button type="button" variant="ghost" size="sm" disabled={quick.pending} onClick={() => connect(item)}>Connect</Button>
       </div>)}
       {!items.length && <p className="m-0 py-6 text-center text-[13px] text-mute">No app matches “{query.trim()}”.</p>}
     </div>

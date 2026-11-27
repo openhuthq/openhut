@@ -150,7 +150,7 @@ is the `openhut-dev-loop` skill (`.agents/skills/`, linked from `.claude/skills`
 `npm run dev` starts agentd with the Docker sandbox, the server API on 127.0.0.1:8797 with `.data`, the dev key `dev`
 enrolled, the real model and real outside services (connect Claude in Settings), and Vite with `/api` proxied to it with
 `Authorization: Bearer dev`, so the app opens straight into the shell. Agents start only where the agents firewall applies
-(Linux, agentd as root); on a Mac the screens and the API work. Ports (API 8797, gateway 8091) step to the next free one, so
+(Linux, agentd as root); on a Mac the screens and the API work: off Linux `npm run dev` runs agents in agentd's in-memory sandbox with the test model (`OPENHUT_FAKE_AGENTS` makes them count as answering), so nothing shows red; set `OPENHUT_FAKE_SANDBOX=false` for Docker. Ports (API 8797, gateway 8091) step to the next free one, so
 it runs beside other checkouts. Ctrl-C stops everything.
 
 ## Test

@@ -1,5 +1,5 @@
 import type { MouseEvent, ReactElement } from 'react'
-import { ArchiveIcon, GlobalIcon, HistoryIcon, PlusSignIcon, WebhookIcon } from '@hugeicons/core-free-icons'
+import { ArchiveIcon, Cancel01Icon, GlobalIcon, HistoryIcon, PlusSignIcon, WebhookIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { Glyph } from '@/components/glyph'
@@ -75,16 +75,17 @@ export function SourceIcon({ thread, size, label }: { thread: SourcedThread; siz
   return <span role="img" aria-label={label} title={label} className="grid place-items-center text-mute">{platform === 'discord' ? <Glyph name="discord" size={size} /> : <I icon={SOURCE_ICON[platform]} size={size} />}</span>
 }
 
-export function PanelThreads({ agent, threadId }: { agent: Agent; threadId: string | undefined }) {
+export function PanelThreads({ agent, threadId, onClose }: { agent: Agent; threadId: string | undefined; onClose?: () => void }) {
   const threads = useThreads()
   const create = useCreateThread(agent.id)
   const mine = threadsOf({ threads: threads.data ?? [], agent })
   const open = threadId ?? agent.id
   const list = useMoreBelow<HTMLDivElement>()
   return <div className="flex min-h-0 flex-1 flex-col gap-2.5">
-    <div className="flex items-center text-[12px]/[16px] text-mute">Threads<span className="ml-auto flex gap-3.5">
+    <div className="flex items-center text-[12px]/[16px] text-mute">Threads<span className="ml-auto flex items-center gap-3.5">
       <Button type="button" variant="bare" className="inline-flex h-auto items-center gap-1 p-0 text-[12px] font-medium text-ink hover:underline" disabled={create.isPending || !agent.canEdit} onClick={() => create.mutate(undefined, { onError: toastError })}><I icon={PlusSignIcon} size={12} />New</Button>
       <a href={agentPath({ agentId: agent.id, dialog: 'threads' })} className="text-[12px] font-medium text-ink no-underline hover:underline">View all</a>
+      {onClose && <Button type="button" variant="bare" aria-label="Close" title="Close" onClick={onClose} className={cn('-my-1 -mr-1.5 grid size-6 place-items-center rounded-md text-mute hover:text-ink', HOVER)}><I icon={Cancel01Icon} size={14} /></Button>}
     </span></div>
     <ErrorNote message={threads.error?.message} />
     <div ref={list.ref} className={cn('no-scrollbar -mx-2.5 flex min-h-0 flex-1 flex-col gap-px overflow-y-auto', list.more && '[mask-image:linear-gradient(to_bottom,#000_calc(100%-56px),transparent)]')}>

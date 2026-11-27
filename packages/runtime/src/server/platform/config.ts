@@ -16,6 +16,7 @@ const TEST_MODEL = env.get('OPENHUT_MODEL').asString() === 'test' // 'test' answ
 const HOST_NET = env.get('OPENHUT_AGENT_HOST_NET').default('false').asBool() // agents share the host's network (desktop)
 const GATEWAY_PORT = env.get('OPENHUT_GATEWAY_PORT').default('8081').asPortNumber() // the agents' gateway
 const FAKE_SANDBOX = env.get('OPENHUT_FAKE_SANDBOX').default('false').asBool() // tests: agentd's in-memory sandbox runs in this process unless AGENTD_SOCK is set
+const FAKE_AGENTS = env.get('OPENHUT_FAKE_AGENTS').default('false').asBool() // dev off Linux: a running agent counts as answering, since nothing listens in the in-memory sandbox
 const AGENTD_SOCK = env.get('AGENTD_SOCK').asString() // the agent host's socket, when it runs as its own process
 
 export const config = {
@@ -30,6 +31,7 @@ export const config = {
   devKeySha256: env.get('OPENHUT_DEV_KEY_SHA256').asString(), // npm run dev and the tests only: sha256 of a key that acts as the owner
   appDir: fileURLToPath(new URL('../../../../app/dist', import.meta.url)), // the built web app, served on the same origin
   modelMode: TEST_MODEL ? 'test' as const : 'claude' as const,
+  fakeAgents: FAKE_AGENTS,
   agentApi: env.get('OPENHUT_AGENT_API').asString(), // overrides the agents' API address (tests)
   agentGateway: HOST_NET ? `http://127.0.0.1:${GATEWAY_PORT}` : undefined,
   agentHostNet: HOST_NET,
