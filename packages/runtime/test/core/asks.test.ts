@@ -61,35 +61,34 @@ test('get_self shows the agent its name, instructions and channels', async () =>
 })
 
 test('every ask needs a short description for the owner: missing or too long is an error the agent can fix, and the ask carries it', async () => {
-  const missing = await client.callTool({ name: 'update_self', arguments: { name: 'Ops', origin: app } })
+  const missing = await client.callTool({ name: 'update_channel', arguments: { id: 'ch_chgwhats', open: true, origin: app } })
   assert.equal(missing.isError, true)
   assert.match(textOf(missing), /description/)
-  const long = await client.callTool({ name: 'update_self', arguments: { description: 'x'.repeat(121), name: 'Ops', origin: app } })
+  const long = await client.callTool({ name: 'update_channel', arguments: { description: 'x'.repeat(121), id: 'ch_chgwhats', open: true, origin: app } })
   assert.equal(long.isError, true)
   assert.match(textOf(long), /under 120 characters/)
   await assert.rejects(asks.create({ agentId: 'ag_chgagent', kind: 'update_self', input: { name: 'Ops' }, description: '', origin: app }), /Add a description/)
-  const id = idIn(textOf(await client.callTool({ name: 'update_self', arguments: { description: 'Give it a clearer name', name: 'Opsy', origin: app } })))
-  assert.equal((await asks.get({ actor: owner, id })).description, 'Give it a clearer name')
+  const id = idIn(textOf(await client.callTool({ name: 'update_channel', arguments: { description: 'Let the team in', id: 'ch_chgwhats', open: true, origin: app } })))
+  assert.equal((await asks.get({ actor: owner, id })).description, 'Let the team in')
   await db.deleteFrom('ask').where('id', '=', id).execute()
 })
 
 test('a rename waits for approval, the owner edits it, and the decision goes back to the chat it came from', async () => {
-  const refused = await client.callTool({ name: 'update_self', arguments: { description: 'Clearer name.', name: 'Ops' } })
-  assert.equal(refused.isError, true)
-  const asked = textOf(await client.callTool({ name: 'update_self', arguments: { description: 'Clearer name.', name: 'Ops', origin: app } }))
-  assert.match(asked, /^Asked for approval \(ask_[a-z0-9]+\): Rename to Ops\. Nothing has changed yet\./)
+  await assert.rejects(asks.create({ agentId: 'ag_chgagent', kind: 'update_self', input: { name: 'Ops' }, description: 'Clearer name.', origin: undefined }), /chat you're in/)
+  const asked = await asks.create({ agentId: 'ag_chgagent', kind: 'update_self', input: { name: 'Ops' }, description: 'Clearer name.', origin: app })
+  assert.match(asked, /^Asked for approval \(ask_[a-z0-9]+\): Renamed to Ops\. Nothing has changed yet\./)
   const id = idIn(asked)
   assert.equal((await db.selectFrom('agent').select('name').where('id', '=', 'ag_chgagent').executeTakeFirstOrThrow()).name, 'Dev')
   assert.deepEqual(await asks.inChat({ agentId: 'ag_chgagent', since: new Date(Date.now() - 60_000) }), [id])
 
   const approved = await asks.approve({ actor: owner, id, answer: { name: 'Ops Bot' } })
   assert.equal(approved.status, 'done')
-  assert.equal(approved.title, 'Rename to Ops Bot')
+  assert.equal(approved.title, 'Renamed to Ops Bot')
   assert.equal((await db.selectFrom('agent').select('name').where('id', '=', 'ag_chgagent').executeTakeFirstOrThrow()).name, 'Ops Bot')
   await settled()
   assert.deepEqual(told.map((each) => each.agentId), ['ag_chgagent'])
-  assert.match(told[0].text, /^\[OpenHut asks:wk_[a-z0-9]+\] Your owner answered your ask:\n- Approved and done: Rename to Ops Bot\./)
-  assert.equal((await asks.approve({ actor: owner, id, answer: { name: 'Other' } })).title, 'Rename to Ops Bot', 'approving an answered ask returns it as it is')
+  assert.match(told[0].text, /^\[OpenHut asks:wk_[a-z0-9]+\] Your owner answered your ask:\n- Approved and done: Renamed to Ops Bot\./)
+  assert.equal((await asks.approve({ actor: owner, id, answer: { name: 'Other' } })).title, 'Renamed to Ops Bot', 'approving an answered ask returns it as it is')
 })
 
 test('a denied request from WhatsApp reaches the agent through the plugin\'s wakes poll, once, and never through the app', async () => {
@@ -132,7 +131,7 @@ test('an agent can ask for Discord with its bot token, and the token stays out o
 })
 
 test('a decision the agent never heard about is sent again by the chat plugin\'s next tick', async () => {
-  const asked = textOf(await client.callTool({ name: 'update_self', arguments: { description: 'Shorter.', name: 'Op', origin: app } }))
+  const asked = await asks.create({ agentId: 'ag_chgagent', kind: 'update_channel', input: { id: 'ch_chgwhats', open: true }, description: 'Let the team in.', origin: app })
   const id = idIn(asked)
   await asks.decline({ actor: owner, id })
   await settled()
@@ -208,7 +207,7 @@ test('connect_app by sign-in: the callback approves the ask for the owner, so th
   mock.method(connectionService, 'listTools', async () => [])
   mock.method(connectionService, 'specs', async () => DO_TOOLS)
   const id = idIn(textOf(await client.callTool({ name: 'connect_app', arguments: { description: 'To file issues.', app: 'mcp', name: 'Tracker', url: 'https://tracker.example.com/mcp', origin: app } })))
-  await assert.rejects(connectionAuthorizationService.create({ actor: owner, kind: 'mcp', url: 'https://tracker.example.com/mcp', askId: idIn(textOf(await client.callTool({ name: 'update_self', arguments: { description: 'Needed for the job', name: 'Not a connect', origin: app } }))) }), /isn't for connecting an app/)
+  await assert.rejects(connectionAuthorizationService.create({ actor: owner, kind: 'mcp', url: 'https://tracker.example.com/mcp', askId: idIn(await asks.create({ agentId: 'ag_chgagent', kind: 'add_webhook', input: { name: 'Not a connect' }, description: 'Needed for the job', origin: app })) }), /isn't for connecting an app/)
   const started = await connectionAuthorizationService.create({ actor: owner, kind: 'mcp', name: 'Tracker', url: 'https://tracker.example.com/mcp', askId: id, permissions: { read: 'allow', update: 'deny' } })
   assert.equal((await asks.get({ actor: owner, id })).status, 'open')
   const done = await connectionAuthorizationService.finish({ state: started.id, code: 'good' })
@@ -267,18 +266,35 @@ test('an answer waits at most 30 seconds for the chat\'s other asks, then goes a
   assert.match(wake.text, /Your owner answered your ask:\n- Not approved: Add a webhook named Slow one\..*\nStill waiting for: Add a webhook named Slow two\./s)
 })
 
-test('new instructions apply at once, with no restart and no held wake, even while the agent is busy', async () => {
-  const id = idIn(await asks.create({ agentId: 'ag_chgagent', kind: 'update_self', input: { instructions: '# Quiet\nNew.' }, description: 'Needed for the job', origin: app }))
+test('an agent changes its own instructions at once, with no approval, no restart and no held wake; the owner can undo it and a member can\'t', async () => {
+  const start = await db.selectFrom('agent').select(['name', 'instructions']).where('id', '=', 'ag_chgagent').executeTakeFirstOrThrow()
   activity.started('ag_chgagent')
   const applies = agentd.applies.length
   const before = told.length
-  await asks.approve({ actor: owner, id })
+  const said = textOf(await client.callTool({ name: 'update_self', arguments: { description: 'You asked for a quieter tone', instructions: '# Quiet\nNew.', origin: app } }))
+  assert.match(said, /^Done: Changed its instructions\. It's in effect now; your owner can undo it in OpenHut\. Your new instructions are already in effect\./)
+  assert.equal((await db.selectFrom('agent').select('instructions').where('id', '=', 'ag_chgagent').executeTakeFirstOrThrow()).instructions, '# Quiet\nNew.')
   assert.equal(agentService.restartPending('ag_chgagent'), false)
   assert.ok(agentd.applies.slice(applies).every((each) => each.change === 'none'))
-  await settled()
   activity.ended('ag_chgagent')
-  assert.equal(told.length, before + 1)
-  assert.match(told.at(-1)?.text ?? '', /Approved and done: Change its instructions\. Your new instructions are already in effect\./)
+  const [change] = (await asks.list({ agentId: 'ag_chgagent' })).filter((each) => each.kind === 'update_self')
+  assert.deepEqual({ status: change.status, title: change.title, before: change.input.before }, { status: 'done', title: 'Changed its instructions', before: start })
+  assert.ok((await asks.inChat({ agentId: 'ag_chgagent', since: new Date(Date.now() - 60_000) })).includes(change.id), 'the chat shows the change as a card')
+  await settled()
+  assert.equal(told.length, before, 'nothing to tell the agent: it made the change')
+  const logged = await db.selectFrom('connection_event').select(['tool', 'reason', 'approved_by']).where('agent_id', '=', 'ag_chgagent').where('tool', '=', 'update_self').orderBy('id', 'desc').executeTakeFirstOrThrow()
+  assert.deepEqual(logged, { tool: 'update_self', reason: 'Changed its own name or instructions', approved_by: null })
+
+  await assert.rejects(asks.undo({ actor: { id: 'usr_chgmembr', email: 'member@example.com', role: 'member' }, id: change.id }), { status: 403 })
+  const undone = await asks.undo({ actor: owner, id: change.id })
+  assert.equal(undone.status, 'undone')
+  assert.deepEqual(await db.selectFrom('agent').select(['name', 'instructions']).where('id', '=', 'ag_chgagent').executeTakeFirstOrThrow(), start)
+  assert.equal((await asks.undo({ actor: owner, id: change.id })).status, 'undone', 'undoing twice is a no-op')
+  await settled()
+  assert.match(told.at(-1)?.text ?? '', /Your owner undid this: Changed its instructions\. It's back to how it was before\./)
+  const undid = await db.selectFrom('connection_event').select(['reason', 'approved_by']).where('agent_id', '=', 'ag_chgagent').where('tool', '=', 'update_self').orderBy('id', 'desc').executeTakeFirstOrThrow()
+  assert.deepEqual(undid, { reason: 'Undid its own change of name or instructions', approved_by: 'usr_chgowner' })
+  await assert.rejects(asks.undo({ actor: owner, id: idIn(await asks.create({ agentId: 'ag_chgagent', kind: 'add_webhook', input: { name: 'No undo' }, description: 'Needed for the job', origin: app })) }), /can't be undone here/)
 })
 
 test('a change that needs a restart is written at once and restarts only once the agent is quiet, holding wakes until then', async () => {
@@ -312,8 +328,8 @@ test('a grant made in the app reaches the agent at once without a restart, even 
 })
 
 test('asking for the same thing twice while it is open gives back the first ask', async () => {
-  const first = idIn(textOf(await client.callTool({ name: 'update_self', arguments: { description: 'Same.', name: 'Twin', origin: app } })))
-  const again = idIn(textOf(await client.callTool({ name: 'update_self', arguments: { description: 'Same again.', name: 'Twin', origin: app } })))
+  const first = idIn(textOf(await client.callTool({ name: 'update_channel', arguments: { description: 'Same.', id: 'ch_chgwhats', allowed: ['15550004444'], origin: app } })))
+  const again = idIn(textOf(await client.callTool({ name: 'update_channel', arguments: { description: 'Same again.', id: 'ch_chgwhats', allowed: ['15550004444'], origin: app } })))
   assert.equal(again, first)
   await asks.decline({ actor: owner, id: first })
 })

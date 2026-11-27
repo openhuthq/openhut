@@ -17,7 +17,7 @@ test('labels come from the MCP title when there is one, else from the tool name,
 
 test('built-in tools have plain labels and a kind; unknown ones are humanized', () => {
   assert.deepEqual(builtIn({ name: 'web_search', input: 'db alerts' }), { tool: 'web_search', app: null, kind: 'read', label: 'Search the web', past: 'Searched the web', input: 'db alerts' })
-  assert.deepEqual(builtIn({ name: 'update_self' }), { tool: 'update_self', app: null, kind: 'change', label: 'Ask to change its instructions', past: 'Asked to change its instructions' })
+  assert.deepEqual(builtIn({ name: 'update_self' }), { tool: 'update_self', app: null, kind: 'change', label: 'Change its instructions', past: 'Changed its instructions' })
   assert.equal(builtIn({ name: 'browser_click' }).past, 'Used the browser')
   assert.equal(builtIn({ name: 'fetch_weather' }).past, 'Fetched weather')
 })

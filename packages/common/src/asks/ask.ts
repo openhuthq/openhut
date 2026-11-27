@@ -1,7 +1,7 @@
 import * as z from 'zod/mini'
 import { Timestamp } from '../api.ts'
 
-export const AskStatus = z.enum(['open', 'done', 'declined', 'expired'])
+export const AskStatus = z.enum(['open', 'done', 'declined', 'expired', 'undone'])
 export type AskStatus = z.infer<typeof AskStatus>
 
 export const Ask = z.object({

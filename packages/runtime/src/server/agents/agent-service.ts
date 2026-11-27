@@ -119,6 +119,13 @@ export const agentService = {
     await db.deleteFrom('agent').execute()
   },
 
+  async ownerOf({ id }: { id: string }): Promise<Caller> {
+    const facts = await agentService.find({ id })
+    const person = await db.selectFrom('person').select(['id', 'email', 'role']).where('email', '=', facts.owner).where('removed_at', 'is', null).executeTakeFirst()
+    if (!person) throw new HttpError(409, `${facts.value.name}'s owner isn't on the team any more, so it can't change itself. An admin can make someone else its owner.`)
+    return person
+  },
+
   async retryApply({ actor, id }: { actor: Caller; id: string }): Promise<Agent> {
     await requireOwner({ actor, id })
     await apply.request(id)

@@ -17,7 +17,7 @@ import { wakes } from './wakes.ts'
 
 const BATCH_MS = 30_000
 const SWEEP_MS = 60_000
-const STATUSES = ['open', 'done', 'declined', 'expired'] as const
+const STATUSES = ['open', 'done', 'declined', 'expired', 'undone'] as const
 const running = new Map<string, Promise<Ask>>()
 
 type Row = Selectable<Database['ask']>
@@ -25,20 +25,44 @@ type Kind = AskKind<z.ZodObject, z.ZodObject | undefined>
 
 export const asks = {
   async create({ agentId, kind, input, description, origin, expires }: { agentId: string; kind: string; input: unknown; description: string; origin: unknown; expires?: Date }): Promise<string> {
-    const said = AskDescription.safeParse(description)
-    if (!said.success) throw new HttpError(400, said.error.issues[0]?.message ?? 'Add a description.')
-    const from = z.safeParse(Origin, origin)
-    if (!from.success) throw new HttpError(400, 'You can only ask from a chat you\'re in.')
-    const parsed = kindOf(kind).input.safeParse(input)
-    if (!parsed.success) throw new HttpError(400, `That ask isn't valid. ${z.prettifyError(parsed.error)}`)
-    const same = JSON.stringify(parsed.data)
+    const { said, from, parsed } = checked({ kind, input, description, origin })
+    const same = JSON.stringify(parsed)
     const open = await db.selectFrom('ask').selectAll().where('agent_id', '=', agentId).where('kind', '=', kind).where('status', '=', 'open').where('input', '=', same).executeTakeFirst()
     const row = open ?? await db.insertInto('ask').values({
-      id: newId('ask'), agent_id: agentId, kind, input: same, title: await kindOf(kind).title({ agentId, input: parsed.data }), why: said.data, origin: JSON.stringify(from.data), expires_at: expires ?? null,
+      id: newId('ask'), agent_id: agentId, kind, input: same, title: await kindOf(kind).title({ agentId, input: parsed }), why: said, origin: JSON.stringify(from), expires_at: expires ?? null,
     }).returningAll().executeTakeFirstOrThrow()
     if (!open) emit({ name: 'ask.created', target: { type: 'ask', id: row.id, agentId, kind } })
     const expiry = row.expires_at ? ` If nobody answers in ${Math.round((new Date(row.expires_at).getTime() - Date.now()) / 60_000)} minutes it expires; carry on without it.` : ''
     return `Asked for approval (${row.id}): ${row.title}. Nothing has changed yet.${expiry} Tell the person in one line that it waits for your owner's approval in OpenHut, then stop. The answer comes back to you as a message.`
+  },
+
+  async apply({ agentId, kind, input, description, origin }: { agentId: string; kind: string; input: unknown; description: string; origin: unknown }): Promise<string> {
+    const { said, from, parsed } = checked({ kind, input, description, origin })
+    const found = kindOf(kind)
+    if (!found.auto) throw new HttpError(500, `The ask ${kind} needs approval.`)
+    const actor = await agentService.ownerOf({ id: agentId })
+    const before = await found.auto.before({ agentId })
+    const id = newId('ask')
+    const title = await found.title({ agentId, input: parsed })
+    const note = await found.run({ actor, ask: { id, agentId, input: parsed, description: said, origin: from }, answer: found.answer ? parsed : undefined })
+    await db.insertInto('ask').values({ id, agent_id: agentId, kind, input: JSON.stringify({ ...parsed, before }), title, why: said, origin: JSON.stringify(from), status: 'done', told: true, answered_at: new Date(), reply: `Done: ${title}.` }).execute()
+    emit({ name: 'ask.done', actor, target: { type: 'ask', id, agentId, kind }, properties: { auto: true } })
+    return `Done: ${title}. It's in effect now; your owner can undo it in OpenHut.${note ? ` ${note}` : ''} Tell the chat in one line what you changed.`
+  },
+
+  async undo({ actor, id }: { actor: Caller; id: string }): Promise<Ask> {
+    const row = await owned({ actor, id })
+    const kind = kinds()[row.kind]
+    if (!kind?.auto) throw new HttpError(409, 'This change can\'t be undone here.')
+    if (row.status === 'undone') return askOf(row)
+    if (row.status !== 'done') throw new HttpError(409, 'Only a change that was made can be undone.')
+    const { before, ...input } = JSON.parse(row.input) as Record<string, unknown>
+    await kind.auto.undo({ actor, ask: { ...askFor(row), input }, before: before && typeof before === 'object' ? before as Record<string, unknown> : {} })
+    const done = await db.updateTable('ask').set({ status: 'undone', told: false, wake_id: null, reply: `Your owner undid this: ${row.title}. It's back to how it was before.` }).where('id', '=', row.id).where('status', '=', 'done').returningAll().executeTakeFirst()
+    if (!done) return askOf(await db.selectFrom('ask').selectAll().where('id', '=', row.id).executeTakeFirstOrThrow())
+    told(done)
+    emit({ name: 'ask.undone', actor, target: { type: 'ask', id: row.id, agentId: row.agent_id, kind: row.kind } })
+    return askOf(done)
   },
 
   approve({ actor, id, answer }: { actor: Caller; id: string; answer?: unknown }): Promise<Ask> {
@@ -109,11 +133,26 @@ export function asksPlugin(list: Plugin[]): Plugin {
 }
 
 function toolOf({ name, kind, description }: { name: string; kind: Kind; description: string }): Tool {
+  if (kind.auto) return defineTool({
+    description,
+    input: { description: AskDescription, ...kind.input.shape },
+    run: async ({ description, ...input }, { agent, origin }) => asks.apply({ agentId: agent.id, kind: name, input, description: String(description), origin }),
+  })
   return defineTool({
     description: `${description} Your owner approves it in OpenHut first: the call returns at once, and the answer comes back to you as a message.`,
     input: { description: AskDescription, ...kind.input.shape },
     run: async ({ description, ...input }, { agent, origin }) => asks.create({ agentId: agent.id, kind: name, input, description: String(description), origin }),
   })
+}
+
+function checked({ kind, input, description, origin }: { kind: string; input: unknown; description: string; origin: unknown }): { said: string; from: Origin; parsed: Record<string, unknown> } {
+  const said = AskDescription.safeParse(description)
+  if (!said.success) throw new HttpError(400, said.error.issues[0]?.message ?? 'Add a description.')
+  const from = z.safeParse(Origin, origin)
+  if (!from.success) throw new HttpError(400, 'You can only ask from a chat you\'re in.')
+  const parsed = kindOf(kind).input.safeParse(input)
+  if (!parsed.success) throw new HttpError(400, `That ask isn't valid. ${z.prettifyError(parsed.error)}`)
+  return { said: said.data, from: from.data, parsed: parsed.data }
 }
 
 async function approving({ actor, id, answer }: { actor: Caller; id: string; answer?: unknown }): Promise<Ask> {
@@ -226,6 +265,7 @@ const controller: FastifyPluginAsyncZod = async (app) => {
     return listOf({ req, data: await asks.list({ agentId: req.query.agentId }) })
   })
   app.post('/:id/approvals', { schema: { params: IdParams, body: ApproveAsk } }, async (req) => asks.approve({ actor: await who(req), id: req.params.id, answer: req.body?.answer }))
+  app.post('/:id/undos', { schema: { params: IdParams } }, async (req) => asks.undo({ actor: await who(req), id: req.params.id }))
   app.post('/:id/declines', { schema: { params: IdParams, body: DeclineAsk } }, async (req) => asks.decline({ actor: await who(req), id: req.params.id, note: req.body?.note }))
 }
 

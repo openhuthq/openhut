@@ -60,7 +60,7 @@ export interface Database {
   artifact_file: { artifact_id: string; path: string; type: string; body: Uint8Array }
   ask: {
     id: string; agent_id: string; kind: string; input: string; title: string; why: string; origin: string
-    status: Generated<'open' | 'done' | 'declined' | 'expired'>; note: string | null; reply: string | null; told: Generated<boolean>; created_at: Generated<Date>
+    status: Generated<'open' | 'done' | 'declined' | 'expired' | 'undone'>; note: string | null; reply: string | null; told: Generated<boolean>; created_at: Generated<Date>
     answered_at: Timestamp | null; expires_at: Timestamp | null; wake_id: string | null
   }
 }

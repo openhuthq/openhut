@@ -8,7 +8,7 @@ const MAX_CALLS = 50
 const MAX_INPUT = 1000
 const MAX_OUTPUT = 2000
 const HIDDEN = new Set(['get_self', 'list_tools', 'describe_tool'])
-const ASKS = new Set(['update_self', 'add_channel', 'update_channel', 'remove_channel', 'connect_app', 'add_secret', 'add_webhook'])
+const ASKS = new Set(['add_channel', 'update_channel', 'remove_channel', 'connect_app', 'add_secret', 'add_webhook'])
 type Kind = ToolCall['kind']
 const BUILT_IN: Record<string, [string, string, Kind]> = {
   web_search: ['Search the web', 'Searched the web', 'read'],
@@ -30,7 +30,7 @@ const BUILT_IN: Record<string, [string, string, Kind]> = {
   delegate_task: ['Hand off a task', 'Handed off a task', 'other'],
   send_message: ['Send a message', 'Sent a message', 'change'],
   connect_app: ['Ask to connect an app', 'Asked to connect an app', 'other'],
-  update_self: ['Ask to change its instructions', 'Asked to change its instructions', 'change'],
+  update_self: ['Change its instructions', 'Changed its instructions', 'change'],
   add_channel: ['Ask to add a channel', 'Asked to add a channel', 'change'],
   update_channel: ['Ask to change a channel', 'Asked to change a channel', 'change'],
   remove_channel: ['Ask to remove a channel', 'Asked to remove a channel', 'delete'],
