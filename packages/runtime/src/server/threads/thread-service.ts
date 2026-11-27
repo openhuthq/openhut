@@ -350,7 +350,7 @@ function startTurn({ chat, prompt, web = false }: { chat: Chat; prompt?: string;
       if (done) writer.write({ type: 'data-work', id: 'work', data: done })
       if (failed !== undefined && !done && !spoke && !signal.aborted) stopped({ writer, reason: error ?? '' })
       if (failed !== undefined && !signal.aborted) throw failed
-      for (const part of await afterTurn({ agentId: agent.id, since: started })) writer.write(part)
+      for (const part of await afterTurn({ agentId: agent.id, threadId: chat.id, since: started })) writer.write(part)
       writer.write({ type: 'finish' })
     } finally {
       live.end()
@@ -541,8 +541,8 @@ function answerStream({ live, ...input }: { agent: AgentRow; session: string; me
   return joinText(tapped)
 }
 
-async function afterTurn({ agentId, since }: { agentId: string; since: number }): Promise<UIMessageChunk[]> {
-  const parts = await Promise.all(plugins().map((plugin) => plugin.afterTurn?.({ agentId, since: new Date(since) })))
+async function afterTurn({ agentId, threadId, since }: { agentId: string; threadId: string; since: number }): Promise<UIMessageChunk[]> {
+  const parts = await Promise.all(plugins().map((plugin) => plugin.afterTurn?.({ agentId, threadId, since: new Date(since) })))
   return parts.flatMap((part) => part ? [part as UIMessageChunk] : [])
 }
 
