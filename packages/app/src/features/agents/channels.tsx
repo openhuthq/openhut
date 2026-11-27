@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch'
 import { ConfirmDialog } from '@/components/confirm-button'
 import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
-import { I, ROW, Section } from '@/components/kit'
+import { I, ROW, Section, Status } from '@/components/kit'
 import { agentPath } from '@/app/routes'
 import { useChannels, useDeleteChannel } from '@/features/agents/api'
 import { ORDER, listedChannels } from '@/features/agents/channel-kinds'
@@ -56,9 +56,10 @@ function ChannelRow({ agent, channel }: { agent: Agent; channel: Channel }) {
   const [confirming, setConfirming] = useState(false)
   const open = () => navigate(agentPath({ agentId: agent.id, dialog: channel.kind }))
   const { label, remove, gone } = KINDS[channel.kind]
+  const word = channel.status === 'linking' ? 'Waiting for scan…' : 'Connected'
   return <div className={cn(ROW, 'cursor-default')} onClick={agent.canEdit && channel.status !== 'connected' ? open : undefined}>
     <Glyph name={channel.kind} size={16} />
-    {label}<span className="min-w-0 flex-1 truncate text-xs text-mute">{channel.status === 'linking' ? 'Waiting for scan…' : 'Connected'}</span>
+    {label}<span className="min-w-0 flex-1 truncate text-xs text-mute" title={channel.offline}>{channel.offline ? <Status tone="bad">Offline</Status> : word}</span>
     {channel.status === 'connected'
       ? <Switch checked aria-label={`${remove} ${label}`} disabled={!agent.canEdit || deleteChannel.isPending} onCheckedChange={() => setConfirming(true)} />
       : <Button type="button" variant="secondary" size="xs" className="rounded-full px-2.5 text-[12px] font-normal" disabled={!agent.canEdit} onClick={(event) => { event.stopPropagation(); open() }}>Scan code</Button>}

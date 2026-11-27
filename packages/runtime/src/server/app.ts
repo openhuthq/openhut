@@ -21,7 +21,7 @@ import { runSet } from './agents/run-set.ts'
 import { computerController } from './computers/computer-controller.ts'
 import { computerService } from './computers/computer-service.ts'
 import { listenLocally } from './team/identity.ts'
-import { plugins } from '../core/plugins.ts'
+import { plugins, startPlugins } from '../core/plugins.ts'
 
 await migrate()
 writeCaddyfile()
@@ -79,5 +79,5 @@ await gatewayServer.start().catch(async (err: unknown) => {
 await startDurable()
 await runSet.start()
 await agentService.boot()
-for (const plugin of plugins()) plugin.start?.()
+startPlugins()
 installSettingsService.startUsageData()

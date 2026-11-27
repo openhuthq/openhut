@@ -28,6 +28,7 @@ export const Channel = z.object({
   names: z.optional(z.record(z.string(), z.string())),
   qr: z.nullable(z.string()),
   link: z.optional(z.string()),
+  offline: z.optional(z.string()),
   createdAt: Timestamp,
 })
 export type Channel = z.infer<typeof Channel>
