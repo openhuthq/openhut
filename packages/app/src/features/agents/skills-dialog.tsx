@@ -51,7 +51,7 @@ export function SkillsDialog({ agent, open, onClose }: { agent: Agent; open: str
     <aside className={cn('flex w-[300px] shrink-0 flex-col gap-3 border-r border-hair bg-sidebar p-4', phone && (selected ? 'hidden' : '!max-h-none flex-1 !border-b-0 animate-[levelback_.3s_cubic-bezier(.22,1,.36,1)]'))}>
       <div className="flex items-center gap-2.5">
         <Face agent={agent} size={32} />
-        <div className="grid min-w-0 flex-1"><DialogTitle className="truncate text-[15px]/[20px] font-medium">{agent.name}'s skills</DialogTitle><span className="text-[12px] text-mute">{counts.learned} learned · {counts.builtIn} built in</span></div>
+        <div className="grid min-w-0 flex-1"><DialogTitle className="truncate text-[15px]/[20px] font-medium">Skills</DialogTitle><span className="text-[12px] text-mute">{counts.learned} learned · {counts.builtIn} built in</span></div>
         {phone && <CloseButton onClose={onClose} />}
       </div>
       <ToggleGroup aria-label="Which skills" value={filter} onPick={(value) => setFilter(FILTERS.find(([id]) => id === value)?.[0] ?? filter)}>
@@ -67,7 +67,7 @@ export function SkillsDialog({ agent, open, onClose }: { agent: Agent; open: str
           {skill.id in drafts && <span className="size-1.5 shrink-0 rounded-full bg-ink" title="Unsaved changes" aria-label="Unsaved changes" />}
         </Button>)}
         {!skills.data && !skills.error && <Loading />}
-        {skills.data && !shown.length && <EmptyState inline line={filter === 'builtIn' ? `${agent.name} has no built-in skills.` : `${agent.name} hasn't learned a skill yet.`} />}
+        {skills.data && !shown.length && <EmptyState inline line={filter === 'builtIn' ? 'No built-in skills' : 'No learned skills yet'} />}
       </nav>
     </aside>
     <section className={cn('flex min-w-0 flex-1 flex-col', phone && (selected ? 'animate-[levelin_.3s_cubic-bezier(.22,1,.36,1)]' : 'hidden'))}>
@@ -103,7 +103,7 @@ function SkillDetail({ agent, skillId, draft, setDraft, onClose, back }: { agent
       <div className="flex items-center gap-2">
         {back && <CloseButton onClose={onClose} back />}
         <h3 className="m-0 min-w-0 truncate text-[15px]/[22px] font-medium">{skill.data?.name ?? 'Skill'}</h3>
-        {skill.data?.builtIn && <Tooltip label={`Built-in skills come with OpenHut and its connections. ${agent.name} reads them but can't change them.`}><Badge variant="secondary">Built in · read-only</Badge></Tooltip>}
+        {skill.data?.builtIn && <Tooltip label="Comes with OpenHut"><Badge variant="secondary">Built in · read-only</Badge></Tooltip>}
         <span className="ml-auto flex items-center gap-1">
           <ToggleGroup aria-label="View" value={view} onPick={(value) => setView(VIEWS.find(([id]) => id === value)?.[0] ?? view)}>
             {VIEWS.map(([id, label]) => <ToggleGroupItem key={id} value={id}>{label}</ToggleGroupItem>)}

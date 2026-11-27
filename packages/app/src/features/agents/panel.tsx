@@ -1,17 +1,13 @@
 import { useEffect, useRef } from 'react'
-import { ArrowRight01Icon, Globe02Icon, PlayIcon, Settings02Icon, SparklesIcon, StopIcon } from '@hugeicons/core-free-icons'
+import { Globe02Icon, PlayIcon, Settings02Icon, StopIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { DialogClose, DialogTitle } from '@/components/ui/dialog'
 import { Tooltip } from '@/components/ui/tooltip'
 import { Textarea } from '@/components/ui/textarea'
-import { Glyph } from '@/components/glyph'
-import { DialogCard, GLASS, HOVER, I, TINY_ICON } from '@/components/kit'
+import { DialogCard, GLASS, I, TINY_ICON } from '@/components/kit'
 import { agentPath } from '@/app/routes'
-import { useChannels, useGrants, useUpdateAgent } from '@/features/agents/api'
-import { listedChannels } from '@/features/agents/channel-kinds'
-import { useConnections } from '@/features/connections/api'
-import { connectionBrand } from '@/features/connections/catalog'
+import { useUpdateAgent } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
 import { RetryApply } from '@/features/agents/status'
 import { PanelThreads } from '@/features/threads/thread-list'
@@ -30,7 +26,6 @@ export function Panel({ agent, threadId, naming, collapsed = false, onBrowser }:
         {agent.canEdit ? <a href={agentPath({ agentId: agent.id, dialog: 'customize' })} aria-label={`Customize ${agent.name}`} title="Customize" className="flex"><Face agent={agent} size={40} /></a> : <Face agent={agent} size={40} />}
         <div className="grid min-w-0 gap-0.5"><AgentName agent={agent} editing={naming && agent.canEdit} />{agent.applyError && <RetryApply agent={agent} />}</div>
         <HeadActions agent={agent} onBrowser={onBrowser} />
-        <Connected agent={agent} />
       </div>
       <PanelThreads agent={agent} threadId={threadId} />
     </div>
@@ -41,34 +36,16 @@ function HeadActions({ agent, onBrowser }: { agent: Agent; onBrowser?: () => voi
   const updateAgent = useUpdateAgent(agent.id)
   const phone = useMedia(PHONE)
   const running = agent.wanted === 'running'
-  const toggle = running ? `Stop ${agent.name}` : `Start ${agent.name}`
+  const toggle = running ? 'Stop' : 'Start'
   return <span className="flex items-center gap-2">
-    {onBrowser && <Tooltip label="Open the browser"><Button type="button" variant="bare" className={cn(TINY_ICON, 'relative text-body')} aria-label="Open the browser" onClick={onBrowser}>
+    {onBrowser && <Tooltip label="Open browser"><Button type="button" variant="bare" className={cn(TINY_ICON, 'relative text-body')} aria-label="Open browser" onClick={onBrowser}>
       <I icon={Globe02Icon} size={16} /><i aria-label="Live" className="absolute top-[5px] right-[5px] size-1.5 rounded-full bg-pass shadow-[0_0_0_2px_var(--sidebar)]" />
     </Button></Tooltip>}
     <Tooltip label="Setup"><a href={agentPath({ agentId: agent.id, dialog: 'setup', detail: 'general' })} aria-label={`Set up ${agent.name}`} className={TINY_ICON}><I icon={Settings02Icon} size={16} /></a></Tooltip>
-    <Tooltip label={toggle}><Button type="button" variant="bare" className={TINY_ICON} aria-label={toggle} disabled={!agent.canEdit || updateAgent.isPending}
+    <Tooltip label={toggle}><Button type="button" variant="bare" className={TINY_ICON} aria-label={`${toggle} ${agent.name}`} disabled={!agent.canEdit || updateAgent.isPending}
       onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}><I icon={running ? StopIcon : PlayIcon} size={16} className={running ? 'text-hue-amber' : 'text-hue-green'} /></Button></Tooltip>
     {phone && <DialogClose render={<Button type="button" variant="bare" className="h-9 rounded-full px-3 text-[16px] font-semibold text-ink" />}>Done</DialogClose>}
   </span>
-}
-
-function Connected({ agent }: { agent: Agent }) {
-  const channels = listedChannels(useChannels(agent.id).data ?? []).map((channel) => channel.kind)
-  const connections = useConnections().data ?? []
-  const apps = (useGrants({ agentId: agent.id }).data ?? []).flatMap((grant) => {
-    const connection = connections.find((each) => each.id === grant.connectionId)
-    return connection ? [connectionBrand(connection)] : []
-  })
-  const marks = [...new Set([...channels, ...apps])]
-  const shown = marks.slice(0, 4)
-  const more = marks.length - shown.length
-  return <a href={agentPath({ agentId: agent.id, dialog: 'setup', detail: 'connections' })} aria-label={`What ${agent.name} is connected to. Opens setup`}
-    className={cn('col-span-full -mx-2 flex h-9 items-center gap-2.5 rounded-lg px-2 text-left text-ink no-underline', HOVER)}>
-    {shown.length ? <span className="flex items-center gap-2.5">{shown.map((kind) => <Glyph key={kind} name={kind} size={16} />)}{more > 0 && <span className="text-[12.5px] text-mute">+{more}</span>}</span>
-      : <span className="text-[12.5px] text-mute">No apps or channels yet</span>}
-    <span className="ml-auto inline-flex items-center gap-0.5 text-[12.5px] text-mute">Setup<I icon={ArrowRight01Icon} size={12} /></span>
-  </a>
 }
 
 const NAME = 'm-0 min-w-0 text-[17px]/[22px] font-semibold'
@@ -101,12 +78,11 @@ export function DoesDialog({ agent, onClose }: { agent: Agent; onClose: () => vo
   const updateAgent = useUpdateAgent(agent.id)
   return <DialogCard onClose={onClose} className="w-[560px]">
     <form className="contents" onSubmit={(event) => updateAgent.mutate({ instructions: formValues(event)('instructions') }, { onSuccess: onClose })}>
-      <div className="flex items-center gap-3"><Face agent={agent} size={40} /><DialogTitle className="text-[18px] font-semibold">What {agent.name} does</DialogTitle></div>
+      <div className="flex items-center gap-3"><Face agent={agent} size={40} /><DialogTitle className="text-[18px] font-semibold">What it does</DialogTitle></div>
       <Textarea autoFocus name="instructions" aria-label="Instructions" maxLength={20000} readOnly={!agent.canEdit} defaultValue={agent.instructions} rows={9} placeholder={`What does ${agent.name} do? Who does it answer, and what must it never do?`}
         className="min-h-[220px] rounded-lg font-sans text-[14px]/[1.55]" />
       {updateAgent.error && <p role="alert" className="m-0 text-xs text-fail">{updateAgent.error.message}</p>}
       <div className="flex items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 text-[13px] text-mute"><I icon={SparklesIcon} size={13} />Plain words are fine. {agent.name} reads this before every reply.</span>
         <span className="ml-auto flex gap-2"><Button type="button" variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" variant="primary" disabled={!agent.canEdit || updateAgent.isPending}>Save</Button></span>
       </div>
     </form>

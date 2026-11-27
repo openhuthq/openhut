@@ -35,7 +35,7 @@ export function ActivityDialog({ agent, onClose }: { agent: Agent; onClose: () =
   const connections = useConnections().data ?? []
   return <DialogCard onClose={onClose} className="max-h-[min(640px,calc(100vh-48px))] w-[540px] gap-0 overflow-hidden p-0">
     <div className="flex items-center gap-3 px-6 pt-6 pb-4">
-      <DialogTitle className="min-w-0 flex-1 text-[15px]/[22px] font-medium">What {agent.name} did</DialogTitle>
+      <DialogTitle className="min-w-0 flex-1 text-[15px]/[22px] font-medium">Activity</DialogTitle>
       <Button type="button" size="icon-sm" aria-label="Close" title="Close" tabIndex={-1} className="-mr-2" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
     </div>
     <div className="flex min-h-0 flex-1 flex-col overflow-auto px-6 pb-6">

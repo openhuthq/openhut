@@ -8,6 +8,7 @@ import { AgentView } from '@/features/agents/agent-view'
 import { FirstAgent, NewAgentDialog } from '@/features/agents/new-agent'
 import { ShowSidebar, Sidebar, SidebarContext, type Contact } from '@/features/agents/sidebar'
 import { useThreads } from '@/features/threads/api'
+import { byCreation } from '@/features/agents/progress'
 import { PHONE, useMedia } from '@/lib/media'
 import { navigate, Redirect } from '@/lib/router'
 import { cn } from '@/lib/utils'
@@ -34,9 +35,7 @@ export function Shell({ route, overlay }: { route: ShellRoute; overlay: 'setting
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
   }, [])
-  const contacts: Contact[] = (agents.data ?? [])
-    .map((agent) => ({ agent, threads: threads.data?.filter((thread) => thread.agentId === agent.id) ?? [] }))
-    .sort((a, b) => lastSeen(b) - lastSeen(a))
+  const contacts: Contact[] = byCreation((agents.data ?? []).map((agent) => ({ agent, threads: threads.data?.filter((thread) => thread.agentId === agent.id) ?? [] })))
   const newAgent = () => navigate(activeId ? agentPath({ agentId: activeId, dialog: 'new' }) : '/new')
   order.current = contacts.map(({ agent }) => agent.id)
   return <SidebarContext value={{ collapsed: hidden }}><div className="relative flex h-dvh overflow-hidden bg-card pt-[env(safe-area-inset-top)] phone:bg-sidebar pb-[env(safe-area-inset-bottom)] text-left">
@@ -76,8 +75,4 @@ function savedCollapsed() {
 
 function saveCollapsed(collapsed: boolean) {
   try { localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0') } catch { return }
-}
-
-function lastSeen({ agent, threads }: Contact) {
-  return Math.max(Date.parse(agent.createdAt), ...threads.map((thread) => Date.parse(thread.updatedAt)))
 }

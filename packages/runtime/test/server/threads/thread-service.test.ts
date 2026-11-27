@@ -656,5 +656,7 @@ test('a new thread starts empty and listed, takes its first message as its title
   assert.equal((await listed())?.title, 'How many orders?')
   await threadService.add({ threadId: thread.id, messages: [{ id: threadService.inboundId({ at: new Date(), ref: 'newt' }), role: 'user', parts: [{ type: 'text', text: 'Disk is\n  full again' }] }] })
   assert.equal((await listed())?.preview, 'Disk is full again')
+  await threadService.add({ threadId: thread.id, messages: [{ id: threadService.inboundId({ at: new Date(), ref: 'newt2' }), role: 'user', parts: [{ type: 'step-start' }] }] })
+  assert.equal((await listed())?.preview, 'Disk is full again', 'a newest message with no text leaves the last one with words')
   assert.equal((await app.inject({ method: 'POST', url: '/api/threads', headers: as(), payload: { agentId: 'ag_nobody' } })).statusCode, 404)
 })

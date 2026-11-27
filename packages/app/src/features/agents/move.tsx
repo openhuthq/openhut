@@ -34,7 +34,7 @@ export function RunsOnRow({ agent }: { agent: Agent }) {
           : <>{here && !here.online && <i className="size-1.5 rounded-full bg-mute-2" />}<span className="text-right [overflow-wrap:anywhere]">{nameOf({ computers, id: from })}{here && !here.online && ' · Offline'}</span></>}
           <I icon={UnfoldMoreIcon} size={12} className="text-mute" /></span>
       </DropdownMenuTrigger>
-      <MenuCard title={`${agent.name} runs on`}>
+      <MenuCard title="Runs on">
         {(computers ?? []).map((computer) => <Choice key={computer.id} icon={<I icon={DEVICE_ICONS.server} size={15} className={DEVICE_HUE} />} name={computer.id === from ? computer.name : `Move to ${computer.name}`}
           note={noteOf(computer)} selected={computer.id === from} disabled={computer.id === from || !computer.online} onClick={() => go(computer.id)} />)}
         <DropdownMenuSeparator />

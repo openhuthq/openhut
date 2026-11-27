@@ -29,7 +29,7 @@ export function TelegramDialog({ agent, channel, onClose }: { agent: Agent; chan
       const field = formValues(event)
       createChannel.mutate({ kind: 'telegram', agentId: agent.id, botToken: field('botToken'), open: false, allowed: [] })
     }}>
-      <Step n={1} title={`Make ${agent.name}’s bot`} state={channel ? 'done' : 'now'} tag={channel?.account ?? undefined}>
+      <Step n={1} title="Make the bot" state={channel ? 'done' : 'now'} tag={channel?.account ?? undefined}>
         {!channel && <>
           <div><a className={cn(buttonVariants({ variant: 'secondary' }), PILL)} href="https://t.me/BotFather" target="_blank" rel="noreferrer"><I icon={LinkSquare02Icon} size={12} />Open BotFather</a></div>
           <p className="m-0 text-[12px]/[16px] text-mute">Send <b className="font-medium text-body">/newbot</b>, give it a name, then a username ending in <b className="font-medium text-body">bot</b>.</p>

@@ -56,7 +56,7 @@ export function AgentGrants({ connection, agents }: { connection: Connection; ag
           <Face agent={agent} size={24} />
           <span className="grid min-w-0 leading-tight"><span className="truncate text-[13px] text-ink">{agent.name}</span><span className="truncate text-[11.5px] text-mute">{agent.instructions.split('\n')[0] || 'No instructions yet'}</span></span>
         </Menu.CheckboxItem>
-        {grant && <a href={agentPath({ agentId: agent.id, dialog: 'apps', detail: connection.id })} className={cn(buttonVariants({ variant: 'ghost' }), PILL, 'shrink-0')} title={`What ${agent.name} may do in ${connection.name}`}>Permissions</a>}
+        {grant && <a href={agentPath({ agentId: agent.id, dialog: 'apps', detail: connection.id })} className={cn(buttonVariants({ variant: 'ghost' }), PILL, 'shrink-0')}>Permissions</a>}
       </div>
     })}</DropdownMenuContent>
   </Menu.Root>

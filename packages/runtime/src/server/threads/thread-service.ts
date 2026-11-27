@@ -477,8 +477,7 @@ async function nameNewThread({ id, said }: { id: string; said: Said[] }): Promis
 }
 
 function previewOf(said: Said[]): string {
-  const last = said.findLast((each) => !isWake(each.message))
-  return last ? textOf(last.message).replace(/\s+/g, ' ').trim().slice(0, 200) : ''
+  return said.filter((each) => !isWake(each.message)).map((each) => textOf(each.message).replace(/\s+/g, ' ').trim()).findLast(Boolean)?.slice(0, 200) ?? ''
 }
 
 function textOf(message: UIMessage | ChatMessage): string {

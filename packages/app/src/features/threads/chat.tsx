@@ -236,7 +236,7 @@ function ChatFrame({ agent, thread, composer, tools, onTitle, onFiles, children 
       <span className="float ml-auto flex items-center gap-0.5 phone:h-10 phone:justify-self-end phone:rounded-full phone:bg-card phone:px-1">{thread && <PresenceFaces agent={agent} threadId={thread.id} />}{tools}</span>
     </div>
     <div ref={log} className="fade-t flex flex-1 flex-col overflow-auto px-8 py-5 phone:px-4" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80 }}>
-      <div className="mx-auto flex w-full max-w-[640px] flex-1 flex-col justify-end gap-4">{children}</div>
+      <div className="mx-auto flex w-full max-w-[840px] flex-1 flex-col justify-end gap-4">{children}</div>
     </div>
     {composer}
   </section>
@@ -254,7 +254,7 @@ function ContinueBar({ thread }: { thread: SourcedThread }) {
   const place = thread.place
   const where = place ? PLATFORM_WORD[place.platform] ?? place.platform : 'the other app'
   return <div className="shrink-0 px-8 pb-5 phone:px-3 phone:pb-3">
-    <div className="mx-auto flex max-w-[640px] items-center gap-2.5 rounded-xl bg-sidebar py-2.5 pr-2.5 pl-3.5 text-[13.5px] text-body phone:flex-wrap">
+    <div className="mx-auto flex max-w-[840px] items-center gap-2.5 rounded-xl bg-sidebar py-2.5 pr-2.5 pl-3.5 text-[13.5px] text-body phone:flex-wrap">
       {place && <PlaceIcon platform={place.platform} size={16} />}
       <span className="min-w-0 flex-1">This conversation continues in {place?.chat_name ? placeName(place) : where}</span>
       {thread.continueUrl && <a href={thread.continueUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'secondary', size: 'sm' })}>Open in {where}<span className="text-[11px] text-mute">↗</span></a>}
@@ -274,7 +274,7 @@ function Day({ iso }: { iso: string }) {
 }
 
 function ComposerSkeleton() {
-  return <div className="shrink-0 px-8 pb-5 phone:px-3 phone:pb-3"><div className="mx-auto h-[51px] max-w-[640px] rounded-xl border border-[oklch(0%_0_0/.12)] bg-card" /></div>
+  return <div className="shrink-0 px-8 pb-5 phone:px-3 phone:pb-3"><div className="mx-auto h-[51px] max-w-[840px] rounded-xl border border-[oklch(0%_0_0/.12)] bg-card" /></div>
 }
 
 function Composer({ agent, threadId, busy, quiet, attachments, onSend, onStop }: { agent: Agent; threadId: string; busy: boolean; quiet: boolean; attachments: Attachments; onSend: (text: string) => void; onStop: () => void }) {
@@ -309,8 +309,8 @@ function Composer({ agent, threadId, busy, quiet, attachments, onSend, onStop }:
   }
   return <div className="shrink-0 px-8 pb-5 phone:px-3 phone:pb-3">
     {(!ready || state === 'not_answering') && !busy && !quiet && <NotReady agent={agent} />}
-    {starting && <p className={cn(HINT, 'mx-auto mb-2 flex max-w-[640px] items-center gap-1.5')} role="status"><Spinner className="mt-0 size-3" />Starting… your message will send.</p>}
-    <form className="mx-auto flex max-w-[640px] flex-col gap-2 rounded-xl border border-[oklch(0%_0_0/.12)] bg-card p-2 focus-within:border-mid" onSubmit={submit}>
+    {starting && <p className={cn(HINT, 'mx-auto mb-2 flex max-w-[840px] items-center gap-1.5')} role="status"><Spinner className="mt-0 size-3" />Starting… your message will send.</p>}
+    <form className="mx-auto flex max-w-[840px] flex-col gap-2 rounded-xl border border-[oklch(0%_0_0/.12)] bg-card p-2 focus-within:border-mid" onSubmit={submit}>
       {attachments.items.length > 0 && <div className="flex flex-wrap gap-1.5">{attachments.items.map((each) => <FileChip key={each.key} name={each.name} image={each.image} thumb={each.thumb} busy={!each.file} onRemove={() => attachments.remove(each.key)} />)}</div>}
       <div className="flex items-end gap-1">
         <Input ref={picker} type="file" multiple hidden onChange={(event) => { attachments.add(Array.from(event.currentTarget.files ?? [])); event.currentTarget.value = '' }} />
@@ -344,7 +344,7 @@ function NotReady({ agent }: { agent: Agent }) {
     missing: 'It comes back by itself within 30 seconds.',
     running: '',
   }[state]
-  return <Alert variant="warning" className="max-w-[640px]" role="status" title={agent.healthDetail || undefined}><b>{agent.name} isn't ready.</b> {reason} {state === 'no_seat' && <a href="/settings/models">Open Settings › Models</a>}</Alert>
+  return <Alert variant="warning" className="max-w-[840px]" role="status" title={agent.healthDetail || undefined}><b>{agent.name} isn't ready.</b> {reason} {state === 'no_seat' && <a href="/settings/models">Open Settings › Models</a>}</Alert>
 }
 
 function ClearChat({ agent, threadId, attachments }: { agent: Agent; threadId: string; attachments: Attachments }) {
@@ -516,7 +516,7 @@ function ChatEmpty({ agent }: { agent: Agent }) {
 function Asleep({ agent }: { agent: Agent }) {
   const updateAgent = useUpdateAgent(agent.id)
   return <Centered agent={agent} title={`${agent.name} is stopped`} line="It won't answer here or on its channels until you start it. Its memory and chats are kept." dim>
-    <Button type="button" variant="primary" className="mt-1 gap-1.5" disabled={!agent.canEdit || updateAgent.isPending} onClick={() => updateAgent.mutate({ wanted: 'running' }, { onError: toastError })}><I icon={PlayIcon} size={14} />Start {agent.name}</Button>
+    <Button type="button" variant="primary" className="mt-1 gap-1.5" disabled={!agent.canEdit || updateAgent.isPending} onClick={() => updateAgent.mutate({ wanted: 'running' }, { onError: toastError })}><I icon={PlayIcon} size={14} />Start</Button>
   </Centered>
 }
 

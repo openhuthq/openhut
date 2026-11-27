@@ -26,7 +26,7 @@ export function ToolPermissionsDialog({ agent, connectionId, onClose }: { agent:
   return <DialogCard onClose={onClose} className="max-h-[min(720px,calc(100vh-48px))] w-[520px] gap-0 overflow-hidden p-0">
     <div className="flex items-center gap-3 px-6 pt-6 pb-4">
       {connection && <Glyph name={connectionBrand(connection)} size={28} />}
-      <DialogTitle className="min-w-0 flex-1 text-[15px]/[22px] font-medium">What {agent.name} may do in {connection?.name ?? '…'}</DialogTitle>
+      <DialogTitle className="min-w-0 flex-1 text-[15px]/[22px] font-medium">{connection?.name ?? '…'}</DialogTitle>
       <Button type="button" size="icon-sm" aria-label="Close" title="Close" tabIndex={-1} className="-mt-1 -mr-2" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
     </div>
     <div className="flex min-h-0 flex-1 flex-col overflow-auto px-6 pb-2">
