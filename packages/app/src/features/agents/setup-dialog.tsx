@@ -14,6 +14,7 @@ import { agentPath } from '@/app/routes'
 import { AccessPicker } from '@/features/agents/access'
 import { Face } from '@/features/agents/face'
 import { MemoryEditor } from '@/features/agents/memory-dialog'
+import { EmptyScene } from '@/components/empty-art'
 import { KeysList } from '@/features/agents/secrets'
 import { ActivityList } from '@/features/agents/activity-dialog'
 import { SkillsBrowser, type Crumb } from '@/features/agents/skills-dialog'
@@ -195,6 +196,7 @@ function ConnectionsPane({ agent }: { agent: Agent }) {
     <Head title="Connections" subtitle={`Apps ${agent.name} can read and use`} count={connections.data ? (connections.data.length ? countOf(grants.data?.length ?? 0, 'app on', 'apps on') : 'No apps yet') : undefined} action={agent.canEdit && <Add label="Add app" onClick={() => open('add-app')} />} />
     <Body>
       <ErrorNote message={(connections.error ?? grants.error)?.message} />
+      {connections.data && !connections.data.length && <EmptyScene kind="connections" title="No apps yet" line={`Plug in Gmail, GitHub or a database, and ${agent.name} can use it.`} />}
       {byName(connections.data ?? [], (each) => each.name).map((connection) => {
         const grant = grants.data?.find((each) => each.connectionId === connection.id)
         const label = <><span className="truncate text-[14px] font-medium">{connection.name}</span><span className="truncate text-[12.5px] text-mute">{integration(connection.kind)?.short ?? kindNote(connection)}</span></>
@@ -252,7 +254,7 @@ function RoutinesPane({ agent }: { agent: Agent }) {
     <Head title="Routines" subtitle={`What ${agent.name} does on a schedule`} count={routines.data ? countOf(routines.data.length, 'routine', 'routines') : undefined} />
     <Body>
       <ErrorNote message={routines.error?.message} />
-      {routines.data && !routines.data.length && <Empty icon={HistoryIcon} title="No routines yet" />}
+      {routines.data && !routines.data.length && <EmptyScene kind="routines" title="No routines yet" line={`Ask ${agent.name} to do something every morning, and it lands here.`} />}
       {routines.data?.map((routine) => <Go key={routine.id} icon={HistoryIcon} label={routine.name} to={`routines:${routine.id}`} chevron="none"
         value={<span className="truncate text-[12.5px] text-mute">{routine.stopped ? 'Stopped' : routine.nextRunAt ? nextOf({ at: new Date(routine.nextRunAt), now }) : ''}</span>} />)}
     </Body>
@@ -266,7 +268,7 @@ function WebhooksPane({ agent }: { agent: Agent }) {
     <Head title="Webhooks" subtitle={`Apps that start a thread with ${agent.name}`} count={webhooks.data ? countOf(webhooks.data.length, 'webhook', 'webhooks') : undefined} action={add} />
     <Body>
       <ErrorNote message={webhooks.error?.message} />
-      {webhooks.data && !webhooks.data.length && <Empty icon={WebhookIcon} title="No webhooks yet" />}
+      {webhooks.data && !webhooks.data.length && <EmptyScene kind="webhooks" title="No webhooks yet" line={`Let another app knock, like Stripe when a payment fails, and ${agent.name} picks it up.`} />}
       {webhooks.data?.map((webhook) => <Go key={webhook.id} icon={WebhookIcon} label={webhook.name} to="webhooks" chevron="none"
         value={<span className="text-[12.5px] text-mute">{webhook.lastAt ? `Called ${ago(webhook.lastAt)} ago` : 'Not called yet'}</span>} />)}
     </Body>
@@ -277,10 +279,3 @@ function countOf(n: number, one: string, many: string) {
   return n === 1 ? `1 ${one}` : `${n} ${many}`
 }
 
-function Empty({ icon, title, action }: { icon: IconSvgElement; title: string; action?: ReactNode }) {
-  return <div className="flex flex-1 flex-col items-center justify-center gap-2 pb-10 text-center">
-    <span className="mb-1.5 grid size-11 place-items-center rounded-xl bg-soft text-body"><I icon={icon} size={20} /></span>
-    <b className="text-[15px] font-semibold">{title}</b>
-    {action && <span className="mt-2.5">{action}</span>}
-  </div>
-}
