@@ -170,6 +170,7 @@ jobs:
 
   main:
     needs: runtime
+    if: ${{ !cancelled() && needs.runtime.result == 'success' }}
     strategy:
       matrix:
         include: [{ arch: amd64, runner: ubuntu-latest }, { arch: arm64, runner: ubuntu-24.04-arm }]
@@ -227,6 +228,7 @@ jobs:
 
   publish:
     needs: main
+    if: ${{ !cancelled() && needs.main.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
