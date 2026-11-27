@@ -1,6 +1,7 @@
 import type { AutonomousAgent, ContentRef } from '../../core/agent.ts'
 import { agentd, containerStates, forgetStates, liveBrowser, pairWhatsapp } from '../../server/platform/agentd.ts'
 import { db } from '../../server/platform/db.ts'
+import { chat } from './chat.ts'
 import { pathOf, refOf, removable } from './content.ts'
 import { emit, handlers } from './events.ts'
 import { render } from './render.ts'
@@ -30,6 +31,8 @@ export const hermes = {
   },
 
   status: ({ on } = {}) => on ? agentd.ps({ on }).then((reply) => reply.states) : containerStates(),
+
+  chat,
 
   content: {
     async list(id) {

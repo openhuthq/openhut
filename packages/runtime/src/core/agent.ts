@@ -26,6 +26,7 @@ export type AgentPart = {
 export type Source = { platform: string; chatId?: string; threadId?: string; userId?: string; userName?: string }
 export type ContentKind = 'instructions' | 'memory' | 'skill' | 'file' | 'upload' | 'session'
 export type ContentRef = { kind: ContentKind; name: string }
+export type ChatEvent = { type: 'text'; delta: string } | { type: 'tool'; progress: unknown } | { type: 'error'; message: string; lost: boolean } | { type: 'dropped' } | { type: 'done'; finish: string | null | undefined; ended: boolean }
 export type AgentStatus = 'running' | 'exited' | 'created'
 
 export type AgentEvents = {
@@ -42,6 +43,7 @@ export type AutonomousAgent = {
   stop(id: string, opts?: { on?: string }): Promise<void>
   remove(id: string, opts?: { on?: string; keep?: boolean }): Promise<void>
   status(opts?: { on?: string }): Promise<Record<string, string> | undefined>
+  chat(x: { agent: { id: string; name: string; net: number; channel_key: string }; session: string; message: object; system: string; signal: AbortSignal }): AsyncGenerator<ChatEvent>
   content: {
     list(id: string, kind: 'skill'): Promise<{ items: { name: string; head: string }[]; bundled: string }>
     read(id: string, ref: ContentRef): Promise<Buffer | null>

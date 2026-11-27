@@ -31,7 +31,7 @@ const cases: Record<string, { mode: 'test' | 'claude'; ctx: Omit<AgentCtx, 'gate
       channels: [
         { kind: 'slack', audience: audience(['C012ABCDEF', 'G034GHIJKL']) },
         { kind: 'telegram', audience: audience(['123456789']) },
-        { kind: 'discord', botToken: 'fake.bot.token', audience: audience(['1234567890123456789']) },
+        { kind: 'discord', audience: audience(['1234567890123456789']) },
         { kind: 'whatsapp', audience: audience([], true) },
       ],
       connections: [{ name: 'GitHub', kind: 'github' }, { name: 'Linear', kind: 'linear' }],

@@ -111,7 +111,7 @@ function alreadyDone(status: number) {
   }
 }
 
-function partOf({ channel, gateway, token, net }: { channel: RenderedChannel; gateway: string; token: string; net: number }): { config: Record<string, unknown>; env: Record<string, string> } {
+function partOf({ channel, gateway, token, net }: { channel: RenderedChannel; gateway: string; token: string; net: number }): { config?: Record<string, unknown>; env?: Record<string, string> } {
   switch (channel.kind) {
     case 'slack': return { config: slack.config, env: slack.env({ token, gateway, channels: channel.audience.allowed }) }
     case 'telegram': return { config: telegram.config({ gateway }), env: telegram.env({ botToken: token, audience: channel.audience }) }

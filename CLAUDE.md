@@ -19,7 +19,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   What an agent's Hermes gets comes from plugins: `src/plugins/<name>/index.ts` is `definePlugin({ name, agent, tools, asks, on, slackAction, wakes, start, migrate, routes, afterTurn, connectorCall })`,
   where `agent()` returns that feature's `AgentPart` (instructions, secrets, model auth, sub-agent limits, and Hermes-only config and env under `native.hermes`), and `tools` its MCP tools (zod `input` and
   `run(input, { agent, origin })`). `src/core/` holds no feature code: `plugins.ts` is the ordered list (its order is the
-  SOUL.md order; two plugins with one tool name fail at boot), `agent.ts` is `AutonomousAgent`, the only agent interface the server uses (`agent.setup`, `content`, `status`, `attach`, `activity`), implemented by
+  SOUL.md order; two plugins with one tool name fail at boot), `agent.ts` is `AutonomousAgent`, the only agent interface the server uses (`agent.setup`, `chat`, `content`, `status`, `attach`, `activity`), implemented by
   the Hermes driver in `src/adapters/hermes/`, whose `render.ts` merges the parts into `config.yaml` (written as JSON), `.env`, `SOUL.md` and `auth.json`, and `mcp.ts` serves every plugin's tools on the gateway's MCP server. A tool
   with `local: true` runs inside Hermes instead, `on` maps agent events (`message.arriving`, `reply.drafted`, `subagent.started`, `subagent.stopped`, `content.written`) to handlers, and `slackAction` takes Slack
   buttons by prefix: the one Hermes plugin, `vendor/hermes-plugins/openhut`, registers what `adapters/hermes/events.ts`'s manifest
