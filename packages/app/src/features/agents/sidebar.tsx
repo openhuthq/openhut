@@ -94,8 +94,8 @@ function AgentRow({ agent, threads, active, phone }: { agent: OpenHutAgent; thre
     </span>
     <span className="flex min-w-0 flex-1 items-center gap-2">
       <span className={cn('min-w-0 flex-1 truncate text-[15px]/[20px] font-medium', !agent.online && 'text-mute', agent.online && trouble && 'text-fail')}>{agent.name}</span>
-      {preview.at && <time dateTime={preview.at} className="shrink-0 text-[12.5px] text-mute tabular-nums">{lastSeenOf({ at: preview.at })}</time>}
       {waiting && <i role="img" aria-label="Waiting on you" title="Waiting on you" className="size-2 shrink-0 rounded-full bg-wait" />}
+      {preview.at && <time dateTime={preview.at} className="shrink-0 text-[12.5px] text-mute tabular-nums">{lastSeenOf({ at: preview.at })}</time>}
     </span>
   </a></RowMenu>
 }
