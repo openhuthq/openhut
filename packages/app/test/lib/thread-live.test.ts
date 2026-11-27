@@ -1,6 +1,6 @@
 import { beforeEach, test } from 'node:test'
 import assert from 'node:assert/strict'
-import { liveThreads, namesLine, presenceOf, typingLine, type LiveSnapshot } from '../../src/lib/thread-live.ts'
+import { liveReplyText, liveThreads, namesLine, presenceOf, typingLine, type LiveSnapshot } from '../../src/lib/thread-live.ts'
 
 const sent: object[] = []
 let snapshot: LiveSnapshot = { turnId: null, seq: 0, text: '', agent: { state: 'idle' } }
@@ -67,6 +67,16 @@ test('a reconnect joins every open thread again; the last leave sends leave', ()
   assert.deepEqual(sent, [])
   liveThreads.leave('th_1')
   assert.deepEqual(sent, [{ type: 'leave', thread: 'th_1' }])
+})
+
+test('a reply whose own stream dropped keeps showing the live text while the agent is still answering', async () => {
+  const streaming = { turnId: 'turn_1', text: 'Half a reply' }
+  const replying = { state: 'replying' as const, turnId: 'turn_1' }
+  assert.equal(liveReplyText({ busy: false, live: { streaming, agent: replying }, lastId: 'turn_1' }), 'Half a reply')
+  assert.equal(liveReplyText({ busy: false, live: { streaming, agent: { state: 'idle' } }, lastId: 'turn_1' }), undefined)
+  assert.equal(liveReplyText({ busy: false, live: { streaming, agent: replying }, lastId: 'other' }), undefined)
+  snapshot = { turnId: 'turn_1', seq: 3, text: 'Half a reply', agent: replying }
+  assert.equal((await liveThreads.catchUp('th_1'))?.turnId, 'turn_1')
 })
 
 test('typing and answering lines read naturally', () => {

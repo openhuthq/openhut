@@ -47,7 +47,7 @@ import { usePhoneBack } from '@/app/phone-page'
 import { TOUCH, useMedia } from '@/lib/media'
 import { cn } from '@/lib/utils'
 import { ICONS } from '@/components/icons'
-import { useThreadLive, useTyping } from '@/lib/thread-live'
+import { liveReplyText, liveThreads, useThreadLive, useTyping } from '@/lib/thread-live'
 import { busyAgent, LiveTitle, PresenceFaces, SeenBy, TypingNow } from '@/features/threads/live'
 import { CallText, webhookOf, WebhookMessage } from '@/features/webhooks/message'
 import { callOf } from '@/features/webhooks/call'
@@ -82,7 +82,11 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
   const busy = chat.status === 'submitted' || chat.status === 'streaming'
   const live = useThreadLive(thread.id)
   const me = useOwner()
-  const retrying = useRetryOnce({ status: chat.status, error: chat.error, retry: () => void chat.regenerate() })
+  const retrying = useRetryOnce({ status: chat.status, error: chat.error, retry: async () => {
+    const answer = chat.messages.at(-1)
+    if (answer?.role === 'assistant' && (await liveThreads.catchUp(thread.id))?.turnId === answer.id) return chat.clearError()
+    void chat.regenerate()
+  } })
   useEffect(() => { if (!busy) chat.setMessages(thread.messages.map(uiMessageOf)) }, [thread.messages])
   const send = (text: string) => {
     touch(thread)
@@ -90,8 +94,8 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
     void chat.sendMessage(files.length ? { text, files } : { text })
     attachments.clear()
   }
-  const own = busy ? live.streaming?.text : undefined
   const listed = agent.runsHere ? chat.messages : chat.messages.filter((message) => message.role === 'user' || message.parts.some((part) => part.type !== 'step-start'))
+  const own = liveReplyText({ busy, live, lastId: listed.at(-1)?.id })
   const shown = own ? listed.map((message, index) => index === listed.length - 1 && message.role === 'assistant' ? withStream({ message, text: own }) : message) : listed
   const last = shown.at(-1)
   const mine = [...shown].reverse().find((message) => message.role === 'user' && !webhookOf(message.metadata) && (z.safeParse(Authored, message.metadata).data?.author ?? me) === me)
@@ -101,7 +105,7 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
   return <ChatFiles value={files}><CardReply value={thread.readOnly ? undefined : (text) => { if (busy) return false; send(text); return true }}><ChatFrame agent={agent} thread={thread} tools={<>{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={thread.readOnly ? <ContinueBar thread={thread} /> : <Composer agent={agent} threadId={thread.id} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void chat.stop()} />}>
     {shown.length ? <>
       <Day iso={thread.updatedAt} />
-      {shown.map((message, index) => <Message key={message.id} agent={agent} thread={thread} message={message} said={(text) => said(index, text)} seen={message === mine} live={busy && message === last} onRetry={!busy && !thread.readOnly && message === last ? () => void chat.regenerate() : undefined} />)}
+      {shown.map((message, index) => <Message key={message.id} agent={agent} thread={thread} message={message} said={(text) => said(index, text)} seen={message === mine} live={(busy || own !== undefined) && message === last} onRetry={!busy && !thread.readOnly && message === last ? () => void chat.regenerate() : undefined} />)}
     </> : !watching && <ChatEmpty agent={agent} />}
     {!busy && live.ending.filter((stream) => !shown.some((message) => message.id === stream.turnId)).map((stream) => <AgentReply key={stream.turnId} agent={agent} message={{ id: stream.turnId, role: 'assistant', parts: [{ type: 'text', text: stream.text }] }} live={false} />)}
     {watching && <AgentReply agent={agent} threadId={thread.id} step={live.agent.step} message={{ id: live.streaming?.turnId ?? 'live', role: 'assistant', parts: live.streaming?.text ? [{ type: 'text', text: live.streaming.text }] : [] }} live />}
@@ -114,7 +118,7 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
   </ChatFrame></CardReply></ChatFiles>
 }
 
-function useRetryOnce({ status, error, retry }: { status: string; error: Error | undefined; retry: () => void }) {
+function useRetryOnce({ status, error, retry }: { status: string; error: Error | undefined; retry: () => Promise<void> }) {
   const [retrying, setRetrying] = useState(false)
   const retried = useRef(false)
   useEffect(() => {
@@ -126,7 +130,7 @@ function useRetryOnce({ status, error, retry }: { status: string; error: Error |
     void serverBack().then(() => {
       if (!live) return
       setRetrying(false)
-      retry()
+      void retry()
     })
     return () => {
       live = false
