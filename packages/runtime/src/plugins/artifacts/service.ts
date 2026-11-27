@@ -59,7 +59,8 @@ export function verify({ id, sig, now = Date.now() }: { id: string; sig: string;
   const [exp, given = ''] = sig.split('.')
   if (!/^\d+$/.test(exp ?? '') || Number(exp) * 1000 <= now) return false
   const expected = Buffer.from(mac({ id, exp: Number(exp) }))
-  return given.length === expected.length && timingSafeEqual(Buffer.from(given), expected)
+  const actual = Buffer.from(given)
+  return actual.length === expected.length && timingSafeEqual(actual, expected)
 }
 
 const mac = ({ id, exp }: { id: string; exp: number }): string => createHmac('sha256', key).update(`${id}.${exp}`).digest('base64url')
@@ -121,7 +122,7 @@ async function viewOf({ row, canManage }: { row: Row; canManage: boolean }): Pro
 }
 
 export const artifactService = {
-  async publish({ agentId, createdBy, artifact, title, files, remove = [], ver }: { agentId: string; createdBy: string; artifact?: string; title?: string; files: FileInput[]; remove?: string[]; ver?: number }): Promise<Artifact> {
+  async publish({ agentId, threadId, createdBy, artifact, title, files, remove = [], ver }: { agentId: string; threadId?: string; createdBy: string; artifact?: string; title?: string; files: FileInput[]; remove?: string[]; ver?: number }): Promise<Artifact> {
     const bodies = files.map((file) => ({ path: cleanPath(file.path), body: bodyOf(file) }))
     const removed = remove.map(cleanPath)
     const row = await db.transaction().execute(async (trx) => {
@@ -130,10 +131,10 @@ export const artifactService = {
       if (existing && ver !== undefined && ver !== existing.ver) throw new HttpError(409, `Changed since you read it (now v${existing.ver}). Read it again.`, { param: 'ver' })
       const entry = existing?.entry ?? newEntry(bodies.map((file) => file.path))
       const sent = bodies.find((file) => file.path === entry)
-      const named = title?.trim() || (sent && kindOf(entry) === 'page' ? titleIn(sent.body.toString()) : undefined)
+      const named = title?.trim() || (!existing?.titled && sent && kindOf(entry) === 'page' ? titleIn(sent.body.toString()) : undefined)
       const saved = existing
-        ? await trx.updateTable('artifact').set({ title: named ?? existing.title, ver: existing.ver + 1, updated_at: new Date() }).where('id', '=', existing.id).returningAll().executeTakeFirstOrThrow()
-        : await trx.insertInto('artifact').values({ id: newArtifactId(), agent_id: agentId, created_by: createdBy, title: named ?? entry.split('/').at(-1)!, entry }).returningAll().executeTakeFirstOrThrow()
+        ? await trx.updateTable('artifact').set({ title: named ?? existing.title, titled: existing.titled || !!title?.trim(), ver: existing.ver + 1, updated_at: new Date() }).where('id', '=', existing.id).returningAll().executeTakeFirstOrThrow()
+        : await trx.insertInto('artifact').values({ id: newArtifactId(), agent_id: agentId, created_by: createdBy, title: named ?? entry.split('/').at(-1)!, titled: !!title?.trim(), entry }).returningAll().executeTakeFirstOrThrow()
       if (removed.length) await trx.deleteFrom('artifact_file').where('artifact_id', '=', saved.id).where('path', 'in', removed).execute()
       for (const file of bodies) {
         await trx.insertInto('artifact_file').values({ artifact_id: saved.id, path: file.path, type: typeOf(file.path), body: file.body })
@@ -147,14 +148,15 @@ export const artifactService = {
       return saved
     })
     const [published] = await artifactsOf([row])
-    shown.set(agentId, { at: Date.now(), card: { id: published!.id, title: published!.title, kind: published!.kind, access: published!.access, size: published!.size } })
+    if (threadId) shown.set(`${agentId}:${threadId}`, { at: Date.now(), card: { id: published!.id, title: published!.title, kind: published!.kind, access: published!.access, size: published!.size } })
     return published!
   },
 
-  card({ agentId, since }: { agentId: string; since: Date }): { type: 'data-artifact'; data: ArtifactCard } | undefined {
-    const held = shown.get(agentId)
+  card({ agentId, threadId, since }: { agentId: string; threadId: string; since: Date }): { type: 'data-artifact'; data: ArtifactCard } | undefined {
+    const key = `${agentId}:${threadId}`
+    const held = shown.get(key)
     if (!held || Date.now() - held.at > KEPT_MS || held.at < since.getTime()) return undefined
-    shown.delete(agentId)
+    shown.delete(key)
     return { type: 'data-artifact', data: held.card }
   },
 
@@ -222,8 +224,9 @@ export const artifactService = {
     if (!verify({ id, sig })) throw missing()
     const row = await found(id)
     const wanted = path ? cleanPath(path) : row.entry
-    const file = await db.selectFrom('artifact_file').select(['path', 'type', 'body']).where('artifact_id', '=', id).where('path', '=', wanted).executeTakeFirst()
-      ?? (extname(wanted) ? undefined : await db.selectFrom('artifact_file').select(['path', 'type', 'body']).where('artifact_id', '=', id).where('path', '=', row.entry).executeTakeFirst())
+    const tried = extname(wanted) ? [wanted] : [wanted, `${wanted}/index.html`, row.entry]
+    const files = await db.selectFrom('artifact_file').select(['path', 'type', 'body']).where('artifact_id', '=', id).where('path', 'in', tried).execute()
+    const file = tried.map((each) => files.find((one) => one.path === each)).find(Boolean)
     if (!file) throw new HttpError(404, 'That file isn’t in this artifact.')
     return { type: file.type, body: file.body, kind: kindOf(row.entry), name: file.path.split('/').at(-1)! }
   },

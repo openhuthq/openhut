@@ -1,6 +1,7 @@
 import * as z from 'zod'
 import { ArtifactAccess } from '@openhut/common/artifacts.ts'
-import { definePlugin, defineTool } from '../../core/plugin.ts'
+import { APP_PLATFORM, definePlugin, defineTool } from '../../core/plugin.ts'
+import { Origin } from '../../server/inbox/routines.ts'
 import { publicAddress } from '../../server/platform/address.ts'
 import { createTables } from './tables.ts'
 import { artifactController, fileController, shareController } from './routes.ts'
@@ -10,13 +11,15 @@ const ID = z.string().max(60).describe('The artifact\'s id, like art_k3m9x2.')
 const EMAILS = z.array(z.email().max(200)).max(50)
 const ACCESS = z.enum(ArtifactAccess.options)
 
+export const ARTIFACTS_PROMPT = 'To show someone a page, chart, report, PDF, image or document, publish it with publish_artifact instead of pasting it into the chat. It opens beside the chat in OpenHut. To change one, read it with read_artifact, then publish it again with its id and ver.'
+
 const pageOf = ({ agentId, id }: { agentId: string; id: string }): string => `${publicAddress()}/agents/${agentId}/a/${id}`
 
 export const artifacts = definePlugin({
   name: 'artifacts',
   migrate: createTables,
   routes: () => ({ '/api/artifacts': artifactController, '/api/share': shareController, '/a': fileController }),
-  agent: () => ({ instructions: 'To show someone a page, chart, report, PDF, image or document, publish it with publish_artifact instead of pasting it into the chat. It opens beside the chat in OpenHut. To change one, read it with read_artifact, then publish it again with its id and ver.' }),
+  agent: () => ({ instructions: ARTIFACTS_PROMPT }),
   afterTurn: async (input) => artifactService.card(input),
   tools: {
     publish_artifact: defineTool({
@@ -32,8 +35,10 @@ export const artifacts = definePlugin({
         remove: z.array(z.string().max(200)).max(MAX_FILES).optional().describe('Paths to delete from an existing artifact.'),
         ver: z.number().int().optional().describe('The ver you last read. If it changed since, nothing is saved.'),
       },
-      run: async (input, { agent }) => {
-        const published = await artifactService.publish({ agentId: agent.id, createdBy: agent.owner_id, ...input })
+      run: async (input, { agent, origin }) => {
+        const place = Origin.safeParse(origin).data
+        const threadId = place?.platform === APP_PLATFORM ? place.chat_id.split('.')[0] : undefined
+        const published = await artifactService.publish({ agentId: agent.id, threadId, createdBy: agent.owner_id, ...input })
         return `Published "${published.title}" (${published.id}, ver ${published.ver}, ${published.access}). It opens at ${pageOf({ agentId: agent.id, id: published.id })}.`
       },
     }),

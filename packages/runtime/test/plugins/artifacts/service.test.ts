@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
 import Fastify from 'fastify'
+import type { AddressInfo } from 'node:net'
+import { gatewayServer } from '../../../src/server/gateway/gateway-server.ts'
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod'
 import { artifacts } from '../../../src/plugins/artifacts/index.ts'
 import { artifactController, fileController, shareController } from '../../../src/plugins/artifacts/routes.ts'
@@ -12,7 +14,7 @@ import { db, migrate } from '../../../src/server/platform/db.ts'
 import { answerErrors } from '../../../src/server/platform/http-error.ts'
 import { config } from '../../../src/server/platform/config.ts'
 import { webApp } from '../../../src/server/platform/web-app.ts'
-import { seal, sha } from '../../../src/server/platform/secrets.ts'
+import { agentToken, seal, sha } from '../../../src/server/platform/secrets.ts'
 
 await migrate()
 await db.insertInto('person').values([
@@ -86,10 +88,11 @@ test('publish needs an entry, keeps to the limits, and a stale ver saves nothing
   await assert.rejects(artifactService.publish({ agentId: 'ag_artone', createdBy: 'usr_artown', files: [{ path: '../x.html', text: '' }] }), /outside/)
   await assert.rejects(artifactService.publish({ agentId: 'ag_artone', createdBy: 'usr_artown', files: [{ path: 'big.bin', base64: Buffer.alloc(10 * 1024 * 1024 + 1).toString('base64') }] }), /10 MB/)
   const since = new Date()
-  const made = await artifactService.publish({ agentId: 'ag_artone', createdBy: 'usr_artown', files: [{ path: 'index.html', text: page }, { path: 'chart.js', text: 'draw()' }] })
+  const made = await artifactService.publish({ agentId: 'ag_artone', threadId: 'th_a', createdBy: 'usr_artown', files: [{ path: 'index.html', text: page }, { path: 'chart.js', text: 'draw()' }] })
   assert.deepEqual({ title: made.title, ver: made.ver, entry: made.entry, kind: made.kind, access: made.access }, { title: 'Order sync failures', ver: 1, entry: 'index.html', kind: 'page', access: 'private' })
-  assert.deepEqual(artifactService.card({ agentId: 'ag_artone', since }), { type: 'data-artifact', data: { id: made.id, title: made.title, kind: 'page', access: 'private', size: Buffer.byteLength(page) } })
-  assert.equal(artifactService.card({ agentId: 'ag_artone', since }), undefined)
+  assert.equal(artifactService.card({ agentId: 'ag_artone', threadId: 'th_b', since }), undefined)
+  assert.deepEqual(artifactService.card({ agentId: 'ag_artone', threadId: 'th_a', since }), { type: 'data-artifact', data: { id: made.id, title: made.title, kind: 'page', access: 'private', size: Buffer.byteLength(page) } })
+  assert.equal(artifactService.card({ agentId: 'ag_artone', threadId: 'th_a', since }), undefined)
   const next = await artifactService.publish({ agentId: 'ag_artone', createdBy: 'usr_artown', artifact: made.id, ver: 1, files: [{ path: 'chart.js', text: 'drawMore()' }] })
   assert.equal(next.ver, 2)
   await assert.rejects(artifactService.publish({ agentId: 'ag_artone', createdBy: 'usr_artown', artifact: made.id, ver: 1, files: [{ path: 'chart.js', text: 'lost' }] }), /Changed since you read it \(now v2\)/)
@@ -151,4 +154,47 @@ test('the public /share page is the app, served without sign-in', async () => {
   assert.equal(res.statusCode, 200)
   assert.equal(res.body, '<div id="root"></div>')
   assert.match(String(res.headers['content-type']), /text\/html/)
+})
+
+test('a title the agent chose stays when it republishes, and a page without one follows its <title>', async () => {
+  const named = await artifactService.publish({ agentId: 'ag_artone', createdBy: 'usr_artown', title: 'Weekly sync report', files: [{ path: 'index.html', text: page }] })
+  const again = await artifactService.publish({ agentId: 'ag_artone', createdBy: 'usr_artown', artifact: named.id, files: [{ path: 'index.html', text: page.replace('Order sync failures', 'Something else') }] })
+  assert.equal(again.title, 'Weekly sync report')
+  const plain = await artifactService.publish({ agentId: 'ag_artone', createdBy: 'usr_artown', files: [{ path: 'index.html', text: page }] })
+  const renamed = await artifactService.publish({ agentId: 'ag_artone', createdBy: 'usr_artown', artifact: plain.id, files: [{ path: 'index.html', text: page.replace('Order sync failures', 'Order sync, fixed') }] })
+  assert.equal(renamed.title, 'Order sync, fixed')
+})
+
+test('a folder path opens its index.html before the entry, and an odd signature is a 404, not an error', async () => {
+  const site = await artifactService.publish({ agentId: 'ag_artone', createdBy: 'usr_artown', files: [{ path: 'index.html', text: page }, { path: 'docs/index.html', text: 'docs' }] })
+  const base = `/a/${site.id}/${sign({ id: site.id })}/`
+  assert.equal((await app.inject({ url: `${base}docs` })).body, 'docs')
+  assert.equal((await app.inject({ url: `${base}docs/` })).body, 'docs')
+  assert.equal((await app.inject({ url: `${base}elsewhere` })).body, page)
+  const [exp, mac] = sign({ id: site.id }).split('.')
+  assert.ok(!verify({ id: site.id, sig: `${exp}.${'é'.repeat(mac!.length)}` }))
+  assert.equal((await app.inject({ url: `/a/${site.id}/${exp}.${encodeURIComponent('é'.repeat(mac!.length))}/index.html` })).statusCode, 404)
+})
+
+test('over the gateway an agent publishes a PDF of several MB, and the card waits in the app thread it came from', async () => {
+  const server = gatewayServer.create().listen(0, '127.0.0.1')
+  await new Promise((resolve) => server.once('listening', resolve))
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  const headers = { authorization: `Agent ${agentToken({ id: 'ag_artone', epoch: 0 })}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream' }
+  try {
+    const since = new Date()
+    const pdf = Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(3 * 1024 * 1024, 32)]).toString('base64')
+    const call = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'publish_artifact', arguments: { files: [{ path: 'contract.pdf', base64: pdf }], origin: { platform: 'api_server', chat_id: 'th_gw.2' } } } }
+    const res = await fetch(`${base}/api/v1/mcp`, { method: 'POST', headers, body: JSON.stringify(call) })
+    const text = ((await res.json()) as { result: { content: { text: string }[] } }).result.content[0]!.text
+    assert.match(text, /^Published "contract.pdf"/)
+    assert.equal(artifactService.card({ agentId: 'ag_artone', threadId: 'th_other', since }), undefined)
+    assert.equal(artifactService.card({ agentId: 'ag_artone', threadId: 'th_gw', since })?.data.kind, 'pdf')
+    const slack = { ...call, params: { ...call.params, arguments: { files: [{ path: 'n.md', text: '# n' }], origin: { platform: 'slack', chat_id: 'C1' } } } }
+    await fetch(`${base}/api/v1/mcp`, { method: 'POST', headers, body: JSON.stringify(slack) })
+    assert.equal(artifactService.card({ agentId: 'ag_artone', threadId: 'C1', since }), undefined)
+    assert.equal((await fetch(`${base}/turn-state`, { method: 'POST', headers, body: 'x'.repeat(2 << 20) })).status, 413)
+  } finally {
+    server.close()
+  }
 })

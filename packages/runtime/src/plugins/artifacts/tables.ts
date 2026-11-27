@@ -3,7 +3,7 @@ import type { Database } from '../../server/platform/db-schema.ts'
 
 export async function createTables(db: Kysely<Database>): Promise<void> {
   await sql`create table if not exists artifact (
-    id text primary key, agent_id text not null references agent(id) on delete cascade, created_by text not null, title text not null,
+    id text primary key, agent_id text not null references agent(id) on delete cascade, created_by text not null, title text not null, titled boolean not null default false,
     access text not null default 'private' check (access in ('private', 'team', 'link')), people text[] not null default '{}',
     entry text not null default 'index.html', share_token text unique, ver integer not null default 1,
     created_at timestamptz not null default now(), updated_at timestamptz not null default now())`.execute(db)

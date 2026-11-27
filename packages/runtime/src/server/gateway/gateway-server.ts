@@ -22,6 +22,7 @@ const PER_AGENT = 8
 // Background polls (Telegram's long poll, the plugin's wakes poll every 15 s) aren't the agent at work, so they don't count toward its request limit.
 const LONG_POLL = /^(\/u\/telegram\/bot[^/]+\/getUpdates|\/wakes)$/
 const MAX_BODY = 1 << 20
+const MCP_MAX_BODY = 16 << 20
 const Turn = z.object({ turn: z.string().check(z.minLength(1), z.maxLength(200)), state: z.enum(['start', 'end']) })
 const REFUSED_LOG_MS = 60_000
 const lastRefused = new Map<string, number>()
@@ -50,7 +51,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const agent = token ? await agentService.byToken({ token, from: forward.relayedFrom(req.socket.remotePort) }) : undefined
   if (!agent) return json(res, 401, errorBody({ status: 401, message: 'Send this agent\'s own token.' }))
   const path = url.pathname
-  const mcp = path === '/api/v1/mcp' && req.method === 'POST' ? await readBody(req) : undefined
+  const mcp = path === '/api/v1/mcp' && req.method === 'POST' ? await readBody(req, MCP_MAX_BODY) : undefined
   // Hermes's MCP keepalives and tool listings aren't work either; only a tool call is.
   const listening = LONG_POLL.test(path) || (path === '/api/v1/mcp' && ![mcp].flat().some((message) => (message as { method?: string } | undefined)?.method === 'tools/call'))
   if (!listening && activity.count(agent.id) >= PER_AGENT) return refused({ agentId: agent.id, path, res })
@@ -92,12 +93,12 @@ function refused({ agentId, path, res }: { agentId: string; path: string; res: S
   json(res, 429, errorBody({ status: 429, message: `This agent already has ${PER_AGENT} requests running. Wait for them.` }), true)
 }
 
-async function readBody(req: IncomingMessage): Promise<unknown> {
+async function readBody(req: IncomingMessage, limit = MAX_BODY): Promise<unknown> {
   let size = 0
   const chunks: Buffer[] = []
   for await (const chunk of req) {
     size += chunk.length
-    if (size > MAX_BODY) throw new HttpError(413, 'Requests to the gateway are limited to 1 MB.')
+    if (size > limit) throw new HttpError(413, `Requests to the gateway are limited to ${limit >> 20} MB.`)
     chunks.push(chunk)
   }
   const raw = Buffer.concat(chunks).toString('utf8')
