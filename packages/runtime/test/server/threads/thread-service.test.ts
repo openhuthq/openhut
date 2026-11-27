@@ -11,7 +11,7 @@ import { answerErrors, HttpError } from '../../../src/server/platform/http-error
 import { seal } from '../../../src/server/platform/secrets.ts'
 import { validatorCompiler } from 'fastify-type-provider-zod'
 import { threadController } from '../../../src/server/threads/thread-controller.ts'
-import { imageTypeOf, LostTurn, safeFileName, shownCall, threadService } from '../../../src/server/threads/thread-service.ts'
+import { busy, imageTypeOf, LostTurn, safeFileName, shownCall, threadService } from '../../../src/server/threads/thread-service.ts'
 import { HERE } from '../../../src/server/team/home.ts'
 import { agentService } from '../../../src/server/agents/agent-service.ts'
 import { connectionService } from '../../../src/server/connections/connection-service.ts'
@@ -71,6 +71,11 @@ const hermes = createServer((req, res) => {
     if (seen.body?.messages.at(-1)?.content === 'rename yourself') {
       await asks.create({ agentId: 'ag_chatcard', kind: 'update_self', input: { name: 'Card Bot' }, description: 'Asked to.', origin: { platform: 'api_server', chat_id: seen.session } })
       return res.end(`${chunk('Asked your owner.')}data: [DONE]\n\n`)
+    }
+    if (seen.body?.messages.at(-1)?.content === 'slow') {
+      res.write(chunk('Halfway, '))
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      return res.end(`${chunk('then done.')}data: [DONE]\n\n`)
     }
     if (seen.body?.messages.at(-1)?.content === 'card') return res.end(`${['Deploy is ready.\n\n```spec\n{"op":"add","path":"/root","value":"c"}\n', '{"op":"add","path":"/elements/c","value":{"type":"Card","props":{"title":"Deploy"}}}\n', '```\n\nApprove?'].map(chunk).join('')}data: [DONE]\n\n`)
     const tool = (data: Record<string, string>) => `event: hermes.tool.progress\ndata: ${JSON.stringify(data)}\n\n`
@@ -499,6 +504,30 @@ test('a thread waits on someone while it shows a webhook setup card for a webhoo
   assert.equal(await waiting(), true)
   await db.updateTable('inbox_source').set({ last_at: new Date() }).where('id', '=', 'wh_chatwait').execute()
   assert.equal(await waiting(), false, 'a call after the card clears it too')
+})
+
+test('a turn keeps going when the person leaves mid-reply and is saved whole; only stop ends it early', async () => {
+  await db.insertInto('agent').values({ id: 'ag_chatgone', name: 'Gone', owner_id: 'usr_chatownr', instructions: '# Gone', model: 'sonnet', net: 31, channel_key: seal('k'.repeat(48)), wanted: 'running', workspace: WS }).execute()
+  const url = await app.listen({ port: 0, host: '127.0.0.1' })
+  const leave = new AbortController()
+  const res = await fetch(`${url}/api/threads/ag_chatgone/chat`, {
+    method: 'POST', signal: leave.signal, headers: { ...as(), 'content-type': 'application/json' },
+    body: JSON.stringify({ trigger: 'submit-message', message: { id: 'm-slow', role: 'user', parts: [{ type: 'text', text: 'slow' }] } }),
+  })
+  await res.body?.getReader().read()
+  leave.abort()
+  while (busy.has('ag_chatgone')) await new Promise((resolve) => setTimeout(resolve, 20))
+  const saved = (await messagesOf('ag_chatgone')).at(-1)
+  assert.equal(saved?.role, 'assistant')
+  assert.deepEqual(saved?.parts.filter((part) => part.type === 'text').map((part) => part.text), ['Halfway, then done.'])
+
+  const started = Date.now()
+  const stopped = say('ag_chatgone', 'slow')
+  await new Promise((resolve) => setTimeout(resolve, 100))
+  assert.equal((await app.inject({ method: 'POST', url: '/api/threads/ag_chatgone/stop', headers: as() })).statusCode, 200)
+  assert.doesNotMatch((await stopped).body, /then done/)
+  assert.ok(Date.now() - started < 300)
+  assert.equal(busy.has('ag_chatgone'), false)
 })
 
 test('a message to an agent that is starting or restarting waits for it, then gets the reply', async () => {
