@@ -88,7 +88,7 @@ test('a listener that throws doesn\'t stop the others or fail the write that emi
   ws.terminate()
 })
 
-test('everyone viewing a thread sees who is there and typing, and the same reply text as it streams; others can\'t join', async () => {
+test('everyone viewing a thread sees who is there and typing, and the same reply as it streams; others can\'t join', async () => {
   const owner = await follower(KEY)
   const mia = await follower(MIA)
   const zed = await follower(ZED)
@@ -108,24 +108,21 @@ test('everyone viewing a thread sees who is there and typing, and the same reply
   zed.send({ type: 'join', thread: 'ag_liveteam' })
   await until(() => zed.heard.some((each) => each.type === 'error'))
   assert.deepEqual(zed.heard.find((each) => each.type === 'error'), { type: 'error', thread: 'ag_liveteam', message: 'That chat doesn\'t exist, or you can\'t see it.' })
-  assert.equal((await app.inject({ method: 'GET', url: '/api/threads/ag_liveteam/live', headers: ZED })).statusCode, 404)
+  assert.equal((await app.inject({ method: 'GET', url: '/api/threads/ag_liveteam/stream', headers: ZED })).statusCode, 404)
+  assert.equal((await app.inject({ method: 'GET', url: '/api/threads/ag_liveteam/stream', headers: MIA })).statusCode, 204)
 
   const sent = app.inject({ method: 'POST', url: '/api/threads/ag_liveteam/chat', headers: KEY, payload: { trigger: 'submit-message', message: { id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hi' }] } } })
-  await until(() => mia.delta() === 'Hello there.')
-  const caught = (await app.inject({ method: 'GET', url: '/api/threads/ag_liveteam/live', headers: MIA })).json()
-  assert.equal(caught.text, 'Hello there.')
-  assert.equal(caught.agent.state, 'replying')
-  assert.deepEqual(caught.agent.answering, ['owner@example.com'])
+  await until(() => mia.last('presence')?.agent.state === 'replying')
+  assert.deepEqual(mia.last('presence')?.agent.answering, ['owner@example.com'])
+  const joined = app.inject({ method: 'GET', url: '/api/threads/ag_liveteam/stream', headers: MIA })
   release()
   const res = await sent
   assert.equal(res.statusCode, 200)
-  assert.match(res.body, /Done\./)
-  await until(() => mia.last('turn')?.state === 'done')
-  assert.equal(mia.delta(), 'Hello there.\n\nDone.')
-  assert.deepEqual(owner.heard.filter((each) => each.type === 'delta'), mia.heard.filter((each) => each.type === 'delta'))
+  assert.match(res.body, /Hello there\.[\s\S]*Done\./)
+  assert.equal((await joined).body, res.body)
   assert.ok(mia.heard.some((each) => each.type === 'presence' && each.agent.state === 'working' && each.agent.step === 'Search the web'))
-  assert.equal(mia.last('presence')?.agent.state, 'idle')
-  assert.deepEqual((await app.inject({ method: 'GET', url: '/api/threads/ag_liveteam/live', headers: MIA })).json(), { object: 'thread_live', thread: 'ag_liveteam', turnId: null, seq: 0, text: '', agent: { state: 'idle' } })
+  await until(() => mia.last('presence')?.agent.state === 'idle')
+  assert.equal((await app.inject({ method: 'GET', url: '/api/threads/ag_liveteam/stream', headers: MIA })).statusCode, 204)
 
   mia.ws.terminate()
   await until(() => owner.last('presence')?.people.length === 1)
@@ -143,7 +140,6 @@ test('everyone who can use an agent sees it go working and back without opening 
   const sent = app.inject({ method: 'POST', url: '/api/threads/ag_liveteam/chat', headers: KEY, payload: { trigger: 'submit-message', message: { id: 'm2', role: 'user', parts: [{ type: 'text', text: 'Again' }] } } })
   await until(() => mia.last('agents')?.agents[0].activity === 'working')
   assert.deepEqual(mia.last('agents')?.agents[0].threads.map((each) => [each.id, each.agent.state]), [['ag_liveteam', 'replying']])
-  assert.equal(mia.heard.some((each) => each.type === 'delta'), false)
   release()
   assert.equal((await sent).statusCode, 200)
   await until(() => mia.last('agents')?.agents[0].activity === 'idle')
@@ -166,7 +162,6 @@ async function follower(headers: Record<string, string>) {
     ws, heard,
     send: (message: unknown) => ws.send(JSON.stringify(message)),
     last: <T extends LiveDown['type']>(type: T) => heard.findLast((each): each is Extract<LiveDown, { type: T }> => each.type === type),
-    delta: () => heard.flatMap((each) => each.type === 'delta' ? [each.text] : []).join(''),
   }
 }
 

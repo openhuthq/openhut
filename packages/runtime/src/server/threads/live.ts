@@ -1,15 +1,14 @@
 import type { Subagent } from '@openhut/common/agents/subagent.ts'
-import { LIVE_DELTA_MS, LIVE_TYPING_MS, type AgentLive, type LiveDown, type LivePerson, type LiveThreadBoard, type ThreadLive } from '@openhut/common/live.ts'
+import { LIVE_TYPING_MS, type AgentLive, type LiveDown, type LivePerson, type LiveThreadBoard } from '@openhut/common/live.ts'
 
 export type Viewer = { person: Omit<LivePerson, 'state'>; send: (message: LiveDown) => void }
-export type LiveTurnHandle = { delta: (input: { part: string; text: string }) => void; step: (label: string) => void; end: () => void }
-type Turn = { turnId: string; seq: number; text: string; buffer: string; part?: string; timer?: NodeJS.Timeout }
+export type LiveTurnHandle = { replying: () => void; step: (label: string) => void; end: () => void }
 
 const IDLE: AgentLive = { state: 'idle' }
 const rooms = new Map<string, Map<object, Viewer>>()
 const typists = new Map<string, Map<string, NodeJS.Timeout>>()
 const agents = new Map<string, AgentLive>()
-const turns = new Map<string, Turn>()
+const turns = new Map<string, string>()
 const owners = new Map<string, string>()
 const subagents = new Map<string, Subagent[]>()
 const watchers: (() => void)[] = []
@@ -61,48 +60,25 @@ export const liveThreads = {
   },
 
   turn({ thread, agentId, turnId, answering }: { thread: string; agentId: string; turnId: string; answering: string[] }): LiveTurnHandle {
-    const turn: Turn = { turnId, seq: 0, text: '', buffer: '' }
-    turns.set(thread, turn)
+    turns.set(thread, turnId)
     owners.set(thread, agentId)
-    const flush = () => {
-      clearTimeout(turn.timer)
-      turn.timer = undefined
-      if (!turn.buffer || turns.get(thread) !== turn) return
-      const text = turn.buffer
-      turn.buffer = ''
-      turn.text += text
-      broadcast({ thread, message: { type: 'delta', thread, turnId, seq: ++turn.seq, text } })
-    }
+    const mine = () => turns.get(thread) === turnId
     const setAgent = (agent: AgentLive) => {
       const now = agents.get(thread)
-      if (now?.state === agent.state && now.step === agent.step) return
+      if (!mine() || (now?.state === agent.state && now.step === agent.step)) return
       agents.set(thread, agent)
       presence(thread)
       changed()
     }
     const base = { turnId, ...answering.length && { answering } }
-    broadcast({ thread, message: { type: 'turn', thread, turnId, state: 'started' } })
     setAgent({ state: 'thinking', ...base })
     return {
-      delta: ({ part, text }) => {
-        if (!text || turns.get(thread) !== turn) return
-        if (turn.part !== part && (turn.text || turn.buffer)) turn.buffer += '\n\n'
-        turn.part = part
-        turn.buffer += text
-        turn.timer ??= setTimeout(flush, LIVE_DELTA_MS).unref()
-        setAgent({ state: 'replying', ...base })
-      },
-      step: (label) => {
-        if (turns.get(thread) !== turn) return
-        flush()
-        setAgent({ state: 'working', step: label, ...base })
-      },
+      replying: () => setAgent({ state: 'replying', ...base }),
+      step: (label) => setAgent({ state: 'working', step: label, ...base }),
       end: () => {
-        if (turns.get(thread) !== turn) return
-        flush()
+        if (!mine()) return
         turns.delete(thread)
         agents.delete(thread)
-        broadcast({ thread, message: { type: 'turn', thread, turnId, state: 'done' } })
         presence(thread)
         forget(thread)
         changed()
@@ -134,12 +110,7 @@ export const liveThreads = {
 
   watch(listener: () => void): void {
     watchers.push(listener)
-  },
-
-  catchUp(thread: string): ThreadLive {
-    const turn = turns.get(thread)
-    return { object: 'thread_live', thread, turnId: turn?.turnId ?? null, seq: turn?.seq ?? 0, text: turn?.text ?? '', agent: agents.get(thread) ?? IDLE }
-  },
+  }
 }
 
 function typingPeople(thread: string): Omit<LivePerson, 'state'>[] {

@@ -11,7 +11,7 @@ import { answerErrors, HttpError } from '../../../src/server/platform/http-error
 import { seal } from '../../../src/server/platform/secrets.ts'
 import { validatorCompiler } from 'fastify-type-provider-zod'
 import { threadController } from '../../../src/server/threads/thread-controller.ts'
-import { busy, imageTypeOf, LostTurn, safeFileName, shownCall, threadService } from '../../../src/server/threads/thread-service.ts'
+import { imageTypeOf, LostTurn, safeFileName, shownCall, threadService } from '../../../src/server/threads/thread-service.ts'
 import { HERE } from '../../../src/server/team/home.ts'
 import { agentService } from '../../../src/server/agents/agent-service.ts'
 import { connectionService } from '../../../src/server/connections/connection-service.ts'
@@ -516,7 +516,7 @@ test('a turn keeps going when the person leaves mid-reply and is saved whole; on
   })
   await res.body?.getReader().read()
   leave.abort()
-  while (busy.has('ag_chatgone')) await new Promise((resolve) => setTimeout(resolve, 20))
+  while ((await app.inject({ method: 'GET', url: '/api/threads/ag_chatgone', headers: as() })).json().activeTurn) await new Promise((resolve) => setTimeout(resolve, 20))
   const saved = (await messagesOf('ag_chatgone')).at(-1)
   assert.equal(saved?.role, 'assistant')
   assert.deepEqual(saved?.parts.filter((part) => part.type === 'text').map((part) => part.text), ['Halfway, then done.'])
@@ -527,7 +527,7 @@ test('a turn keeps going when the person leaves mid-reply and is saved whole; on
   assert.equal((await app.inject({ method: 'POST', url: '/api/threads/ag_chatgone/stop', headers: as() })).statusCode, 200)
   assert.doesNotMatch((await stopped).body, /then done/)
   assert.ok(Date.now() - started < 300)
-  assert.equal(busy.has('ag_chatgone'), false)
+  assert.equal((await app.inject({ method: 'GET', url: '/api/threads/ag_chatgone', headers: as() })).json().activeTurn, null)
 })
 
 test('a message to an agent that is starting or restarting waits for it, then gets the reply', async () => {

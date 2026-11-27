@@ -26,6 +26,7 @@ export const Thread = z.object({
   readOnly: z.boolean(),
   continueUrl: z.nullable(z.string()),
   waiting: z.boolean(),
+  activeTurn: z.nullable(z.string()),
   preview: z.string(),
   archivedAt: z.nullable(Timestamp),
   createdAt: Timestamp,

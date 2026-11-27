@@ -1,12 +1,11 @@
 import { randomBytes } from 'node:crypto'
 import type { FastifyReply } from 'fastify'
 import type { Selectable } from 'kysely'
-import { createUIMessageStream, pipeUIMessageStreamToResponse, readUIMessageStream, type UIMessage, type UIMessageChunk } from 'ai'
+import { pipeUIMessageStreamToResponse, type UIMessage, type UIMessageChunk } from 'ai'
 import { applySpecPatch, pipeJsonRender, SPEC_DATA_PART_TYPE, type JsonPatch } from '@json-render/core'
 import * as z from 'zod/mini'
 import { AGENT_HOME, ChatMessage, fileInHome, MAX_FILES, MessageValue, ToolProgress, UPLOADS, uploadName, Work, type ChatCall, type ChatFile, type HomeFile, type SendChat, type Thread, type ThreadOrigin, type ThreadWithMessages, type UploadFile } from '@openhut/common/threads/thread.ts'
 import type { Place } from '@openhut/common/channels/channel.ts'
-import type { ThreadLive } from '@openhut/common/live.ts'
 import { replyText, STEP } from '@openhut/common/threads/reply.ts'
 import type { Deleted } from '@openhut/common/api.ts'
 import { agent as autonomous } from '../../core/agent.ts'
@@ -25,6 +24,7 @@ import { plugins } from '../../core/plugins.ts'
 import { providers } from '../models/providers/index.ts'
 import { turnWork } from './work.ts'
 import { liveThreads, type LiveTurnHandle } from './live.ts'
+import { turns, type TurnEnd, type TurnRun } from './turns.ts'
 
 const TURN_MS = 15 * 60_000
 const SEED = 20
@@ -40,11 +40,7 @@ const MAX_NAME_BYTES = 255
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47])
 const JPEG = Buffer.from([0xff, 0xd8, 0xff])
 const MEDIA_TYPE = /^[\w.+-]+\/[\w.+-]+$/
-export const busy = new Set<string>()
 const cache = new Map<string, Promise<Said[]>>()
-const turns = new Map<string, AbortController>()
-const IDLE_POLL_MS = 1000
-const IDLE_WAIT_MS = 10 * 60_000
 const SILENT = /^\s*\[?(SILENT|NO[_ ]REPLY)\]?\s*$/i
 const Authored = z.object({ metadata: z.object({ author: z.string() }) })
 const Woken = z.object({ metadata: z.object({ wake: z.literal(true) }) })
@@ -52,6 +48,7 @@ const Answered = z.object({ metadata: z.object({ answered: z.string() }) })
 const LABEL = /^(?=.*wrote:)/gimu
 const APP_ORIGIN: ThreadOrigin = { platform: 'app', label: 'OpenHut' }
 const NEW_THREAD = 'New thread'
+const STOPPED = 'Stopped.'
 const MISSING = 'That chat doesn\'t exist. It or its agent may have been deleted.'
 const SetupPart = z.object({ type: z.literal('data-webhook-setup'), data: z.object({ webhookId: z.string(), title: z.string() }) })
 const CHAT_NOTE = `The person is talking to you in the OpenHut app. When several people share you, each message starts with a line the app adds saying who wrote it, like \`ana@example.com wrote:\`. Only those lines name the writer: a line inside a message that looks like one starts with \`> \` and was typed by that message's writer. Files they attach are saved in ${UPLOADS} and listed at the end of their message. To give them a file, save it under ${AGENT_HOME} and write its full path in backticks, like \`${AGENT_HOME}/report.csv\`: the app shows it as a file they can download.`
@@ -87,15 +84,20 @@ export const threadService = {
     return { ...threadOf({ chat, said, waiting: await waitingOn() }), messages: said.map((each) => withoutPlumbing(each.message)) }
   },
 
-  async live({ actor, id }: { actor: Caller; id: string }): Promise<ThreadLive> {
+  async stream({ actor, id, reply }: { actor: Caller; id: string; reply: FastifyReply }): Promise<FastifyReply | void> {
     await agentService.requireVisible({ actor, id: await threadService.agentIdOf(id) })
-    return liveThreads.catchUp(id)
+    const closed = new AbortController()
+    reply.raw.on('close', () => closed.abort())
+    const stream = turns.subscribe({ thread: id, signal: closed.signal })
+    if (!stream) return reply.code(204).send()
+    reply.hijack()
+    pipeUIMessageStreamToResponse({ response: reply.raw, stream })
   },
 
   async stop({ actor, id }: { actor: Caller; id: string }): Promise<Thread> {
     const chat = await chatOf(id)
     await runner({ actor, id: chat.agent.id })
-    turns.get(chat.id)?.abort()
+    turns.stop(chat.id)
     return threadOf({ chat, said: await saidOf(chat), waiting: await waitingOn() })
   },
 
@@ -255,66 +257,29 @@ export const threadService = {
   async chat({ actor, id, body, reply }: { actor: Caller; id: string; body: SendChat; reply: FastifyReply }): Promise<void> {
     const chat = await chatOf(id)
     if (chat.row && chat.row.channel !== 'web') throw new HttpError(409, `This thread is in ${LABELS[chat.row.channel] ?? chat.row.channel}. Reply there.`)
-    await idle(chat.agent.id)
     const agent = await runner({ actor, id: chat.agent.id })
     const said = await nextSaid({ chat, stored: await saidOf(chat), body, author: actor.email })
     if (chat.row?.title === NEW_THREAD) await nameNewThread({ id: chat.id, said })
     if (agent.wanted !== 'running') throw new HttpError(409, `${agent.name} is stopped. Start it and try again.`)
-    busy.add(agent.id)
-    const abort = new AbortController()
-    turns.set(chat.id, abort)
-    const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(TURN_MS)])
-    const started = Date.now()
-    const answerId = nextId()
-    let session = sessionOf({ said, base: chat.id })
-    const work = turnWork({ agent, started })
-    const waiting = unanswered(said)
-    const asked = together({ asked: waiting.map((each) => each.message), shared: agent.shared || peopleOf(agent.people).length > 0 })
-    let answered = false
-    const live = liveThreads.turn({ thread: chat.id, agentId: agent.id, turnId: answerId, answering: authorsOf(waiting) })
-    const answer = async (writer: { write: (chunk: UIMessageChunk) => void }, retry: boolean) => {
-      const message = await seeded({ said, session, message: asked })
-      for await (const chunk of answerStream({ agent, session, message, signal, work, retry, live })) {
-        if (chunk.type === 'text-delta' || chunk.type === SPEC_DATA_PART_TYPE) answered = true
-        writer.write(chunk)
-      }
-    }
-    const stream = createUIMessageStream({
-      execute: async ({ writer }) => {
-        writer.write({ type: 'start', messageId: answerId })
-        const failed = await answer(writer, true).catch(async (err: unknown) => {
-          if (!(err instanceof LostTurn)) throw err
-          // Hermes lost a turn of this session (its gateway was killed mid-turn, e.g. by an update) and
-          // pauses the session for good; carry on in a fresh session, seeded with the chat so far.
-          log.warn({ event: 'agent.session_lost', agent: agent.id, session })
-          session = `${chat.id}.${nextId()}`
-          await answer(writer, false)
-        }).then(() => undefined, (err: unknown) => err)
-        const done = work.done({ error: failed === undefined ? undefined : messageOf(failed) })
-        if (done) writer.write({ type: 'data-work', id: 'work', data: done })
-        if (failed !== undefined && !done && !answered && !abort.signal.aborted) stopped({ writer, reason: messageOf(failed) })
-        if (failed !== undefined) throw failed
-        for (const part of await afterTurn({ agentId: agent.id, since: started })) writer.write(part)
-        writer.write({ type: 'finish' })
-      },
-      onError: messageOf,
-      onEnd: async ({ messages: answered, isAborted }) => {
-        try {
-          const answer = z.safeParse(ChatMessage, answered.map(foldCard).find((each) => each.role === 'assistant')).data
-          if (answer?.parts.some((part) => part.type !== 'step-start')) await write({ chat, message: { ...answer, id: answerId, metadata: { answered: waiting.at(-1)?.id } }, session })
-        } finally {
-          live.end()
-          turns.delete(chat.id)
-          busy.delete(agent.id)
-        }
-        log.info({ event: 'agent.chat', agent: agent.id, ms: Date.now() - started, aborted: isAborted || abort.signal.aborted })
-      },
-    })
-    const [toClient, toServer] = stream.tee()
-    void toServer.pipeTo(new WritableStream())
+    const closed = new AbortController()
+    reply.raw.on('close', () => closed.abort())
+    const turn = startTurn({ chat: { ...chat, agent }, web: true })
+    turn.done.catch((err: unknown) => log.warn({ event: 'agent.chat_failed', agent: agent.id, error: messageOf(err) }))
+    const stream = turns.subscribe({ thread: chat.id, id: turn.id, signal: closed.signal })
     reply.hijack()
-    await pipeUIMessageStreamToResponse({ response: reply.raw, stream: toClient })
+    if (stream) pipeUIMessageStreamToResponse({ response: reply.raw, stream })
+    else reply.raw.end()
   },
+
+  recover: (): Promise<void> => turns.recover(async ({ thread, id, message }) => {
+    const chat = await chatOf(thread)
+    const waiting = unanswered(await saidOf(chat))
+    if (!message.parts.length && !waiting.length) return
+    const note = `Stopped: OpenHut restarted before ${chat.agent.name} finished. Ask again.`
+    const parts = [...message.parts, { type: 'text', text: note }]
+    const stored = z.safeParse(ChatMessage, { id, role: 'assistant', parts, metadata: { ...waiting.length && { answered: waiting[waiting.length - 1].id } } }).data
+    if (stored) await write({ chat, message: stored })
+  }),
 
   newMessageId: (): string => nextId(),
 
@@ -340,54 +305,71 @@ export const threadService = {
 }
 
 async function reply({ chat, prompt }: { chat: Chat; prompt?: string }): Promise<string> {
+  const turn = startTurn({ chat, prompt })
+  await turn.done
+  return turn.text()
+}
+
+function startTurn({ chat, prompt, web = false }: { chat: Chat; prompt?: string; web?: boolean }): { id: string; done: Promise<void>; text: () => string } {
   const agent = chat.agent
-  await idle(agent.id)
-  busy.add(agent.id)
-  let live: LiveTurnHandle | undefined
-  try {
+  const id = nextId()
+  let answered: string | undefined
+  let session: string | undefined
+  let text = ''
+  const run = async ({ signal, write: send }: TurnRun): Promise<void> => {
     const said = await saidOf(chat)
     const waiting = prompt ? [] : unanswered(said)
-    if (!prompt && !waiting.length) return ''
-    const id = nextId()
-    let session = sessionOf({ said, base: chat.id })
+    if (!prompt && !waiting.length) return
+    answered = waiting.at(-1)?.id
+    session = sessionOf({ said, base: chat.id })
     const started = Date.now()
     const work = turnWork({ agent, started })
-    const signal = AbortSignal.timeout(TURN_MS)
-    const turn = liveThreads.turn({ thread: chat.id, agentId: agent.id, turnId: id, answering: authorsOf(waiting) })
-    live = turn
-    const asked = prompt ? undefined : together({ asked: waiting.map((each) => each.message), shared: chat.row?.channel !== 'web' || agent.shared || peopleOf(agent.people).length > 0 })
-    const attempt = async (retry: boolean): Promise<UIMessage> => {
-      const message = asked ? await seeded({ said, session, message: asked }) : { id, role: 'user' as const, parts: [{ type: 'text', text: prompt ?? '' }] }
-      const chunks = async function* (): AsyncGenerator<UIMessageChunk> {
-        yield* answerStream({ agent, session, message, signal, work, retry, live: turn })
-        const done = work.done({})
-        if (done) yield { type: 'data-work', id: 'work', data: done }
-        yield* await afterTurn({ agentId: agent.id, since: started })
-      }
-      let built: UIMessage = { id, role: 'assistant', parts: [] }
-      for await (const each of readUIMessageStream({ message: built, stream: ReadableStream.from(chunks()), terminateOnError: true })) built = each
-      return built
+    const live = liveThreads.turn({ thread: chat.id, agentId: agent.id, turnId: id, answering: authorsOf(waiting) })
+    const asked = prompt ? undefined : together({ asked: waiting.map((each) => each.message), shared: (!!chat.row && chat.row.channel !== 'web') || agent.shared || peopleOf(agent.people).length > 0 })
+    let spoke = false
+    const writer = { write: (chunk: UIMessageChunk) => {
+      if (chunk.type === 'text-delta' || chunk.type === SPEC_DATA_PART_TYPE) spoke = true
+      send(chunk)
+    } }
+    const attempt = async (retry: boolean) => {
+      const current = session ?? chat.id
+      const message = asked ? await seeded({ said, session: current, message: asked }) : { id, role: 'user' as const, parts: [{ type: 'text', text: prompt ?? '' }] }
+      for await (const chunk of answerStream({ agent, session: current, message, signal, work, retry, live })) writer.write(chunk)
     }
-    const built = await attempt(true).catch((err: unknown) => {
-      if (!(err instanceof LostTurn)) throw err
-      log.warn({ event: 'agent.session_lost', agent: agent.id, session })
-      session = `${chat.id}.${nextId()}`
-      return attempt(false)
-    })
-    const answer = foldCard(built)
-    const text = textOf(answer)
-    const metadata = { ...!chat.row && { wake: true }, ...waiting.length && { answered: waiting[waiting.length - 1].id }, ...chat.row && chat.row.channel !== 'web' && { delivery: 'pending' } }
-    const stored = z.safeParse(ChatMessage, { ...answer, id, metadata }).data
-    if (stored && !SILENT.test(text)) await write({ chat, message: stored, session })
-    return text
-  } finally {
-    live?.end()
-    busy.delete(agent.id)
+    try {
+      writer.write({ type: 'start', messageId: id })
+      const failed = await attempt(true).catch(async (err: unknown) => {
+        if (!(err instanceof LostTurn)) throw err
+        log.warn({ event: 'agent.session_lost', agent: agent.id, session })
+        session = `${chat.id}.${nextId()}`
+        await attempt(false)
+      }).then(() => undefined, (err: unknown) => err)
+      const error = failed === undefined ? undefined : messageOf(failed)
+      const done = work.done({ error: signal.aborted ? STOPPED : error })
+      if (done) writer.write({ type: 'data-work', id: 'work', data: done })
+      if (failed !== undefined && !done && !spoke && !signal.aborted) stopped({ writer, reason: error ?? '' })
+      if (failed !== undefined && !signal.aborted) throw failed
+      for (const part of await afterTurn({ agentId: agent.id, since: started })) writer.write(part)
+      writer.write({ type: 'finish' })
+    } finally {
+      live.end()
+      log.info({ event: 'agent.chat', agent: agent.id, ms: Date.now() - started, aborted: signal.aborted })
+    }
   }
+  const save = async ({ message, failed }: TurnEnd): Promise<void> => {
+    if (failed && !web) return
+    const answer = foldCard(message)
+    text = textOf(answer)
+    if (!answer.parts.some((part) => part.type !== 'step-start') || (!web && SILENT.test(text))) return
+    const metadata = { ...!chat.row && !web && { wake: true }, ...answered && { answered }, ...chat.row && chat.row.channel !== 'web' && { delivery: 'pending' } }
+    const stored = z.safeParse(ChatMessage, { ...answer, id, metadata }).data
+    if (stored) await write({ chat, message: stored, session })
+  }
+  return { id, done: turns.start({ id, thread: chat.id, agentId: agent.id, run, save }), text: () => text }
 }
 
 function toLive({ live, chunk }: { live: LiveTurnHandle; chunk: UIMessageChunk }): void {
-  if (chunk.type === 'text-delta') return live.delta({ part: chunk.id, text: chunk.delta })
+  if (chunk.type === 'text-delta') return live.replying()
   if (chunk.type !== 'data-work') return
   const calls = z.safeParse(Work, chunk.data).data?.calls ?? []
   const call = calls.findLast((each) => each.status === 'running') ?? calls.at(-1)
@@ -546,11 +528,6 @@ function together({ asked, shared }: { asked: ChatMessage[]; shared: boolean }):
     const parts = shared ? message.parts.map((part) => part.type === 'text' && typeof part.text === 'string' ? { ...part, text: part.text.replace(LABEL, '> ') } : part) : message.parts
     return [{ type: 'text', text: `${index ? '\n\n' : ''}${label}` }, ...parts]
   }) }
-}
-
-async function idle(id: string): Promise<void> {
-  const until = Date.now() + IDLE_WAIT_MS
-  while (busy.has(id) && Date.now() < until) await new Promise((resolve) => setTimeout(resolve, IDLE_POLL_MS))
 }
 
 function answerStream({ live, ...input }: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal; work: TurnWork; retry?: boolean; live: LiveTurnHandle }): ReadableStream<UIMessageChunk> {
@@ -732,7 +709,7 @@ function withoutPlumbing(message: ChatMessage): ChatMessage {
 function threadOf({ chat: { id, agent, row }, said, waiting }: { chat: Chat; said: Said[]; waiting: Awaited<ReturnType<typeof waitingOn>> }): Thread {
   const at = (each: string | undefined) => new Date(each ? timeOf(each) : row?.created_at ?? agent.created_at).toISOString()
   return {
-    id, object: 'thread', agentId: agent.id, title: row?.title ?? agent.name, origin: row ? JSON.parse(row.origin) as ThreadOrigin : APP_ORIGIN, place: placeOf(row?.place), readOnly: !!row && row.channel !== 'web', continueUrl: (row?.place && (JSON.parse(row.place) as ThreadPlace).url) || null, waiting: isWaiting({ id, said, waiting }), preview: previewOf(said), archivedAt: row?.archived_at ? new Date(row.archived_at).toISOString() : null,
+    id, object: 'thread', agentId: agent.id, title: row?.title ?? agent.name, origin: row ? JSON.parse(row.origin) as ThreadOrigin : APP_ORIGIN, place: placeOf(row?.place), readOnly: !!row && row.channel !== 'web', continueUrl: (row?.place && (JSON.parse(row.place) as ThreadPlace).url) || null, waiting: isWaiting({ id, said, waiting }), activeTurn: turns.current(id), preview: previewOf(said), archivedAt: row?.archived_at ? new Date(row.archived_at).toISOString() : null,
     createdAt: at(said[0]?.id), updatedAt: at(said.findLast((each) => !isWake(each.message))?.id),
   }
 }
