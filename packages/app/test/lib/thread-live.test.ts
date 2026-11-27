@@ -1,58 +1,15 @@
 import { beforeEach, test } from 'node:test'
 import assert from 'node:assert/strict'
-import { agentWorking, busyOf, liveReplyText, liveThreads, namesLine, presenceOf, typingLine, type LiveSnapshot } from '../../src/lib/thread-live.ts'
+import { agentWorking, busyOf, liveThreads, namesLine, presenceOf, typingLine } from '../../src/lib/thread-live.ts'
 
 const sent: object[] = []
-let snapshot: LiveSnapshot = { turnId: null, seq: 0, text: '', agent: { state: 'idle' } }
 let refetched: string[] = []
 
 beforeEach(() => {
   liveThreads.reset()
   sent.length = 0
   refetched = []
-  snapshot = { turnId: null, seq: 0, text: '', agent: { state: 'idle' } }
-  liveThreads.connect({ send: (message) => sent.push(message), fetchLive: async () => snapshot, refetch: async (thread) => void refetched.push(thread) })
-})
-
-const delta = (seq: number, text: string, turnId = 'turn_1') => liveThreads.receive({ type: 'delta', thread: 'th_1', turnId, seq, text })
-
-test('deltas join in seq order, whatever order they arrive in, and repeats are dropped', () => {
-  liveThreads.receive({ type: 'turn', thread: 'th_1', turnId: 'turn_1', state: 'started' })
-  delta(2, ' world')
-  assert.equal(liveThreads.get('th_1').stream?.text, '')
-  delta(1, 'Hello')
-  delta(1, 'Hello')
-  delta(3, '!')
-  assert.deepEqual({ text: liveThreads.get('th_1').stream?.text, seq: liveThreads.get('th_1').stream?.seq }, { text: 'Hello world!', seq: 3 })
-})
-
-test('joining mid-turn keeps early deltas until the catch-up fills the start', async () => {
-  delta(5, ' more')
-  snapshot = { turnId: 'turn_1', seq: 4, text: 'Up to four', agent: { state: 'replying', answering: ['Mo'] } }
-  liveThreads.join('th_1')
-  assert.deepEqual(sent, [{ type: 'join', thread: 'th_1' }])
-  await liveThreads.catchUp('th_1')
-  assert.equal(liveThreads.get('th_1').stream?.text, 'Up to four more')
-  assert.equal(liveThreads.get('th_1').agent.state, 'replying')
-  delta(6, '.')
-  assert.equal(liveThreads.get('th_1').stream?.text, 'Up to four more.')
-})
-
-test('a catch-up older than what streamed already changes nothing', async () => {
-  delta(1, 'a')
-  delta(2, 'b')
-  snapshot = { turnId: 'turn_1', seq: 1, text: 'a', agent: { state: 'replying' } }
-  await liveThreads.catchUp('th_1')
-  assert.equal(liveThreads.get('th_1').stream?.text, 'ab')
-})
-
-test('a done turn clears only after the messages refetch', async () => {
-  delta(1, 'Hi')
-  const done = liveThreads.finish({ thread: 'th_1', turnId: 'turn_1' })
-  assert.equal(liveThreads.get('th_1').stream?.text, 'Hi')
-  await done
-  assert.deepEqual(refetched, ['th_1'])
-  assert.equal(liveThreads.get('th_1').stream, undefined)
+  liveThreads.connect({ send: (message) => sent.push(message), refetch: async (thread) => void refetched.push(thread) })
 })
 
 test('a reconnect joins every open thread again; the last leave sends leave', () => {
@@ -69,14 +26,12 @@ test('a reconnect joins every open thread again; the last leave sends leave', ()
   assert.deepEqual(sent, [{ type: 'leave', thread: 'th_1' }])
 })
 
-test('a reply whose own stream dropped keeps showing the live text while the agent is still answering', async () => {
-  const streaming = { turnId: 'turn_1', text: 'Half a reply' }
-  const replying = { state: 'replying' as const, turnId: 'turn_1' }
-  assert.equal(liveReplyText({ busy: false, live: { streaming, agent: replying }, lastId: 'turn_1' }), 'Half a reply')
-  assert.equal(liveReplyText({ busy: false, live: { streaming, agent: { state: 'idle' } }, lastId: 'turn_1' }), undefined)
-  assert.equal(liveReplyText({ busy: false, live: { streaming, agent: replying }, lastId: 'other' }), undefined)
-  snapshot = { turnId: 'turn_1', seq: 3, text: 'Half a reply', agent: replying }
-  assert.equal((await liveThreads.catchUp('th_1'))?.turnId, 'turn_1')
+test('coming back to the tab refetches every open thread, so a turn that started or ended meanwhile shows', () => {
+  liveThreads.join('th_1')
+  liveThreads.join('th_2')
+  liveThreads.leave('th_2')
+  liveThreads.refresh()
+  assert.deepEqual(refetched, ['th_1'])
 })
 
 test('typing and answering lines read naturally', () => {
@@ -103,18 +58,6 @@ test('a thread nobody opened reads its typing and agent state from the agents bo
   liveThreads.leave('th_2')
   assert.equal(liveThreads.joined('th_2'), false)
   assert.deepEqual(liveThreads.get('th_2').people, [])
-})
-
-test('a turn that starts before the last one refetched keeps the last text until its refetch', async () => {
-  delta(1, 'First answer')
-  const done = liveThreads.finish({ thread: 'th_1', turnId: 'turn_1' })
-  liveThreads.receive({ type: 'turn', thread: 'th_1', turnId: 'turn_2', state: 'started' })
-  delta(1, 'Second', 'turn_2')
-  assert.deepEqual(liveThreads.get('th_1').ending?.map((stream) => stream.text), ['First answer'])
-  assert.equal(liveThreads.get('th_1').stream?.text, 'Second')
-  await done
-  assert.deepEqual(liveThreads.get('th_1').ending, [])
-  assert.equal(liveThreads.get('th_1').stream?.text, 'Second')
 })
 
 test('a thread is working when its own presence or the agents board says so, and the agent works while one of its threads or sub-agents does', () => {
