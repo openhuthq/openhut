@@ -2,6 +2,7 @@ import { definePlugin } from '../../core/plugin.ts'
 import { config } from '../../server/platform/config.ts'
 import { AGENT_API_PORT, AGENT_API_PORT_BASE } from '../../agentd/network/ports.ts'
 import { deliverAppWakes } from './wakes.ts'
+import { chat as hub } from '../../server/chat/index.ts'
 import { threadController } from '../../server/threads/thread-controller.ts'
 import { createTables } from './tables.ts'
 import { notified, notifyController, notifyPrompt, notifyTool } from './notify.ts'
@@ -24,5 +25,8 @@ export const chat = definePlugin({
       },
     },
   }),
-  start: deliverAppWakes,
+  start: () => {
+    deliverAppWakes()
+    hub.start()
+  },
 })

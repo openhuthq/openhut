@@ -12,6 +12,7 @@ import { agent } from '../../core/agent.ts'
 import { slack, SlackSecrets } from '../integrations/slack/slack.ts'
 import { telegram, TelegramSecrets } from '../integrations/telegram/telegram.ts'
 import { discord } from '../integrations/discord/discord.ts'
+import { bots } from '../chat/bots.ts'
 import { agentService, placeOf, type AgentFacts } from '../agents/agent-service.ts'
 import { recordsService, type Held } from '../platform/records.ts'
 import { HOME } from '../team/home.ts'
@@ -328,7 +329,8 @@ function channelsOf(records: Held[]): Channel[] {
 function channelOf({ held, qr }: { held: Held; qr: string | null }): Channel {
   const value = ChannelRecord.parse(held.value)
   const botToken = value.kind === 'discord' ? ChannelSecrets.safeParse(held.secret).data?.botToken : undefined
-  return { id: held.id, object: 'channel', agentId: held.parent ?? '', kind: value.kind, status: value.status, account: value.account, ownerAddress: value.ownerAddress, open: value.open, allowed: value.allowed, names: value.names, qr, ...botToken && { link: discord.invite(botToken) }, createdAt: value.createdAt }
+  const offline = value.kind === 'discord' ? bots.offline(held.parent ?? '') : undefined
+  return { id: held.id, object: 'channel', agentId: held.parent ?? '', kind: value.kind, status: value.status, account: value.account, ownerAddress: value.ownerAddress, open: value.open, allowed: value.allowed, names: value.names, qr, ...botToken && { link: discord.invite(botToken) }, ...offline && { offline }, createdAt: value.createdAt }
 }
 
 function rowChannel({ row, qr }: { row: Row; qr: string | null }): Channel {

@@ -20,6 +20,8 @@ let list: Plugin[] | undefined
 
 export const plugins = (): Plugin[] => list ??= ordered()
 
+export const startPlugins = (): void => { for (const plugin of plugins()) plugin.start?.() }
+
 function ordered(): Plugin[] {
   const before = [base, models, chat, channels, self, connections, keys, browser, onboarding]
   const after = [inbox, post, cards, subagents, github]
