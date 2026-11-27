@@ -6,7 +6,7 @@ const FACE = 'https://dl.openhut.dev/a/abc.png'
 
 test('the footer names the agent, shows its face and links only to openhut.dev', () => {
   const body = signed({ body: 'Adds an index.', name: 'Database', face: FACE })
-  assert.equal(body, `Adds an index.\n\n${MARK}\n---\n<sub><img src="${FACE}" width="16" height="16" align="top" alt=""> Opened by <b>Database</b>, an AI agent · Made with <a href="https://openhut.dev/?ref=gh">OpenHut</a></sub>`)
+  assert.equal(body, `Adds an index.\n\n${MARK}\n---\n<sub><img src="${FACE}" width="16" height="16" align="top" alt=""> Opened by <b>Database</b>, an AI agent</sub>`)
   assert.equal(signed({ body: '', name: 'Database', face: null }).startsWith(`${MARK}\n---\n<sub>Opened by <b>Database</b>`), true)
   assert.match(signed({ body: '', name: '<script>', face: null }), /<b>&#60;script&#62;<\/b>/)
 })

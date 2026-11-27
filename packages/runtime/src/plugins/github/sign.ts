@@ -4,7 +4,7 @@ const LIMIT = 65_000
 
 export function signed({ body, name, face }: { body: string; name: string; face: string | null }): string {
   const image = face ? `<img src="${face}" width="16" height="16" align="top" alt=""> ` : ''
-  const footer = `${MARK}\n---\n<sub>${image}Opened by <b>${escaped(name)}</b>, an AI agent · Made with <a href="https://openhut.dev/?ref=gh">OpenHut</a></sub>`
+  const footer = `${MARK}\n---\n<sub>${image}Opened by <b>${escaped(name)}</b>, an AI agent</sub>`
   const text = body.split(MARK)[0].trimEnd().slice(0, LIMIT - footer.length - 2)
   return text ? `${text}\n\n${footer}` : footer
 }
