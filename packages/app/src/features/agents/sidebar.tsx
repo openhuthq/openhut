@@ -1,6 +1,5 @@
 import { createContext, useEffect, useState, type MouseEvent, type ReactElement } from 'react'
-import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react'
-import { ArchiveIcon, CancelCircleIcon, CheckmarkCircle02Icon, CircleIcon, DashedLineCircleIcon, PauseCircleIcon, ArrowDown01Icon, ArrowRight01Icon, BubbleChatIcon, Clock01Icon, Delete02Icon, GitBranchIcon, Logout01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SidebarLeftIcon, StopIcon, WebhookIcon } from '@hugeicons/core-free-icons'
+import { ArchiveIcon, ArrowDown01Icon, ArrowRight01Icon, BubbleChatIcon, Clock01Icon, Delete02Icon, Logout01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SidebarLeftIcon, StopIcon, WebhookIcon } from '@hugeicons/core-free-icons'
 import type { OpenHutAgent } from '@/lib/openhut'
 import { Subagent } from '@openhut/common/agents/subagent.ts'
 import { Button } from '@/components/ui/button'
@@ -11,10 +10,9 @@ import { Hut } from '@/components/hut'
 import { GLASS, HOVER, I, ICON_BUTTON, PICKED, SURFACE } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
 import { agentPath, threadRoute } from '@/app/routes'
-import { firstThreads, sourceOf, type SourcedThread } from '@/features/threads/places'
+import { firstThreads, sourceOf, startedIn, type SourcedThread } from '@/features/threads/places'
 import { useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
-import { Face, lookOf } from '@/features/agents/face'
-import { SWATCHES } from '@/lib/face'
+import { Face } from '@/features/agents/face'
 import { toneOf, troubleOf, wordOf } from '@/features/agents/status'
 import { useSignOut } from '@/features/auth/api'
 import { useOwner } from '@/features/people/api'
@@ -26,9 +24,9 @@ import { PHONE, useMedia } from '@/lib/media'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
-import { useLiveLine } from '@/features/threads/live'
-import { useAgentsLive, type LiveAgentBoard } from '@/lib/thread-live'
+import { useAgentsLive, usePresence, type LiveAgentBoard } from '@/lib/thread-live'
 import { useArchiveThread } from '@/features/threads/api'
+import { summaryOf, type Progress } from '@/features/agents/progress'
 
 const ROUND = 'float phone:size-10 phone:rounded-full phone:bg-card phone:text-ink'
 
@@ -115,39 +113,41 @@ function AgentRow({ agent, threads, active, threadId, phone }: { agent: OpenHutA
   const open = (phone || expanded) && shown > 0
   const idle = agent.online ? troubleOf(agent) ?? (agent.summary || 'Say hello') : 'Offline'
   const line = lineOf({ working, waiting, activity, idle })
+  const summary = summaryOf({ working, waiting, activity })
   const [more, setMore] = useState(false)
-  const accent = SWATCHES[lookOf(agent).body].shade
-  const rows = children.map((child) => <Session key={child.id} gone={child.gone} icon={<I icon={GitBranchIcon} size={12} />} title={child.title} detail="Sub-agent" status={child.status} time={ago(child.startedAt)} accent={accent} />)
+  const rows = children.map((child) => <Session key={child.id} gone={child.gone} title={child.title} status={child.status} time={ago(child.startedAt)} />)
   const cut = children.findIndex((_, index) => children.slice(0, index + 1).filter((child) => !child.gone).length > FIRST)
   const toggle = () => setExpanded(!open)
-  return <div className="group relative flex flex-col">
+  return <div className="flex flex-col">
+    <div className="group/agent relative">
     <RowMenu agent={agent}><a href={agentPath({ agentId: agent.id })} aria-current={active ? 'page' : undefined}
-      className={cn('row grid w-full shrink-0 data-popup-open:bg-picked grid-cols-[40px_1fr] items-center gap-3 rounded-lg px-2.5 py-2 text-left text-inherit no-underline phone:grid-cols-[52px_1fr_auto] phone:gap-3.5 phone:rounded-2xl phone:px-3 phone:py-3', HOVER, shown > 0 && 'pr-8', !phone && active && !(open && sessions.some((each) => each.id === threadId)) && PICKED)}
+      className={cn('row grid h-10 w-full shrink-0 data-popup-open:bg-picked grid-cols-[28px_1fr_auto] items-center gap-2.5 rounded-lg px-2 text-left text-inherit no-underline phone:h-auto phone:grid-cols-[52px_1fr_auto] phone:gap-3.5 phone:rounded-2xl phone:px-3 phone:py-3', HOVER, !phone && active && !(open && sessions.some((each) => each.id === threadId)) && PICKED)}
       title={agent.online ? undefined : 'Offline'}>
-      <span className={cn('relative', !agent.online && 'opacity-45')}><Face agent={agent} size={phone ? 52 : 40} /><Live agent={agent} className="-right-0.5 -bottom-0.5 phone:size-3.5" /></span>
+      <span className={cn('relative', !agent.online && 'opacity-45')}><Face agent={agent} size={phone ? 52 : 28} /><Live agent={agent} className="-right-0.5 -bottom-0.5 size-2.5 border-[1.5px] phone:size-3.5 phone:border-2" /></span>
       <span className="grid min-w-0 gap-0.5">
-        <span className="flex min-w-0 items-center gap-2"><span className={cn('truncate text-[14px] font-semibold phone:text-[17px]', !agent.online && 'text-mute')}>{agent.name}</span></span>
-        <span className={cn('truncate text-[13px]', agent.online ? 'text-body' : 'text-mute', agent.online && !working && troubleOf(agent) && 'text-fail')}>{line}</span>
+        <span className={cn('truncate text-[13.5px] font-semibold phone:text-[17px]', !agent.online && 'text-mute')}>{agent.name}</span>
+        <span className={cn('hidden truncate text-[13px] phone:block', agent.online ? 'text-body' : 'text-mute', agent.online && !working && troubleOf(agent) && 'text-fail')}>{line}</span>
       </span>
       {thread && <span className="hidden self-start pt-1 text-[12px] text-mute tabular-nums phone:block">{ago(thread.updatedAt)}</span>}
+      <span className={cn('flex items-center text-[11.5px] text-mute tabular-nums phone:hidden', shown > 0 && 'transition-opacity group-hover/agent:opacity-0 group-focus-within/agent:opacity-0')}>{open ? listed.length || '' : summary && <Mark status={summary} />}</span>
     </a></RowMenu>
-    {!open && shown > 0 && <span className="pointer-events-none absolute top-[19px] right-3 flex items-center gap-1.5 text-[11.5px] text-mute-2 tabular-nums transition-opacity group-hover:opacity-0"><Mark status="working" accent={accent} />{working || ''}</span>}
     {shown > 0 && !phone && <Button type="button" variant="bare" aria-label={open ? `Collapse ${agent.name}` : `Expand ${agent.name}`} aria-expanded={open} onClick={toggle}
-      className={cn('absolute top-[16px] right-1.5 grid size-6 place-items-center rounded-md text-mute transition-opacity', HOVER, open ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100')}>
+      className={cn('absolute top-2 right-1 grid size-6 place-items-center rounded-md text-mute opacity-0 transition-opacity group-hover/agent:opacity-100 focus-visible:opacity-100', HOVER)}>
       <I icon={open ? ArrowDown01Icon : ArrowRight01Icon} size={14} />
     </Button>}
-    {open && <div className="flex flex-col gap-0.5 pt-1.5 pb-2 pl-[32px] phone:pl-[48px]">
+    </div>
+    {open && <div className="flex flex-col gap-px pt-0.5 pb-2.5 phone:gap-0.5 phone:pt-1.5 phone:pb-2 phone:pl-[48px]">
       {more ? rows : rows.slice(0, cut === -1 ? rows.length : cut)}
-      {subagents > FIRST && <Button type="button" variant="bare" onClick={() => setMore(!more)} className={cn('flex h-8 w-full items-center justify-start rounded-md px-2 text-[12.5px] font-normal text-mute', HOVER)}>
+      {subagents > FIRST && <Button type="button" variant="bare" onClick={() => setMore(!more)} className={cn(MORE, HOVER)}>
         {more ? 'Show less' : `Show ${subagents - FIRST} more`}
       </Button>}
-      {sessions.map((each) => <ThreadRow key={each.id} agentId={agent.id} thread={each} accent={accent} active={threadId === each.id} />)}
-      {listed.length > sessions.length && <a href={agentPath({ agentId: agent.id, dialog: 'threads' })} className={cn('flex h-8 w-full items-center rounded-md px-2 text-[12.5px] text-mute no-underline', HOVER)}>Show all ({listed.length})</a>}
+      {sessions.map((each) => <ThreadRow key={each.id} agentId={agent.id} thread={each} active={threadId === each.id} />)}
+      {listed.length > sessions.length && <a href={agentPath({ agentId: agent.id, dialog: 'threads' })} className={cn(MORE, 'no-underline', HOVER)}>Show all ({listed.length})</a>}
     </div>}
   </div>
 }
 
-type Progress = 'idle' | 'queued' | 'working' | 'review' | 'done' | 'failed'
+const MORE = 'flex h-[30px] w-full items-center justify-start rounded-lg pr-2 pl-[46px] text-[12.5px] font-normal text-mute'
 
 function lineOf({ working, waiting, activity, idle }: { working: number; waiting: number; activity: LiveAgentBoard['activity']; idle: string }) {
   if (working) return `Working on ${working} ${working === 1 ? 'task' : 'tasks'}`
@@ -159,55 +159,58 @@ function lineOf({ working, waiting, activity, idle }: { working: number; waiting
 
 const SOURCE_ICON = { app: BubbleChatIcon, webhook: WebhookIcon, routine: Clock01Icon }
 
-export function ThreadRow({ agentId, thread, active, accent }: { agentId: string; thread: SourcedThread; active: boolean; accent: string }) {
+const ROW = 'grid h-[30px] shrink-0 grid-cols-[28px_1fr_auto] items-center gap-2.5 rounded-lg px-2 text-inherit no-underline'
+
+export function ThreadRow({ agentId, thread, active }: { agentId: string; thread: SourcedThread; active: boolean }) {
   const source = sourceOf(thread)
-  const live = useLiveLine(thread.id)
+  const busy = usePresence(thread.id).agent.state !== 'idle'
   const archive = useArchiveThread(thread)
   const main = thread.id === thread.agentId
+  const where = startedIn(thread)
+  const status = thread.waiting ? 'review' : busy ? 'working' : 'idle'
   const onArchive = (event: MouseEvent) => {
     event.preventDefault()
     event.stopPropagation()
     archive.mutate(undefined, { onSuccess: () => active && navigate(agentPath({ agentId })), onError: toastError })
   }
   return <div className="group/thread relative">
-  <a href={threadRoute({ agentId, threadId: thread.id })} aria-current={active ? 'page' : undefined} title={source.word} className={cn('grid shrink-0 grid-cols-[14px_1fr_auto] items-start gap-x-2 rounded-lg px-2 py-1.5 text-inherit no-underline', HOVER, active && PICKED, !main && 'group-hover/thread:pr-9 group-focus-within/thread:pr-9')}>
-    <span className="grid h-[18px] place-items-center text-mute">{source.platform === 'discord' ? <Glyph name="discord" size={13} /> : <I icon={SOURCE_ICON[source.platform]} size={13} />}</span>
-    <span className="grid min-w-0">
-      <span className="truncate text-[13px]/[18px] font-medium text-ink">{thread.title}</span>
-      <span className="flex min-w-0 text-[11.5px]/[16px] text-mute-2 tabular-nums">{live ?? <span className="min-w-0 truncate">{source.label}</span>}<span className="shrink-0 whitespace-pre"> · {ago(thread.updatedAt)}</span></span>
+  <a href={threadRoute({ agentId, threadId: thread.id })} aria-current={active ? 'page' : undefined} className={cn(ROW, HOVER, active && PICKED)}>
+    <span className="grid place-items-center text-mute-2"><Mark status={status} /></span>
+    <span className="truncate text-[13px] font-medium text-ink">{thread.title}</span>
+    <span className={cn('flex items-center gap-[5px] text-[11.5px] text-mute tabular-nums', !main && 'group-hover/thread:invisible group-focus-within/thread:invisible')}>
+      <span role="img" aria-label={where} title={where} className="grid place-items-center">{source.platform === 'discord' ? <Glyph name="discord" size={12} /> : <I icon={SOURCE_ICON[source.platform]} size={12} />}</span>
+      {ago(thread.updatedAt)}
     </span>
-    {thread.waiting && <span className={cn('flex h-[18px] items-center gap-1 text-[11.5px] text-ink', !main && 'group-hover/thread:hidden group-focus-within/thread:hidden')}><Mark status="review" accent={accent} />Waiting on you</span>}
   </a>
   {!main && <Button type="button" variant="bare" aria-label={`Archive ${thread.title}`} title="Archive" disabled={archive.isPending} onClick={onArchive}
-    className={cn('absolute top-1/2 right-1.5 grid size-6 -translate-y-1/2 place-items-center rounded-md text-mute opacity-0 transition-opacity group-hover/thread:opacity-100 group-focus-within/thread:opacity-100', HOVER)}>
+    className={cn('absolute top-1/2 right-1 grid size-6 -translate-y-1/2 place-items-center rounded-md text-mute opacity-0 transition-opacity group-hover/thread:opacity-100 group-focus-within/thread:opacity-100', HOVER)}>
     <I icon={ArchiveIcon} size={14} />
   </Button>}
   </div>
 }
 
-const SESSION = 'grid h-8 shrink-0 grid-cols-[14px_1fr_auto] items-center gap-2 overflow-hidden rounded-lg px-2 text-inherit no-underline transition-[height,opacity] duration-500 ease-out'
-
-function Session({ gone, icon, title, detail, status, time, accent }: {
-  gone: boolean; icon: ReactElement; title: string; detail: string; status: Progress; time: string; accent: string
-}) {
-  const body = <>
-    <span className="grid place-items-center"><Mark status={status} accent={accent} /></span>
-    <span className="min-w-0 truncate text-[13px] font-medium text-ink">{title}</span>
-    <span className="flex items-center gap-1.5 text-[11.5px] text-mute-2 tabular-nums"><span className="grid place-items-center">{icon}</span>{time}</span>
-  </>
-  return <div title={detail} className={cn(SESSION, HOVER, gone && 'h-0 opacity-0')}>{body}</div>
+function Session({ gone, title, status, time }: { gone: boolean; title: string; status: Progress; time: string }) {
+  return <div title="Sub-agent" className={cn(ROW, 'overflow-hidden transition-[height,opacity] duration-500 ease-out', HOVER, gone && 'h-0 opacity-0')}>
+    <span className="grid place-items-center text-mute-2"><Mark status={status} /></span>
+    <span className={cn('min-w-0 truncate text-[13px] font-medium', status === 'done' ? 'text-body' : 'text-ink')}>{title}</span>
+    <span className="text-[11.5px] text-mute tabular-nums">{time}</span>
+  </div>
 }
 
-const MARK_ICON: Record<Progress, IconSvgElement> = { idle: CircleIcon, queued: DashedLineCircleIcon, working: DashedLineCircleIcon, review: PauseCircleIcon, done: CheckmarkCircle02Icon, failed: CancelCircleIcon }
-const MARK_COLOR: Partial<Record<Progress, string>> = { done: 'oklch(62% .13 150)', failed: 'oklch(60% .15 27)' }
-
-function Mark({ status, accent }: { status: Progress; accent: string }) {
-  return <span role="img" aria-label={MARK_LABEL[status]} className={cn('grid place-items-center', status === 'working' && 'animate-[spin_3s_linear_infinite] motion-reduce:animate-none', status === 'queued' && 'opacity-45', (status === 'done' || status === 'failed') && 'animate-[pop_.4s_ease-out]')}>
-    <HugeiconsIcon icon={MARK_ICON[status]} size={14} strokeWidth={1.8} color={MARK_COLOR[status] ?? (status === 'idle' ? 'currentColor' : accent)} aria-hidden="true" />
-  </span>
+const MARK: Record<Progress, ReactElement> = {
+  idle: <circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" strokeWidth="1.5" />,
+  queued: <circle cx="7" cy="7" r="6" fill="none" stroke="#8a8a8a" strokeWidth="1.5" strokeDasharray="2.2 1.9" />,
+  working: <><circle cx="7" cy="7" r="6" fill="none" stroke="#CDA23A" strokeWidth="1.5" /><path d="M7 4a3 3 0 0 1 0 6z" fill="#CDA23A" /></>,
+  review: <><circle cx="7" cy="7" r="6" fill="none" stroke="#D9824A" strokeWidth="1.5" /><circle cx="7" cy="7" r="2.2" fill="#D9824A" /></>,
+  done: <><circle cx="7" cy="7" r="7" fill="#8A90CF" /><path d="M4.2 7.2l1.9 1.9 3.7-3.9" stroke="#fff" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></>,
+  failed: <><circle cx="7" cy="7" r="6" fill="none" stroke="#a3a3a3" strokeWidth="1.5" /><path d="M5.2 5.2l3.6 3.6M8.8 5.2l-3.6 3.6" stroke="#a3a3a3" strokeWidth="1.6" strokeLinecap="round" /></>,
 }
 
-const MARK_LABEL: Record<Progress, string> = { idle: 'Idle', queued: 'Waiting', working: 'Working', review: 'Needs you', done: 'Done', failed: 'Failed' }
+function Mark({ status }: { status: Progress }) {
+  return <svg role="img" aria-label={MARK_LABEL[status]} width="14" height="14" viewBox="0 0 14 14" className={cn('shrink-0', (status === 'done' || status === 'failed') && 'animate-[pop_.4s_ease-out] motion-reduce:animate-none')}>{MARK[status]}</svg>
+}
+
+const MARK_LABEL: Record<Progress, string> = { idle: 'Idle', queued: 'Queued', working: 'Working', review: 'Needs you', done: 'Done', failed: 'Failed' }
 
 function RowMenu({ agent, children }: { agent: OpenHutAgent; children: ReactElement }) {
   const update = useUpdateAgent(agent.id)
