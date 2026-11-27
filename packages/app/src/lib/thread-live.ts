@@ -99,9 +99,9 @@ export const liveThreads = {
       return begin(live, drain({ ...stream, early: new Map(stream.early).set(event.seq, event.text) }))
     })
   },
-  async catchUp(thread: string) {
+  async catchUp(thread: string): Promise<LiveSnapshot | undefined> {
     const snapshot = await wire?.fetchLive(thread).catch(() => undefined)
-    if (!snapshot) return
+    if (!snapshot) return undefined
     put(thread, (live) => {
       const base = { ...live, agent: snapshot.agent }
       if (!snapshot.turnId) return { ...base, stream: undefined }
@@ -109,6 +109,7 @@ export const liveThreads = {
       if (live.stream?.turnId === snapshot.turnId && live.stream.seq >= snapshot.seq) return base
       return { ...base, stream: drain({ turnId: snapshot.turnId, seq: snapshot.seq, text: snapshot.text, early }) }
     })
+    return snapshot
   },
   async finish({ thread, turnId }: { thread: string; turnId: string }) {
     await wire?.refetch(thread).catch(() => undefined)
@@ -179,6 +180,11 @@ export function useThreadLive(thread: string): { streaming?: { turnId: string; t
   }, [thread])
   const live = useLive(thread)
   return { streaming: live.stream && live.stream.seq >= 0 ? { turnId: live.stream.turnId, text: live.stream.text } : undefined, ending: live.ending ?? [], agent: live.agent }
+}
+
+export function liveReplyText({ busy, live, lastId }: { busy: boolean; live: { streaming?: { turnId: string; text: string }; agent: AgentLive }; lastId?: string }): string | undefined {
+  if (busy) return live.streaming?.text
+  return live.agent.state !== 'idle' && live.streaming?.turnId === lastId ? live.streaming?.text : undefined
 }
 
 export function presenceOf(live: ThreadLive | LiveThreadBoard | undefined): { people: LivePerson[]; typing: LivePerson[]; agent: AgentLive } {
