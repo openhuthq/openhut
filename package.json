@@ -10,6 +10,7 @@
   ],
   "scripts": {
     "dev": "node scripts/dev.ts",
+    "demo": "node scripts/demo.ts",
     "seed": "node scripts/seed-ui.ts",
     "reset": "rm -rf .data && echo Wiped .data.",
     "check": "TURBO_SCM_BASE=${TURBO_SCM_BASE:-origin/main} turbo run typecheck test --affected",

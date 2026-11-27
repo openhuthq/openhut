@@ -146,6 +146,7 @@ is the `openhut-dev-loop` skill (`.agents/skills/`, linked from `.claude/skills`
 | Command | What it does |
 |---|---|
 | `npm run dev` | agentd, the runtime server and Vite on localhost. The everyday loop |
+| `npm run demo` | The real app with sample agents and nothing else: in-memory agents, the test model, a throwaway data folder, Vite on 127.0.0.1. No Docker or keys; Linux or Mac, headless. For agents that need to look at the app |
 | `npm run seed` | Sample agents and connections in the running dev app (on a fresh `.data`) |
 | `npm run reset` | Wipe `.data` |
 | `npm run check` | Typecheck and test only what changed since `origin/main` |

@@ -44,7 +44,7 @@ export type Origin = z.infer<typeof Origin>
 export const placeFor = (input: { agentId: string; origin: Origin }): Promise<string> => placeOf(input)
 type Stored = Origin & { place: string }
 type RoutineRow = Selectable<Database['inbox_source']>
-type ScheduleInput = { name: string; plan: string; at?: string; cron?: string; until?: string; origin?: unknown }
+type ScheduleInput = { name: string; plan: string; at?: string; cron?: string; until?: string; origin?: unknown; replaces?: string }
 export type Fired = { runId: string; routineId: string; agentId: string; text: string }
 
 const ranToday = new Map<string, { day: string; count: number; capLogged: boolean }>()
@@ -57,23 +57,27 @@ export const routineService = {
     const plan = input.plan.trim().slice(0, ROUTINE_PLAN_MAX)
     if (!name || !plan) throw new HttpError(400, 'Give the routine a name and a plan.')
     if (!!input.at === !!input.cron) throw new HttpError(400, 'Send either at (one time) or cron (repeating), not both.')
-    const origin = z.safeParse(Origin, input.origin)
+    const old = input.replaces ? await db.selectFrom('inbox_source').selectAll().where('id', '=', input.replaces).where('agent_id', '=', agentId).where('kind', '=', 'schedule').executeTakeFirst() : undefined
+    if (input.replaces && !old) throw new HttpError(404, `No routine ${input.replaces}. Call list_routines to see yours.`)
+    const origin = old ? { success: true as const, data: hermesOrigin(originOf(old)) } : z.safeParse(Origin, input.origin)
     if (!origin.success) throw new HttpError(400, 'You can only set up routines from a chat you\'re in.')
     const place = await placeOf({ agentId, origin: origin.data })
-    if (await openRun(agentId)) throw new HttpError(409, 'A routine can\'t set up another routine. Tell the person instead.')
+    if (!old && await openRun(agentId)) throw new HttpError(409, 'A routine can\'t set up another routine. Tell the person instead.')
     const active = await db.selectFrom('inbox_source').select((eb) => eb.fn.countAll<number>().as('n')).where('agent_id', '=', agentId).where('kind', '=', 'schedule').executeTakeFirstOrThrow()
-    if (Number(active.n) >= MAX_ACTIVE) throw new HttpError(409, `You already have ${MAX_ACTIVE} routines. Stop one with cancel_routine first.`)
+    if (!old && Number(active.n) >= MAX_ACTIVE) throw new HttpError(409, `You already have ${MAX_ACTIVE} routines. Stop one with cancel_routine first.`)
     const now = new Date()
     const at = input.at ? timeOf({ value: input.at, field: 'at' }) : null
     if (at && at.getTime() < now.getTime() - 60_000) throw new HttpError(400, 'That time has passed. Pick a time in the future.')
-    const until = input.cron ? untilOf({ value: input.until, now }) : null
+    const endless = !!old?.cron && !old.until && !!input.cron
+    const until = input.cron && !endless ? untilOf({ value: input.until, now }) : null
     const nextRunAt = at ?? nextOf({ cron: checkedCron(input.cron ?? ''), after: now })
-    const row = await db.insertInto('inbox_source').values({
-      id: newId('rt'), agent_id: agentId, kind: 'schedule', name, plan, at, cron: input.cron ?? null, until, origin: JSON.stringify({ ...origin.data, place }), next_run_at: nextRunAt,
-    }).returningAll().executeTakeFirstOrThrow()
+    const fields = { name, plan, at, cron: input.cron ?? null, until, origin: JSON.stringify({ ...origin.data, place }), next_run_at: nextRunAt }
+    const row = old
+      ? await db.updateTable('inbox_source').set({ ...fields, failures: 0 }).where('id', '=', old.id).returningAll().executeTakeFirstOrThrow()
+      : await db.insertInto('inbox_source').values({ id: newId('rt'), agent_id: agentId, kind: 'schedule', ...fields }).returningAll().executeTakeFirstOrThrow()
     await upload(row)
-    changed({ name: 'routine.scheduled', agentId, routineId: row.id, properties: { cron: row.cron, at: at?.toISOString() } })
-    return `Scheduled ${row.id}, next ${nextRunAt ? shortTime(nextRunAt) : 'never'}. Reports go to ${place}.`
+    changed({ name: old ? 'routine.updated' : 'routine.scheduled', agentId, routineId: row.id, properties: { cron: row.cron, at: at?.toISOString() } })
+    return `${old ? 'Changed' : 'Scheduled'} ${row.id}, next ${nextRunAt ? shortTime(nextRunAt) : 'never'}. Reports go to ${place}.${endless ? ' No end date, as the owner set it.' : ''}`
   },
 
   async listForAgent({ agentId }: { agentId: string }): Promise<string> {

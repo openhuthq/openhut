@@ -42,7 +42,7 @@ test('the agent sees four routine tools, and origin is not in the schema it gets
   const names = tools.map((tool) => tool.name)
   for (const name of ['schedule_routine', 'list_routines', 'run_routine', 'cancel_routine']) assert.ok(names.includes(name), name)
   const schedule = tools.find((tool) => tool.name === 'schedule_routine')
-  assert.deepEqual(Object.keys(schedule?.inputSchema.properties ?? {}).sort(), ['at', 'cron', 'name', 'plan', 'until'])
+  assert.deepEqual(Object.keys(schedule?.inputSchema.properties ?? {}).sort(), ['at', 'cron', 'name', 'plan', 'replaces', 'until'])
   await client.close()
 })
 
