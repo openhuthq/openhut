@@ -14,7 +14,7 @@ import { agentPath } from '@/app/routes'
 import { AccessPicker } from '@/features/agents/access'
 import { Face } from '@/features/agents/face'
 import { MemoryEditor } from '@/features/agents/memory-dialog'
-import { SkillsBrowser } from '@/features/agents/skills-dialog'
+import { SkillsBrowser, type Crumb } from '@/features/agents/skills-dialog'
 import { useChannels, useCreateGrant, useDeleteAgent, useDeleteChannel, useDeleteGrant, useGrants, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
 import { ORDER } from '@/features/agents/channel-kinds'
 import { ModelRows } from '@/features/agents/model-rows'
@@ -80,9 +80,11 @@ function Pane({ agent, tab }: { agent: Agent; tab: typeof SETUP_TABS[number]['sl
   }
 }
 
-function Head({ title, subtitle, count, action }: { title: string; subtitle: string; count?: string; action?: ReactNode }) {
+function Head({ title, subtitle, count, action, crumb }: { title: string; subtitle: string; count?: string; action?: ReactNode; crumb?: Crumb }) {
   return <div className="flex shrink-0 flex-col">
-    <h2 className="m-0 pr-[52px] text-[15px]/[22px] font-medium">{title}</h2>
+    {crumb
+      ? <h2 className="m-0 flex min-w-0 items-center gap-1.5 pr-[52px] text-[15px]/[22px] font-medium"><Button type="button" variant="bare" className="h-auto p-0 text-[15px] font-medium text-mute hover:text-ink" onClick={crumb.onBack}>{title}</Button><I icon={ArrowRight01Icon} size={13} className="shrink-0 text-mute-2" /><span className="min-w-0 truncate">{crumb.label}</span></h2>
+      : <h2 className="m-0 pr-[52px] text-[15px]/[22px] font-medium">{title}</h2>}
     <p className="m-0 pr-[52px] text-[12.5px]/[18px] text-mute">{subtitle}</p>
     {(count || action) && <div className="mt-[18px] mb-1.5 flex min-h-[26px] items-center pr-8 text-[12px]/[16px] text-mute">{count}<span className="ml-auto">{action}</span></div>}
     {!count && !action && <div className="h-[18px]" />}
@@ -214,18 +216,11 @@ function ChannelsPane({ agent }: { agent: Agent }) {
 }
 
 function MemoryPane({ agent }: { agent: Agent }) {
-  return <>
-    <Head title="Memory" subtitle={`What ${agent.name} remembers`} />
-    <div className="-mb-6 flex min-h-0 flex-1 flex-col"><MemoryEditor agent={agent} /></div>
-  </>
+  return <div className="flex min-h-0 flex-1 flex-col"><MemoryEditor agent={agent} head={(crumb) => <Head title="Memory" subtitle={`What ${agent.name} remembers`} crumb={crumb} />} /></div>
 }
 
 function SkillsPane({ agent }: { agent: Agent }) {
-  const skills = useSkills(agent.id)
-  return <>
-    <Head title="Skills" subtitle={`What ${agent.name} knows how to do`} count={skills.data ? countOf(skills.data.length, 'skill', 'skills') : undefined} />
-    <div className="-mb-6 flex min-h-0 flex-1 flex-col"><SkillsBrowser agent={agent} /></div>
-  </>
+  return <div className="flex min-h-0 flex-1 flex-col"><SkillsBrowser agent={agent} head={(crumb) => <Head title="Skills" subtitle={`What ${agent.name} knows how to do`} crumb={crumb} />} /></div>
 }
 
 function RoutinesPane({ agent }: { agent: Agent }) {

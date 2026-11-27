@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { ArrowLeft01Icon, Delete02Icon, Note01Icon, PlusSignIcon, UserIcon } from '@hugeicons/core-free-icons'
+import { Delete02Icon, Note01Icon, PlusSignIcon, UserIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { Memory, MemoryTarget } from '@openhut/common/agents/memory.ts'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/empty-state'
 import { ErrorNote } from '@/components/error-note'
 import { I, Loading, PILL } from '@/components/kit'
 import { useMemory, useUpdateMemory } from '@/features/agents/api'
+import type { Crumb } from '@/features/agents/skills-dialog'
 import { formValues } from '@/lib/form'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
@@ -20,17 +21,17 @@ const KINDS: { target: MemoryTarget; label: string; one: string; icon: typeof Us
 
 type Entry = { kind: (typeof KINDS)[number]; text: string; index: number; key: string }
 
-export function MemoryEditor({ agent }: { agent: Agent }) {
+export function MemoryEditor({ agent, head }: { agent: Agent; head: (crumb?: Crumb) => ReactNode }) {
   const memory = useMemory(agent.id)
   return <>
-    {!agent.runsHere && <p className="m-0 mb-3 text-[13px] text-mute">On another computer. Run the agent here to change it.</p>}
+    {!memory.data && head()}
     <ErrorNote message={memory.error?.message} />
     {!memory.data && !memory.error && <Loading />}
-    {memory.data && <Entries agent={{ ...agent, canEdit: agent.canEdit && agent.runsHere }} memory={memory.data} />}
+    {memory.data && <Entries agent={{ ...agent, canEdit: agent.canEdit && agent.runsHere }} memory={memory.data} head={head} />}
   </>
 }
 
-function Entries({ agent, memory }: { agent: Agent; memory: Memory }) {
+function Entries({ agent, memory, head }: { agent: Agent; memory: Memory; head: (crumb?: Crumb) => ReactNode }) {
   const update = useUpdateMemory(agent.id)
   const [picked, setPicked] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
@@ -45,7 +46,7 @@ function Entries({ agent, memory }: { agent: Agent; memory: Memory }) {
     const target = value('kind') === 'notes' ? 'notes' : 'people'
     save({ target, list: [...memory[target].entries, value('text')], done: back })
   }}>
-    <BackTo onBack={back} />
+    {head({ label: 'New', onBack: back })}
     <RadioGroup name="kind" variant="segmented" className="mb-3 w-[200px]">{KINDS.map((kind) => <RadioGroupItem key={kind.target} value={kind.target} disabled={!memory[kind.target].saved}
       defaultChecked={kind.target === KINDS.find((each) => memory[each.target].saved)?.target}><I icon={kind.icon} size={13} />{kind.one}</RadioGroupItem>)}</RadioGroup>
     <Textarea name="text" className="min-h-[160px] flex-1 resize-none text-[14px]/[1.6]" aria-label="New memory entry" required autoFocus placeholder={`What should ${agent.name} remember?`} />
@@ -53,8 +54,7 @@ function Entries({ agent, memory }: { agent: Agent; memory: Memory }) {
   </form>
   if (selected) return <form key={`${selected.key}:${selected.text}`} className="flex min-h-0 flex-1 flex-col pr-8"
     onSubmit={(event) => save({ target: selected.kind.target, list: memory[selected.kind.target].entries.map((each, j) => j === selected.index ? formValues(event)('text') : each), done: back })}>
-    <BackTo onBack={back} />
-    <span className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-mute"><I icon={selected.kind.icon} size={13} />{selected.kind.one}</span>
+    {head({ label: selected.kind.one, onBack: back })}
     <Textarea name="text" className="min-h-[160px] flex-1 resize-none text-[14px]/[1.6]" aria-label="Memory entry" required readOnly={!agent.canEdit} defaultValue={selected.text} />
     {agent.canEdit && <Foot>
       {removing
@@ -66,6 +66,8 @@ function Entries({ agent, memory }: { agent: Agent; memory: Memory }) {
     </Foot>}
   </form>
   return <>
+    {head()}
+    {!agent.runsHere && <p className="m-0 mb-2 text-[13px] text-mute">On another computer. Run the agent here to change it.</p>}
     <div className="mb-1.5 flex min-h-[26px] items-center pr-8 text-[12px]/[16px] text-mute">{all.length === 1 ? '1 note' : `${all.length} notes`}
       {agent.canEdit && saved && <Button type="button" variant="primary" className={cn(PILL, 'ml-auto gap-1')} onClick={() => { setAdding(true); setRemoving(false) }}><I icon={PlusSignIcon} size={14} />Add</Button>}
     </div>
@@ -77,10 +79,6 @@ function Entries({ agent, memory }: { agent: Agent; memory: Memory }) {
       </Button>)}
     </div>}
   </>
-}
-
-function BackTo({ onBack }: { onBack: () => void }) {
-  return <Button type="button" variant="bare" className="mb-3 -ml-1 inline-flex w-fit items-center gap-1 px-1 text-[13px] text-mute hover:text-ink" onClick={onBack}><I icon={ArrowLeft01Icon} size={14} />Memory</Button>
 }
 
 function Foot({ children }: { children: ReactNode }) {
