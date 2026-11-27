@@ -217,7 +217,7 @@ test('the delivery id comes from the sender\'s header, else the payload\'s top-l
 const DO_THREAD = 'p => `${p.subject}/${p.data.alert_rule_name}`'
 const DO_CARD = 'p => ({ title: `${p.data.alert_rule_name} · ${p.data.resource_name}`, status: p.data.state, details: `${p.data.value}%`, link: "https://cloud.digitalocean.com/monitoring", icon: "digitalocean" })'
 
-test('in group mode an alert and its recovery share a thread named by the card; a resend is counted, not woken; each call\'s message carries its card', async () => {
+test('in group mode an alert and its recovery share a thread; a resend is counted, not woken; each call\'s message carries its card', async () => {
   const hook = await inboxService.createSource({ actor: owner, agentId: 'ag_hookpuls', name: 'DO alerts' })
   assert.equal(hook.threads, 'group')
   const first = told.length
@@ -237,10 +237,8 @@ test('in group mode an alert and its recovery share a thread named by the card; 
   const [, triggered] = told.slice(first)
   assert.equal(told.length - first, 2)
   assert.doesNotMatch(triggered.text, /set_webhook_threads/)
-  assert.notEqual(told[first].threadId, triggered.threadId)
+  assert.equal(told[first].threadId, triggered.threadId)
   assert.deepEqual({ author: triggered.metadata?.author, call: triggered.metadata?.call }, { author: 'DO alerts', call: { webhookId: hook.id, card: { title: 'CPU high · pulse-db', status: 'STATE_TRIGGERED', details: '95%', link: 'https://cloud.digitalocean.com/monitoring', icon } } })
-  const thread = await db.selectFrom('chat_thread').select('title').where('id', '=', triggered.threadId ?? '').executeTakeFirstOrThrow()
-  assert.equal(thread.title, 'CPU high · pulse-db')
   const item = await db.selectFrom('inbox_item').select(['seen', 'sample', 'thread_id']).where('source_id', '=', hook.id).where('text', 'like', '%g-2%').executeTakeFirstOrThrow()
   assert.equal(item.seen, 2)
   assert.match(item.sample ?? '', /"value":96/)
@@ -316,6 +314,21 @@ test('X-Group-Key picks the thread, and each mode starts a new thread per call',
   assert.equal(told.length - first, 4)
   assert.notEqual(told[first + 2].threadId, told[first + 3].threadId)
   assert.notEqual(told[first + 2].threadId, told[first].threadId)
+})
+
+test('changing thread mid-conversation keeps each thread: its last call\'s new key maps to it, other groups still get their own', async () => {
+  const hook = await inboxService.createSource({ actor: owner, agentId: 'ag_hookpuls', name: 'Regrouped' })
+  const first = told.length
+  await doPost({ hook, body: doAlert({ id: 'r-1', state: 'STATE_TRIGGERED', value: 91, time: '2026-11-26T13:00:00Z' }) })
+  await settle()
+  const threadId = told[first].threadId
+  await inboxService.setThreads({ agentId: 'ag_hookpuls', id: hook.id, thread: DO_THREAD })
+  await doPost({ hook, body: doAlert({ id: 'r-2', state: 'STATE_RECOVERED', value: 30, time: '2026-11-26T13:20:00Z' }) })
+  await settle()
+  assert.equal(told[first + 1].threadId, threadId)
+  await doPost({ hook, body: JSON.stringify({ id: 'r-3', subject: 'other-db', data: { alert_rule_name: 'CPU high' } }) })
+  await settle()
+  assert.notEqual(told[first + 2].threadId, threadId)
 })
 
 test('a webhook that runs in Discord starts one Discord thread per group: the first call starts it, named by titleBy, and later calls reuse it', async () => {

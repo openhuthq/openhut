@@ -195,7 +195,9 @@ export const inboxService = {
     await inboxService.ownWebhook({ agentId, id })
     if (!threads && [filter, fingerprint, thread, card].every((each) => each === undefined)) throw new HttpError(400, 'Give at least one of threads, filter, fingerprint, thread or card.')
     const value = (source: string | undefined) => source === undefined ? undefined : source.trim() || null
+    const before = await db.selectFrom('inbox_source').select('thread').where('id', '=', id).executeTakeFirstOrThrow()
     const row = await db.updateTable('inbox_source').set({ threads, filter: value(filter), fingerprint: value(fingerprint), thread: value(thread), card: value(card) }).where('id', '=', id).returningAll().executeTakeFirstOrThrow()
+    if (row.thread !== before.thread) await regroup({ id, thread: row.thread })
     const each = row.threads === 'each' ? ' Each call starts a new thread, so thread isn\'t used.' : ' Related calls share a thread.'
     const last = (await lastPayloads([id])).get(id)
     if (last === undefined) return `Saved. There's no call yet to try them on.${each}`
@@ -310,6 +312,16 @@ async function threadOf({ agentId, row, title }: { agentId: string; row: Pending
   const id = await open()
   await db.insertInto('inbox_thread').values({ source_id: row.source_id, group_key: group, thread_id: id }).onConflict((conflict) => conflict.columns(['source_id', 'group_key']).doUpdateSet({ thread_id: id })).execute()
   return id
+}
+
+async function regroup({ id, thread }: { id: string; thread: string | null }): Promise<void> {
+  const held = await db.selectFrom('inbox_thread').select('thread_id').where('source_id', '=', id).execute()
+  for (const { thread_id } of held) {
+    const last = await db.selectFrom('inbox_item').select(['text', 'sample']).where('source_id', '=', id).where('thread_id', '=', thread_id).orderBy(sql`coalesce(last_at, created_at)`, 'desc').executeTakeFirst()
+    if (!last) continue
+    const group = (thread ? keyOf(await evaluate(thread, payloadOf(latestOf(last)))) : undefined) ?? ''
+    await db.insertInto('inbox_thread').values({ source_id: id, group_key: group, thread_id }).onConflict((conflict) => conflict.columns(['source_id', 'group_key']).doNothing()).execute()
+  }
 }
 
 async function callRow({ source, item }: { source: string | null; item: Pending }): Promise<WebhookCallRow> {
