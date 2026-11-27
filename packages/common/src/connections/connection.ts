@@ -1,13 +1,13 @@
 import * as z from 'zod/mini'
 import { ListQuery, Timestamp } from '../api.ts'
 
-export const KEYED_KINDS = ['postgres', 'convex', 'excalidraw', 'mcp'] as const
+export const KEYED_KINDS = ['postgres', 'clickhouse', 'betterstack', 'convex', 'excalidraw', 'mcp'] as const
 export const GOOGLE_KINDS = ['gmail', 'drive', 'google', 'google_chat', 'google_contacts', 'google_search'] as const
 export const SIGN_IN_KINDS = ['posthog', 'linear', 'github', ...GOOGLE_KINDS, 'mcp'] as const
-export const ConnectionKind = z.enum(['postgres', 'convex', 'posthog', 'linear', 'github', ...GOOGLE_KINDS, 'excalidraw', 'mcp'])
+export const ConnectionKind = z.enum(['postgres', 'clickhouse', 'betterstack', 'convex', 'posthog', 'linear', 'github', ...GOOGLE_KINDS, 'excalidraw', 'mcp'])
 export type ConnectionKind = z.infer<typeof ConnectionKind>
 export const CONNECTION_TITLES: Record<ConnectionKind, string> = {
-  postgres: 'Postgres', convex: 'Convex', posthog: 'PostHog', linear: 'Linear', github: 'GitHub', gmail: 'Gmail', drive: 'Google Drive',
+  postgres: 'Postgres', clickhouse: 'ClickHouse', betterstack: 'Better Stack', convex: 'Convex', posthog: 'PostHog', linear: 'Linear', github: 'GitHub', gmail: 'Gmail', drive: 'Google Drive',
   google: 'Google Workspace', google_chat: 'Google Chat', google_contacts: 'Google Contacts', google_search: 'Google Search', excalidraw: 'Excalidraw', mcp: 'MCP server',
 }
 
@@ -123,6 +123,7 @@ export const CreateConnection = z.object({
   name: Name,
   dsn: z.optional(z.string().check(z.minLength(1), z.maxLength(2000))),
   deployKey: z.optional(z.string().check(z.minLength(1), z.maxLength(2000))),
+  token: z.optional(z.string().check(z.minLength(1), z.maxLength(4000))),
   url: z.optional(McpUrl),
   header: z.optional(z.string().check(z.maxLength(4000))),
 })

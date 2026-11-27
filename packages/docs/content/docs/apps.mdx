@@ -38,6 +38,8 @@ Each is an official MCP server, run with your own credentials:
 - **Convex:** a deploy key.
 - **Excalidraw:** no account. Agents draw a diagram and send a link to it; anyone with the link can open it.
 - **Postgres:** read-only. Paste a connection string, or host, database, user and password. **Copy SQL** gives you the statements for a read-only role. OpenHut runs a test query when you save: if the database can't be reached, add this computer's IP to its trusted sources or firewall. A user that can change data still connects, with a warning to use a read-only one. Connection pools like PgBouncer work in any mode.
+- **ClickHouse:** read-only. Enter the address (like `https://abc.clickhouse.cloud:8443`), a user, a password and an optional database, or paste one connection string like `https://reader:password@host:8443/default`. **Copy SQL** gives you the statements for a user that can only read. OpenHut runs a test query when you save. Agents can list databases and tables, describe a table and run one SELECT at a time: every query runs in ClickHouse's read-only mode, stops after 15 seconds and returns at most 1000 rows.
+- **Better Stack:** search your logs in Better Stack Telemetry. Paste a Telemetry API token, from **API tokens › Team-based tokens** in Better Stack; OpenHut checks it when you save. Agents can list sources, search a source for log lines that contain some text in a time range (the last hour unless they say otherwise), and run one read-only SQL query over a source, 1000 rows at most. The token only reads; nothing changes in Better Stack.
 - **Custom MCP:** any MCP server by URL, with a header (like `Authorization`) or OAuth.
 
 ## Apps not on the list

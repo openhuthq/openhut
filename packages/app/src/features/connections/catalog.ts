@@ -18,6 +18,16 @@ export const SHELVES: { shelf: string; items: Integration[] }[] = [
       safe: ['Every query runs in a read-only transaction.', 'Superusers and roles that can run programs are refused.', 'Agents never see the connection string.'],
     },
     {
+      name: 'clickhouse', short: 'Read-only database access', safeLine: 'Read-only. Agents never see the password.', eta: '2 minutes', title: 'ClickHouse', blurb: 'Read-only access to a ClickHouse database, like the one that holds your logs.',
+      gets: ['databases and tables: what is there, with row counts', 'describe: a table\'s columns and types', 'query: one read-only SELECT, 15 s and 1000 rows at most'],
+      safe: ['Every query runs in ClickHouse\'s read-only mode, so nothing can change.', 'Agents never see the address or the password.'],
+    },
+    {
+      name: 'betterstack', short: 'Search your logs', safeLine: 'Read-only. Agents never see the token.', eta: '1 minute', title: 'Better Stack', blurb: 'Search and query your logs in Better Stack Telemetry.',
+      gets: ['sources: every log source', 'search: log lines that contain some text, in a time range', 'query: one read-only SQL query over a source, 1000 rows at most'],
+      safe: ['Agents only read logs. Nothing changes in Better Stack.', 'The token is stored safely on this computer and never shown again.'],
+    },
+    {
       name: 'convex', short: 'Tables, functions and logs', safeLine: 'The deploy key is stored safely on this computer.', warn: 'Running functions can change data. Let only agents you trust with writes use it.', eta: '1 minute', title: 'Convex', blurb: 'Convex’s official MCP server for one deployment, through its deploy key.',
       gets: ['tables and data: the schema and pages of documents', 'functionSpec and run: every function, and calling one', 'runOneoffQuery: a read-only query you write', 'logs: recent runs, console lines and errors', 'Whatever else Convex adds to its MCP server'],
       safe: ['run can change data: let only agents you trust with writes use it.', 'Environment-variable tools are off, so agents never see the deployment’s secrets.', 'The server runs on this computer; the deploy key is stored safely here and never shown again.'],

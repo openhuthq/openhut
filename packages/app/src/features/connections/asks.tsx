@@ -156,6 +156,8 @@ function ConnectDialog({ agent, ask, wanted, onClose }: { agent: Agent; ask: Ask
 
 function KeyFields({ wanted }: { wanted: Wanted }) {
   if (wanted.app === 'postgres') return <Field label="Connection string"><Input mono name="dsn" type="password" required autoComplete="off" placeholder="postgres://reader:…@host:5432/db" /></Field>
+  if (wanted.app === 'clickhouse') return <Field label="Connection string"><Input mono name="dsn" type="password" required autoComplete="off" placeholder="https://reader:…@host:8443/default" /></Field>
+  if (wanted.app === 'betterstack') return <Field label="Telemetry API token"><Input mono name="token" type="password" required autoComplete="off" placeholder="Paste the token" /></Field>
   if (wanted.app === 'convex') return <Field label="Deploy key"><Input mono name="deployKey" type="password" required autoComplete="off" /></Field>
   if (wanted.app !== 'mcp') return null
   return <div className="flex flex-col gap-2">
@@ -167,8 +169,9 @@ function KeyFields({ wanted }: { wanted: Wanted }) {
 
 function fieldsOf({ wanted, field }: { wanted: Wanted; field: (name: string) => string }): Record<string, string> {
   if (wanted.app === 'postgres') return { dsn: field('dsn') }
+  if (wanted.app === 'clickhouse') return { dsn: field('dsn') }
   if (wanted.app === 'convex') return { deployKey: field('deployKey') }
-  if (wanted.app === 'mcp') return { token: field('token') }
+  if (wanted.app === 'mcp' || wanted.app === 'betterstack') return { token: field('token') }
   return {}
 }
 
@@ -200,6 +203,7 @@ function brandOf(wanted: Wanted): BrandName {
 
 function detailOf(wanted: Wanted): string {
   if (wanted.token) return 'token'
+  if (wanted.app === 'clickhouse' || wanted.app === 'betterstack') return 'read only'
   if (wanted.app === 'postgres') return wanted.permissions?.create === 'allow' || wanted.permissions?.update === 'allow' ? '' : 'read only'
   return hostOf(wanted.url) ?? ''
 }

@@ -29,6 +29,8 @@ const close = () => navigate('/connections')
 
 const KEY_FIELDS: Partial<Record<Connection['kind'], { name: 'dsn' | 'deployKey' | 'token'; label: string; placeholder: string }>> = {
   postgres: { name: 'dsn', label: 'New connection string', placeholder: 'postgres://reader:…@host:5432/db' },
+  clickhouse: { name: 'dsn', label: 'New connection string', placeholder: 'https://reader:…@host:8443/default' },
+  betterstack: { name: 'token', label: 'New token', placeholder: 'Paste the new Telemetry API token' },
   convex: { name: 'deployKey', label: 'New deploy key', placeholder: 'Paste the deploy key' },
   mcp: { name: 'token', label: 'New token', placeholder: 'Paste the new token' },
 }
@@ -93,7 +95,7 @@ function AccessSheet({ connection, agents }: { connection: Connection; agents: O
 function successLine(connection: Connection) {
   if (connection.signIn && connection.account) return `Signed in as ${connection.account}`
   if (connection.kind === 'postgres' && connection.account.endsWith(' · can write')) return `${connection.name} is connected. Agents only read, but this user can change data. Connect with a read-only user to be safe.`
-  if (connection.kind === 'postgres') return `${connection.name} is connected. Read-only.`
+  if (connection.kind === 'postgres' || connection.kind === 'clickhouse' || connection.kind === 'betterstack') return `${connection.name} is connected. Read-only.`
   return `${connection.name} is connected.`
 }
 
