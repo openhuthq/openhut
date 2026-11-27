@@ -44,10 +44,10 @@ export function ShowSidebar({ onExpand, onNew }: { onExpand: () => void; onNew: 
 }
 
 export function Sidebar({ contacts, activeId, threadId, collapsed, onCollapse, onNew }: {
-  contacts: Contact[]; activeId: string | undefined; threadId: string | undefined; collapsed: boolean; onCollapse: () => void; onNew: () => void
+  contacts: Contact[] | undefined; activeId: string | undefined; threadId: string | undefined; collapsed: boolean; onCollapse: () => void; onNew: () => void
 }) {
   const phone = useMedia(PHONE)
-  return <aside inert={collapsed} className={cn('pushable still shrink-0 overflow-hidden border-hair transition-[width] duration-[240ms] ease-(--ease-spring)', collapsed ? 'w-0' : 'w-[280px] border-r-[0.5px]', contacts.length ? 'phone:w-full phone:border-r-0' : 'phone:hidden', GLASS)}>
+  return <aside inert={collapsed} className={cn('pushable still shrink-0 overflow-hidden border-hair transition-[width] duration-[240ms] ease-(--ease-spring)', collapsed ? 'w-0' : 'w-[280px] border-r-[0.5px]', contacts?.length === 0 ? 'phone:hidden' : 'phone:w-full phone:border-r-0', GLASS)}>
     <div className={cn('flex h-full w-[280px] flex-col phone:w-full transition-[opacity,translate] duration-[160ms] ease-out', collapsed && '-translate-x-2 opacity-0')}>
     <div className={cn('flex h-[44px] shrink-0 items-center gap-1.5 pr-3 pl-3 phone:h-16 phone:px-4')}>
       <a href="/" aria-label="OpenHut" title="OpenHut" className="flex items-center gap-1.5 text-[14px] font-semibold text-ink no-underline phone:hidden"><Hut className="size-6" />OpenHut</a>
@@ -59,10 +59,10 @@ export function Sidebar({ contacts, activeId, threadId, collapsed, onCollapse, o
     </div>
     <h1 className="m-0 hidden px-5 pt-1 pb-3 text-[32px]/[1.1] font-bold tracking-[-.02em] phone:block">Agents</h1>
     <nav className="flex min-h-0 flex-col gap-1 overflow-auto px-3 pt-1 phone:gap-0 phone:px-2">
-      {contacts.length > 0 && <div className="flex flex-col gap-1 phone:gap-0">
+      {!!contacts?.length && <div className="flex flex-col gap-1 phone:gap-0">
       {contacts.map(({ agent, threads }) => <AgentRow key={agent.id} agent={agent} threads={threads} active={agent.id === activeId} threadId={agent.id === activeId ? threadId : undefined} phone={phone} />)}
       </div>}
-      {!contacts.length && <Button type="button" variant="bare" onClick={onNew} className={cn('grid h-auto w-full grid-cols-[40px_1fr] items-center gap-3 rounded-lg px-2.5 py-2 text-left font-normal text-inherit', HOVER)}>
+      {contacts?.length === 0 && <Button type="button" variant="bare" onClick={onNew} className={cn('grid h-auto w-full grid-cols-[40px_1fr] items-center gap-3 rounded-lg px-2.5 py-2 text-left font-normal text-inherit', HOVER)}>
         <span className="grid size-10 place-items-center rounded-[24%] border-[1.5px] border-dashed border-mute-2 text-mute"><I icon={PlusSignIcon} size={16} /></span>
         <span className="grid min-w-0 gap-0.5"><span className="truncate text-[14px] font-semibold">New agent</span><span className="truncate text-[13px] text-body">Make your first agent</span></span>
       </Button>}

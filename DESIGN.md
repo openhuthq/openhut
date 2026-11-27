@@ -136,6 +136,7 @@ Tabs and filters use the line style by default (shadcn's `line` tabs, https://ui
 
 - Pickers in one form share one fixed width; content left-aligned, text truncates, chevron pinned right.
 - No layout shift: choosing an option, toggling a mode or adding items never changes the size of the row, card or popover (reserve check/icon slots, keep one-line subtitles).
+- Loading never shows an empty state: while an agent or a thread loads, the panel and the composer hold their place as empty shapes, and "nothing here yet" copy waits until the data says so. The panel's browser preview appears only once a page is on screen.
 - A preview shows the real state (the Access row shows exactly the picked people), never placeholders.
 - One line of help at most; prefer a sensible default over explanatory text.
 - No shadows, no nested borders.
