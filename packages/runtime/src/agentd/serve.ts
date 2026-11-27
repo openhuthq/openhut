@@ -1,18 +1,20 @@
 import { mkdirSync, readdirSync } from 'node:fs'
 import type { Duplex } from 'node:stream'
 import { browser } from './browser.ts'
-import { commands, type Command } from './commands.ts'
+import { checkFence, commands, type Command } from './commands.ts'
+import { config } from './config.ts'
 import { firewall } from './firewall.ts'
-import { DATA, ID } from './host.ts'
+import { ID } from './host.ts'
 import { errorText, isRecord } from './util.ts'
 
 const MAX_REQUEST = 1 << 20
 const queues = new Map<string, Promise<unknown>>()
 
 export async function boot(): Promise<void> {
-  for (const dir of [`${DATA}/agents`, `${DATA}/agent-conf`]) mkdirSync(dir, { recursive: true, mode: 0o700 })
-  browser.freeAll(readdirSync(`${DATA}/agent-conf`).filter((name) => ID.test(name)))
+  for (const dir of [`${config.data}/agents`, `${config.data}/agent-conf`]) mkdirSync(dir, { recursive: true, mode: 0o700 })
+  browser.freeAll(readdirSync(`${config.data}/agent-conf`).filter((name) => ID.test(name)))
   firewall.watch()
+  void checkFence()
 }
 
 export function serve(sock: Duplex) {

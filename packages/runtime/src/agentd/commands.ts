@@ -6,8 +6,8 @@ import { firewall } from './firewall.ts'
 import { newMessages, usage } from './hermes-db.ts'
 import { agentHome, type Kind } from './home/home.ts'
 import { MAX_FILE_BASE64 } from './home/uploads.ts'
-import { AGENT_USER, box, home, ID, IMAGE, RESOLV, TMP_MIB } from './host.ts'
-import { gvisorOn, imageReady } from './sandbox/docker.ts'
+import { config } from './config.ts'
+import { box, home, ID, RESOLV, scratchSpec } from './host.ts'
 import { isRecord } from './util.ts'
 import { whatsapp } from './whatsapp.ts'
 
@@ -17,19 +17,15 @@ const READABLE: Kind[] = ['skill', 'memory', 'file', 'upload']
 const WRITABLE: Kind[] = ['skill', 'memory', 'upload']
 const REMOVABLE: Kind[] = ['upload', 'skill-folder', 'session']
 
-let fence = checkFence()
+let fence: Promise<FenceReport> | undefined
 
 export const commands = {
   health: {
     parse: () => ({}),
-    run: async () => {
-      const ready = box.name === 'docker' ? await imageReady(IMAGE) : true
-      return {
-        firewall: await firewall.recent(), image: IMAGE, imageReady: ready,
-        gvisor: box.name === 'docker' ? ready ? await gvisorOn(IMAGE) : undefined : false, // unknown until the image is loaded, so the main doesn't show "off"
-        features: { whatsapp: whatsapp.installed(), browser: browser.installed() },
-      }
-    },
+    run: async () => ({
+      firewall: await firewall.recent(), image: config.image, ...await box.health(config.image),
+      features: { whatsapp: whatsapp.installed(), browser: browser.installed() },
+    }),
   },
   ps: {
     parse: () => ({}),
@@ -41,10 +37,7 @@ export const commands = {
   },
   fence: {
     parse: () => ({}),
-    run: async (): Promise<FenceReport> => {
-      if (!(await fence).ok) fence = checkFence()
-      return fence
-    },
+    run: async (): Promise<FenceReport> => fence && (await fence).ok ? fence : checkFence(),
   },
   apply: {
     parse: (v: Fields) => ({ id: agentId(v.id), net: netOf(v.net), files: filesOf(v.files), browser: v.browser === true, running: v.running === true, force: v.force === true, restart: v.restart !== false }),
@@ -151,11 +144,13 @@ function stateDbs() {
   return agents.ids().map((id) => ({ id, file: `${home(id)}/state.db` }))
 }
 
-async function checkFence(): Promise<FenceReport> {
-  const spec = { id: 'fence', image: IMAGE, cpus: 1, memoryMib: TMP_MIB, user: AGENT_USER, env: {}, mounts: [{ host: RESOLV, guest: '/etc/resolv.conf', readOnly: true }], tmpfs: [{ guest: '/tmp', sizeMib: 16 }], labels: {} }
-  const report = await proveFence({ box, spec })
-  for (const line of fenceLines(report)) (report.ok ? console.log : console.error)(line)
-  return report
+export function checkFence(): Promise<FenceReport> {
+  const spec = scratchSpec({ id: 'fence', mounts: [{ host: RESOLV, guest: '/etc/resolv.conf', readOnly: true }], tmpfs: [{ guest: '/tmp', sizeMib: 16 }] })
+  fence = proveFence({ box, spec }).then((report) => {
+    for (const line of fenceLines(report)) (report.ok ? console.log : console.error)(line)
+    return report
+  })
+  return fence
 }
 
 type Fields = Record<string, unknown>
@@ -166,4 +161,3 @@ export type Command = {
   body?: number
   stream?: true
 }
-export type AgentdReplies = { [K in keyof typeof commands]: Awaited<ReturnType<(typeof commands)[K]['run']>> }

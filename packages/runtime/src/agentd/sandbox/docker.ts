@@ -18,6 +18,11 @@ export const docker: Sandboxes = {
     return exec(FIREWALL, ['--check'], EXEC).then(() => ({ ok: true }), () => ({ ok: false, reason: 'firewall is off' }))
   },
 
+  async health(image) {
+    const ready = await imageReady(image)
+    return { imageReady: ready, gvisor: ready ? await gvisorOn(image) : undefined }
+  },
+
   async create(spec) {
     if (spec.net === undefined) throw new Error('an agent container needs its network number')
     const name = `ag-${spec.id}`
@@ -108,12 +113,12 @@ export function pullOf(log: string): Pull | null {
   return { done: last.match(/: Pull complete/g)?.length ?? 0, total, unit: 'layers' }
 }
 
-export function gvisorOn(image: string): Promise<boolean> {
+function gvisorOn(image: string): Promise<boolean> {
   runsc ??= probeRunsc(image)
   return runsc
 }
 
-export async function imageReady(image: string): Promise<boolean> {
+function imageReady(image: string): Promise<boolean> {
   return cli('image', 'inspect', image).then(() => true, () => false)
 }
 

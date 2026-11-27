@@ -5,7 +5,7 @@ import { openInside } from './skills.ts'
 
 export const MAX_FILE_BYTES = 25 << 20
 export const MAX_FILE_BASE64 = Math.ceil(MAX_FILE_BYTES / 3) * 4
-export const MAX_NAME_BYTES = 255
+const MAX_NAME_BYTES = 255
 const UPLOADS = 'uploads'
 const NAME = /^[\p{L}\p{N}_(+,=@][\p{L}\p{N}._ ()+,=@-]{0,127}$/u
 const MAX_DEPTH = 32

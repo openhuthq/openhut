@@ -1,4 +1,4 @@
-import { closeSync, constants, existsSync, fstatSync, ftruncateSync, openSync, readdirSync, readlinkSync, readSync, realpathSync, statSync, writeSync } from 'node:fs'
+import { closeSync, constants, existsSync, fstatSync, openSync, readdirSync, readlinkSync, readSync, realpathSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const SEGMENT = /^[A-Za-z0-9][\w.-]{0,63}$/
@@ -10,7 +10,7 @@ const HEAD_BYTES = 4096
 const MANIFEST_BYTES = 64_000
 export const MAX_SKILL_BYTES = 400_000
 
-export type SkillHead = { path: string; head: string }
+type SkillHead = { path: string; head: string }
 
 export function isSkillPath(value: unknown): value is string {
   if (typeof value !== 'string') return false
@@ -22,24 +22,6 @@ export function listSkills(root: string): { skills: SkillHead[]; bundled: string
   const skills: SkillHead[] = []
   walk({ root, dir: '', depth: 1, skills })
   return { skills, bundled: readInside({ root, file: MANIFEST, limit: MANIFEST_BYTES }) ?? '' }
-}
-
-export function readSkill({ root, path }: { root: string; path: string }): string {
-  const body = readInside({ root, file: `${path}/${SKILL_FILE}`, limit: MAX_SKILL_BYTES + 1 })
-  if (body === undefined) throw new Error('that skill is gone')
-  if (Buffer.byteLength(body) > MAX_SKILL_BYTES) throw new Error('that skill is too large to open here')
-  return body
-}
-
-export function writeSkill({ root, path, body }: { root: string; path: string; body: string }): void {
-  const fd = openInside({ root, file: `${path}/${SKILL_FILE}`, flags: constants.O_WRONLY })
-  if (fd === undefined) throw new Error('that skill is gone')
-  try {
-    ftruncateSync(fd, 0)
-    writeSync(fd, body, 0)
-  } finally {
-    closeSync(fd)
-  }
 }
 
 function walk({ root, dir, depth, skills }: { root: string; dir: string; depth: number; skills: SkillHead[] }): void {

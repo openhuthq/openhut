@@ -3,7 +3,8 @@ import type { Duplex } from 'node:stream'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
-import { BIN, box, conf, writeIfChanged } from './host.ts'
+import { config } from './config.ts'
+import { box, conf, writeIfChanged } from './host.ts'
 import type { Exec, Mount } from './sandbox/sandbox.ts'
 import { isRecord, jsonOrUndefined } from './util.ts'
 
@@ -13,7 +14,7 @@ export const HELD_POLICY = `${JSON.stringify({ default: 'deny', allow: ['snapsho
 export const HOLD_IDLE_MS = 120_000
 export const MAX_FPS = 30
 
-const AGENT_BROWSER = join(BIN, 'agent-browser')
+const AGENT_BROWSER = join(config.bin, 'agent-browser')
 const DIR = fileURLToPath(new URL('../../../../install/agent-browser', import.meta.url))
 
 export const browser = {

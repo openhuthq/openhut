@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, symlinkSync, writeFileSync } from 'node:fs'
+import { constants, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { listSkills, readSkill, writeSkill } from '../../../src/agentd/home/skills.ts'
+import { listSkills, openInside, readInside } from '../../../src/agentd/home/skills.ts'
 
 const skip = process.platform !== 'linux' && 'needs /proc (Linux)'
 const base = realpathSync(mkdtempSync(`${tmpdir()}/skills-`))
@@ -23,10 +23,7 @@ test('lists skills at any depth with their first lines and the bundled manifest'
   assert.equal(bundled, 'arxiv:abc\n')
 })
 
-test('reads and rewrites a skill in place', { skip }, () => {
-  writeSkill({ root, path: 'invoices', body: 'New body\n' })
-  assert.equal(readSkill({ root, path: 'invoices' }), 'New body\n')
-})
+const opens = (path: string) => readInside({ root, file: `${path}/SKILL.md`, limit: 100 }) !== undefined || openInside({ root, file: `${path}/SKILL.md`, flags: constants.O_WRONLY }) !== undefined
 
 test('a symlinked file, a symlinked folder and a hard link are never read or written', { skip }, () => {
   mkdirSync(`${root}/linkfile`)
@@ -35,8 +32,7 @@ test('a symlinked file, a symlinked folder and a hard link are never read or wri
   mkdirSync(`${root}/hard`)
   linkSync(`${secret}/keys/SKILL.md`, `${root}/hard/SKILL.md`)
   for (const path of ['linkfile', 'linkdir', 'hard']) {
-    assert.throws(() => readSkill({ root, path }), /gone/)
-    assert.throws(() => writeSkill({ root, path, body: 'pwned' }), /gone/)
+    assert.equal(opens(path), false)
   }
   assert.deepEqual(listSkills(root).skills.map((skill) => skill.path), ['invoices', 'research/arxiv'])
   assert.equal(readFileSync(`${secret}/keys/SKILL.md`, 'utf8'), 'TOP SECRET')
@@ -46,7 +42,6 @@ test('a skills folder swapped for a symlink shows nothing from where it points',
   renameSync(root, `${base}/skills-real`)
   symlinkSync(secret, root)
   assert.deepEqual(listSkills(root).skills, [])
-  assert.throws(() => readSkill({ root, path: 'keys' }), /gone/)
-  assert.throws(() => writeSkill({ root, path: 'keys', body: 'pwned' }), /gone/)
+  assert.equal(opens('keys'), false)
   assert.equal(readFileSync(`${secret}/keys/SKILL.md`, 'utf8'), 'TOP SECRET')
 })

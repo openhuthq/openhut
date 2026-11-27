@@ -19,11 +19,12 @@ export type SandboxSpec = {
   net?: number
 }
 export type SandboxState = { id: string; running: boolean; startedAt?: string; labels: Record<string, string> }
-export type Pull = { done: number; total: number; unit: 'bytes' | 'layers' }
+export type Pull = { done: number; total: number; unit: 'layers' }
 export type Exec = { stdin: Writable | null; stdout: Readable; exit: Promise<number>; kill: () => void }
 export type Sandboxes = {
   name: 'docker' | 'memory'
   ready(): Promise<{ ok: boolean; reason?: string }>
+  health(image: string): Promise<{ imageReady: boolean; gvisor?: boolean }>
   create(spec: SandboxSpec): Promise<void>
   start(id: string): Promise<void>
   stop(req: { id: string; seconds: number }): Promise<void>

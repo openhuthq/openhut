@@ -1,18 +1,18 @@
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, utimesSync } from 'node:fs'
 import { browser, POLICY_FILE, policyOf } from './browser.ts'
+import { config } from './config.ts'
 import { firewall } from './firewall.ts'
-import { join } from 'node:path'
-import { AGENT_UID, AGENT_USER, ASSETS, box, CLAUDE, conf, DATA, home, ID, IMAGE, own, RESOLV, TMP_MIB, writeIfChanged } from './host.ts'
+import { AGENT_UID, AGENT_USER, box, CLAUDE, conf, home, ID, own, RESOLV, scratchSpec, TMP_MIB, writeIfChanged } from './host.ts'
 import type { Mount, SandboxSpec, SandboxState } from './sandbox/sandbox.ts'
 import { whatsapp } from './whatsapp.ts'
 
 export const FILES = ['config.yaml', '.env', 'SOUL.md', 'auth.json'] as const
 export const RESTART_KEY = 'restart.key'
-const PLUGINS = `${ASSETS}/vendor/hermes-plugins`
+const PLUGINS = `${config.assets}/vendor/hermes-plugins`
 const MOUNTS = createHash('sha256').update(`${PLUGINS}\n${CLAUDE}`).digest('hex').slice(0, 16)
 const SPEC = '4'
-const TRASH = `${DATA}/trash`
+const TRASH = `${config.data}/trash`
 const TRASH_MS = 30 * 24 * 60 * 60_000
 const AGENT_MEMORY_MIB = 1024
 const AGENT_CPUS = 1
@@ -53,6 +53,7 @@ export const agents = {
       return { applied: id, change: made.running ? 'stopped' : 'none' }
     }
     if (!made.running) {
+      await firewall.require()
       await start(id)
       return { applied: id, change: 'started' }
     }
@@ -93,28 +94,18 @@ export const agents = {
     return (await sandboxOf(id))?.running === true
   },
 
-  async exists(id: string): Promise<boolean> {
-    return (await sandboxOf(id)) !== undefined
-  },
-
-  makeHome,
-
   ids(): string[] {
-    return readdirSync(`${DATA}/agents`).filter((name) => ID.test(name))
+    return readdirSync(`${config.data}/agents`).filter((name) => ID.test(name))
   },
 
   async removeInside({ id, guest }: { id: string; guest: string }): Promise<void> {
-    const spec: SandboxSpec = {
-      id, image: IMAGE, cpus: 1, memoryMib: TMP_MIB, user: AGENT_USER, entrypoint: 'rm', command: [], env: {},
-      mounts: [{ host: home(id), guest: '/opt/data', readOnly: false }], tmpfs: [], labels: {},
-    }
+    const spec = { ...scratchSpec({ id, mounts: [{ host: home(id), guest: '/opt/data', readOnly: false }], tmpfs: [] }), entrypoint: 'rm', command: [] }
     const { code } = await box.run({ spec, command: ['-rf', '--', `/opt/data/${guest}`] })
     if (code !== 0) throw new Error(`couldn't delete ${guest} (rm exited with ${code})`)
   },
 }
 
 async function start(id: string) {
-  await firewall.require()
   if (await agents.isRunning(id)) return
   for (const name of HERMES_RUNTIME_FILES) rmSync(`${home(id)}/${name}`, { force: true })
   await box.start(id)
@@ -134,18 +125,18 @@ function stateText({ running, startedAt }: SandboxState) {
 }
 
 function outdated({ made, browser: on }: { made: SandboxState; browser: boolean }) {
-  const labels = made.labels
-  return `${labels['openhut.spec'] ?? ''} ${labels['openhut.browser'] || 'off'} ${labels['openhut.mounts'] ?? ''}` !== `${SPEC} ${on ? 'on' : 'off'} ${MOUNTS}`
+  const { labels } = made
+  return labels['openhut.spec'] !== SPEC || (labels['openhut.browser'] || 'off') !== (on ? 'on' : 'off') || labels['openhut.mounts'] !== MOUNTS
 }
 
 function stale(made: SandboxState) {
   const started = made.startedAt ? Date.parse(made.startedAt.replace(/(\.\d{3})\d+/, '$1')) : 0
-  return Math.max(...[RESTART_KEY, CLAUDE_SETTINGS_FILE].map((name) => Math.floor(statSync(`${conf(made.id)}/${name}`).mtimeMs))) > started
+  return Math.max(...[RESTART_KEY, CLAUDE_SETTINGS_FILE].map((name) => Math.floor(statSync(`${conf(made.id)}/${name}`, { throwIfNoEntry: false })?.mtimeMs ?? 0))) > started
 }
 
 function specOf({ id, net, browser: on }: { id: string; net: number; browser: boolean }): SandboxSpec {
   return {
-    id, image: IMAGE, cpus: AGENT_CPUS, memoryMib: on ? browser.memoryMib : AGENT_MEMORY_MIB,
+    id, image: config.image, cpus: AGENT_CPUS, memoryMib: on ? browser.memoryMib : AGENT_MEMORY_MIB,
     user: AGENT_USER, entrypoint: '/opt/hermes/bin/hermes', command: ['gateway', 'run'], env: AGENT_ENV,
     mounts: [
       { host: RESOLV, guest: '/etc/resolv.conf', readOnly: true },
