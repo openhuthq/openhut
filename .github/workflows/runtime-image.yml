@@ -119,12 +119,118 @@ jobs:
           docker exec openhut sh -c 'tail -n 40 /data/log/*.log' || true
           docker exec openhut-runtime sh -c 'tail -n 80 /var/log/openhut/*.log' || true
 
-  publish:
+  # Each arch builds on its own native runner, no QEMU. openhut pins openhut-runtime by its multi-arch digest, so the
+  # runtime images come first, then openhut per arch, then publish joins them under the tags and writes install.sh.
+  runtime:
     needs: smoke
     # Runs when the smoke passed or was skipped, never after a failed one.
     if: ${{ !cancelled() && inputs.tags != '' && needs.smoke.result != 'failure' }}
-    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include: [{ arch: amd64, runner: ubuntu-latest }, { arch: arm64, runner: ubuntu-24.04-arm }]
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+      - name: A release build sets the runtime version in this checkout
+        if: inputs.build != ''
+        env:
+          BUILD_INPUT: ${{ inputs.build }}
+        run: node scripts/set-version.ts "$BUILD_INPUT"
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build openhut-runtime for linux/${{ matrix.arch }} and push it by digest
+        env:
+          BUILD_INPUT: ${{ inputs.build }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          [ -z "$BUILD_INPUT" ] || export BUILD="${BUILD_INPUT#v}"
+          mkdir -p digests
+          ONLY=runtime scripts/image.sh "$REPO" "" --platform "linux/$ARCH" --output "type=image,name=$REPO/openhut-runtime,push-by-digest=true,push=true" \
+            --cache-from "type=gha,scope=runtime-publish-$ARCH" --cache-to "type=gha,scope=runtime-publish-$ARCH,mode=min" > "digests/runtime-$ARCH"
+          cat "digests/runtime-$ARCH"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: digest-runtime-${{ matrix.arch }}
+          path: digests/runtime-${{ matrix.arch }}
+
+  main:
+    needs: runtime
+    if: ${{ !cancelled() && needs.runtime.result == 'success' }}
+    strategy:
+      matrix:
+        include: [{ arch: amd64, runner: ubuntu-latest }, { arch: arm64, runner: ubuntu-24.04-arm }]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+      - name: A release build sets the runtime version in this checkout
+        if: inputs.build != ''
+        env:
+          BUILD_INPUT: ${{ inputs.build }}
+        run: node scripts/set-version.ts "$BUILD_INPUT"
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: digest-runtime-*
+          merge-multiple: true
+          path: digests
+      - name: Join and tag the openhut-runtime images, then build openhut for linux/${{ matrix.arch }} on them and push it by digest
+        env:
+          BUILD_INPUT: ${{ inputs.build }}
+          TAGS: ${{ inputs.tags }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          [ -z "$BUILD_INPUT" ] || export BUILD="${BUILD_INPUT#v}"
+          tags=; for tag in $TAGS; do tags="$tags -t $REPO/openhut-runtime:${tag#v}"; done
+          docker buildx imagetools create $tags $(cat digests/runtime-*)
+          first="${TAGS%% *}"
+          runtime="$REPO/openhut-runtime@$(docker buildx imagetools inspect "$REPO/openhut-runtime:${first#v}" --format '{{json .Manifest}}' | jq -r .digest)"
+          echo "$runtime" > digests/runtime
+          RUNTIME_IMAGE="$runtime" ONLY=main scripts/image.sh "$REPO" "" --platform "linux/$ARCH" --output "type=image,name=$REPO/openhut,push-by-digest=true,push=true" \
+            --cache-from "type=gha,scope=main-publish-$ARCH" --cache-to "type=gha,scope=main-publish-$ARCH,mode=min" > "digests/main-$ARCH"
+          cat digests/runtime "digests/main-$ARCH"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: digest-main-${{ matrix.arch }}
+          path: |
+            digests/runtime
+            digests/main-${{ matrix.arch }}
+
+  publish:
+    needs: main
+    if: ${{ !cancelled() && needs.main.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       packages: write
@@ -144,9 +250,6 @@ jobs:
         env:
           BUILD_INPUT: ${{ inputs.build }}
         run: node scripts/set-version.ts "$BUILD_INPUT"
-      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
-        with:
-          platforms: arm64
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -154,24 +257,29 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build linux/amd64 and linux/arm64, push, and record the digest
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: digest-main-*
+          merge-multiple: true
+          path: digests
+      - name: Join and tag the openhut images, and record the digest
         id: push
         env:
           BUILD_INPUT: ${{ inputs.build }}
           TAGS: ${{ inputs.tags }}
         run: |
-          start=$(date +%s)
           [ -z "$BUILD_INPUT" ] || export BUILD="${BUILD_INPUT#v}"
-          scripts/image.sh "$REPO" "$TAGS" --platform linux/amd64,linux/arm64 --push \
-            --label org.opencontainers.image.source="https://github.com/$GITHUB_REPOSITORY" --label org.opencontainers.image.revision="$(git rev-parse HEAD)" \
-            --cache-from type=gha,scope=runtime-multi --cache-to type=gha,scope=runtime-multi,mode=min | tee dist-build.txt
-          image=$(sed -n 's/^IMAGE="${OPENHUT_IMAGE:-\(.*\)}"$/\1/p' dist/install.sh)
-          runtime=$(sed -n 's/^RUNTIME="${RUNTIME_IMAGE:-\(.*\)}"$/\1/p' dist/install.sh)
+          tags=; for tag in $TAGS; do tags="$tags -t $REPO/openhut:${tag#v}"; done
+          docker buildx imagetools create $tags $(cat digests/main-*)
+          first="${TAGS%% *}"
+          image="$REPO/openhut@$(docker buildx imagetools inspect "$REPO/openhut:${first#v}" --format '{{json .Manifest}}' | jq -r .digest)"
+          runtime=$(cat digests/runtime)
+          RUNTIME_IMAGE="$runtime" MAIN_IMAGE="$image" scripts/image.sh "$REPO" "$TAGS" | tee dist-build.txt
           build=$(sed -n 's/.*(build \(.*\))$/\1/p' dist-build.txt)
           echo "image=$image" >> "$GITHUB_OUTPUT"
           echo "build=$build" >> "$GITHUB_OUTPUT"
           printf '%s\n%s\n' "$image" "$runtime" > dist/runtime-image.txt
-          echo "Pushed $image and $runtime (build $build, tags $TAGS) in $(( $(date +%s) - start ))s" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pushed $image and $runtime (build $build, tags $TAGS)" >> "$GITHUB_STEP_SUMMARY"
       - name: Anyone can pull it, as servers do
         run: |
           for image in $(cat dist/runtime-image.txt); do
@@ -183,6 +291,4 @@ jobs:
           name: runtime-image
           path: |
             dist/runtime-image.txt
-            dist/openhut.json
-            dist/openhut-runtime.json
             dist/install.sh

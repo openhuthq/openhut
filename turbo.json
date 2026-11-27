@@ -4,7 +4,7 @@
   "tasks": {
     "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
     "typecheck": { "dependsOn": ["^typecheck"] },
-    "test": { "dependsOn": ["^build"] },
+    "test": { "dependsOn": ["^build"], "env": ["TEST_SHARD"] },
     "@openhut/site#test": { "dependsOn": [] },
     "dev": { "cache": false, "persistent": true }
   }

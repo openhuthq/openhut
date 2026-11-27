@@ -94,9 +94,10 @@ main's own runtime). Runtimes follow the main: its welcome names its paired runt
 `install.sh join` in a one-shot `openhut-runtime-update` container, which goes back on failure and labels the image failed.
 The main also runs `openhut-updater` (`install/updater.sh`): Settings › Updates has the server write `/data/update/request`
 with the sha256 of the install.sh it checked at `OPENHUT_URL`, and the updater runs that install.sh if it still matches.
-`.github/workflows/runtime-image.yml` builds, smoke-tests (`scripts/image-smoke.sh`) and pushes both; `promote.yml`
-smoke-tests main's newest green commit, tags both images `stable` and publishes its install.sh (pinned by digest, with
-`OPENHUT_BUILD`) where openhut.dev/ redirects. `vendor/` is the pinned Hermes plugin.
+`.github/workflows/runtime-image.yml` builds both (linux/amd64 and linux/arm64, each on its own native runner),
+smoke-tests (`scripts/image-smoke.sh`) and pushes them by commit; run it by hand with `tags` to get images for a branch.
+`promote.yml` is the release: it runs it for main's newest green commit (the smoke when `smoke` is on), tags both images
+`stable` and publishes that install.sh (pinned by digest, with `OPENHUT_BUILD`) where openhut.dev/ redirects. `vendor/` is the pinned Hermes plugin.
 
 ## Conventions (Skyfleet's)
 
@@ -129,8 +130,8 @@ CI is not part of the edit loop. Iterate locally (`npm run check`, one test file
 push once and open the PR. After one review round with no open blocker, run `gh pr merge --auto --merge` and stop: no
 `gh run watch`, `gh pr checks` or sleep loops (the account's API limit is 5000/h, shared by every agent). If `gate`
 fails, auto-merge waits; fix it and push again. The main ruleset has no bypass, so a red `gate` means fixing it, never
-forcing it. CI (`ci.yml`, Linux only) is checks (typecheck, tests, the site), the browser
-run and, on `main`, the runtime image pushed by commit; `gate` waits on all of them. Deploy then ships main's newest green
+forcing it. CI (`ci.yml`, Linux only) is typecheck, the tests (split in six, `TEST_SHARD`) and the browser
+run; `gate` waits on all of them. CI builds no image; Promote does. Deploy then ships main's newest green
 commit to openhut.dev. Reviewer loop and flaky tests: `openhut-private: brain/openhut-deploy.md`.
 
 ## Dev loop

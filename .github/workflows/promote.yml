@@ -1,13 +1,18 @@
 name: Promote
 
-# Takes main's newest green CI run, runs the runtime image smoke on that exact commit (install.sh, an agent in gVisor answers a
-# chat, a release with a failing /health rolls back), then tags the two images CI pushed for that commit (openhut and openhut-runtime) as `stable` and publishes
-# that run's install.sh (pinned to both by digest, with its OPENHUT_BUILD) as dl.openhut.dev/channels/stable/install.sh,
-# which openhut.dev/ redirects to. Servers' Settings › Updates compare that OPENHUT_BUILD with their own; the updater runs
-# that install.sh only if its sha256 is the one the server checked.
+# The release. Takes main's newest green CI run, builds both images for that exact commit (openhut and openhut-runtime,
+# linux/amd64 and linux/arm64 on native runners, tagged by commit; runtime-image.yml, with its smoke when `smoke` is on), then
+# tags them `stable` and publishes that build's install.sh (pinned to both by digest, with its OPENHUT_BUILD) as
+# dl.openhut.dev/channels/stable/install.sh, which openhut.dev/ redirects to. Servers' Settings › Updates compare that
+# OPENHUT_BUILD with their own; the updater runs that install.sh only if its sha256 is the one the server checked.
 
 on:
   workflow_dispatch:
+    inputs:
+      smoke:
+        description: Run the runtime image smoke (install.sh, an agent in gVisor answers a chat, a failing /health rolls back) before the build
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -40,8 +45,7 @@ jobs:
           echo "Promoting ${sha::8} (CI run $run)" | tee -a "$GITHUB_STEP_SUMMARY"
           printf 'run=%s\nsha=%s\n' "$run" "$sha" >> "$GITHUB_OUTPUT"
 
-  smoke:
-    if: false
+  image:
     needs: green
     permissions:
       contents: read
@@ -50,10 +54,11 @@ jobs:
     secrets: inherit
     with:
       ref: ${{ needs.green.outputs.sha }}
-      tags: ''
+      tags: ${{ needs.green.outputs.sha }}
+      smoke: ${{ inputs.smoke }}
 
   stable:
-    needs: [green]
+    needs: [green, image]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -64,20 +69,22 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: That run's install.sh pins the image CI pushed for that commit
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: runtime-image
+          path: dist
+      - name: The install.sh just built pins the images just pushed for that commit
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RUN: ${{ needs.green.outputs.run }}
+          RUN: ${{ github.run_id }}
           SHA: ${{ needs.green.outputs.sha }}
         run: |
-          gh run download "$RUN" -R "$GITHUB_REPOSITORY" -n runtime-image -D dist || { echo "::error::CI run $RUN has no runtime-image artifact; rerun CI on main."; exit 1; }
           for name in openhut openhut-runtime; do
             digest=$(docker buildx imagetools inspect "$REPO/$name:$SHA" --format '{{json .Manifest.Digest}}' | tr -d '"')
             grep -qF ":-$REPO/$name@$digest}\"" dist/install.sh || { echo "::error::install.sh from run $RUN doesn't pin $REPO/$name@$digest"; exit 1; }
           done
           grep -Eqx 'OPENHUT_BUILD="[0-9A-Za-z_.-]+"' dist/install.sh || { echo "::error::install.sh from run $RUN has no OPENHUT_BUILD"; exit 1; }
           sh -n dist/install.sh
-      - name: Tag both images CI pushed for that commit as stable
+      - name: Tag both images built for that commit as stable
         env:
           SHA: ${{ needs.green.outputs.sha }}
         run: |
