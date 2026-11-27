@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/.."
-REPO="${1:?image.sh <repository, like ghcr.io/openhuthq> <tags> [docker buildx build flags]; BUILD names the build, OUT (dist) gets install.sh}"
+REPO="${1:?image.sh <repository, like ghcr.io/openhuthq> <tags> [docker buildx build flags]; BUILD names the build, OUT (dist) gets install.sh; RUNTIME_IMAGE or MAIN_IMAGE uses that image instead of building it; ONLY=runtime or ONLY=main stops after that image and prints it}"
 TAGS="${2:?image.sh <repository> <tags>}"
 shift 2
 OUT="${OUT:-dist}"
@@ -19,7 +19,9 @@ build() { # <image> <target> [flags]: builds and pushes, prints <image>@<digest>
   [ -n "$digest" ] || { echo "image.sh: the $name build didn't report a digest" >&2; exit 1; }
   echo "$REPO/$name@$digest"
 }
-RUNTIME="$(build openhut-runtime runtime "$@")"
-MAIN="$(build openhut main --build-arg RUNTIME_IMAGE="$RUNTIME" "$@")"
+RUNTIME="${RUNTIME_IMAGE:-$(build openhut-runtime runtime "$@")}"
+[ "${ONLY:-}" != runtime ] || { echo "$RUNTIME"; exit; }
+MAIN="${MAIN_IMAGE:-$(build openhut main --build-arg RUNTIME_IMAGE="$RUNTIME" "$@")}"
+[ "${ONLY:-}" != main ] || { echo "$MAIN"; exit; }
 sed -e "s|@OPENHUT_IMAGE@|$MAIN|" -e "s|@OPENHUT_RUNTIME_IMAGE@|$RUNTIME|" -e "s|@OPENHUT_BUILD@|$BUILD|" install/install.sh > "$OUT/install.sh"
 echo "$OUT/install.sh pins $MAIN and $RUNTIME (build $BUILD)"
