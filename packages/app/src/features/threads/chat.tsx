@@ -27,7 +27,7 @@ import { agentState } from '@/components/status-badge'
 import { troubleOf } from '@/features/agents/status'
 import { useAgents, useUpdateAgent } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
-import { deleteUpload, saveFile, threadPath, uploadFile, useClearChat, useHomeFiles, useThread, useThumb, useTouchThread, type ThreadWithMessages } from '@/features/threads/api'
+import { deleteUpload, saveFile, stopThread, threadPath, uploadFile, useClearChat, useHomeFiles, useThread, useThumb, useTouchThread, type ThreadWithMessages } from '@/features/threads/api'
 import { replyOf, replyText } from '@openhut/common/threads/reply.ts'
 import { Notified, PLATFORM_WORD, placeName, startedIn, type SourcedThread } from '@/features/threads/places'
 import { PlaceIcon } from '@/features/routines/target-picker'
@@ -102,7 +102,7 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
   const watching = !busy && (live.streaming || busyAgent(live.agent)) && !shown.some((message) => message.id === (live.streaming?.turnId ?? live.agent.turnId))
   const said = saidAfter(shown)
   const clear = agent.canEdit && chat.messages.length > 0 && !busy && !attachments.uploading && <ClearChat agent={agent} threadId={thread.id} attachments={attachments} />
-  return <ChatFiles value={files}><CardReply value={thread.readOnly ? undefined : (text) => { if (busy) return false; send(text); return true }}><ChatFrame agent={agent} thread={thread} tools={<>{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={thread.readOnly ? <ContinueBar thread={thread} /> : <Composer agent={agent} threadId={thread.id} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void chat.stop()} />}>
+  return <ChatFiles value={files}><CardReply value={thread.readOnly ? undefined : (text) => { if (busy) return false; send(text); return true }}><ChatFrame agent={agent} thread={thread} tools={<>{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={thread.readOnly ? <ContinueBar thread={thread} /> : <Composer agent={agent} threadId={thread.id} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void stopThread({ agentId: agent.id, threadId: thread.id }).catch(toastError)} />}>
     {shown.length ? <>
       <Day iso={thread.updatedAt} />
       {shown.map((message, index) => <Message key={message.id} agent={agent} thread={thread} message={message} said={(text) => said(index, text)} seen={message === mine} live={(busy || own !== undefined) && message === last} onRetry={!busy && !thread.readOnly && message === last ? () => void chat.regenerate() : undefined} />)}

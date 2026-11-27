@@ -51,6 +51,10 @@ export function useArchiveThread(thread: SourcedThread) {
   })
 }
 
+export function stopThread({ agentId, threadId }: { agentId: string; threadId: string }) {
+  return request({ schema: SourcedThread, of: agentId, path: `${threadPath(threadId)}/stop`, method: 'POST' })
+}
+
 export function threadPath(threadId: string) {
   return `/api/threads/${encodeURIComponent(threadId)}`
 }
