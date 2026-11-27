@@ -21,7 +21,7 @@ const app = spawn(process.execPath, ['--no-node-snapshot', '--env-file-if-exists
   env: { ...shared, OPENHUT_DATA: DATA, OPENHUT_DEV_KEY_SHA256: createHash('sha256').update('dev').digest('hex'), ...(FAKE === 'true' && { OPENHUT_FAKE_AGENTS: 'true', OPENHUT_MODEL: process.env.OPENHUT_MODEL ?? 'test' }) },
   stdio: 'inherit',
 })
-const vite = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'packages/app'], { env: { ...shared, OPENHUT_DEV_LABEL: LABEL }, stdio: 'inherit' })
+const vite = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'packages/app', ...process.env.OPENHUT_DEV_HOST ? ['--host', process.env.OPENHUT_DEV_HOST] : []], { env: { ...shared, OPENHUT_DEV_LABEL: LABEL }, stdio: 'inherit' })
 const children: ChildProcess[] = [agentd, app, vite]
 console.log([
   '',

@@ -4,6 +4,9 @@ description: Run and prove an OpenHut change. Use before starting work, when you
 ---
 OpenHut is a web app. You see a change in a browser in seconds.
 
+**0. Just need the real app to look at?** (an agent comparing the site mock, docs screenshots)
+- `npm install` once, then `npm run demo`. It starts the whole app with agents in memory and the test model: no Docker, no keys, no `.env`, on Linux (as any user, headless) or a Mac. It seeds Ops, Growth and Support into a throwaway data folder (deleted on Ctrl-C) and prints `Open http://127.0.0.1:<port>/`, which opens straight into the app.
+
 **1. Start the web app (every change)**
 - `npm install` once per worktree, then `npm run dev`. It prints the Vite URL (5173 or the next free port). Open it in Claude in Chrome: it opens straight into the app, no sign-in (Vite's `/api` proxy adds `Authorization: Bearer dev`).
 - `npm run seed` adds sample agents to a fresh `.data`, and the sample Orders DB only with `SEED_POSTGRES_DSN` set to a database it can reach (OpenHut checks a database before saving it). On a Mac the agents are refused (firewall off), so the seed finishes only on Linux. `npm run reset` wipes it.
