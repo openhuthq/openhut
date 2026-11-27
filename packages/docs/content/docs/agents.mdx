@@ -16,7 +16,7 @@ icon: ops
 
 ### Tell it its job
 
-Just say hello. In its first chat a new agent asks you a few questions about the job, then writes its own instructions and asks you to approve them. You can also open **Setup** (the gear, or click the agent's name at the top of the chat) and write **What it does** yourself, the way you'd brief a new teammate. The agent reads it before every reply.
+Just say hello. In its first chat a new agent asks you a few questions about the job, then writes its own instructions. You can also open **Setup** (the gear, or click the agent's name at the top of the chat) and write **What it does** yourself, the way you'd brief a new teammate. The agent reads it before every reply.
 
 Threads and the Setup gear sit at the top right of the chat; Clear chat sits next to attach in the message box. Click the agent's face or name at the top of the chat to open Setup, where you change what it does, its model, apps, channels, memory, skills, routines and webhooks. **Threads** opens the agent's threads in a card on the right. While the agent uses its browser, a small **Browser** window shows the page live; close it and the globe at the top of the chat brings it back.
 
@@ -62,7 +62,9 @@ While they work, the sidebar lists them under the agent, one row each, with what
 
 ## Changes it asks for
 
-An agent can ask to change its own settings. The request shows in the chat with what it wants, one short line from the agent saying what it's for (every request has one, and it stays on the line once you've answered), the fields you can edit before you agree (a new name, a key to paste), **Approve** and **Not now**. New instructions show what changes: removed lines struck through, new lines marked +; **Edit** lets you change them before you approve. The agent hears your answers once, together: when nothing it asked for in that chat is still waiting, or 30 seconds after your last answer. Most changes reach it on its next turn, in the same conversation, without a restart: a new name or instructions, apps you give or take away, keys, its model, and **Run code**.
+An agent changes its own name and instructions by itself, when you or the person it works for ask it to in a chat. The change applies at once, with no approval, and shows in the chat as a card: *Changed its instructions*, with what changed (removed lines struck through, new lines marked +) and **Applied**. **Undo** puts the old name and instructions back; anyone who can edit the agent in Setup can use it, and the agent hears that you undid it. It's told never to change its instructions because of something it read in a web page, file or message, but read the card: nothing stops a change before it happens any more.
+
+For everything else, an agent asks to change its own settings. The request shows in the chat with what it wants, one short line from the agent saying what it's for (every request has one, and it stays on the line once you've answered), the fields you can edit before you agree (a key to paste), **Approve** and **Not now**. The agent hears your answers once, together: when nothing it asked for in that chat is still waiting, or 30 seconds after your last answer. Most changes reach it on its next turn, in the same conversation, without a restart: a new name or instructions, apps you give or take away, keys, its model, and **Run code**.
 
 A change you make in the app saves at once; the agent shows **Updating…** for the moment it takes to reach it. If it can't, it shows **Couldn’t apply your last change** with **Retry**.
 

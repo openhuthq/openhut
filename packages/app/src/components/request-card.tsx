@@ -16,12 +16,13 @@ const DEFAULT_DECIDED: Record<Ask['status'], Decided | undefined> & { expired: D
   done: { label: 'Approved', tone: 'success' },
   declined: { label: 'Not approved', tone: 'secondary' },
   expired: { label: 'Expired. No one answered in time.', tone: 'secondary' },
+  undone: { label: 'Undone', tone: 'secondary' },
 }
 
 export const EXPIRED = DEFAULT_DECIDED.expired
 
-export function RequestCard({ agent, change, icon, action, title, decided = DEFAULT_DECIDED[change.status], error, actions, children }: {
-  agent: Agent; change: Ask; icon: ReactNode; action?: Action; title: ReactNode; decided?: Decided; error?: string; actions?: ReactNode; children?: ReactNode
+export function RequestCard({ agent, change, icon, action, title, decided = DEFAULT_DECIDED[change.status], error, actions, after, children }: {
+  agent: Agent; change: Ask; icon: ReactNode; action?: Action; title: ReactNode; decided?: Decided; error?: string; actions?: ReactNode; after?: ReactNode; children?: ReactNode
 }) {
   const pending = change.status === 'open'
   return <div className="flex max-w-[560px] min-w-0 flex-col gap-3.5 rounded-xl bg-sidebar p-4">
@@ -36,7 +37,7 @@ export function RequestCard({ agent, change, icon, action, title, decided = DEFA
     </div>
     {children}
     {change.note && <span className="text-[13px] text-mute">You said: {change.note}</span>}
-    {!pending && decided && <Outcome decided={decided} />}
+    {!pending && decided && <div className="flex flex-wrap items-center gap-3"><Outcome decided={decided} />{after}</div>}
     {pending && (agent.canEdit ? actions && <div className="flex flex-wrap items-center gap-1">{actions}</div> : <span className="text-[13px] text-mute">Waiting for {agent.name}'s owner.</span>)}
     <ErrorNote message={error} />
   </div>

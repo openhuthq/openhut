@@ -30,8 +30,8 @@ const url = (path: string) => `http://127.0.0.1:${(server.address() as AddressIn
 test.after(() => server.close())
 
 test('every plugin\'s due wakes come back as one list, each named and prefixed [OpenHut <plugin>:<id>]', async () => {
-  const fromApp = /ask_[a-z0-9]+/.exec(await asks.create({ agentId: 'ag_wakeagnt', kind: 'update_self', input: { name: 'Ops' }, description: 'Needed for the job', origin: app }))?.[0] ?? ''
-  const fromWhatsApp = /ask_[a-z0-9]+/.exec(await asks.create({ agentId: 'ag_wakeagnt', kind: 'update_self', input: { name: 'Op' }, description: 'Needed for the job', origin: whatsapp }))?.[0] ?? ''
+  const fromApp = /ask_[a-z0-9]+/.exec(await asks.create({ agentId: 'ag_wakeagnt', kind: 'add_webhook', input: { name: 'Ops' }, description: 'Needed for the job', origin: app }))?.[0] ?? ''
+  const fromWhatsApp = /ask_[a-z0-9]+/.exec(await asks.create({ agentId: 'ag_wakeagnt', kind: 'add_webhook', input: { name: 'Op' }, description: 'Needed for the job', origin: whatsapp }))?.[0] ?? ''
   nudged.length = 0
   await asks.decline({ actor: owner, id: fromApp })
   await asks.decline({ actor: owner, id: fromWhatsApp })

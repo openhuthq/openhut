@@ -32,6 +32,10 @@ export type AskKind<I extends z.ZodObject = z.ZodObject, A extends z.ZodObject |
   title(x: { agentId: string; input: z.infer<I> }): string | Promise<string>
   run(x: { actor: Caller; ask: AskOf<z.infer<I>>; answer: A extends z.ZodObject ? z.infer<A> : undefined }): Promise<string | void>
   declined?(x: { actor: Caller; ask: AskOf<z.infer<I>> }): Promise<void>
+  auto?: {
+    before(x: { agentId: string }): Promise<Record<string, unknown>>
+    undo(x: { actor: Caller; ask: AskOf<z.infer<I>>; before: Record<string, unknown> }): Promise<void>
+  }
 }
 
 export type Plugin = {

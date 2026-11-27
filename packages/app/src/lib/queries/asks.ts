@@ -13,7 +13,7 @@ export function useAsks(agentId: string) {
 export function useAnswer(agentId: string) {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, verb, body }: { id: string; verb: 'approvals' | 'declines'; body: object }) => request({ schema: Ask, of: agentId, path: `/api/asks/${encodeURIComponent(id)}/${verb}`, method: 'POST', body }),
+    mutationFn: ({ id, verb, body }: { id: string; verb: 'approvals' | 'declines' | 'undos'; body: object }) => request({ schema: Ask, of: agentId, path: `/api/asks/${encodeURIComponent(id)}/${verb}`, method: 'POST', body }),
     onSuccess: (answered) => {
       client.setQueryData<Ask[]>(asksKey(agentId), (all) => all?.map((each) => each.id === answered.id ? answered : each))
       void Promise.all([CONNECTIONS_KEY, GRANTS_KEY, agentToolsKey(agentId), agentSecretsKey(agentId)].map((queryKey) => client.invalidateQueries({ queryKey })))
