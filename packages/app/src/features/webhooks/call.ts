@@ -68,11 +68,6 @@ export function tileOf(color: string): string {
   return light < 0.15 ? '#f3f3f4' : `color-mix(in srgb, ${color} 10%, white)`
 }
 
-export function initialsOf(name: string): string {
-  const words = name.split(/[\s._-]+/).filter(Boolean)
-  return words.slice(0, 2).map((word) => word[0]).join('').toUpperCase() || '?'
-}
-
 export function clockOf(at: string): string {
   return new Date(at).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false })
 }

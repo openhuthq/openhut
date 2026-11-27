@@ -1,3 +1,4 @@
+import { replyText } from '@openhut/common/threads/reply.ts'
 import type { ChatMessage } from '@openhut/common/threads/thread.ts'
 import { durable } from '../../core/durable.ts'
 import { channelService } from '../channels/channel-service.ts'
@@ -56,4 +57,4 @@ export const chat = {
 
 const metadataOf = (message: ChatMessage): Record<string, unknown> => (message.metadata ?? {}) as Record<string, unknown>
 
-const textOf = (message: ChatMessage): string => message.parts.map((part) => part.type === 'text' && typeof part.text === 'string' ? part.text : '').join('')
+const textOf = (message: ChatMessage): string => replyText(message.parts)
