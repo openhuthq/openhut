@@ -1,13 +1,13 @@
 import { execFile, spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
-import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { EXEC, errorText, isRecord } from '../util.ts'
+import { FIREWALL } from '../network/ports.ts'
+import { agentIp, freshNetwork } from '../network/subnet.ts'
+import { cli, EXEC, errorText, isRecord } from '../util.ts'
 import type { Exec, Mount, Pull, Sandboxes, SandboxSpec, SandboxState } from './sandbox.ts'
 
 const exec = promisify(execFile)
 const PULL_LOG = '/var/log/openhut/pull.log'
-export const FIREWALL = fileURLToPath(new URL('../../../../../install/agents-firewall.sh', import.meta.url))
 
 let runsc: Promise<boolean> | undefined
 
@@ -16,6 +16,11 @@ export const docker: Sandboxes = {
 
   async ready() {
     return exec(FIREWALL, ['--check'], EXEC).then(() => ({ ok: true }), () => ({ ok: false, reason: 'firewall is off' }))
+  },
+
+  async health(image) {
+    const ready = await imageReady(image)
+    return { imageReady: ready, gvisor: ready ? await gvisorOn(image) : undefined }
   },
 
   async create(spec) {
@@ -93,7 +98,7 @@ export function createArgs({ spec, gvisor }: { spec: SandboxSpec; gvisor: boolea
     ...['--user', spec.user, '--init', '--entrypoint', spec.entrypoint],
     ...['--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges'],
     ...['--pids-limit', '512', '--memory', sizeOf(spec.memoryMib), '--cpus', String(spec.cpus), '--log-opt', 'max-size=10m', '--log-opt', 'max-file=3'],
-    ...['--network', `ag-${spec.id}`, '--ip', `10.200.${spec.net}.2`],
+    ...['--network', `ag-${spec.id}`, '--ip', agentIp(spec.net ?? 0)],
     ...envArgs(spec.env),
     ...spec.mounts.flatMap(mountArgs),
     ...spec.tmpfs.flatMap(tmpfsArgs),
@@ -108,12 +113,12 @@ export function pullOf(log: string): Pull | null {
   return { done: last.match(/: Pull complete/g)?.length ?? 0, total, unit: 'layers' }
 }
 
-export function gvisorOn(image: string): Promise<boolean> {
+function gvisorOn(image: string): Promise<boolean> {
   runsc ??= probeRunsc(image)
   return runsc
 }
 
-export async function imageReady(image: string): Promise<boolean> {
+function imageReady(image: string): Promise<boolean> {
   return cli('image', 'inspect', image).then(() => true, () => false)
 }
 
@@ -161,29 +166,8 @@ function stateOf(row: unknown): SandboxState[] {
   return [{ id, running: state.Running === true, startedAt, labels }]
 }
 
-async function freshNetwork({ id, net }: { id: string; net: number }) {
-  await cli('network', 'rm', `ag-${id}`).catch(() => undefined)
-  const create = () => cli('network', 'create', '--subnet', `10.200.${net}.0/24`, '--gateway', `10.200.${net}.1`, '--label', `openhut.agent=${id}`, `ag-${id}`)
-  await create().catch(async (err: unknown) => {
-    if (!/overlap/i.test(errorText(err))) throw err
-    await dropUnused(`10.200.${net}.0/24`)
-    return create()
-  })
-}
-
-async function dropUnused(subnet: string) {
-  for (const name of (await cli('network', 'ls', '--filter', 'name=ag-', '--format', '{{.Name}}')).split('\n').filter(Boolean)) {
-    const used = await cli('network', 'inspect', '--format', '{{range .IPAM.Config}}{{.Subnet}}{{end}}', name).catch(() => '')
-    if (used === subnet) await cli('network', 'rm', name).catch(() => undefined)
-  }
-}
-
 async function digestOf(image: string) {
   return cli('image', 'inspect', '--format', '{{index .RepoDigests 0}}', image).catch(() => image)
-}
-
-async function cli(...args: string[]) {
-  return (await exec('docker', args, EXEC)).stdout.trim()
 }
 
 function ignoreMissing(e: unknown) {

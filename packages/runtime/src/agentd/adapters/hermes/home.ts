@@ -1,11 +1,20 @@
-import { closeSync, constants, ftruncateSync, writeSync } from 'node:fs'
-import { AGENT_OWNER, DATA, realHome } from '../host.ts'
-import { isSkillPath, listSkills, MAX_SKILL_BYTES, openInside, readInside } from './skills.ts'
-import { isHomePath, isUploadName, readHomeFile, removeUploads, replaceUpload, saveNew, saveUpload, statHomeFiles } from './uploads.ts'
+import { closeSync, constants, ftruncateSync, readdirSync, writeSync } from 'node:fs'
+import { config } from '../../config.ts'
+import { openInside, readInside } from '../../home/safe-fs.ts'
+import { isHomePath, isUploadName, readHomeFile, removeUploads, replaceUpload, saveNew, saveUpload, statHomeFiles } from '../../home/uploads.ts'
+import { AGENT_OWNER, realHome } from '../../host.ts'
 
 const MEMORY_FILES = new Set(['MEMORY.md', 'USER.md'])
 const MAX_MEMORY_BYTES = 64_000
 const SESSION = 'platforms/whatsapp/session'
+const SEGMENT = /^[A-Za-z0-9][\w.-]{0,63}$/
+const SKILL_FILE = 'SKILL.md'
+const MANIFEST = '.bundled_manifest'
+const MAX_DEPTH = 3
+const MAX_SKILLS = 300
+const HEAD_BYTES = 4096
+const MANIFEST_BYTES = 64_000
+const MAX_SKILL_BYTES = 400_000
 
 export const agentHome = {
   kindOf(path: unknown): Kind | undefined {
@@ -59,7 +68,7 @@ export const agentHome = {
         overwrite({ root, path, body, gone: 'the agent has not saved that memory yet' })
         return path
       case 'upload':
-        if (replace) return `home/${replaceUpload({ home: `${root}/home`, name: path.split('/').at(-1) ?? '', body, owner: AGENT_OWNER, trash: `${DATA}/trash/${Date.now()}-${id}/home/uploads` })}`
+        if (replace) return `home/${replaceUpload({ home: `${root}/home`, name: path.split('/').at(-1) ?? '', body, owner: AGENT_OWNER, trash: `${config.data}/trash/${Date.now()}-${id}/home/uploads` })}`
         return `home/${saveUpload({ home: `${root}/home`, name: path.split('/').at(-1) ?? '', body, owner: AGENT_OWNER })}`
       default:
         throw new Error('that path can\'t be written')
@@ -87,6 +96,39 @@ function overwrite({ root, path, body, gone }: { root: string; path: string; bod
     writeSync(fd, body, 0)
   } finally {
     closeSync(fd)
+  }
+}
+
+type SkillHead = { path: string; head: string }
+
+function isSkillPath(value: unknown): value is string {
+  if (typeof value !== 'string') return false
+  const segments = value.split('/')
+  return segments.length <= MAX_DEPTH && segments.every((segment) => SEGMENT.test(segment))
+}
+
+export function listSkills(root: string): { skills: SkillHead[]; bundled: string } {
+  const skills: SkillHead[] = []
+  walk({ root, dir: '', depth: 1, skills })
+  return { skills, bundled: readInside({ root, file: MANIFEST, limit: MANIFEST_BYTES }) ?? '' }
+}
+
+function walk({ root, dir, depth, skills }: { root: string; dir: string; depth: number; skills: SkillHead[] }): void {
+  for (const entry of entriesOf(`${root}/${dir}`)) {
+    if (skills.length >= MAX_SKILLS) return
+    if (!entry.isDirectory() || !SEGMENT.test(entry.name)) continue
+    const path = dir ? `${dir}/${entry.name}` : entry.name
+    const head = readInside({ root, file: `${path}/${SKILL_FILE}`, limit: HEAD_BYTES })
+    if (head !== undefined) skills.push({ path, head })
+    else if (depth < MAX_DEPTH) walk({ root, dir: path, depth: depth + 1, skills })
+  }
+}
+
+function entriesOf(dir: string) {
+  try {
+    return readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))
+  } catch {
+    return []
   }
 }
 

@@ -66,7 +66,8 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
   instead, a key that acts as the owner. The server also serves the built App (`platform/web-app.ts`).
   `src/agentd/` is the root helper on a Unix socket in openhut-runtime, the only process that starts agents: `sandbox/docker.ts` runs each one
   as a container (`--runtime runsc` when a probe at boot finds gVisor works; health says `gvisor`), `sandbox/memory.ts`
-  is the tests' fake (`OPENHUT_FAKE_SANDBOX=1`). Tests mirror them in `test/server/` and `test/agentd/`.
+  is the tests' fake (`OPENHUT_FAKE_SANDBOX=1`). `agents.ts` and `commands.ts` know no Hermes: the container spec, home layout,
+  conf files and `state.db` are `adapters/hermes/` (`hermesBox`), and the firewall, fence, link, subnets and ports are `network/`. Tests mirror them in `test/server/` and `test/agentd/`.
 - **`packages/app`** — `@openhut/app`, the App: the React dashboard (Vite to `dist`, built into the image and served by the runtime on the same origin, TanStack Query). Tailwind v4 with shared
   components in `src/components/ui` (shadcn on Base UI); screens use those, not their own styles.
 - **`packages/common`** — `@openhut/common`, the API contract: Zod Mini request schemas and response types.
@@ -84,7 +85,7 @@ An npm-workspaces monorepo run with Turborepo, laid out like Skyfleet.
 Docker socket, data in `openhut-data`, network `openhut`, 127.0.0.1:8787, ports 80 and 443 for Caddy; `install.sh proxy <port> [network]` publishes only 127.0.0.1:<port>, joins that Docker network, skips Caddy and keeps it as `OPENHUT_PROXY` env for updates), prints the address to open, and goes back to the previous container if the new one fails its health check. On first boot it starts
 its own runtime with `install.sh join http://openhut:8787 <token>`. `ghcr.io/openhuthq/openhut-runtime` (`--target runtime`:
 dockerd, gVisor, Claude Code pinned by `ARG CLAUDE`, agent-browser, the WhatsApp bridge and the pinned Hermes agent image, so
-nothing downloads on the server; entrypoint `install/runtime-start.sh`) runs agentd and `agentd/link.ts`, privileged, no open
+nothing downloads on the server; entrypoint `install/runtime-start.sh`) runs agentd and `agentd/network/link.ts`, privileged, no open
 port, data in `openhut-runtime-data`. Other machines run only that: `curl … | sh -s -- join <address> <token>` from
 Settings › Computers. The link is one outbound WebSocket to `/api/computers/link` carrying the `common/src/tunnel/mux.ts`
 streams (frames.ts): the main opens agentd, agent-API and home-copy streams, the runtime opens gateway streams, so model keys

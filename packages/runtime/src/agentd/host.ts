@@ -1,34 +1,38 @@
-import { chmodSync, chownSync, existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { chmodSync, chownSync, existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { sandboxes } from './sandbox/index.ts'
 import { config } from './config.ts'
+import { ID } from './network/ports.ts'
+import { docker } from './sandbox/docker.ts'
+import { memory } from './sandbox/memory.ts'
+import type { Mount, Sandboxes, SandboxSpec } from './sandbox/sandbox.ts'
 
-export const SOCK = config.socket
-export const IMAGE = config.image
 export const APP_GID = gidOf('openhut')
-export const ASSETS = config.assets
-export const DATA = config.data
-export const BIN = config.bin
-export const CLAUDE = join(BIN, 'claude')
-export const RESOLV = '/etc/agentd/resolv.conf'
+export const CLAUDE = join(config.bin, 'claude')
 export const AGENT_UID = 10000
 export const AGENT_USER = `${AGENT_UID}:${AGENT_UID}`
 export const AS_ROOT = process.getuid?.() === 0
 export const AGENT_OWNER = AS_ROOT ? { uid: AGENT_UID, gid: AGENT_UID } : undefined
 export const TMP_MIB = 256
-export const ID = /^ag_[a-z0-9]{8}$/
-export const box = sandboxes
+export const box: Sandboxes = config.fakeSandbox ? memory : docker
 
 export function home(id: string): string {
-  return `${DATA}/agents/${id}`
+  return `${config.data}/agents/${id}`
+}
+
+export function agentIds(): string[] {
+  return readdirSync(`${config.data}/agents`).filter((name) => ID.test(name))
 }
 
 export function realHome(id: string): string {
-  return `${realpathSync(`${DATA}/agents`)}/${id}`
+  return `${realpathSync(`${config.data}/agents`)}/${id}`
 }
 
 export function conf(id: string): string {
-  return `${DATA}/agent-conf/${id}`
+  return `${config.data}/agent-conf/${id}`
+}
+
+export function scratchSpec({ id, mounts, tmpfs }: { id: string; mounts: Mount[]; tmpfs: SandboxSpec['tmpfs'] }): Omit<SandboxSpec, 'entrypoint' | 'command'> {
+  return { id, image: config.image, cpus: 1, memoryMib: TMP_MIB, user: AGENT_USER, env: {}, mounts, tmpfs, labels: {} }
 }
 
 export function writeIfChanged(path: string, body: string): boolean {

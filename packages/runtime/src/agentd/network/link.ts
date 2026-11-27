@@ -5,13 +5,14 @@ import type { Duplex } from 'node:stream'
 import { promisify } from 'node:util'
 import WebSocket from 'ws'
 import { mux, type Mux } from '@openhut/common/tunnel/mux.ts'
-import { config } from './config.ts'
+import { config } from '../config.ts'
+import { AGENT_API_PORT, ID } from './ports.ts'
+import { agentIp } from './subnet.ts'
 
 const LINK = `${config.data}/link`
 const FAILED = `${config.data}/failed-images`
 const UPDATE_LOG = `${config.data}/update.log`
 const LINKED = '/run/openhut-linked'
-const ID = /^ag_[a-z0-9]{8}$/
 const HELLO_MS = 60_000
 const run = promisify(execFile)
 
@@ -21,7 +22,7 @@ let wait = 1_000
 function accept(open: Record<string, unknown>, stream: Duplex): void {
   const id = typeof open.id === 'string' && ID.test(open.id) ? open.id : undefined
   if (open.to === 'agentd') return join(stream, connect(config.socket))
-  if (open.to === 'agent' && Number.isInteger(open.net) && Number(open.net) >= 1 && Number(open.net) <= 250) return join(stream, connect(8642, `10.200.${Number(open.net)}.2`))
+  if (open.to === 'agent' && Number.isInteger(open.net) && Number(open.net) >= 1 && Number(open.net) <= 250) return join(stream, connect(AGENT_API_PORT, agentIp(Number(open.net))))
   if (open.to === 'pack' && id) return pack(id, stream)
   if (open.to === 'unpack' && id) return unpack(id, stream)
   stream.destroy()

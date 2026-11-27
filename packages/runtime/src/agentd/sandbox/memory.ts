@@ -10,6 +10,10 @@ export const memory: Sandboxes = {
     return { ok: true }
   },
 
+  async health() {
+    return { imageReady: true, gvisor: false }
+  },
+
   async create(spec) {
     boxes.set(spec.id, { spec, running: false })
   },

@@ -2,9 +2,10 @@ import { once } from 'node:events'
 import { createServer, type AddressInfo } from 'node:net'
 import { networkInterfaces } from 'node:os'
 import { text } from 'node:stream/consumers'
-import { errorText } from './util.ts'
-import type { Sandboxes, SandboxSpec } from './sandbox/sandbox.ts'
-import { config } from './config.ts'
+import { config } from '../config.ts'
+import type { Sandboxes, SandboxSpec } from '../sandbox/sandbox.ts'
+import { errorText } from '../util.ts'
+import { hostIp } from './subnet.ts'
 
 type FenceCheck = { name: string; target: string; expect: 'refused' | 'allowed'; got: string; pass: boolean }
 export type FenceReport = { ok: boolean; sandbox: string; skipped?: string; checks: FenceCheck[] }
@@ -25,7 +26,7 @@ export async function proveFence({ box, spec, timeoutMs = TIMEOUT_MS }: { box: S
   if (!ready.ok) return { ok: false, sandbox: box.name, skipped: ready.reason ?? 'the sandbox is not ready', checks: [] }
   const listener = createServer((sock) => sock.end('HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n')).listen(0, '0.0.0.0')
   await once(listener, 'listening')
-  const probes = probesFor({ host: `10.200.${FENCE_NET}.1`, hostPort: (listener.address() as AddressInfo).port, lan: hostAddress(isPrivate, '10.0.0.1'), tailnet: hostAddress(isCgnat, '100.64.0.1') })
+  const probes = probesFor({ host: hostIp(FENCE_NET), hostPort: (listener.address() as AddressInfo).port, lan: hostAddress(isPrivate, '10.0.0.1'), tailnet: hostAddress(isCgnat, '100.64.0.1') })
   let timer: NodeJS.Timeout | undefined
   const probe = async () => {
     await box.create({ ...spec, entrypoint: '/usr/bin/env', command: ['sleep', String(timeoutMs / 1000)], net: FENCE_NET })
