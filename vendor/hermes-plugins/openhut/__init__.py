@@ -24,6 +24,7 @@ POLL_SECONDS = 15
 ANSWERED = ("pre_", "transform_")
 NOTIFY_SECONDS = 5
 STRANGER = {"action": "skip", "reason": "openhut stranger"}
+DIRECT = {"action": "skip", "reason": "openhut discord dm"}
 injected = set()
 warned = {}
 notices = queue.Queue()
@@ -95,6 +96,8 @@ def notify():
 def dispatch(**kwargs):
     source = getattr(kwargs.get("event"), "source", None)
     user = str(getattr(source, "user_id", None) or "")
+    if plain(getattr(source, "platform", None)) == "discord" and getattr(source, "chat_type", None) == "dm":
+        return DIRECT
     result = forward("pre_gateway_dispatch")(**kwargs)
     if plain(getattr(source, "platform", None)) != "telegram" or not user:
         return result

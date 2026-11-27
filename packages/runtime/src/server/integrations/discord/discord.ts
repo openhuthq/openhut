@@ -90,7 +90,7 @@ export const discord = {
 
   env({ botToken, channels }: { botToken: string; channels: string[] }): Record<string, string> {
     if (!channels.length) return {}
-    return { DISCORD_BOT_TOKEN: botToken, DISCORD_ALLOWED_CHANNELS: channels.join(','), DISCORD_HOME_CHANNEL: channels[0] }
+    return { DISCORD_BOT_TOKEN: botToken, DISCORD_ALLOW_ALL_USERS: 'true', DISCORD_ALLOWED_CHANNELS: channels.join(','), DISCORD_HOME_CHANNEL: channels[0] }
   },
 
   config: { discord: { require_mention: true, unauthorized_dm_behavior: 'ignore', gateway_restart_notification: false } },

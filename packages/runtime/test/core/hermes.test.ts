@@ -72,12 +72,13 @@ test('Slack before any channel is picked: no Slack settings, so it answers nowhe
   assert.ok(!Object.keys(render([{ kind: 'slack', audience: { ownerAddress: '', open: false, allowed: [] } }]).env).some((key) => key.startsWith('SLACK_')))
 })
 
-test('Discord in its channels: the bot token, only those channels, no user allowlist so DMs are refused', () => {
+test('Discord in its channels: the bot token, anyone in only those channels', () => {
   const { config: yaml, env } = render([{ kind: 'discord', botToken: 'fake.bot.token', audience: { ownerAddress: '', open: false, allowed: ['1234567890123456789', '9876543210987654321'] } }])
   assert.equal(env.DISCORD_BOT_TOKEN, 'fake.bot.token')
   assert.equal(env.DISCORD_ALLOWED_CHANNELS, '1234567890123456789,9876543210987654321')
   assert.equal(env.DISCORD_HOME_CHANNEL, '1234567890123456789')
-  assert.equal(env.DISCORD_ALLOW_ALL_USERS ?? env.DISCORD_ALLOWED_USERS, undefined)
+  assert.equal(env.DISCORD_ALLOW_ALL_USERS, 'true')
+  assert.equal(env.DISCORD_ALLOWED_USERS, undefined)
   assert.deepEqual(yaml.discord, { require_mention: true, unauthorized_dm_behavior: 'ignore', gateway_restart_notification: false })
 })
 
