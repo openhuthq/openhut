@@ -31,7 +31,7 @@ The first time a webhook is called, the agent looks at the payload and writes fo
 
 - **Which calls wake it**: calls that don't match are counted and skipped, like every GitHub run except the release workflow. The webhook shows **Wakes on** and how many calls were skipped since the last one that woke the agent.
 - **Which calls are the same event**: a resend, or the same alert firing again, only counts as **Seen 3×** on the call that's already there. It doesn't wake the agent again.
-- **Which calls share a thread**: for a DigitalOcean alert, the alert rule, so the alert and its recovery read as one story.
+- **Which calls share a thread**: for a DigitalOcean alert, the alert rule, so the alert and its recovery read as one story. When the agent changes this, the conversation already going on stays in its thread: the next call from the same group lands there.
 - **What each call shows as**: the card's title (which also names a new thread), status, details, link and the sender's logo. **Preview card** on the webhook shows it filled from the last call.
 
 A sender can also pick the thread itself with an `X-Group-Key` header: calls with the same value share a thread. Calls that come in while the agent is busy reach it together, as one turn per thread, and show as one card with each call listed.
