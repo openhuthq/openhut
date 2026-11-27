@@ -12,3 +12,7 @@ export function threadRoute({ agentId, threadId }: { agentId: string; threadId: 
 export function goneAgentPath({ agentId, listed }: { agentId: string; listed: string[] }) {
   return listed.includes(agentId) ? undefined : '/'
 }
+
+export function artifactPath({ agentId, threadId, artifactId }: { agentId: string; threadId: string; artifactId: string }) {
+  return `${threadRoute({ agentId, threadId })}/a/${encodeURIComponent(artifactId)}`
+}

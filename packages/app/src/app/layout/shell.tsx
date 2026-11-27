@@ -47,8 +47,8 @@ export function Shell({ route, overlay }: { route: ShellRoute; overlay: 'setting
     <ErrorBoundary><Sidebar contacts={agents.data && contacts} activeId={activeId} collapsed={hidden} onCollapse={() => setCollapsed((on) => !on)} onNew={newAgent} /></ErrorBoundary>
     <ErrorBoundary key={activeId ?? route.page}>
       {route.page === 'agent' && (phone
-        ? <PhonePage key={route.agentId}><AgentView agentId={route.agentId} threadId={route.threadId} dialog={route.dialog} detail={route.detail} /></PhonePage>
-        : <AgentView key={route.agentId} agentId={route.agentId} threadId={route.threadId} dialog={route.dialog} detail={route.detail} />)}
+        ? <PhonePage key={route.agentId}><AgentView agentId={route.agentId} threadId={route.threadId} artifactId={route.artifactId} dialog={route.dialog} detail={route.detail} /></PhonePage>
+        : <AgentView key={route.agentId} agentId={route.agentId} threadId={route.threadId} artifactId={route.artifactId} dialog={route.dialog} detail={route.detail} />)}
       {route.page === 'home' && agents.data && <Home first={contacts[0]?.agent.id} adding={route.adding} overlaid={!!overlay} />}
       {route.page === 'missing' && <Redirect to="/" />}
     </ErrorBoundary>

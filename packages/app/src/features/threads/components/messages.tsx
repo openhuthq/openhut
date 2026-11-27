@@ -36,7 +36,7 @@ import { callOf } from '@/lib/webhook-call'
 import { CallCardMessage } from '@/components/call-card'
 import { FileChip } from '@/features/threads/components/file-drop'
 
-export type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; work: Work; spec: SpecDataPart; asks: string[]; notified: Notified; 'webhook-setup': WebhookSetup; step: Record<string, never> }>
+export type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; work: Work; spec: SpecDataPart; asks: string[]; notified: Notified; 'webhook-setup': WebhookSetup; artifact: unknown; step: Record<string, never> }>
 type AgentPart = AgentMessage['parts'][number]
 
 export const ChatFiles = createContext<{ agentId: string; threadId: string; save: (path: string) => void }>({ agentId: '', threadId: '', save: () => undefined })
@@ -48,6 +48,8 @@ const CodeBlock = lazy(() => import('@/features/threads/components/code').then((
 export type AskSlots = { Cards: ComponentType<{ agent: Agent; ids: string[] }>; Pending: ComponentType<{ agent: Agent; shown: Set<string> }> }
 
 export const ChatAsks = createContext<AskSlots>({ Cards: () => null, Pending: () => null })
+
+export const ChatParts = createContext<{ Artifact: ComponentType<{ agentId: string; threadId: string; data: unknown }> }>({ Artifact: () => null })
 
 function NotifiedRow({ notified }: { notified: Notified[number] }) {
   return <span className="inline-flex items-center gap-1.5 text-[12.5px] text-mute" title={notified.text}><PlaceIcon platform={notified.place.platform} size={12} />Notified {placeName(notified.place)}</span>
@@ -69,6 +71,7 @@ export function Message({ agent, thread, message, said, seen, live, onRetry }: {
 export function AgentReply({ agent, threadId: liveThread, step, message, said, live, onRetry }: { agent: Agent; threadId?: string; step?: string; message: AgentMessage; said?: (text: string) => boolean; live: boolean; onRetry?: () => void }) {
   const { agentId, threadId } = useContext(ChatFiles)
   const asks = useContext(ChatAsks)
+  const parts = useContext(ChatParts)
   const blocks = blocksOf(message)
   const ids = changesOf(message)
   const stored = workOf(message)
@@ -89,6 +92,7 @@ export function AgentReply({ agent, threadId: liveThread, step, message, said, l
         : hasSpec && <MessageCard key={index} spec={spec} loading={live} />)}
       {ids.length > 0 && <asks.Cards agent={agent} ids={ids} />}
       {message.parts.map((part, index) => part.type === 'data-webhook-setup' && <WebhookSetupCard key={index} agentId={agentId} card={part.data} done={said?.(doneText(part.data)) ?? false} />)}
+      {message.parts.map((part, index) => part.type === 'data-artifact' && <parts.Artifact key={index} agentId={agentId} threadId={threadId} data={part.data} />)}
       {message.parts.flatMap((part, index) => part.type === 'data-notified' ? part.data.map((each, at) => <NotifiedRow key={`${index}-${at}`} notified={each} />) : [])}
       {live && !blocks.length && !step && !work?.calls.some((call) => call.status === 'running') && <span className="pt-1.5" aria-label={`${agent.name} is thinking`}><Dots /></span>}
       {!live && error !== undefined && <span className="flex flex-wrap items-center gap-2 text-[13.5px] text-mute-2 italic">{error}{onRetry && <RetryButton onRetry={onRetry} />}</span>}
@@ -173,6 +177,14 @@ export function workOf(message: AgentMessage): Work | undefined {
   return legacyWork({ events: message.parts.flatMap((part) => part.type === 'data-tool' ? [part.data] : []), calls: message.parts.flatMap((part) => part.type === 'data-calls' ? part.data : []) })
 }
 
+export function ChatMarkdown({ text }: { text: string }) {
+  return <div className="msg-t doc"><Markdown remarkPlugins={[remarkGfm]} components={{ a: OutLink, pre: Code, input: TaskBox, table: WideTable }}>{bullets(text)}</Markdown></div>
+}
+
+function OutLink({ href, children }: { href?: string; children?: ReactNode }) {
+  return <a href={href} target="_blank" rel="noreferrer">{children}</a>
+}
+
 export function ChatLink({ href, children }: { href?: string; children?: ReactNode }) {
   const { save } = useContext(ChatFiles)
   const path = href === undefined ? undefined : homeFile(href)
@@ -198,6 +210,7 @@ export function uiMessageOf(message: ChatMessage): AgentMessage {
     if (part.type === 'data-calls') return [{ type: 'data-calls', data: z.safeParse(z.array(ChatCall), part.data).data ?? [] }]
     if (part.type === 'data-asks' || part.type === 'data-changes') return [{ type: 'data-asks', data: z.safeParse(z.array(z.string()), part.data).data ?? [] }]
     if (part.type === 'data-webhook-setup') return z.safeParse(WebhookSetup, part.data).data ? [{ type: 'data-webhook-setup', data: z.parse(WebhookSetup, part.data) }] : []
+    if (part.type === 'data-artifact') return [{ type: 'data-artifact', data: part.data }]
     if (part.type === 'data-notified') return z.safeParse(Notified, part.data).data ? [{ type: 'data-notified', data: z.parse(Notified, part.data) }] : []
     if (part.type === 'data-spec') return [{ type: 'data-spec', data: part.data as SpecDataPart }]
     if (part.type === 'data-step') return [{ type: 'data-step', data: {} }]

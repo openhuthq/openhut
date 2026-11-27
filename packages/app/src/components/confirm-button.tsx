@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import type { IconSvgElement } from '@hugeicons/react'
 import { Cancel01Icon } from '@hugeicons/core-free-icons'
 import { Tooltip } from '@/components/ui/tooltip'
@@ -61,10 +61,14 @@ export function ConfirmIcon({ label, icon, danger, disabled, question, action, b
   const phone = useMedia(PHONE)
   if (phone) return <ConfirmButton variant="bare" size="icon-sm" className={cn(TINY_ICON, danger && 'text-fail')} label={label} question={question} detail="" action={action} onConfirm={() => onConfirm(() => {})}><I icon={icon} size={16} /></ConfirmButton>
   if (!confirming) return <Tooltip label={label}><Button type="button" variant="bare" className={cn(TINY_ICON, danger && 'text-fail')} aria-label={label} disabled={disabled} onClick={() => setConfirming(true)}><I icon={icon} size={16} /></Button></Tooltip>
+  return <ConfirmPills box={box} question={question} action={action} danger={danger} busy={busy} onCancel={() => setConfirming(false)} onConfirm={() => onConfirm(() => setConfirming(false))} />
+}
+
+export function ConfirmPills({ box, question, action, danger, busy, onCancel, onConfirm }: { box: RefObject<HTMLDivElement | null>; question: string; action: string; danger?: boolean; busy: boolean; onCancel: () => void; onConfirm: () => void }) {
   return <div ref={box} role="group" aria-label={question} className="flex min-w-0 animate-grow items-center gap-1.5">
     <span className="min-w-0 truncate text-[12px] text-mute">{question}</span>
-    <Button type="button" variant="secondary" className={PILL} autoFocus onClick={() => setConfirming(false)}>Cancel</Button>
-    <Button type="button" variant={danger ? 'destructive' : 'primary'} className={PILL} disabled={busy} onClick={() => onConfirm(() => setConfirming(false))}>{action}</Button>
+    <Button type="button" variant="secondary" className={PILL} autoFocus onClick={onCancel}>Cancel</Button>
+    <Button type="button" variant={danger ? 'destructive' : 'primary'} className={PILL} disabled={busy} onClick={onConfirm}>{action}</Button>
   </div>
 }
 

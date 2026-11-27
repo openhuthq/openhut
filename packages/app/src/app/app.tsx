@@ -5,6 +5,7 @@ import { Shell, type ShellRoute } from '@/app/layout/shell'
 import { useMe } from '@/lib/queries/people'
 import { navigate, Redirect, usePath } from '@/lib/router'
 import { RequestError } from '@/lib/api-client'
+import { SharePage } from '@/app/routes/share'
 import { InvitePage, ResetPage, SetupPage, SignInPage } from '@/features/auth/pages'
 
 const SettingsView = lazy(() => import('@/app/routes/settings').then((module) => ({ default: module.SettingsView })))
@@ -16,6 +17,7 @@ export function App() {
   if (path === '/setup') return <SetupPage />
   if (path === '/login') return <SignInPage />
   if (path === '/reset') return <ResetPage />
+  if (path.startsWith('/share/')) return <SharePage token={decodeURIComponent(path.slice('/share/'.length))} />
   if (path.startsWith('/invite/')) return <InvitePage token={decodeURIComponent(path.slice('/invite/'.length))} />
   return <SignedIn path={path} />
 }

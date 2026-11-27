@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { routeOf } from '../../src/app/routes.ts'
-import { agentPath, goneAgentPath, threadRoute } from '../../src/config/paths.ts'
+import { agentPath, artifactPath, goneAgentPath, threadRoute } from '../../src/config/paths.ts'
 
 test('every screen has one path and the dialog lives in it', () => {
   assert.deepEqual(routeOf('/'), { page: 'home', adding: false })
@@ -35,4 +35,12 @@ test('a thread from another channel has its own path, and the agent\'s own chat 
   assert.deepEqual(routeOf(threadRoute({ agentId: 'ag_1', threadId: 'th 2' })), { page: 'agent', agentId: 'ag_1', dialog: undefined, detail: undefined, threadId: 'th 2' })
   assert.deepEqual(routeOf('/agents/ag_1/threads'), { page: 'agent', agentId: 'ag_1', dialog: 'threads', detail: undefined })
   assert.deepEqual(routeOf('/agents/ag_1/notify'), { page: 'agent', agentId: 'ag_1', dialog: 'notify', detail: undefined })
+})
+
+test('an open artifact lives in the path, beside the thread it was opened from', () => {
+  assert.deepEqual(routeOf('/agents/ag_1/a/art_1'), { page: 'agent', agentId: 'ag_1', dialog: undefined, detail: undefined, artifactId: 'art_1' })
+  assert.deepEqual(routeOf('/agents/ag_1/threads/th_1/a/art_1'), { page: 'agent', agentId: 'ag_1', dialog: undefined, detail: undefined, threadId: 'th_1', artifactId: 'art_1' })
+  assert.equal(artifactPath({ agentId: 'ag_1', threadId: 'ag_1', artifactId: 'art_1' }), '/agents/ag_1/a/art_1')
+  assert.deepEqual(routeOf(artifactPath({ agentId: 'ag_1', threadId: 'th_1', artifactId: 'art 1' })).artifactId, 'art 1')
+  assert.deepEqual(routeOf('/agents/ag_1/a'), { page: 'missing' })
 })
