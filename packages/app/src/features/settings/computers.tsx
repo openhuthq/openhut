@@ -7,15 +7,15 @@ import { ConfirmDialog } from '@/components/confirm-button'
 import { DialogTitle } from '@/components/ui/dialog'
 import { Spinner } from '@/components/ui/spinner'
 import { ErrorNote } from '@/components/error-note'
-import { DialogCard, I, PILL } from '@/components/kit'
+import { DialogCard, I, PILL, Chevron, Row, Rows } from '@/components/kit'
 import { DEVICE_HUE, DEVICE_ICONS } from '@/components/custom/device'
-import { useComputerAdmins, useComputers, useJoinComputer, useRemoveComputer } from '@/features/computers/api'
-import { useIsAdmin } from '@/features/people/api'
-import { Chevron, Row, Rows } from '@/features/settings/kit'
+import { useComputerAdmins, useComputers, useJoinComputer, useRemoveComputer } from '@/lib/queries/computers'
+import { useIsAdmin } from '@/lib/queries/people'
 import { copyText } from '@/lib/clipboard'
 import { COMPUTERS_KEY } from '@/lib/query-keys'
 import { open, useOpen } from '@/lib/router'
 import { toast } from '@/lib/toast'
+import { noteOf } from '@/lib/computers'
 import { cn } from '@/lib/utils'
 
 export function ComputersSettings() {
@@ -47,18 +47,6 @@ function ComputerRow({ computer, admin, updating, onRemoved }: { computer: Compu
     <ConfirmDialog open={asking} onOpenChange={setAsking} question={`Remove ${computer.name}?`} detail="It disconnects and can’t run agents for this install anymore. You can add it again later." action="Remove"
       onConfirm={() => remove.mutate({ id: computer.id }, { onSuccess: (removed) => onRemoved({ name: computer.name, command: removed.uninstall }), onError: (error) => toast(`Couldn’t remove ${computer.name}`, error.message) })} />
   </Row>
-}
-
-export function noteOf(computer: Computer): string {
-  const seen = computer.seenAt ? `Offline since ${new Date(computer.seenAt).toLocaleString()}` : 'Offline'
-  const parts = [
-    computer.online ? 'Online' : seen,
-    computer.gvisor !== null && `gVisor: ${computer.gvisor ? 'on' : 'off'}`,
-    computer.version && `OpenHut ${computer.version}`,
-    computer.agents ? `${computer.agents} agent${computer.agents === 1 ? '' : 's'}` : 'No agents',
-  ]
-  const note = parts.filter(Boolean).join(' · ')
-  return computer.updateError ? `${note}. Couldn’t update: ${computer.updateError}` : note
 }
 
 function ComputerMark({ computer }: { computer: Computer }) {

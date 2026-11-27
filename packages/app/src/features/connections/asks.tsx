@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { Add01Icon, AlertCircleIcon, CheckmarkCircle02Icon, LinkSquare02Icon, Wrench01Icon } from '@hugeicons/core-free-icons'
-import type { IconSvgElement } from '@hugeicons/react'
+import { Add01Icon, AlertCircleIcon, CheckmarkCircle02Icon, LinkSquare02Icon } from '@hugeicons/core-free-icons'
 import * as z from 'zod/mini'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { Ask } from '@openhut/common/asks/ask.ts'
@@ -11,18 +10,19 @@ import { Spinner } from '@/components/ui/spinner'
 import { Glyph } from '@/components/glyph'
 import { isBrand, type BrandName } from '@/components/brand-icons'
 import { I, PILL, SetupSheet } from '@/components/kit'
-import { useAnswer } from '@/features/asks/api'
-import type { AskExtra, AskRow } from '@/features/asks/custom'
-import { toolAnswer, toolChoices, toolDetails, toolOutcome, undoable, type ToolChoice } from '@/features/asks/extras'
-import { Details, RequestCard } from '@/features/agents/request-card'
-import { useGrants } from '@/features/agents/api'
-import { openSignInTab, useAuthorizeConnection, useConnections } from '@/features/connections/api'
-import { connectionBrand, titleOf } from '@/features/connections/catalog'
+import { useAnswer } from '@/lib/queries/asks'
+import { toolAnswer, toolChoices, toolDetails, toolOutcome, undoable, type AskExtra, type AskRow, type ToolChoice } from '@/lib/asks'
+import { Details, RequestCard } from '@/components/request-card'
+import { useGrants } from '@/lib/queries/grants'
+import { openSignInTab, useAuthorizeConnection } from '@/features/connections/api'
+import { useConnections } from '@/lib/queries/connections'
+import { connectionBrand, titleOf } from '@/config/catalog'
 import { GroupIcon, GROUPS, PermissionPicker } from '@/features/connections/permissions'
 import { GitHubAskRow } from '@/features/connections/github-access'
-import { Field } from '@/features/connections/sheet'
+import { Field } from '@/components/sheet'
 import { formValues } from '@/lib/form'
 import { open, useOpen } from '@/lib/router'
+import { AppIcon } from '@/components/app-icon'
 import { cn } from '@/lib/utils'
 
 const State = z.enum(['allow', 'ask', 'deny'])
@@ -97,11 +97,6 @@ export const cards = { call_tool: ToolAsk }
 function variantOf({ choice, index }: { choice: ToolChoice; index: number }): 'primary' | 'secondary' | 'ghost' {
   if (choice === 'decline') return 'ghost'
   return index === 0 ? 'primary' : 'secondary'
-}
-
-export function AppIcon({ brand, size, fallback = Wrench01Icon }: { brand: BrandName | undefined; size: 18 | 28; fallback?: IconSvgElement }) {
-  if (brand && brand !== 'mcp') return <Glyph name={brand} size={size} />
-  return <span className={cn('grid shrink-0 place-items-center rounded-lg bg-soft text-mute', size === 28 ? 'size-7' : 'size-[18px] rounded-md')}><I icon={fallback} size={size === 28 ? 16 : 12} /></span>
 }
 
 function ConnectDialog({ agent, ask, wanted, onClose }: { agent: Agent; ask: Ask; wanted: Wanted; onClose: () => void }) {

@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { I } from '@/components/kit'
 import { cn } from '@/lib/utils'
 import { initialsOf } from '@/lib/format'
-import { brandColor, clockOf, payloadOf, pretty, statusLabel, tileOf, toneOf, type Call, type CallCard, type CallRow, type Tone } from '@/features/webhooks/call'
+import { brandColor, clockOf, payloadOf, pretty, statusLabel, tileOf, toneOf, type Call, type CallCard, type CallRow, type Tone } from '@/lib/webhook-call'
 
 const TONE: Record<Tone, string> = {
   green: 'bg-tone-green-subtle text-tone-green',

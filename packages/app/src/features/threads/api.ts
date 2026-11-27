@@ -7,7 +7,7 @@ import { THREADS_KEY } from '@/lib/query-keys'
 import { navigate } from '@/lib/router'
 import { threadRoute } from '@/config/paths'
 import { RASTER } from '@/features/threads/files'
-import { SourcedThread } from '@/features/threads/places'
+import { SourcedThread } from '@/lib/places'
 
 const THREAD_LIST = List(SourcedThread)
 const THREAD_WITH_MESSAGES = z.extend(SourcedThread, { messages: z.array(ChatMessage) })

@@ -2,11 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { List } from '@openhut/common/api.ts'
 import { Ask } from '@openhut/common/asks/ask.ts'
 import { request } from '@/lib/api-client'
-import { CONNECTIONS_KEY, GRANTS_KEY } from '@/lib/query-keys'
+import { asksKey, CONNECTIONS_KEY, GRANTS_KEY } from '@/lib/query-keys'
 
 const ASK_LIST = List(Ask)
-
-export const asksKey = (agentId: string) => ['asks', agentId]
 
 export function useAsks(agentId: string) {
   return useQuery({ queryKey: asksKey(agentId), queryFn: () => request({ schema: ASK_LIST, of: agentId, path: `/api/asks?${new URLSearchParams({ agentId })}` }).then((page) => page.data) })

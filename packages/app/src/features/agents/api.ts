@@ -1,55 +1,21 @@
 import { useEffect, useState } from 'react'
-import { useMutation, useMutationState, useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useMutation, useMutationState, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { Deleted, List } from '@openhut/common/api.ts'
-import { Agent, Grant, type CreateAgent, type UpdateAgent } from '@openhut/common/agents/agent.ts'
+import { Agent, type CreateAgent } from '@openhut/common/agents/agent.ts'
 import { Memory, type UpdateMemory } from '@openhut/common/agents/memory.ts'
 import { Skill } from '@openhut/common/agents/skill.ts'
 import { Channel, Conversation, TelegramInvite, type CreateChannel, type UpdateChannel } from '@openhut/common/channels/channel.ts'
-import { openhut, type OpenHutAgent } from '@/lib/openhut'
+import type { OpenHutAgent } from '@/lib/openhut'
 import { request } from '@/lib/api-client'
-import { AGENTS_KEY, CONNECTIONS_KEY, GRANTS_KEY, grantsKey } from '@/lib/query-keys'
+import { AGENTS_KEY, agentKey, CONNECTIONS_KEY, GRANTS_KEY } from '@/lib/query-keys'
 import { navigate } from '@/lib/router'
-import { localFace } from '@/features/agents/face'
 
-const GRANT_LIST = List(Grant)
 const CHANNEL_LIST = List(Channel)
 const CONVERSATION_LIST = List(Conversation)
 const SKILL_LIST = List(Skill)
 const DELETED_AGENT = Deleted('agent')
-const DELETED_GRANT = Deleted('grant')
 const DELETED_CHANNEL = Deleted('channel')
 const DELETED_SKILL = Deleted('skill')
-
-export function useAgents() {
-  return useQuery({ queryKey: AGENTS_KEY, queryFn: () => openhut.agents.list() })
-}
-
-const sharedFaces = new Set<string>()
-
-export function useShareLocalFaces(agents: OpenHutAgent[] | undefined) {
-  const client = useQueryClient()
-  useEffect(() => {
-    for (const agent of agents ?? []) {
-      const face = !agent.face && agent.canEdit && agent.online && !sharedFaces.has(agent.id) ? localFace(agent.id) : null
-      if (face) sharedFaces.add(agent.id)
-      if (face) void request({ schema: Agent, of: agent.id, path: agentPath(agent.id), method: 'PATCH', body: { face } })
-        .then((saved) => client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (list) => list?.map((each) => each.id === saved.id ? { ...each, face: saved.face } : each)), () => undefined)
-    }
-  }, [agents, client])
-}
-
-export function useAgent(agentId: string) {
-  const client = useQueryClient()
-  return useQuery({
-    queryKey: [...AGENTS_KEY, agentId],
-    queryFn: async () => {
-      const agent = await request({ schema: Agent, of: agentId, path: agentPath(agentId) })
-      client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (list) => list?.map((each) => each.id === agent.id ? { ...each, status: agent.status, health: agent.health, healthDetail: agent.healthDetail, wanted: agent.wanted } : each))
-      return agent
-    },
-    placeholderData: () => client.getQueryData<OpenHutAgent[]>(AGENTS_KEY)?.find((each) => each.id === agentId),
-  })
-}
 
 export function useCreateAgent() {
   const client = useQueryClient()
@@ -59,7 +25,7 @@ export function useCreateAgent() {
       return request({ schema: Agent, path: agentPath(agent.id), method: 'PATCH', body: { wanted: 'running' } })
     },
     onSuccess: (agent) => {
-      client.setQueryData([...AGENTS_KEY, agent.id], agent)
+      client.setQueryData(agentKey(agent.id), agent)
       client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents && [...agents, { ...agent, computer: agent.runsOn ?? 'here', online: true }])
       navigate(`/agents/${encodeURIComponent(agent.id)}`)
     },
@@ -80,72 +46,17 @@ export function useRestarting(agentId: string) {
   return pending || lingering
 }
 
-export function useUpdateAgent(agentId: string) {
-  const client = useQueryClient()
-  return useMutation({
-    mutationKey: ['agent-update', agentId],
-    mutationFn: (body: UpdateAgent) => request({ schema: Agent, of: agentId, path: agentPath(agentId), method: 'PATCH', body }),
-    onMutate: (body) => {
-      client.setQueryData<Agent>([...AGENTS_KEY, agentId], (agent) => agent && { ...agent, ...body })
-      client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents?.map((each) => each.id === agentId ? { ...each, ...body } : each))
-    },
-    onError: () => client.invalidateQueries({ queryKey: AGENTS_KEY }),
-    onSuccess: (agent) => {
-      client.setQueryData([...AGENTS_KEY, agent.id], agent)
-      client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents?.map((each) => each.id === agent.id ? { ...each, ...agent } : each))
-    },
-  })
-}
-
-export function useRetryApply(agentId: string) {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: () => request({ schema: Agent, of: agentId, path: `${agentPath(agentId)}/apply`, method: 'POST' }),
-    onSuccess: (agent) => {
-      client.setQueryData([...AGENTS_KEY, agent.id], agent)
-      client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents?.map((each) => each.id === agent.id ? { ...each, ...agent } : each))
-    },
-  })
-}
-
 export function useDeleteAgent(agentId: string) {
   const client = useQueryClient()
   return useMutation({
     mutationFn: () => request({ schema: DELETED_AGENT, of: agentId, path: agentPath(agentId), method: 'DELETE' }),
     onSuccess: () => {
       navigate('/')
-      client.removeQueries({ queryKey: [...AGENTS_KEY, agentId] })
+      client.removeQueries({ queryKey: agentKey(agentId) })
       client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (agents) => agents?.filter((agent) => agent.id !== agentId))
       void client.invalidateQueries({ queryKey: GRANTS_KEY })
       void client.invalidateQueries({ queryKey: CONNECTIONS_KEY })
     },
-  })
-}
-
-export function useGrants(filter: { agentId: string } | { connectionId: string }) {
-  return useQuery({ queryKey: grantsKey(filter), queryFn: () => request({ schema: GRANT_LIST, of: 'agentId' in filter ? filter.agentId : filter.connectionId, path: `/api/grants?${new URLSearchParams(filter)}` }).then((page) => page.data) })
-}
-
-export function useConnectionGrants(connection: { computers: { id: string }[] }) {
-  return useQueries({
-    queries: connection.computers.map(({ id }) => ({ queryKey: grantsKey({ connectionId: id }), queryFn: () => request({ schema: GRANT_LIST, of: id, path: `/api/grants?${new URLSearchParams({ connectionId: id })}` }).then((page) => page.data) })),
-    combine: (results) => ({ data: results.every((result) => result.data) ? results.flatMap((result) => result.data ?? []) : undefined }),
-  })
-}
-
-export function useCreateGrant() {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: (body: { agentId: string; connectionId: string }) => openhut.connections.grant({ agent: body.agentId, connection: body.connectionId }),
-    onSuccess: (grant) => writeGrant(client, grant, (grants) => [...grants.filter((each) => each.id !== grant.id), grant]),
-  })
-}
-
-export function useDeleteGrant() {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: (grant: Grant) => request({ schema: DELETED_GRANT, of: grant.agentId, path: `/api/grants/${encodeURIComponent(grant.id)}`, method: 'DELETE' }),
-    onSuccess: (_, grant) => writeGrant(client, grant, (grants) => grants.filter((each) => each.id !== grant.id)),
   })
 }
 
@@ -208,7 +119,7 @@ export function useSkills(agentId: string) {
   return useQuery({
     queryKey: ['skills', agentId],
     queryFn: () => request({ schema: SKILL_LIST, of: agentId, path: `/api/skills?${new URLSearchParams({ agentId })}` }).then((page) => page.data),
-    refetchInterval: (query) => !query.state.data?.length && client.getQueryData<Agent>([...AGENTS_KEY, agentId])?.status === 'running' ? 3_000 : false,
+    refetchInterval: (query) => !query.state.data?.length && client.getQueryData<Agent>(agentKey(agentId))?.status === 'running' ? 3_000 : false,
   })
 }
 
@@ -274,13 +185,6 @@ function channelsKey(agentId: string) {
   return ['channels', agentId]
 }
 
-function writeGrant(client: QueryClient, grant: Grant, change: (grants: Grant[]) => Grant[]) {
-  client.setQueryData<Grant[]>(grantsKey({ agentId: grant.agentId }), (grants) => grants && change(grants))
-  client.setQueryData<Grant[]>(grantsKey({ connectionId: grant.connectionId }), (grants) => grants && change(grants))
-  void client.invalidateQueries({ queryKey: CONNECTIONS_KEY })
-}
-
 function writeChannel(client: QueryClient, channel: Channel) {
   client.setQueryData<Channel[]>(channelsKey(channel.agentId), (channels) => channels && [...channels.filter((each) => each.kind !== channel.kind), channel])
 }
-

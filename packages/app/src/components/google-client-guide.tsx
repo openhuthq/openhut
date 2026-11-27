@@ -4,7 +4,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { I, PILL } from '@/components/kit'
 import { CopyButton } from '@/components/copy-button'
-import { Field } from '@/features/connections/sheet'
+import { Field } from '@/components/sheet'
 import { fieldError } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
 

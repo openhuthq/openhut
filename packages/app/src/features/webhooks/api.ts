@@ -1,31 +1,12 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Deleted, List } from '@openhut/common/api.ts'
-import * as z from 'zod/mini'
-import { Webhook as BaseWebhook, type CreateWebhook, type UpdateWebhook } from '@openhut/common/webhooks/webhook.ts'
-import { Place } from '@openhut/common/channels/channel.ts'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Deleted } from '@openhut/common/api.ts'
+import type { CreateWebhook, UpdateWebhook } from '@openhut/common/webhooks/webhook.ts'
+import type { Place } from '@openhut/common/channels/channel.ts'
 import { request } from '@/lib/api-client'
-import { CallCard } from '@/features/webhooks/call'
+import { webhooksKey } from '@/lib/query-keys'
+import { Webhook } from '@/lib/queries/webhooks'
 
-export const Webhook = z.extend(BaseWebhook, {
-  channel: z.optional(z.union([z.literal('app'), Place])),
-  preview: z.optional(z.nullable(CallCard)),
-  filter: z.optional(z.nullable(z.string())),
-  skipped: z.optional(z.number()),
-})
-export type Webhook = z.infer<typeof Webhook>
-
-const WEBHOOK_LIST = List(Webhook)
 const DELETED_WEBHOOK = Deleted('webhook')
-
-export const webhooksKey = (agentId: string) => ['webhooks', agentId]
-
-export function useWebhooks(agentId: string, enabled = true) {
-  return useQuery({
-    queryKey: webhooksKey(agentId),
-    enabled,
-    queryFn: () => request({ schema: WEBHOOK_LIST, of: agentId, path: `/api/webhooks?${new URLSearchParams({ agentId })}` }).then((page) => page.data),
-  })
-}
 
 function useWebhookMutation<T>({ agentId, send }: { agentId: string; send: (input: T) => Promise<Webhook> }) {
   const client = useQueryClient()

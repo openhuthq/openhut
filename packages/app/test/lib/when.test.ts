@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { dayOf, nextOf, onceOf, scheduleOf } from '../../../src/features/routines/when.ts'
+import { dayOf, nextOf, onceOf, scheduleOf } from '../../src/lib/when.ts'
 
 test('common cron schedules read as plain words', () => {
   assert.equal(scheduleOf('0 10 * * 1-5'), 'Weekdays at 10:00')

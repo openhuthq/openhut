@@ -9,7 +9,7 @@ import { ICONS } from '@/components/icons'
 import { I, TINY_ICON } from '@/components/kit'
 import { agentPath } from '@/config/paths'
 import { useLive } from '@/features/agents/browser-live'
-import { Face } from '@/features/agents/face'
+import { Face } from '@/components/agent-face'
 import { cn } from '@/lib/utils'
 
 const PREVIEW_FPS = 2

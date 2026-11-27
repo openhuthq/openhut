@@ -1,12 +1,12 @@
 import { AiMagicIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { I, ROW, ROW_VALUE } from '@/components/kit'
-import { useAgents, useUpdateAgent } from '@/features/agents/api'
-import { useComputerProviders } from '@/features/models/api'
-import { ModelPicker, ModelValue } from '@/features/models/model-picker'
+import { useAgents, useUpdateAgent } from '@/lib/queries/agents'
+import { useComputerProviders } from '@/lib/queries/models'
+import { ModelPicker, ModelValue } from '@/components/model-picker'
 import { toastError } from '@/lib/toast'
 import { Glyph } from '@/components/glyph'
-import { find, glyphOf } from '@/features/models/labels'
+import { find, glyphOf } from '@/lib/models'
 
 export function ModelRows({ agent }: { agent: Agent }) {
   const computer = useAgents().data?.find((each) => each.id === agent.id)?.computer ?? 'local'

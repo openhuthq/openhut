@@ -5,7 +5,7 @@ import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { Ask } from '@openhut/common/asks/ask.ts'
 import { ErrorNote } from '@/components/error-note'
 import { I } from '@/components/kit'
-import { Face } from '@/features/agents/face'
+import { Face } from '@/components/agent-face'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 
 export type Decided = { label: string; tone: 'success' | 'secondary' }

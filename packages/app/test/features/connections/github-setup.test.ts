@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { appName, connectStep, ownerSuggestions, rememberOwner, setupStage, slugOf } from '../../../src/features/settings/github-setup.ts'
+import { appName, connectStep, ownerSuggestions, rememberOwner, setupStage, slugOf } from '../../../src/features/connections/github-setup.ts'
 
 test('the setup dialog moves on by itself: form, creating on GitHub, installing, done once a repository is reachable', () => {
   assert.equal(setupStage({ started: false, app: null }), 'form')

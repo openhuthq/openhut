@@ -1,4 +1,4 @@
-import { splitModelKey, type Provider, type ProviderId, type ProviderModel } from '@openhut/common/models/provider.ts'
+import { ProviderId, splitModelKey, type Provider, type ProviderModel } from '@openhut/common/models/provider.ts'
 import type { BrandName } from '@/components/brand-icons'
 
 const LABS: Record<string, BrandName> = { anthropic: 'anthropic', openai: 'openai', google: 'gemini', 'x-ai': 'xai', deepseek: 'deepseek', qwen: 'qwen', moonshotai: 'kimi', 'z-ai': 'zai', mistralai: 'mistral', meta: 'meta' }
@@ -83,4 +83,23 @@ export function updatedAgo(iso: string | null) {
   if (seconds < 3600) return `${Math.round(seconds / 60)} minutes ago`
   if (seconds < 86400) return `${Math.round(seconds / 3600)} hours ago`
   return `${Math.round(seconds / 86400)} days ago`
+}
+
+export const DEFAULT_MODEL = 'claude:opus'
+
+export function firstModel(providers: Provider[] | undefined, only?: ProviderId): string | null {
+  const ready = providers?.filter((provider) => provider.connected && (!only || provider.id === only)) ?? []
+  if (ready.some((provider) => provider.id === 'claude' && provider.models.some((model) => model.id === 'opus' && model.on))) return DEFAULT_MODEL
+  const found = ready.flatMap((provider) => provider.models.filter((model) => model.on).map((model) => `${provider.id}:${model.id}`))
+  return found[0] ?? null
+}
+
+export function inUse(providers: Provider[] | undefined): ProviderId | undefined {
+  const picked = firstModel(providers)
+  return providers?.find((provider) => picked?.startsWith(`${provider.id}:`))?.id
+}
+
+export function stepOf(name: string | null): ProviderId | undefined {
+  const parsed = ProviderId.safeParse(name)
+  return parsed.success ? parsed.data : undefined
 }

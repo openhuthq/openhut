@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { AgentFace, FACE_SIZE } from '@openhut/common/agents/face.ts'
 import type { Agent } from '@openhut/common/agents/agent.ts'
-import { slackIcon } from '@/features/agents/face'
+import { slackIcon } from '@/components/agent-face'
 import { request } from '@/lib/api-client'
 
 export function useGitHubFace(agent: Agent) {

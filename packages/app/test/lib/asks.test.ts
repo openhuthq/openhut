@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { lineDiff, needsQrScan, toolAnswer, toolChoices, toolDetails, toolOutcome, undoable, webhookOf } from '../../../src/features/asks/extras.ts'
+import { lineDiff, needsQrScan, toolAnswer, toolChoices, toolDetails, toolOutcome, undoable, webhookOf } from '../../src/lib/asks.ts'
 
 test('update_self shows the instructions diff: removed lines struck, new lines added, kept lines plain', () => {
   assert.deepEqual(lineDiff({ before: '# Dev\nAnswer briefly.\n', after: '# Dev\nWatch the inbox.' }), [

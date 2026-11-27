@@ -1,27 +1,17 @@
 import { useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CodexSignIn } from '@openhut/common/admin/admin.ts'
-import { List } from '@openhut/common/api.ts'
+import { Admin, CodexSignIn, SeatSignIn, SeatUsage } from '@openhut/common/admin/admin.ts'
 import { Provider, type ProviderId } from '@openhut/common/models/provider.ts'
-import { foundNotice } from '@/features/models/labels'
+import { foundNotice } from '@/lib/models'
 import { request } from '@/lib/api-client'
 import { toastError } from '@/lib/toast'
 import { AGENTS_KEY, PROVIDERS_KEY } from '@/lib/query-keys'
 
-const PROVIDER_LIST = List(Provider)
 const pathOf = (id: ProviderId) => `/api/providers/${id}`
-
-export function useProviders() {
-  return useQuery({ queryKey: PROVIDERS_KEY, queryFn: () => request({ schema: PROVIDER_LIST, path: '/api/providers' }).then((page) => page.data) })
-}
 
 export function useFoundNotice() {
   const client = useQueryClient()
   return (id: ProviderId) => foundNotice({ provider: client.getQueryData<Provider[]>(PROVIDERS_KEY)?.find((each) => each.id === id) })
-}
-
-export function useComputerProviders(_computer: string): Provider[] | undefined {
-  return useProviders().data
 }
 
 export function useConnectProvider() {
@@ -88,3 +78,30 @@ export function useCodexSignIn(onSignedIn: () => void) {
   }, [done, client, onSignedIn])
   return { signIn: start.data, error: start.error ?? poll.error, restart: () => start.mutate() }
 }
+
+const ADMIN_KEY = ['admin']
+
+export function useAdmin() {
+  return useQuery({ queryKey: ADMIN_KEY, queryFn: () => request({ schema: Admin, computer: 'local', path: '/api/admin' }) })
+}
+
+export function useSeatUsage(enabled: boolean) {
+  return useQuery({ queryKey: ['seat-usage'], queryFn: () => request({ schema: SeatUsage, computer: 'local', path: '/api/admin/seat-usage' }), retry: false, enabled })
+}
+
+export function useStartSeatSignIn() {
+  return useMutation({ mutationFn: () => request({ schema: SeatSignIn, computer: 'local', path: '/api/admin/seat-sign-ins', method: 'POST' }) })
+}
+
+export function useCompleteSeatSignIn() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, code }: { id: string; code: string }) => request({ schema: SeatSignIn, computer: 'local', path: `/api/admin/seat-sign-ins/${encodeURIComponent(id)}`, method: 'PATCH', body: { code } }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ADMIN_KEY })
+      void client.invalidateQueries({ queryKey: AGENTS_KEY })
+      void client.invalidateQueries({ queryKey: PROVIDERS_KEY })
+    },
+  })
+}
+

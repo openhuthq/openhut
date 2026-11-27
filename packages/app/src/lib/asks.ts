@@ -1,4 +1,9 @@
+import type { ComponentType } from 'react'
+import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { Ask } from '@openhut/common/asks/ask.ts'
+
+export type AskRow = ComponentType<{ agent: Agent; ask: Ask; compact: boolean }>
+export type AskExtra = ComponentType<{ agent: Agent; ask: Ask }>
 
 export type DiffLine = { kind: 'gone' | 'added' | 'same'; text: string }
 

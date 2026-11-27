@@ -2,7 +2,7 @@ import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Status, type Tone } from '@/components/kit'
 import { agentState } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
-import { useRetryApply } from '@/features/agents/api'
+import { useRetryApply } from '@/lib/queries/agents'
 import { toastError } from '@/lib/toast'
 
 const STATES: Record<ReturnType<typeof agentState>, [Tone, string]> = {

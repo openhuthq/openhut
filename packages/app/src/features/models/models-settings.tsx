@@ -11,14 +11,13 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { CopyButton } from '@/components/copy-button'
 import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
-import { useAdmin, useCompleteSeatSignIn, useSeatUsage, useStartSeatSignIn } from '@/features/settings/api'
-import { useAgents } from '@/features/agents/api'
-import { Face } from '@/features/agents/face'
-import { Busy, DialogCard, HINT, I, PILL, SetupSheet, Section, Status } from '@/components/kit'
-import { CardTitle, ListNote, Row, Rows, useConfirming } from '@/features/settings/kit'
-import { useCodexSignIn, useConnectProvider, useDisconnectProvider, useFoundNotice, useProviders, useRefreshProvider, useSetModel } from '@/features/models/api'
-import { consequence, count, describe, glyphOf, matches, plural, updatedAgo } from '@/features/models/labels'
-import { inUse } from '@/features/agents/form'
+import { useAgents } from '@/lib/queries/agents'
+import { Face } from '@/components/agent-face'
+import { Busy, DialogCard, HINT, I, PILL, SetupSheet, Section, Status, CardTitle, ListNote, Row, Rows } from '@/components/kit'
+import { useConfirming } from '@/components/confirm-button'
+import { useCodexSignIn, useConnectProvider, useDisconnectProvider, useFoundNotice, useRefreshProvider, useSetModel, useAdmin, useCompleteSeatSignIn, useSeatUsage, useStartSeatSignIn } from '@/features/models/api'
+import { useProviders } from '@/lib/queries/models'
+import { consequence, count, describe, glyphOf, matches, plural, updatedAgo, inUse } from '@/lib/models'
 import { open, Redirect, useOpen } from '@/lib/router'
 import { formValues } from '@/lib/form'
 import { fieldError } from '@/lib/api-client'
@@ -32,11 +31,6 @@ const MIN_KEY = 8
 const MAX_KEY = 400
 const SUBSCRIPTIONS = PROVIDERS.filter((info) => info.kind === 'subscription')
 const KEYS = PROVIDERS.filter((info) => info.kind === 'key')
-
-export function stepOf(name: string | null): ProviderId | undefined {
-  const parsed = ProviderId.safeParse(name)
-  return parsed.success ? parsed.data : undefined
-}
 
 export function ModelsSettings() {
   const admin = useAdmin()

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { placeKey, placeName, samePlace, sourceOf, startedIn, threadsOf, type SourcedThread } from '../../../src/features/threads/places.ts'
+import { placeKey, placeName, samePlace, sourceOf, startedIn, threadsOf, type SourcedThread } from '../../src/lib/places.ts'
 
 const thread = (origin?: SourcedThread['origin']): SourcedThread => ({ id: 'th_1', object: 'thread', agentId: 'ag_1', title: 'Disk full', preview: '', createdAt: '2026-11-26T10:00:00Z', updatedAt: '2026-11-26T10:00:00Z', origin, mirrors: [] })
 

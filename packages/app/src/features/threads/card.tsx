@@ -6,7 +6,7 @@ import { cardCatalog } from '@openhut/common/cards/card.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { isBrand } from '@/components/brand-icons'
 import { Glyph } from '@/components/glyph'
-import { integration } from '@/features/connections/catalog'
+import { integration } from '@/config/catalog'
 
 export const CardReply = createContext<((text: string) => boolean) | undefined>(undefined)
 

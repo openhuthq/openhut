@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { Provider, ProviderModel } from '@openhut/common/models/provider.ts'
-import { consequence, context, count, plural, describe, foundNotice, glyphOf, matches, nameOf, prices, updatedAgo } from '../../../src/features/models/labels.ts'
+import { consequence, context, count, plural, describe, firstModel, foundNotice, glyphOf, inUse, matches, nameOf, prices, updatedAgo } from '../../src/lib/models.ts'
 
 const model = (id: string, patch: Partial<ProviderModel> = {}): ProviderModel => ({ id, name: id, on: true, tier: 'big', note: null, contextLength: null, inputPrice: null, outputPrice: null, ...patch })
 const provider = (id: Provider['id'], models: ProviderModel[], kind: Provider['kind'] = 'key'): Provider => ({ id, object: 'provider', kind, name: id === 'openrouter' ? 'OpenRouter' : 'Claude subscription', connected: true, keyHint: null, updatedAt: null, models })
@@ -64,4 +64,24 @@ test('a model shows its maker\'s logo, whichever provider runs it', () => {
   assert.equal(glyphOf({ provider: 'codex', model: 'gpt-5.5' }), 'openai')
   assert.equal(glyphOf({ provider: 'compatible', model: 'grok-4.7' }), 'compatible')
   assert.equal(glyphOf({ provider: 'openrouter', model: 'someone/new-model' }), 'openrouter')
+})
+
+const ready = (id: string, connected: boolean, models: string[]) => ({ id, connected, models: models.map((model) => ({ id: model, on: true })) }) as never
+
+test('the form picks Claude Opus first, then the first model on, and nothing when no provider is set up', () => {
+  assert.equal(firstModel([ready('claude', true, ['opus', 'sonnet']), ready('openai', true, ['gpt'])]), 'claude:opus')
+  assert.equal(firstModel([ready('claude', true, ['sonnet', 'haiku'])]), 'claude:sonnet')
+  assert.equal(firstModel([ready('claude', false, ['sonnet']), ready('openai', true, ['gpt'])]), 'openai:gpt')
+  assert.equal(firstModel([ready('claude', false, ['sonnet'])]), null)
+})
+
+test('a provider just set up from the Model row becomes the pick', () => {
+  assert.equal(firstModel([ready('claude', true, ['sonnet']), ready('openrouter', true, ['kimi'])], 'openrouter'), 'openrouter:kimi')
+})
+
+test('Models marks the one new agents use: Claude Sonnet first, else the first connected from top to bottom, none when nothing is set up', () => {
+  assert.equal(inUse([ready('claude', true, ['sonnet']), ready('openrouter', true, ['x-ai/grok'])]), 'claude')
+  assert.equal(inUse([ready('claude', false, ['sonnet']), ready('openrouter', true, ['x-ai/grok'])]), 'openrouter')
+  assert.equal(inUse([ready('openai', false, ['gpt'])]), undefined)
+  assert.equal(inUse(undefined), undefined)
 })

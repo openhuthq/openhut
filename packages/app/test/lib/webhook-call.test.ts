@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { brandColor, callOf, payloadOf, pretty, statusLabel, tileOf, toneOf } from '../../../src/features/webhooks/call.ts'
+import { brandColor, callOf, payloadOf, pretty, statusLabel, tileOf, toneOf } from '../../src/lib/webhook-call.ts'
 
 test('a webhook call shows its label and keeps the payload behind the first blank line', () => {
   assert.deepEqual(callOf({ author: 'DigitalOcean alerts', call: { webhookId: 'wh_1', label: 'Triggered · 80%' } }), { webhookId: 'wh_1', label: 'Triggered · 80%' })

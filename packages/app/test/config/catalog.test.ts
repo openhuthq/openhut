@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { Connection } from '@openhut/common/connections/connection.ts'
-import { appRows, byName, chipMarks, connectionBrand, INTEGRATIONS, kindNote, SHELVES, uniqueName } from '../../../src/features/connections/catalog.ts'
+import { appRows, byName, chipMarks, connectionBrand, INTEGRATIONS, kindNote, SHELVES, uniqueName } from '../../src/config/catalog.ts'
 
 test('a new connection takes the service name, numbered when that name is taken', () => {
   assert.equal(uniqueName({ title: 'Linear', taken: [] }), 'Linear')

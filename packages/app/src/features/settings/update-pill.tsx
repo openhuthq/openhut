@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Meter } from '@/components/ui/meter'
 import { Hut } from '@/components/hut'
 import { toastError, toastFailed } from '@/lib/toast'
-import { adminOf, startUpdate, useComputerAdmins, useComputers } from '@/features/computers/api'
+import { adminOf, startUpdate, useComputerAdmins, useComputers } from '@/lib/queries/computers'
 import { behind, updateServers } from '@/features/settings/update-all'
 import { COMPUTERS_KEY } from '@/lib/query-keys'
 

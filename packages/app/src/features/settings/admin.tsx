@@ -1,38 +1,25 @@
 import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { Analytics01Icon, Globe02Icon, Mail01Icon } from '@hugeicons/core-free-icons'
 import * as z from 'zod/mini'
-import { InstallSettings, type UpdateInstallSettings } from '@openhut/common/team/team.ts'
+import type { InstallSettings } from '@openhut/common/team/team.ts'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
-import { Busy, I, PILL, SetupSheet } from '@/components/kit'
-import { Field } from '@/features/connections/sheet'
-import { GoogleClientGuide } from '@/features/connections/google-client'
-import { Row, Rows } from '@/features/settings/kit'
-import { GitHubDialogs, GitHubRow } from '@/features/settings/github-app'
+import { Busy, I, PILL, SetupSheet, Row, Rows } from '@/components/kit'
+import { Field } from '@/components/sheet'
+import { GoogleClientGuide } from '@/components/google-client-guide'
+import { GitHubDialogs, GitHubRow } from '@/features/connections/github-app'
 import { fieldError, formError, request } from '@/lib/api-client'
 import { formValues } from '@/lib/form'
 import { longDate } from '@/lib/format'
 import { open, useOpen } from '@/lib/router'
 import { toast, toastError } from '@/lib/toast'
+import { useInstallSettings, useUpdateInstallSettings } from '@/lib/queries/install-settings'
 
 const TestEmail = z.object({ object: z.literal('test_email'), to: z.string() })
-const KEY = ['install-settings']
-
-export function useInstallSettings(enabled = true) {
-  return useQuery({ queryKey: KEY, queryFn: () => request({ schema: InstallSettings, path: '/api/install-settings' }), enabled })
-}
-
-export function useUpdateInstallSettings() {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: (body: UpdateInstallSettings) => request({ schema: InstallSettings, path: '/api/install-settings', method: 'PATCH', body }),
-    onSuccess: (saved) => client.setQueryData(KEY, saved),
-  })
-}
 
 function useTestEmail() {
   return useMutation({

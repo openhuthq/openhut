@@ -1,20 +1,14 @@
 import type { ReactNode } from 'react'
 import { ArrowRight01Icon, Search01Icon, Tick02Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import { PROVIDERS, modelKey, providerInfo, type Provider, type ProviderId, type ProviderModel } from '@openhut/common/models/provider.ts'
-import { buttonVariants } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuEmpty, DropdownMenuFilter, DropdownMenuInput, DropdownMenuItem, DropdownMenuList, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Glyph } from '@/components/glyph'
-import { I } from '@/components/kit'
-import { find, glyphOf, labOf, prices } from '@/features/models/labels'
+import { FIELD_MENU, I, SOFT_TRIGGER } from '@/components/kit'
+import { find, glyphOf, labOf, prices } from '@/lib/models'
 import { cn } from '@/lib/utils'
 
 const SEARCH_FROM = 8
 const LABEL = 'px-2 pt-1.5 pb-1 text-[12px] text-mute'
-
-// Menus that open from a form field are exactly as wide as the field.
-export const FIELD_MENU = 'w-(--anchor-width) min-w-(--anchor-width)'
-
-export const SOFT_TRIGGER = cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'min-w-[136px] max-w-full justify-between')
 
 export type PickerNone = { name: string; note: string; icon: ReactNode }
 

@@ -5,7 +5,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { I } from '@/components/kit'
 import { cn } from '@/lib/utils'
-import { PayloadButton } from '@/features/webhooks/call-card'
+import { PayloadButton } from '@/components/call-card'
 
 export const WebhookSource = z.object({ source: z.object({ kind: z.literal('webhook'), id: z.string(), name: z.string() }), payload: z.optional(z.unknown()) })
 export type WebhookSource = z.infer<typeof WebhookSource>
