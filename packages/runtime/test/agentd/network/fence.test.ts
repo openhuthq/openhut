@@ -1,9 +1,9 @@
 import { test } from 'node:test'
 import { Readable } from 'node:stream'
 import assert from 'node:assert/strict'
-import { fenceLines, probesFor, proveFence, reportOf, scriptOf, verdict } from '../../src/agentd/fence.ts'
-import { boxes, memory } from '../../src/agentd/sandbox/memory.ts'
-import type { Sandboxes } from '../../src/agentd/sandbox/sandbox.ts'
+import { fenceLines, probesFor, proveFence, reportOf, scriptOf, verdict } from '../../../src/agentd/network/fence.ts'
+import { boxes, memory } from '../../../src/agentd/sandbox/memory.ts'
+import type { Sandboxes } from '../../../src/agentd/sandbox/sandbox.ts'
 
 const probes = probesFor({ host: '127.0.0.1', hostPort: 50123, lan: '192.168.0.43', tailnet: '100.64.0.1' })
 const spec = { id: 'fence', image: 'img', cpus: 1, memoryMib: 256, user: '10000:10000', env: {}, mounts: [], tmpfs: [], labels: {} }

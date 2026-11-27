@@ -3,8 +3,8 @@ import type { Duplex } from 'node:stream'
 import { browser } from './browser.ts'
 import { checkFence, commands, type Command } from './commands.ts'
 import { config } from './config.ts'
-import { firewall } from './firewall.ts'
-import { ID } from './host.ts'
+import { firewall } from './network/firewall.ts'
+import { ID } from './network/ports.ts'
 import { errorText, isRecord } from './util.ts'
 
 const MAX_REQUEST = 1 << 20

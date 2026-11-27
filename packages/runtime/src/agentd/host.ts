@@ -7,13 +7,11 @@ import type { Mount, Sandboxes, SandboxSpec } from './sandbox/sandbox.ts'
 
 export const APP_GID = gidOf('openhut')
 export const CLAUDE = join(config.bin, 'claude')
-export const RESOLV = '/etc/agentd/resolv.conf'
 export const AGENT_UID = 10000
 export const AGENT_USER = `${AGENT_UID}:${AGENT_UID}`
 export const AS_ROOT = process.getuid?.() === 0
 export const AGENT_OWNER = AS_ROOT ? { uid: AGENT_UID, gid: AGENT_UID } : undefined
 export const TMP_MIB = 256
-export const ID = /^ag_[a-z0-9]{8}$/
 export const box: Sandboxes = config.fakeSandbox ? memory : docker
 
 export function home(id: string): string {

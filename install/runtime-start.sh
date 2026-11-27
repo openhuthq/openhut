@@ -23,7 +23,7 @@ if [ -n "$(ls -A /data/agents)" ]; then pull; else pull >> "$LOG/pull.log" 2>&1 
 
 supervise "$LOG/agentd.log" node "$J/packages/runtime/src/agentd/agentd.ts" &
 i=0; until [ -S /run/agentd/agentd.sock ]; do i=$((i+1)); [ $i -gt 300 ] && { mark "agentd failed"; exit 1; }; sleep 0.2; done
-( cd "$J" && supervise "$LOG/link.log" node "$J/packages/runtime/src/agentd/link.ts" ) &
+( cd "$J" && supervise "$LOG/link.log" node "$J/packages/runtime/src/agentd/network/link.ts" ) &
 mark "agentd and link started"
 echo "openhut-runtime: up"
 while :; do sleep 3600; done
