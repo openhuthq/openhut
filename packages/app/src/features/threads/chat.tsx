@@ -320,7 +320,7 @@ function NotReady({ agent }: { agent: Agent }) {
 function ClearChat({ agent, threadId, attachments, disabled }: { agent: Agent; threadId: string; attachments: Attachments; disabled: boolean }) {
   const clearChat = useClearChat({ agentId: agent.id, threadId })
   const uploads = attachments.items.flatMap((item) => item.file ? [item.file.path] : [])
-  return <ConfirmIcon label="Clear chat" text="Clear chat" disabled={disabled} icon={EraserIcon} question="Clear this chat? Memory stays; files you sent are deleted." action="Clear" busy={clearChat.isPending}
+  return <ConfirmIcon label="Clear chat" disabled={disabled} icon={EraserIcon} question="Clear this chat? Memory stays; files you sent are deleted." action="Clear" busy={clearChat.isPending}
     onConfirm={(done) => clearChat.mutate({ uploads }, { onSuccess: () => { attachments.clear(); done() }, onError: toastError })} />
 }
 

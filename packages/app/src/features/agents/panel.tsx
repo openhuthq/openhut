@@ -2,9 +2,10 @@ import { useEffect, type ReactNode } from 'react'
 import { FlashIcon, Globe02Icon, Link01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, Settings02Icon, StopIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
+import { Tooltip } from '@/components/ui/tooltip'
 import { DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
-import { DialogCard, HEADER_ACTION, HOVER, I } from '@/components/kit'
+import { DialogCard, HOVER, I, TINY_ICON } from '@/components/kit'
 import { Glyph } from '@/components/glyph'
 import { agentPath } from '@/app/routes'
 import { useChannels, useGrants, useUpdateAgent } from '@/features/agents/api'
@@ -36,13 +37,13 @@ export function AgentActions({ agent, threads, onBrowser }: { agent: Agent; thre
   const running = agent.wanted === 'running'
   const toggle = running ? 'Stop' : 'Start'
   return <>
-    {onBrowser && <Button type="button" variant="bare" className={cn(HEADER_ACTION, 'relative')} aria-label="Browser" onClick={onBrowser}>
-      <I icon={Globe02Icon} size={15} />Browser<i aria-label="Live" className="size-1.5 rounded-full bg-pass" />
-    </Button>}
+    {onBrowser && <Tooltip label="Browser"><Button type="button" variant="bare" className={cn(TINY_ICON, 'relative')} aria-label="Browser" onClick={onBrowser}>
+      <I icon={Globe02Icon} size={16} /><i aria-label="Live" className="absolute top-[5px] right-[5px] size-1.5 rounded-full bg-pass shadow-[0_0_0_2px_var(--card)]" />
+    </Button></Tooltip>}
     {threads}
-    <a href={agentPath({ agentId: agent.id, dialog: 'setup', detail: 'general' })} aria-label={`Set up ${agent.name}`} className={HEADER_ACTION}><I icon={Settings02Icon} size={15} />Setup</a>
-    <Button type="button" variant="bare" className={HEADER_ACTION} aria-label={`${toggle} ${agent.name}`} disabled={!agent.canEdit || updateAgent.isPending}
-      onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}><I icon={running ? StopIcon : PlayIcon} size={15} className={running ? 'text-hue-red' : 'text-hue-green'} />{toggle}</Button>
+    <Tooltip label="Setup"><a href={agentPath({ agentId: agent.id, dialog: 'setup', detail: 'general' })} aria-label={`Set up ${agent.name}`} className={TINY_ICON}><I icon={Settings02Icon} size={16} /></a></Tooltip>
+    <Tooltip label={toggle}><Button type="button" variant="bare" className={TINY_ICON} aria-label={`${toggle} ${agent.name}`} disabled={!agent.canEdit || updateAgent.isPending}
+      onClick={() => updateAgent.mutate({ wanted: running ? 'stopped' : 'running' }, { onError: toastError })}><I icon={running ? StopIcon : PlayIcon} size={16} className={running ? 'text-hue-red' : 'text-hue-green'} /></Button></Tooltip>
   </>
 }
 
