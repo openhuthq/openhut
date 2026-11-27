@@ -81,8 +81,8 @@ test('every webhook call runs on the server in a web thread of its own, its mess
   deliver('ag_appwagnt')
   await settled()
   const ran = told.slice(before)
-  const threads = await db.selectFrom('chat_thread').select(['id', 'title', 'origin', 'mirrors']).where('agent_id', '=', 'ag_appwagnt').orderBy('title').execute()
-  assert.deepEqual(threads.map((thread) => [thread.title, JSON.parse(thread.origin).platform, thread.mirrors]), [['Hook wh_appwnone', 'webhook', '[]'], ['Hook wh_appwtwoo', 'webhook', '[]']])
+  const threads = await db.selectFrom('chat_thread').select(['id', 'title', 'origin', 'channel']).where('agent_id', '=', 'ag_appwagnt').orderBy('title').execute()
+  assert.deepEqual(threads.map((thread) => [thread.title, JSON.parse(thread.origin).platform, thread.channel]), [['Hook wh_appwnone', 'webhook', 'web'], ['Hook wh_appwtwoo', 'webhook', 'web']])
   assert.deepEqual(new Set(ran.map((each) => each.threadId)), new Set(threads.map((thread) => thread.id)))
   assert.deepEqual(ran.map((each) => each.metadata).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))), [
     { author: 'Hook wh_appwnone', call: { webhookId: 'wh_appwnone' }, source: { kind: 'webhook', id: 'wh_appwnone', name: 'Hook wh_appwnone' }, payload: { from: 'wh_appwnone' } },

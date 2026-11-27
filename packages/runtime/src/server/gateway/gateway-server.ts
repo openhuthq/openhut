@@ -15,7 +15,6 @@ import { brokerService, upstreams } from './broker.ts'
 import { activity } from './activity.ts'
 import { wakes } from '../../core/wakes.ts'
 import { runsOnServer } from '../../plugins/chat/wakes.ts'
-import { reportTurn, threadContext } from '../../plugins/chat/turns.ts'
 
 export { toolList } from '../../plugins/connections/index.ts'
 
@@ -66,8 +65,6 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   if (brokered && upstream) return brokerService.forward({ agent, upstream, path: brokered[2] + url.search, req, res })
   if (path === '/api/v1/mcp') return serveMcp({ server: mcpOf(agent), req, res, body: mcp })
   if (path === '/wakes' && req.method === 'GET') return json(res, 200, { object: 'list', url: path, hasMore: false, data: (await wakes.due({ agentId: agent.id })).filter((wake) => !runsOnServer(wake)) })
-  if (path === '/thread-context' && req.method === 'POST') return json(res, 200, await threadContext({ agentId: agent.id, body: await readBody(req) }))
-  if (path === '/turns' && req.method === 'POST') return json(res, 200, await reportTurn({ agentId: agent.id, body: await readBody(req) }))
   const wake = /^\/wakes\/(\w+:\w+)$/.exec(path)
   if (wake && req.method === 'POST') return json(res, 200, await wakes.report({ agentId: agent.id, id: wake[1], body: await readBody(req) }))
   if (path === '/turn-state' && req.method === 'POST') return json(res, 200, turned({ agentId: agent.id, body: await readBody(req) }))

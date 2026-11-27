@@ -7,7 +7,6 @@ import { config } from '../../server/platform/config.ts'
 import { WHATSAPP_PORT_BASE } from '../../agentd/network/ports.ts'
 import { slack } from '../../server/integrations/slack/slack.ts'
 import { telegram } from '../../server/integrations/telegram/telegram.ts'
-import { discord } from '../../server/integrations/discord/discord.ts'
 import { whatsapp } from '../../server/integrations/whatsapp/whatsapp.ts'
 import { channelService } from '../../server/channels/channel-service.ts'
 import { channelController } from '../../server/channels/channel-controller.ts'
@@ -21,7 +20,7 @@ const TELEGRAM_USER = /^[1-9]\d{4,14}$/
 export type RenderedChannel =
   | { kind: Extract<ChannelKind, 'slack'>; audience: Audience }
   | { kind: Extract<ChannelKind, 'telegram'>; audience: Audience }
-  | { kind: Extract<ChannelKind, 'discord'>; audience: Audience; botToken: string }
+  | { kind: Extract<ChannelKind, 'discord'>; audience: Audience }
   | { kind: Extract<ChannelKind, 'whatsapp'>; audience: Audience }
 
 export const channels = definePlugin({
@@ -33,7 +32,7 @@ export const channels = definePlugin({
     const parts = list.map((channel) => partOf({ channel, gateway, token, net: agent.net }))
     return {
       native: { hermes: { config: Object.assign({}, ...parts.map((part) => part.config)), env: Object.assign({}, ...parts.map((part) => part.env)) } },
-      restart: list.map((channel) => channel.kind === 'telegram' ? channel.kind : channel),
+      restart: list.filter((channel) => channel.kind !== 'discord').map((channel) => channel.kind === 'telegram' ? channel.kind : channel),
     }
   },
   asks: {
@@ -116,7 +115,7 @@ function partOf({ channel, gateway, token, net }: { channel: RenderedChannel; ga
   switch (channel.kind) {
     case 'slack': return { config: slack.config, env: slack.env({ token, gateway, channels: channel.audience.allowed }) }
     case 'telegram': return { config: telegram.config({ gateway }), env: telegram.env({ botToken: token, audience: channel.audience }) }
-    case 'discord': return { config: discord.config, env: discord.env({ botToken: channel.botToken, channels: channel.audience.allowed }) }
+    case 'discord': return {}
     case 'whatsapp': return { config: whatsapp.config({ bridgePort: config.agentHostNet ? WHATSAPP_PORT_BASE + net : undefined }), env: whatsapp.env(channel.audience) }
   }
 }

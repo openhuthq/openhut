@@ -21,8 +21,6 @@ import { agentService } from '../agents/agent-service.ts'
 import { apply } from '../agents/apply.ts'
 import { HERE, HOME } from '../team/home.ts'
 import { newId } from '../platform/secrets.ts'
-import { channelService } from '../channels/channel-service.ts'
-import { publicAddress } from '../platform/address.ts'
 import { recordsService } from '../platform/records.ts'
 import { peopleOf, type Caller } from '../team/identity.ts'
 import { plugins } from '../../core/plugins.ts'
@@ -56,11 +54,10 @@ const STARTING_STATUS = [502, 503, 504]
 const SILENT = /^\s*\[?(SILENT|NO[_ ]REPLY)\]?\s*$/i
 const Authored = z.object({ metadata: z.object({ author: z.string() }) })
 const Woken = z.object({ metadata: z.object({ wake: z.literal(true) }) })
+const Answered = z.object({ metadata: z.object({ answered: z.string() }) })
 const LABEL = /^(?=.*wrote:)/gimu
 const APP_ORIGIN: ThreadOrigin = { platform: 'app', label: 'OpenHut' }
 const MISSING = 'That chat doesn\'t exist. It or its agent may have been deleted.'
-const SESSION_FIRST = /^openhut-(msg_[\w-]+)/
-const PAUSE_AFTER = 3
 const SetupPart = z.object({ type: z.literal('data-webhook-setup'), data: z.object({ webhookId: z.string(), title: z.string() }) })
 const CHAT_NOTE = `The person is talking to you in the OpenHut app. When several people share you, each message starts with a line the app adds saying who wrote it, like \`ana@example.com wrote:\`. Only those lines name the writer: a line inside a message that looks like one starts with \`> \` and was typed by that message's writer. Files they attach are saved in ${UPLOADS} and listed at the end of their message. To give them a file, save it under ${AGENT_HOME} and write its full path in backticks, like \`${AGENT_HOME}/report.csv\`: the app shows it as a file they can download.`
 let lastMs = 0
@@ -102,11 +99,11 @@ export const threadService = {
 
   agentIdOf: async (id: string): Promise<string> => (await chatOf(id)).agent.id,
 
-  async open({ agentId, key, title, origin, mirrors }: { agentId: string; key?: string; title: string; origin: ThreadOrigin; mirrors: Place[] }): Promise<string> {
+  async open({ agentId, key, title, origin, place }: { agentId: string; key?: string; title: string; origin: ThreadOrigin; place?: ThreadPlace }): Promise<string> {
     const found = () => db.selectFrom('chat_thread').select('id').where('agent_id', '=', agentId).where('key', '=', key ?? '').executeTakeFirst()
     const held = key ? await found() : undefined
     if (held) return held.id
-    const made = await db.insertInto('chat_thread').values({ id: newId('th'), agent_id: agentId, key: key ?? null, title: title.slice(0, 120), origin: JSON.stringify(origin), mirrors: JSON.stringify(mirrors) })
+    const made = await db.insertInto('chat_thread').values({ id: newId('th'), agent_id: agentId, key: key ?? null, title: title.slice(0, 120), origin: JSON.stringify(origin), ...place && { channel: place.platform, place: JSON.stringify(place) } })
       .onConflict((conflict) => conflict.columns(['agent_id', 'key']).doNothing()).returning('id').executeTakeFirst()
     const id = made?.id ?? (await found())?.id
     if (!id) throw new HttpError(500, 'The chat couldn\'t be saved. Try again.')
@@ -115,31 +112,61 @@ export const threadService = {
   },
 
   async bySession({ agentId, session }: { agentId: string; session: string }): Promise<string> {
-    const first = SESSION_FIRST.exec(session)?.[1]
-    if (!first) return agentId
-    const agent = await db.selectFrom('agent').select('workspace').where('id', '=', agentId).executeTakeFirst()
-    const id = agent ? (await recordsService.get({ collection: 'message', workspace: agent.workspace ?? HOME, id: first }))?.parent : undefined
-    return id && (id === agentId || (await db.selectFrom('chat_thread').select('id').where('id', '=', id).where('agent_id', '=', agentId).executeTakeFirst())) ? id : agentId
+    const id = session.split('.')[0] ?? ''
+    if (id === agentId) return agentId
+    return (await db.selectFrom('chat_thread').select('id').where('id', '=', id).where('agent_id', '=', agentId).executeTakeFirst())?.id ?? agentId
   },
 
-  async recordTurn({ agentId, origin, user, author, reply }: { agentId: string; origin: Place; user: string; author: string; reply: string }): Promise<{ object: 'thread'; id: string }> {
-    const id = await threadService.discordThread({ agentId, place: origin })
-    await db.updateTable('chat_thread').set({ mirror_paused: false, web_streak: 0 }).where('id', '=', id).execute()
-    const chat = await chatOf(id)
-    if (user.trim()) await write({ chat, message: { id: nextId(), role: 'user', parts: [{ type: 'text', text: user }], metadata: { author } } })
-    if (reply.trim() && !SILENT.test(reply)) await write({ chat, message: { id: nextId(), role: 'assistant', parts: [{ type: 'text', text: reply }] } })
-    return { object: 'thread', id }
+  placeThread: ({ agentId, place, title }: { agentId: string; place: ThreadPlace; title?: string }): Promise<string> => threadService.open({
+    agentId, key: keyOf(place), title: title || place.chat_name || LABELS[place.platform] || place.platform, origin: { platform: place.platform as ThreadOrigin['platform'], label: place.chat_name || LABELS[place.platform] || place.platform }, place,
+  }),
+
+  async whereOf(id: string): Promise<{ agentId: string; title: string; origin: string; place?: ThreadPlace }> {
+    const { agent, row } = await chatOf(id)
+    return { agentId: agent.id, title: row?.title ?? agent.name, origin: row ? (JSON.parse(row.origin) as ThreadOrigin).platform : 'app', ...row?.place && { place: JSON.parse(row.place) as ThreadPlace } }
   },
 
-  async mirror({ actor, id, paused }: { actor: Caller; id: string; paused: boolean }): Promise<Thread> {
-    const chat = await chatOf(id)
-    await runner({ actor, id: chat.agent.id })
-    if (!chat.row) throw new HttpError(400, 'This chat isn\'t posted anywhere else.')
-    await db.updateTable('chat_thread').set({ mirror_paused: paused, web_streak: 0 }).where('id', '=', id).execute()
-    emit({ name: 'thread.updated', actor, target: { type: 'thread', id, agentId: chat.agent.id } })
-    const fresh = await chatOf(id)
-    return threadOf({ chat: fresh, said: await saidOf(fresh), waiting: await waitingOn() })
+  known: async ({ agentId, place }: { agentId: string; place: ThreadPlace }): Promise<boolean> => !!(await db.selectFrom('chat_thread').select('id').where('agent_id', '=', agentId).where('key', '=', keyOf(place)).executeTakeFirst()),
+
+  async lastHeard({ agentId, channel, since }: { agentId: string; channel: string; since: number }): Promise<{ place: ThreadPlace; ref: string }[]> {
+    const rows = await db.selectFrom('chat_thread').select('id').where('agent_id', '=', agentId).where('channel', '=', channel).execute()
+    const found = await Promise.all(rows.map(async ({ id }) => {
+      const chat = await chatOf(id)
+      const ref = (await saidOf(chat)).findLast((each) => timeOf(each.id) > since && typeof (each.message.metadata as { ref?: unknown } | undefined)?.ref === 'string')
+      return ref && chat.row?.place ? [{ place: JSON.parse(chat.row.place) as ThreadPlace, ref: String((ref.message.metadata as { ref: string }).ref) }] : []
+    }))
+    return found.flat()
   },
+
+  async moved({ id, place }: { id: string; place: ThreadPlace }): Promise<void> {
+    await db.updateTable('chat_thread').set({ key: keyOf(place), place: JSON.stringify(place) }).where('id', '=', id).execute()
+    emit({ name: 'thread.updated', target: { type: 'thread', id, agentId: await threadService.agentIdOf(id) } })
+  },
+
+  async message({ threadId, messageId }: { threadId: string; messageId: string }): Promise<ChatMessage | undefined> {
+    return (await saidOf(await chatOf(threadId))).find((each) => each.id === messageId)?.message
+  },
+
+  async undelivered(threadId: string): Promise<string[]> {
+    return (await saidOf(await chatOf(threadId))).filter((each) => deliveryOf(each.message) === 'pending').map((each) => each.id)
+  },
+
+  async add({ threadId, messages }: { threadId: string; messages: ChatMessage[] }): Promise<void> {
+    const chat = await chatOf(threadId)
+    const known = new Set((await saidOf(chat)).map((each) => each.id))
+    for (const message of messages.filter((each) => !known.has(each.id))) await write({ chat, message })
+  },
+
+  async post({ threadId, text }: { threadId: string; text: string }): Promise<string> {
+    const chat = await chatOf(threadId)
+    const id = nextId()
+    await write({ chat, message: { id, role: 'assistant', parts: [{ type: 'text', text }], ...chat.row?.channel !== 'web' && { metadata: { delivery: 'pending' } } } })
+    return id
+  },
+
+  answer: async ({ threadId }: { threadId: string }): Promise<string> => reply({ chat: await chatOf(threadId) }),
+
+  inboundId: ({ at, ref }: { at: Date; ref: string }): string => idAt({ ms: at.getTime(), tail: ref }),
 
   async archive({ actor, id, archived }: { actor: Caller; id: string; archived: boolean }): Promise<Thread> {
     const chat = await chatOf(id)
@@ -151,34 +178,9 @@ export const threadService = {
     return threadOf({ chat: fresh, said: await saidOf(fresh), waiting: await waitingOn() })
   },
 
-  async threadOfOrigin({ agentId, origin }: { agentId: string; origin: { platform: string; chat_id: string; thread_id?: string | null; parent_chat_id?: string | null } }): Promise<string | undefined> {
-    if (origin.platform === 'api_server') return threadService.bySession({ agentId, session: origin.chat_id })
-    if (origin.platform !== 'discord') return undefined
-    const place = discordPlace(origin)
-    const row = await db.selectFrom('chat_thread').select('id').where('agent_id', '=', agentId).where('key', '=', `discord:${place.chat_id}:${place.thread_id ?? ''}`).executeTakeFirst()
-    return row?.id
+  async threadOfOrigin({ agentId, origin }: { agentId: string; origin: { platform: string; chat_id: string } }): Promise<string | undefined> {
+    return origin.platform === 'api_server' ? threadService.bySession({ agentId, session: origin.chat_id }) : undefined
   },
-
-  async startChannelThread({ id, place, text, title }: { id: string; place: Place; text: string; title: string }): Promise<void> {
-    const chat = await chatOf(id)
-    if (!chat.row || !text.trim() || SILENT.test(text)) return
-    const sent = await channelService.send({ agentId: chat.agent.id, place, text, startThread: title.slice(0, 100) })
-    const home = { ...place, ...sent.threadId && { thread_id: sent.threadId } }
-    await db.updateTable('chat_thread').set({ key: `${place.platform}:${place.chat_id}:${home.thread_id ?? ''}`, mirrors: JSON.stringify([home]), continue_url: sent.url }).where('id', '=', id).execute()
-    emit({ name: 'thread.updated', target: { type: 'thread', id, agentId: chat.agent.id } })
-  },
-
-  async contextFor({ agentId, origin }: { agentId: string; origin: { platform: string; chat_id: string; thread_id?: string | null; parent_chat_id?: string | null } }): Promise<{ object: 'thread_context'; context: string | null }> {
-    const id = await threadService.threadOfOrigin({ agentId, origin })
-    const chat = id ? await chatOf(id) : undefined
-    if (!chat?.row?.continue_url) return { object: 'thread_context', context: null }
-    const lines = (await saidOf(chat)).slice(-SEED).map(({ message }) => `${message.role === 'assistant' ? 'You' : 'OpenHut'}: ${textOf(message).trim().slice(0, SEED_CHARS)}`)
-    return { object: 'thread_context', context: lines.length ? `This Discord thread continues "${chat.row.title}", which you handled in OpenHut. What happened there:\n\n${lines.join('\n\n')}` : null }
-  },
-
-  discordThread: ({ agentId, place }: { agentId: string; place: Place }): Promise<string> => threadService.open({
-    agentId, key: `${place.platform}:${place.chat_id}:${place.thread_id ?? ''}`, title: place.chat_name || 'Discord', origin: { platform: 'discord', label: place.chat_name || 'Discord' }, mirrors: [place],
-  }),
 
   async delete({ actor, id, uploads }: { actor: Caller; id: string; uploads: string[] }): Promise<Deleted<'thread'>> {
     const chat = await chatOf(id)
@@ -244,11 +246,10 @@ export const threadService = {
 
   async chat({ actor, id, body, reply }: { actor: Caller; id: string; body: SendChat; reply: FastifyReply }): Promise<void> {
     const chat = await chatOf(id)
-    if (chat.row?.continue_url) throw new HttpError(409, `Continue this in ${(JSON.parse(chat.row.mirrors) as Place[])[0]?.chat_name || 'its channel'}.`)
+    if (chat.row && chat.row.channel !== 'web') throw new HttpError(409, `This thread is in ${LABELS[chat.row.channel] ?? chat.row.channel}. Reply there.`)
     await idle(chat.agent.id)
     const agent = await runner({ actor, id: chat.agent.id })
     const said = await nextSaid({ chat, stored: await saidOf(chat), body, author: actor.email })
-    if (body.trigger === 'submit-message' && said.at(-1)?.message.role === 'user') await mirrorAsked({ chat, author: actor.email, text: textOf(said[said.length - 1].message) })
     if (agent.wanted !== 'running') throw new HttpError(409, `${agent.name} is stopped. Start it and try again.`)
     busy.add(agent.id)
     reply.raw.on('close', () => busy.delete(agent.id))
@@ -256,11 +257,12 @@ export const threadService = {
     reply.raw.on('close', () => abort.abort())
     const started = Date.now()
     const answerId = nextId()
-    let session = sessionOf(said)
+    let session = sessionOf({ said, base: chat.id })
     const work = turnWork({ agent, started })
-    const asked = together({ messages: said.map((each) => each.message), shared: agent.shared || peopleOf(agent.people).length > 0 })
+    const waiting = unanswered(said)
+    const asked = together({ asked: waiting.map((each) => each.message), shared: agent.shared || peopleOf(agent.people).length > 0 })
     let answered = false
-    const live = liveThreads.turn({ thread: chat.id, agentId: agent.id, turnId: answerId, answering: answering(said) })
+    const live = liveThreads.turn({ thread: chat.id, agentId: agent.id, turnId: answerId, answering: authorsOf(waiting) })
     const answer = async (writer: { write: (chunk: UIMessageChunk) => void }, retry: boolean) => {
       const message = await seeded({ said, session, message: asked })
       for await (const chunk of answerStream({ agent, session, message, signal: abort.signal, work, retry, live })) {
@@ -276,7 +278,7 @@ export const threadService = {
           // Hermes lost a turn of this session (its gateway was killed mid-turn, e.g. by an update) and
           // pauses the session for good; carry on in a fresh session, seeded with the chat so far.
           log.warn({ event: 'agent.session_lost', agent: agent.id, session })
-          session = `${sessionOf([], said[0]?.id)}.${nextId()}`
+          session = `${chat.id}.${nextId()}`
           await answer(writer, false)
         }).then(() => undefined, (err: unknown) => err)
         const done = work.done({ error: failed === undefined ? undefined : messageOf(failed) })
@@ -289,10 +291,7 @@ export const threadService = {
       onError: messageOf,
       onEnd: async ({ messages: answered, isAborted }) => {
         const answer = z.safeParse(ChatMessage, answered.map(foldCard).find((each) => each.role === 'assistant')).data
-        if (answer?.parts.some((part) => part.type !== 'step-start')) {
-          await write({ chat, message: { ...answer, id: answerId }, session })
-          if (!isAborted) await afterAnswer({ chat, message: answer })
-        }
+        if (answer?.parts.some((part) => part.type !== 'step-start')) await write({ chat, message: { ...answer, id: answerId, metadata: { answered: waiting.at(-1)?.id } }, session })
         live.end()
         busy.delete(agent.id)
         log.info({ event: 'agent.chat', agent: agent.id, ms: Date.now() - started, aborted: isAborted })
@@ -316,56 +315,59 @@ export const threadService = {
   },
 
   async runRoutine({ agentId, threadId = agentId, text, metadata, messageId }: { agentId: string; threadId?: string; text: string; metadata?: Record<string, unknown>; messageId?: string }): Promise<string> {
-    await idle(agentId)
-    busy.add(agentId)
-    let live: LiveTurnHandle | undefined
-    try {
-      const chat = await chatOf(threadId)
-      if (chat.agent.id !== agentId) throw new HttpError(404, MISSING)
-      const agent = chat.agent
-      const last = (await saidOf(chat)).at(-1)?.message
-      const retried = last?.role === 'user' && textOf(last) === text ? last : undefined
-      const asked: ChatMessage | undefined = chat.row ? retried ?? { id: messageId ?? nextId(), role: 'user', parts: [{ type: 'text', text }], metadata: { author: chat.row.title, ...metadata } } : undefined
-      if (asked && !retried) await write({ chat, message: asked })
-      const said = await saidOf(chat)
-      const id = nextId()
-      const first = asked ? said[0]?.id : id
-      let session = sessionOf(said, first)
-      const started = Date.now()
-      const work = turnWork({ agent, started })
-      const signal = AbortSignal.timeout(TURN_MS)
-      const turn = liveThreads.turn({ thread: chat.id, agentId, turnId: id, answering: answering(said) })
-      live = turn
-      const attempt = async (retry: boolean): Promise<UIMessage> => {
-        const message = asked ? await seeded({ said, session, message: asked }) : { id, role: 'user' as const, parts: [{ type: 'text', text }] }
-        const chunks = async function* (): AsyncGenerator<UIMessageChunk> {
-          yield* answerStream({ agent, session, message, signal, work, retry, live: turn })
-          const done = work.done({})
-          if (done) yield { type: 'data-work', id: 'work', data: done }
-          yield* await afterTurn({ agentId, since: started })
-        }
-        let built: UIMessage = { id, role: 'assistant', parts: [] }
-        for await (const each of readUIMessageStream({ message: built, stream: ReadableStream.from(chunks()), terminateOnError: true })) built = each
-        return built
+    const chat = await chatOf(threadId)
+    if (chat.agent.id !== agentId) throw new HttpError(404, MISSING)
+    if (!chat.row) return reply({ chat, prompt: text })
+    const last = (await saidOf(chat)).at(-1)?.message
+    if (last?.role !== 'user' || textOf(last) !== text) await write({ chat, message: { id: messageId ?? nextId(), role: 'user', parts: [{ type: 'text', text }], metadata: { author: chat.row.title, ...metadata } } })
+    return reply({ chat })
+  },
+}
+
+async function reply({ chat, prompt }: { chat: Chat; prompt?: string }): Promise<string> {
+  const agent = chat.agent
+  await idle(agent.id)
+  busy.add(agent.id)
+  let live: LiveTurnHandle | undefined
+  try {
+    const said = await saidOf(chat)
+    const waiting = prompt ? [] : unanswered(said)
+    if (!prompt && !waiting.length) return ''
+    const id = nextId()
+    let session = sessionOf({ said, base: chat.id })
+    const started = Date.now()
+    const work = turnWork({ agent, started })
+    const signal = AbortSignal.timeout(TURN_MS)
+    const turn = liveThreads.turn({ thread: chat.id, agentId: agent.id, turnId: id, answering: authorsOf(waiting) })
+    live = turn
+    const asked = prompt ? undefined : together({ asked: waiting.map((each) => each.message), shared: chat.row?.channel !== 'web' || agent.shared || peopleOf(agent.people).length > 0 })
+    const attempt = async (retry: boolean): Promise<UIMessage> => {
+      const message = asked ? await seeded({ said, session, message: asked }) : { id, role: 'user' as const, parts: [{ type: 'text', text: prompt ?? '' }] }
+      const chunks = async function* (): AsyncGenerator<UIMessageChunk> {
+        yield* answerStream({ agent, session, message, signal, work, retry, live: turn })
+        const done = work.done({})
+        if (done) yield { type: 'data-work', id: 'work', data: done }
+        yield* await afterTurn({ agentId: agent.id, since: started })
       }
-      const built = await attempt(true).catch((err: unknown) => {
-        if (!(err instanceof LostTurn)) throw err
-        log.warn({ event: 'agent.session_lost', agent: agentId, session })
-        session = `${sessionOf([], first)}.${nextId()}`
-        return attempt(false)
-      })
-      const answer = foldCard(built)
-      const reply = textOf(answer)
-      const stored = z.safeParse(ChatMessage, { ...answer, id, ...!chat.row && { metadata: { wake: true } } }).data
-      if (stored && !SILENT.test(reply)) {
-        await write({ chat, message: stored, session })
-        await afterAnswer({ chat, message: stored })
-      }
-      return reply
-    } finally {
-      live?.end()
-      busy.delete(agentId)
+      let built: UIMessage = { id, role: 'assistant', parts: [] }
+      for await (const each of readUIMessageStream({ message: built, stream: ReadableStream.from(chunks()), terminateOnError: true })) built = each
+      return built
     }
+    const built = await attempt(true).catch((err: unknown) => {
+      if (!(err instanceof LostTurn)) throw err
+      log.warn({ event: 'agent.session_lost', agent: agent.id, session })
+      session = `${chat.id}.${nextId()}`
+      return attempt(false)
+    })
+    const answer = foldCard(built)
+    const text = textOf(answer)
+    const metadata = { ...!chat.row && { wake: true }, ...waiting.length && { answered: waiting[waiting.length - 1].id }, ...chat.row && chat.row.channel !== 'web' && { delivery: 'pending' } }
+    const stored = z.safeParse(ChatMessage, { ...answer, id, metadata }).data
+    if (stored && !SILENT.test(text)) await write({ chat, message: stored, session })
+    return text
+  } finally {
+    live?.end()
+    busy.delete(agent.id)
   }
 }
 
@@ -377,9 +379,21 @@ function toLive({ live, chunk }: { live: LiveTurnHandle; chunk: UIMessageChunk }
   if (call) live.step(call.status === 'running' ? call.label : call.past)
 }
 
-function answering(said: Said[]): string[] {
-  const asked = said.slice(said.findLastIndex((each) => each.message.role !== 'user') + 1)
+function authorsOf(asked: Said[]): string[] {
   return [...new Set(asked.flatMap((each) => z.safeParse(Authored, each.message).data?.metadata.author ?? []))]
+}
+
+function unanswered(said: Said[]): Said[] {
+  const cut = said.reduce((max, each) => {
+    if (each.message.role !== 'assistant') return max
+    const at = z.safeParse(Answered, each.message).data?.metadata.answered ?? each.id
+    return at > max ? at : max
+  }, '')
+  return said.filter((each) => each.message.role === 'user' && each.id > cut)
+}
+
+function deliveryOf(message: ChatMessage): unknown {
+  return (message.metadata as { delivery?: unknown } | undefined)?.delivery
 }
 
 async function runner({ actor, id }: { actor: Caller; id: string }): Promise<AgentRow> {
@@ -413,20 +427,6 @@ async function chatOf(id: string): Promise<Chat> {
   return { id, agent, row }
 }
 
-async function afterAnswer({ chat, message }: { chat: Chat; message: ChatMessage | UIMessage }): Promise<void> {
-  const row = chat.row && await db.selectFrom('chat_thread').selectAll().where('id', '=', chat.id).executeTakeFirst()
-  if (row) await mirror({ chat: { ...chat, row }, text: textOf(message) })
-}
-
-async function mirrorAsked({ chat, author, text }: { chat: Chat; author: string; text: string }): Promise<void> {
-  if (!chat.row || chat.row.mirror_paused || chat.row.mirrors === '[]') return
-  const row = await db.updateTable('chat_thread').set((eb) => ({ web_streak: eb('web_streak', '+', 1) })).where('id', '=', chat.id).returningAll().executeTakeFirstOrThrow()
-  if (row.web_streak < PAUSE_AFTER) return mirror({ chat: { ...chat, row }, text: `${author} wrote in OpenHut:\n${text}` })
-  await mirror({ chat: { ...chat, row }, text: `Continuing in OpenHut ↗ ${publicAddress()}/agents/${encodeURIComponent(chat.agent.id)}/threads/${encodeURIComponent(chat.id)}` })
-  await db.updateTable('chat_thread').set({ mirror_paused: true }).where('id', '=', chat.id).execute()
-  emit({ name: 'thread.updated', target: { type: 'thread', id: chat.id, agentId: chat.agent.id } })
-}
-
 async function waitingChanged(askId: string): Promise<void> {
   const ask = await db.selectFrom('ask').select(['agent_id', 'origin']).where('id', '=', askId).executeTakeFirst().catch(() => undefined)
   const id = ask && await threadService.threadOfOrigin({ agentId: ask.agent_id, origin: JSON.parse(ask.origin) as { platform: string; chat_id: string } }).catch(() => undefined)
@@ -455,14 +455,6 @@ function isWaiting({ id, said, waiting }: { id: string; said: Said[]; waiting: A
   }))
 }
 
-async function mirror({ chat, text }: { chat: Chat; text: string }): Promise<void> {
-  if (!chat.row || chat.row.mirror_paused || !text.trim()) return
-  for (const place of JSON.parse(chat.row.mirrors) as Place[]) {
-    await channelService.send({ agentId: chat.agent.id, place, text })
-      .catch((err: unknown) => log.warn({ event: 'thread.mirror_failed', agent: chat.agent.id, thread: chat.id, platform: place.platform, error: messageOf(err) }))
-  }
-}
-
 function textOf(message: UIMessage | ChatMessage): string {
   return message.parts.map((part) => part.type === 'text' && 'text' in part && typeof part.text === 'string' ? part.text : '').join('')
 }
@@ -480,10 +472,11 @@ const idAt = ({ ms, tail }: { ms: number; tail: string }): string => `msg_${ms.t
 
 const timeOf = (id: string): number => parseInt(id.slice(4, 13), 36) || 0
 
-const sessionOf = (said: Said[], first = said[0]?.id): string => {
-  const base = `openhut-${first}`
-  return said.findLast((each) => each.session === base || each.session?.startsWith(`${base}.`))?.session ?? base
-}
+const sessionOf = ({ said, base }: { said: Said[]; base: string }): string => said.findLast((each) => each.session === base || each.session?.startsWith(`${base}.`))?.session ?? base
+
+const keyOf = (place: ThreadPlace): string => `${place.platform}:${place.chat_id}:${place.thread_id ?? ''}`
+
+const LABELS: Record<string, string> = { web: 'OpenHut', discord: 'Discord', slack: 'Slack', telegram: 'Telegram', whatsapp: 'WhatsApp' }
 
 async function seeded({ said, session, message }: { said: Said[]; session: string; message: ChatMessage }): Promise<ChatMessage> {
   const me = HERE
@@ -519,10 +512,8 @@ function authored({ message, author }: { message: ChatMessage; author: string })
   return { ...rest, metadata: { author } }
 }
 
-function together({ messages, shared }: { messages: ChatMessage[]; shared: boolean }): ChatMessage {
-  const start = messages.findLastIndex((message) => message.role !== 'user') + 1
-  const asked = messages.slice(start)
-  const last = messages[messages.length - 1]
+function together({ asked, shared }: { asked: ChatMessage[]; shared: boolean }): ChatMessage {
+  const last = asked[asked.length - 1]
   if (asked.length < 2 && !shared) return last
   return { ...last, parts: asked.flatMap((message, index) => {
     const author = z.safeParse(Authored, message).data?.metadata.author
@@ -664,16 +655,6 @@ async function relay({ agent, session, message, writer, signal, work, retry = fa
   return `Stopped: ${agent.name} ended its turn without an answer. Ask again.`
 }
 
-export function discordPlace(origin: { chat_id: string; chat_name?: string | null; thread_id?: string | null; parent_chat_id?: string | null }): Place {
-  const inThread = !!origin.thread_id && origin.thread_id === origin.chat_id && !!origin.parent_chat_id
-  return {
-    platform: 'discord',
-    chat_id: inThread && origin.parent_chat_id ? origin.parent_chat_id : origin.chat_id,
-    ...origin.thread_id && { thread_id: origin.thread_id },
-    chat_name: origin.chat_name ?? '',
-  }
-}
-
 export class LostTurn extends Error {}
 
 const LOST = new Set(['unknown_execution', 'queue_full'])
@@ -787,14 +768,21 @@ function withoutPlumbing(message: ChatMessage): ChatMessage {
 function threadOf({ chat: { id, agent, row }, said, waiting }: { chat: Chat; said: Said[]; waiting: Awaited<ReturnType<typeof waitingOn>> }): Thread {
   const at = (each: string | undefined) => new Date(each ? timeOf(each) : row?.created_at ?? agent.created_at).toISOString()
   return {
-    id, object: 'thread', agentId: agent.id, title: row?.title ?? agent.name, origin: row ? JSON.parse(row.origin) as ThreadOrigin : APP_ORIGIN, mirrors: row ? JSON.parse(row.mirrors) as Place[] : [], mirrorPaused: row?.mirror_paused ?? false, readOnly: !!row?.continue_url, continueUrl: row?.continue_url ?? null, waiting: isWaiting({ id, said, waiting }), archivedAt: row?.archived_at ? new Date(row.archived_at).toISOString() : null,
+    id, object: 'thread', agentId: agent.id, title: row?.title ?? agent.name, origin: row ? JSON.parse(row.origin) as ThreadOrigin : APP_ORIGIN, place: placeOf(row?.place), readOnly: !!row && row.channel !== 'web', continueUrl: (row?.place && (JSON.parse(row.place) as ThreadPlace).url) || null, waiting: isWaiting({ id, said, waiting }), archivedAt: row?.archived_at ? new Date(row.archived_at).toISOString() : null,
     createdAt: at(said[0]?.id), updatedAt: at(said.findLast((each) => !isWake(each.message))?.id),
   }
+}
+
+function placeOf(stored: string | null | undefined): Place | null {
+  if (!stored) return null
+  const { url: _, ...place } = JSON.parse(stored) as ThreadPlace
+  return place
 }
 
 const isWake = (message: ChatMessage): boolean => z.safeParse(Woken, message).success
 
 type Said = { id: string; by: string; message: ChatMessage; session?: string }
+export type ThreadPlace = Place & { url?: string }
 type FilePart = z.infer<typeof FilePart>
 type ImagePart = { type: 'image_url'; image_url: { url: string } }
 type OpenAiMessage = { role: 'user' | 'assistant'; content: string | ({ type: 'text'; text: string } | ImagePart)[] }

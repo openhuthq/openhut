@@ -1,6 +1,6 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { agentService } from '../agents/agent-service.ts'
-import { DeleteThread, ListThreads, LookUpFiles, MAX_FILE_BYTES, MirrorThread, ReadFile, SendChat, UploadFile } from '@openhut/common/threads/thread.ts'
+import { DeleteThread, ListThreads, LookUpFiles, MAX_FILE_BYTES, ReadFile, SendChat, UploadFile } from '@openhut/common/threads/thread.ts'
 import { IdParams, listOf } from '../platform/responses.ts'
 import { requireSignIn, who } from '../team/identity.ts'
 import { threadService } from './thread-service.ts'
@@ -22,8 +22,6 @@ export const threadController: FastifyPluginAsyncZod = async (app) => {
 
   app.delete('/:id', DeleteRequest, async (req) => threadService.delete({ actor: await who(req), id: req.params.id, uploads: req.body?.uploads ?? [] }))
 
-  app.post('/:id/mirror', MirrorRequest, async (req) => threadService.mirror({ actor: await who(req), id: req.params.id, paused: req.body.paused }))
-
   app.post('/:id/archive', IdRequest, async (req) => threadService.archive({ actor: await who(req), id: req.params.id, archived: true }))
 
   app.post('/:id/unarchive', IdRequest, async (req) => threadService.archive({ actor: await who(req), id: req.params.id, archived: false }))
@@ -43,7 +41,6 @@ const SignedIn = { onRequest: requireSignIn }
 const ListRequest = { schema: { querystring: ListThreads } }
 const IdRequest = { schema: { params: IdParams } }
 const ChatRequest = { schema: { params: IdParams, body: SendChat } }
-const MirrorRequest = { schema: { params: IdParams, body: MirrorThread } }
 const DeleteRequest = { schema: { params: IdParams, body: DeleteThread } }
 const UploadRequest = { onRequest: requireSignIn, bodyLimit: MAX_FILE_BYTES, schema: { params: IdParams, querystring: UploadFile } }
 const DownloadRequest = { schema: { params: IdParams, querystring: ReadFile } }

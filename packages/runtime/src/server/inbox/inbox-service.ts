@@ -18,7 +18,7 @@ import type { Caller } from '../team/identity.ts'
 import { APP_PLATFORM, type Wake } from '../../core/plugin.ts'
 import { wakes } from '../../core/wakes.ts'
 import { placeFor, routineService, targetOf, type Fired, type Origin } from './routines.ts'
-import { discordPlace, threadService } from '../threads/thread-service.ts'
+import { threadService } from '../threads/thread-service.ts'
 import { attempt, evaluate } from './expressions.ts'
 
 export const BODY_MAX = 256 * 1024
@@ -178,7 +178,7 @@ export const inboxService = {
     if (!row) throw new HttpError(404, `No open run ${id}.`)
     const origin = originOf(row)
     if (row.kind !== 'webhook') {
-      if (origin.platform === 'discord') return { threadId: await threadService.discordThread({ agentId, place: discordPlace(chatOf(origin)) }) }
+      if (origin.platform === 'discord') return { threadId: await threadService.placeThread({ agentId, place: { platform: 'discord', chat_id: origin.chat_id, ...origin.thread_id && { thread_id: origin.thread_id }, chat_name: origin.place ?? origin.chat_name ?? '' } }) }
       return { threadId: await threadService.bySession({ agentId, session: origin.chat_id }) }
     }
     const batch = row.message_id ? await pending().where('inbox_item.message_id', '=', row.message_id).orderBy('inbox_item.created_at').orderBy('inbox_item.id').execute() : [row]
@@ -202,15 +202,6 @@ export const inboxService = {
     const last = (await lastPayloads([id])).get(id)
     if (last === undefined) return `Saved. There's no call yet to try them on.${each}`
     return `Saved. With the last call:\n${(await preview({ row, payload: payloadOf(last) })).join('\n')}\n${each.trim()}`
-  },
-
-  async answered({ agentId, id, threadId, said }: { agentId: string; id: string; threadId: string; said: string }): Promise<void> {
-    const row = await db.selectFrom('inbox_item').innerJoin('inbox_source', 'inbox_source.id', 'inbox_item.source_id').select(['inbox_source.kind', 'inbox_source.name', 'inbox_source.origin'])
-      .where('inbox_item.id', '=', id).where('inbox_item.agent_id', '=', agentId).executeTakeFirst()
-    const channel = row?.kind === 'webhook' ? channelOf(row) : 'app'
-    if (channel === 'app') return
-    const thread = await db.selectFrom('chat_thread').select(['title', 'continue_url']).where('id', '=', threadId).executeTakeFirst()
-    if (thread && !thread.continue_url) await threadService.startChannelThread({ id: threadId, place: channel, text: said, title: thread.title })
   },
 
   async setup({ actor, agentId, id }: { actor: Caller; agentId: string; id: string }): Promise<{ object: 'webhook_setup'; address: string; secret: string }> {
@@ -303,7 +294,8 @@ export function withSeen({ metadata, at, seen }: { metadata: Record<string, unkn
 }
 
 async function threadOf({ agentId, row, title }: { agentId: string; row: Pending; title: string }): Promise<string> {
-  const open = () => threadService.open({ agentId, title, origin: { platform: 'webhook', label: row.name }, mirrors: [] })
+  const channel = channelOf(row)
+  const open = () => threadService.open({ agentId, title, origin: { platform: 'webhook', label: row.name }, ...channel !== 'app' && { place: channel } })
   if (row.threads === 'each') return open()
   const group = row.group_key ?? ''
   const held = await db.selectFrom('inbox_thread').innerJoin('chat_thread', 'chat_thread.id', 'inbox_thread.thread_id').select('chat_thread.id')

@@ -79,18 +79,3 @@ test('a channel wake nobody picks up is logged once, five minutes on, and an app
   assert.deepEqual(stuck().map((entry) => entry.item), ['hd_wakestck'])
   warned.mock.restore()
 })
-
-test('a Discord turn the Hermes plugin reports lands in that channel thread\'s web thread; other platforms are refused', async () => {
-  const turn = (origin: Record<string, string>) => fetch(url('/turns'), { method: 'POST', headers, body: JSON.stringify({ user: 'is prod up?', reply: 'Yes.', origin }) })
-  const res = await turn({ platform: 'discord', chat_id: '444', thread_id: '444', parent_chat_id: '333', chat_name: 'incident', user_name: 'ana' })
-  const { id } = await res.json() as { id: string }
-  const row = await db.selectFrom('chat_thread').select(['key', 'mirrors']).where('id', '=', id).executeTakeFirstOrThrow()
-  assert.deepEqual([row.key, JSON.parse(row.mirrors)], ['discord:333:444', [{ platform: 'discord', chat_id: '333', thread_id: '444', chat_name: 'incident' }]])
-  assert.equal((await turn({ platform: 'telegram', chat_id: '1' })).status, 400)
-})
-
-test('the Hermes plugin asks for a Discord thread\'s OpenHut context through the gateway', async () => {
-  const ask = (body: unknown) => fetch(url('/thread-context'), { method: 'POST', headers, body: JSON.stringify(body) })
-  assert.deepEqual(await (await ask({ origin: { platform: 'discord', chat_id: '999', thread_id: '999', parent_chat_id: '1' } })).json(), { object: 'thread_context', context: null })
-  assert.equal((await ask({})).status, 400)
-})
