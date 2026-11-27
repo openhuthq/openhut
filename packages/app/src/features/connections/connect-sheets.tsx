@@ -25,9 +25,9 @@ grant pg_read_all_data to openhut_reader;`
 
 type FlowProps = { me: Me; item: Integration; close: () => void; returned: string | undefined }
 
-export function ConnectSheet({ me, item }: { me: Me; item: Integration }) {
+export function ConnectSheet({ me, item, onClose }: { me: Me; item: Integration; onClose?: () => void }) {
   const returned = new URLSearchParams(location.search).get('error') ?? undefined
-  const close = () => navigate('/connections')
+  const close = onClose ?? (() => navigate('/connections'))
   const props = { me, item, returned, close }
   if (GOOGLE_KINDS.some((kind) => kind === item.name)) return <GoogleSheet {...props} />
   switch (item.name) {

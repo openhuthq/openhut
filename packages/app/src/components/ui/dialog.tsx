@@ -25,8 +25,8 @@ const popupVariants = cva('group/dialog fixed inset-0 z-50 overflow-auto border-
 
 export type DialogSize = NonNullable<VariantProps<typeof popupVariants>['size']>
 
-export function backdropClass(size: DialogSize) {
-  return cn('fixed inset-0 z-50 phone:transition-opacity phone:duration-300 phone:data-ending-style:opacity-0', size === 'sheet' ? 'bg-[oklch(0%_0_0/.1)] backdrop-blur-[4px]' : 'bg-[oklch(0%_0_0/.32)] backdrop-blur-[3px]')
+export function backdropClass(size: DialogSize, nested = false) {
+  return cn('fixed inset-0 z-50 phone:transition-opacity phone:duration-300 phone:data-ending-style:opacity-0', size === 'sheet' ? 'bg-[oklch(0%_0_0/.1)] backdrop-blur-[4px]' : 'bg-[oklch(0%_0_0/.32)] backdrop-blur-[3px]', nested && 'bg-[oklch(0%_0_0/.18)] backdrop-blur-none')
 }
 
 export function popupClass(size: DialogSize, className?: string) {
@@ -45,7 +45,7 @@ export function firstFocusable(popup: HTMLElement | null) {
   return found ?? true
 }
 
-export function Dialog({ size = 'default', dismissable = true, label, onClose, onEscape, className, children }: { size?: DialogSize; dismissable?: boolean; label?: string; onClose: () => void; onEscape?: () => void; className?: string; children: ReactNode }) {
+export function Dialog({ size = 'default', dismissable = true, nested = false, label, onClose, onEscape, className, children }: { size?: DialogSize; dismissable?: boolean; nested?: boolean; label?: string; onClose: () => void; onEscape?: () => void; className?: string; children: ReactNode }) {
   const popup = useRef<HTMLDivElement>(null)
   const backdrop = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => () => leaveAfter({ sheet: popup.current, backdrop: backdrop.current }), [])
@@ -59,7 +59,7 @@ export function Dialog({ size = 'default', dismissable = true, label, onClose, o
     else if (dismissable || details.reason !== 'escape-key') onClose()
   }}>
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Backdrop ref={backdrop} forceRender className={backdropClass(size)} />
+      <DialogPrimitive.Backdrop ref={backdrop} forceRender className={backdropClass(size, nested)} />
       <DialogPrimitive.Popup ref={popup} initialFocus={() => size === 'window' || matchMedia(TOUCH).matches ? popup.current ?? true : firstFocusable(popup.current)} data-size={size} aria-label={label} className={popupClass(size, className)}>
         {size !== 'confirm' && <Grabber popup={popup} onClose={onClose} />}
         {children}
