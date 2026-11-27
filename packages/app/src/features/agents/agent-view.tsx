@@ -43,10 +43,9 @@ export function AgentView({ agentId, threadId, artifactId, dialog, detail }: { a
   const phone = useMedia(PHONE)
   const [picked, setSide] = useState(savedSide)
   useEffect(() => saveSide(picked), [picked])
-  useEffect(() => { if (artifactId) setSide(null) }, [artifactId])
   const side: Side = artifactId ? 'artifact' : picked
   const [row, setRow] = useState<HTMLDivElement | null>(null)
-  const leave = () => navigate(threadRoute({ agentId, threadId: threadId ?? agentId }))
+  const leave = () => navigate(threadRoute({ agentId, threadId: threadId ?? agentId }), true)
   const [details, setDetails] = useState(false)
   const [browsing, setBrowsing] = useState(false)
   useEffect(() => { if (browsing) setSide((open) => open ?? 'browser') }, [browsing])

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState, type CSSProperties, type FormEvent, type KeyboardEvent, type PointerEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent, type PointerEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as z from 'zod/mini'
 import { ArrowLeft01Icon, Cancel01Icon, Copy01Icon, Delete02Icon, LinkSquare02Icon, MoreHorizontalIcon, Share03Icon } from '@hugeicons/core-free-icons'
@@ -17,13 +17,13 @@ import { I } from '@/components/kit'
 import { Face } from '@/features/agents/face'
 import { usePeople } from '@/features/people/api'
 import { ChatMarkdown } from '@/features/threads/chat'
-import { request } from '@/lib/api-client'
+import { request, RequestError } from '@/lib/api-client'
 import { openhut } from '@/lib/openhut'
 import { copyText } from '@/lib/clipboard'
 import { personName } from '@/lib/format'
 import { toast, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
-import { ACCESS_WORD, ArtifactView, DOCK_FROM, paneWidth, type ArtifactAccess } from '@/features/artifacts/artifact'
+import { ACCESS_WORD, ArtifactView, DOCK_FROM, keptSrc, paneWidth, type ArtifactAccess, type ShownSrc } from '@/features/artifacts/artifact'
 import { ACCESS_ICON, artifactKey, fetchArtifact, KindTile } from '@/features/artifacts/artifact-card'
 
 const SPLIT_KEY = 'openhut.artifactSplit'
@@ -65,6 +65,7 @@ function useSplit(row: HTMLElement | null) {
     observer.observe(row)
     return () => observer.disconnect()
   }, [row])
+  useEffect(() => { if (total < DOCK_FROM) setDrag(undefined) }, [total])
   const set = (width: number, save = true) => {
     const next = paneWidth({ total, fraction: width / total }) / total
     setFraction(next)
@@ -82,6 +83,7 @@ function useSplit(row: HTMLElement | null) {
     },
     onPointerUp: () => { setDrag(undefined); saveFraction(fraction) },
     onPointerCancel: () => { setDrag(undefined); saveFraction(fraction) },
+    onLostPointerCapture: () => setDrag(undefined),
     onDoubleClick: () => set(total / 2),
     onKeyDown: (event: KeyboardEvent) => {
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
@@ -114,13 +116,14 @@ function ArtifactPane({ agent, artifactId, sheet, still, onClose }: { agent: Age
   })
   const data = view.data
   const close = <Button type="button" size="icon" className="text-ink" aria-label="Close" title="Close" onClick={onClose}><I icon={Cancel01Icon} size={16} /></Button>
-  const actions = data && (confirming
+  const gone = view.error instanceof RequestError && view.error.status === 404
+  const actions = confirming
     ? <ConfirmPills box={box} question="Delete for everyone?" action="Delete" danger busy={remove.isPending} onCancel={() => setConfirming(false)} onConfirm={() => remove.mutate()} />
     : <>
-      {data.canManage && <SharePopover agent={agent} view={data} icon={sheet} />}
-      <MoreMenu view={data} onDelete={() => setConfirming(true)} />
+      {data?.canManage && <SharePopover agent={agent} view={data} icon={sheet} />}
+      {data && <MoreMenu view={data} onDelete={() => setConfirming(true)} />}
       {!sheet && close}
-    </>)
+    </>
   return <div className="flex min-h-0 w-full flex-1 flex-col bg-card">
     <header className={cn('flex h-[52px] shrink-0 items-center gap-2 border-b border-hair', sheet ? 'px-2' : 'pr-2.5 pl-4')}>
       {sheet && <Button type="button" size="icon" className="text-ink" aria-label="Back" title="Back" onClick={onClose}><I icon={ArrowLeft01Icon} size={18} /></Button>}
@@ -131,18 +134,21 @@ function ArtifactPane({ agent, artifactId, sheet, still, onClose }: { agent: Age
       {actions}
     </header>
     <div className={cn('relative min-h-0 flex-1 overflow-hidden', still && 'pointer-events-none')}>
-      {data ? <Viewer view={data} /> : <div className="grid size-full place-items-center"><ErrorNote message={view.error?.message} /></div>}
+      {data ? <Viewer view={data} /> : <div className="grid size-full place-items-center">{gone ? <p className="m-0 p-6 text-center text-mute">This was deleted, or you can’t open it.</p> : <ErrorNote message={view.error?.message} />}</div>}
     </div>
   </div>
 }
 
-export function Viewer({ view }: { view: Pick<ArtifactView, 'kind' | 'src' | 'title'> }) {
+export function Viewer({ view }: { view: Pick<ArtifactView, 'id' | 'kind' | 'src' | 'title'> & { ver?: number } }) {
+  const kept = useRef<ShownSrc>(undefined)
+  kept.current = keptSrc({ kept: kept.current, key: `${view.id}:${view.ver ?? ''}`, src: view.src, now: Date.now() })
+  const src = kept.current.src
   switch (view.kind) {
-    case 'page': return <iframe title={view.title} src={view.src} sandbox="allow-scripts allow-forms allow-popups allow-modals" className="block size-full border-0 bg-card" />
-    case 'pdf': return <iframe title={view.title} src={view.src} className="block size-full border-0 bg-card" />
-    case 'image': return <div className="grid size-full place-items-center overflow-auto p-4"><img src={view.src} alt={view.title} className="max-h-full max-w-full rounded-lg object-contain" /></div>
-    case 'md': return <Notes src={view.src} />
-    case 'file': return <div className="grid size-full place-items-center"><a href={view.src} download={view.title} className={buttonVariants({ variant: 'secondary' })}>Download</a></div>
+    case 'page': return <iframe title={view.title} src={src} sandbox="allow-scripts allow-forms allow-popups allow-modals" referrerPolicy="no-referrer" className="block size-full border-0 bg-card" />
+    case 'pdf': return <iframe title={view.title} src={src} referrerPolicy="no-referrer" className="block size-full border-0 bg-card" />
+    case 'image': return <div className="grid size-full place-items-center overflow-auto p-4"><img src={src} alt={view.title} className="max-h-full max-w-full rounded-lg object-contain" /></div>
+    case 'md': return <Notes src={src} />
+    case 'file': return <div className="grid size-full place-items-center"><a href={src} download={view.title} className={buttonVariants({ variant: 'secondary' })}>Download</a></div>
   }
 }
 

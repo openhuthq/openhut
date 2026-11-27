@@ -49,3 +49,19 @@ export function metaOf(card: Pick<ArtifactCard, 'title' | 'kind' | 'access' | 's
   const ext = /\.([a-z0-9]{1,8})$/i.exec(card.title)?.[1]
   return `${ext ? ext.toUpperCase() : KIND_WORD.file} · ${sizeOf(card.size)}`
 }
+
+const RENEW_MS = 10 * 60 * 1000
+
+export function expiryOf(src: string): number | undefined {
+  const exp = Number(/^\/a\/[^/]+\/(\d+)\./.exec(new URL(src, 'http://app').pathname)?.[1])
+  if (!exp) return undefined
+  return exp < 1e12 ? exp * 1000 : exp
+}
+
+export type ShownSrc = { key: string; src: string }
+
+export function keptSrc({ kept, key, src, now }: { kept: ShownSrc | undefined; key: string; src: string; now: number }): ShownSrc {
+  if (!kept || kept.key !== key) return { key, src }
+  const exp = expiryOf(kept.src)
+  return exp !== undefined && exp - now < RENEW_MS ? { key, src } : kept
+}

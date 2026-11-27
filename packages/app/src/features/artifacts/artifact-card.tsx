@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowRight01Icon, BrowserIcon, Download04Icon, File01Icon, File02Icon, GridTableIcon, Image01Icon, Link01Icon, SquareLock02Icon, TextAlignLeftIcon, UserMultipleIcon } from '@hugeicons/core-free-icons'
 import type { IconSvgElement } from '@hugeicons/react'
 import { I } from '@/components/kit'
+import { Button } from '@/components/ui/button'
 import { artifactPath } from '@/app/routes'
 import { request } from '@/lib/api-client'
 import { PHONE } from '@/lib/media'
@@ -54,18 +55,20 @@ export function ArtifactCardLink({ agentId, threadId, card }: { agentId: string;
     fetchSrc().then((src) => { if (tab) tab.location.href = src }, (error: Error) => { tab?.close(); toastError(error) })
   }
   const click = (event: MouseEvent) => {
-    if (card.kind !== 'file' && !(card.kind === 'pdf' && matchMedia(PHONE).matches)) return
+    if (card.kind !== 'pdf' || !matchMedia(PHONE).matches || event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
     event.preventDefault()
-    if (card.kind === 'file') void download()
-    else newTab()
+    newTab()
   }
-  return <a href={href} onClick={click} aria-current={open || undefined} aria-label={card.kind === 'file' ? `Download ${shown.title}` : `Open ${shown.title}`}
-    className="flex w-[320px] max-w-full items-center gap-2.5 rounded-xl border border-hair bg-card py-2 pr-2.5 pl-2 text-ink no-underline transition-colors hover:bg-tint aria-current:bg-tint">
+  const body = <>
     <KindTile kind={shown.kind} title={shown.title} />
     <span className="flex min-w-0 flex-1 flex-col leading-[1.35]">
       <b className="truncate text-[14px] font-medium">{shown.title}</b>
       <span className="flex items-center gap-1 text-[12px] text-mute"><I icon={ACCESS_ICON[shown.access]} size={11} />{metaOf(shown)}</span>
     </span>
     <I icon={card.kind === 'file' ? Download04Icon : ArrowRight01Icon} size={16} className={card.kind === 'file' ? 'shrink-0 text-mute' : 'shrink-0 text-mute-2'} />
-  </a>
+  </>
+  if (card.kind === 'file') return <Button type="button" variant="bare" onClick={() => void download()} aria-label={`Download ${shown.title}`} className={cn(CARD, 'cursor-pointer')}>{body}</Button>
+  return <a href={href} onClick={click} aria-current={open || undefined} aria-label={`Open ${shown.title}`} className={CARD}>{body}</a>
 }
+
+const CARD = 'flex w-[320px] max-w-full items-center gap-2.5 rounded-xl border border-hair bg-card py-2 pr-2.5 pl-2 text-ink no-underline transition-colors hover:bg-tint aria-current:bg-tint'
