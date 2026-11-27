@@ -20,6 +20,8 @@ ORIGIN_FIELDS = ("platform", "chat_id", "chat_type", "chat_name", "thread_id", "
 LOCAL_TOOLSET = "openhut-local"
 WAKE = re.compile(r"\[OpenHut (\w+:\w+)\]")
 POLL_SECONDS = 15
+RETRY_SECONDS = 2
+MCP_SERVER = "openhut"
 ANSWERED = ("pre_", "transform_")
 NOTIFY_SECONDS = 5
 STRANGER = {"action": "skip", "reason": "openhut stranger"}
@@ -134,9 +136,14 @@ async def clicked(ctx, ack, body, action):
 
 
 def poll(ctx):
+    lost = False
     while True:
         try:
-            for wake in gateway("/wakes")["data"]:
+            due = gateway("/wakes")["data"]
+            if lost:
+                revive()
+            lost = False
+            for wake in due:
                 try:
                     if wake["id"] not in injected:
                         if not ctx.inject_message(wake["text"], origin=wake["origin"]):
@@ -147,8 +154,17 @@ def poll(ctx):
                 except Exception as err:
                     warn("wake " + wake["id"], describe(err))
         except Exception as err:
+            lost = True
             warn("wake poll", describe(err))
-        time.sleep(POLL_SECONDS)
+        time.sleep(RETRY_SECONDS if lost else POLL_SECONDS)
+
+
+def revive():
+    try:
+        from tools.mcp_tool_loop import reconnect_mcp_server
+        reconnect_mcp_server(MCP_SERVER)
+    except Exception as err:
+        warn("mcp reconnect", describe(err))
 
 
 def turn(state):

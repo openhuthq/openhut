@@ -119,4 +119,18 @@ assert hooks["transform_llm_output"](response_text="CARD", platform="slack") is 
 assert hooks["pre_gateway_dispatch"](event=event("/start abcdefghijklmnop")) is None
 assert hooks["pre_gateway_dispatch"](event=event("hello", "999000111")) == stranger, "with the gateway down, a stranger still gets nothing"
 assert hooks["pre_gateway_dispatch"](event=event("hello", "555000111")) is None
+gateway_url, naps = os.environ["OPENHUT_GATEWAY"], []
+def nap(seconds):
+    naps.append(seconds)
+    if len(naps) == 1:
+        os.environ["OPENHUT_GATEWAY"] = "http://127.0.0.1:%d" % server.server_port
+        return
+    raise Stop()
+m.time.sleep = nap
+try:
+    m.poll(ctx)
+except Stop:
+    pass
+assert naps == [m.RETRY_SECONDS, m.POLL_SECONDS], naps
+assert sys.modules["tools.mcp_tool_loop"].reconnects == ["openhut"], "once the gateway answers again, the parked openhut MCP server is woken at once"
 print("openhut plugin check ok")
