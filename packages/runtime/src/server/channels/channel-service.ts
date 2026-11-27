@@ -13,7 +13,7 @@ import { slack, SlackSecrets } from '../integrations/slack/slack.ts'
 import { telegram, TelegramSecrets } from '../integrations/telegram/telegram.ts'
 import { discord } from '../integrations/discord/discord.ts'
 import { bots } from '../chat/bots.ts'
-import { agentService, placeOf, type AgentFacts } from '../agents/agent-service.ts'
+import { agentService, mayEdit, placeOf, type AgentFacts } from '../agents/agent-service.ts'
 import { recordsService, type Held } from '../platform/records.ts'
 import { HOME } from '../team/home.ts'
 import type { Caller } from '../team/identity.ts'
@@ -241,7 +241,7 @@ export const channelService = {
 
 async function owned({ actor, agentId }: { actor: Caller; agentId: string }): Promise<AgentFacts> {
   const facts = await agentService.find({ id: agentId })
-  if (facts.owner !== actor.email) throw new HttpError(403, `Only ${facts.owner} can change where ${facts.value.name} talks.`)
+  if (!mayEdit({ facts, actor })) throw new HttpError(403, `Only ${facts.owner} or an admin can change where ${facts.value.name} talks.`)
   return facts
 }
 

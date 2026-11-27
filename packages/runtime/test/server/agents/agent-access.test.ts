@@ -55,7 +55,7 @@ test('only the owner changes who has access, and only to people on the team', as
   await assert.rejects(agentService.update({ actor: owner, id: ID, patch: { people: ['stranger@example.com'] } }), { status: 400 })
 })
 
-test('a picked member can chat, but only the owner changes its tools, keys and token, or answers its requests', async () => {
+test('a picked member can chat, but only the owner or an admin changes its tools, keys and token, or answers its requests', async () => {
   await agentService.update({ actor: owner, id: ID, patch: { shared: false, people: [picked.email] } })
   assert.equal(await canChat(picked), true)
   const app = Fastify()
@@ -78,7 +78,18 @@ test('a picked member can chat, but only the owner changes its tools, keys and t
   await assert.rejects(secretService.replace({ actor: picked, id: key.id, value: 'sk_test_y' }), { status: 403 })
   await assert.rejects(secretService.delete({ actor: picked, id: key.id }), { status: 403 })
   await assert.rejects(agentService.revokeToken({ actor: picked, id: ID }), { status: 403 })
-  await assert.rejects(agentService.revokeToken({ actor: admin, id: ID }), { status: 403 })
   assert.equal((await secretService.delete({ actor: owner, id: key.id })).deleted, true)
   assert.equal((await agentService.revokeToken({ actor: owner, id: ID })).id, ID)
+})
+
+test('an admin edits any agent, someone else\'s too; a member only their own', async () => {
+  await agentService.update({ actor: admin, id: ID, patch: { instructions: '# Pepper\n\nAnswers billing questions.' } })
+  await agentService.update({ actor: admin, id: ID, patch: { codeExecution: false, shared: true } })
+  const edited = await agentService.get({ actor: admin, id: ID })
+  assert.deepEqual([edited.summary, edited.codeExecution, edited.canEdit, edited.canManage], ['Answers billing questions.', false, true, true])
+  assert.equal((await agentService.revokeToken({ actor: admin, id: ID })).id, ID)
+  await assert.rejects(agentService.update({ actor: other, id: ID, patch: { instructions: '# Pepper' } }), { status: 403 })
+  await assert.rejects(agentService.update({ actor: other, id: ID, patch: { codeExecution: true } }), { status: 403 })
+  const seen = await agentService.get({ actor: other, id: ID })
+  assert.deepEqual([seen.canEdit, seen.canManage], [false, false])
 })
