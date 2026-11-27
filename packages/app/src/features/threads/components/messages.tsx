@@ -9,6 +9,7 @@ import { ArrowUpRight01Icon, Copy01Icon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { ChatCall, fileInHome, ToolProgress, Work, type ChatMessage, type TurnStatus } from '@openhut/common/threads/thread.ts'
 import { DropdownMenuItem, LongPressMenu } from '@/components/ui/dropdown-menu'
+import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Dots, I } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
@@ -164,7 +165,7 @@ function HomeImage({ path }: { path: string }) {
   const mediaType = MEDIA_TYPES[path.slice(path.lastIndexOf('.') + 1).toLowerCase()] ?? ''
   const thumb = useThumb({ agentId, threadId, path, mediaType })
   if (!thumb) return <FileChip name={nameOf(path)} image onOpen={() => save(path)} />
-  return <button type="button" className="block max-w-[520px] cursor-zoom-in overflow-hidden rounded-lg border border-hair p-0" onClick={() => save(path)} aria-label={`Save ${nameOf(path)}`}><img src={thumb} alt={nameOf(path)} className="block h-auto w-full" /></button>
+  return <Button type="button" variant="bare" className="block h-auto max-w-[520px] cursor-zoom-in overflow-hidden rounded-lg border border-hair p-0" onClick={() => save(path)} aria-label={`Save ${nameOf(path)}`}><img src={thumb} alt={nameOf(path)} className="block h-auto w-full" /></Button>
 }
 
 function homeFile(text: string) {
