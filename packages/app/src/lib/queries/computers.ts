@@ -3,11 +3,9 @@ import { Admin, Update } from '@openhut/common/admin/admin.ts'
 import { ComputerJoin, RemovedComputer } from '@openhut/common/computers/computer.ts'
 import { request } from '@/lib/api-client'
 import { HERE, openhut, type Computer, type Features } from '@/lib/openhut'
-import { COMPUTERS_KEY } from '@/lib/query-keys'
+import { computerAdminsKey, COMPUTERS_KEY } from '@/lib/query-keys'
 
 type ComputerAdmin = { computer: Computer; admin: Admin | undefined }
-
-const ADMINS_KEY = [...COMPUTERS_KEY, 'admins']
 
 export function useComputers({ watching = false }: { watching?: boolean } = {}) {
   return useQuery({ queryKey: COMPUTERS_KEY, queryFn: () => openhut.computers.list(), refetchInterval: watching ? 2000 : undefined })
@@ -24,7 +22,7 @@ export function nameOf({ computers, id }: { computers: Computer[] | undefined; i
 export function useComputerAdmins() {
   const here = useComputers().data?.find((computer) => computer.here)
   return useQuery({
-    queryKey: [...ADMINS_KEY, here?.id],
+    queryKey: computerAdminsKey(here?.id),
     queryFn: async (): Promise<ComputerAdmin[]> => here ? [{ computer: here, admin: await adminOf() }] : [],
     enabled: !!here,
   })

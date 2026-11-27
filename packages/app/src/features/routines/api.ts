@@ -3,7 +3,7 @@ import { Deleted, List } from '@openhut/common/api.ts'
 import { Routine, type UpdateRoutine } from '@openhut/common/routines/routine.ts'
 import { DeliveryTarget } from '@openhut/common/webhooks/webhook.ts'
 import { request } from '@/lib/api-client'
-import { routinesKey } from '@/lib/query-keys'
+import { deliveryTargetsKey, routinesKey } from '@/lib/query-keys'
 
 const DELETED_ROUTINE = Deleted('routine')
 
@@ -27,7 +27,7 @@ const TARGET_LIST = List(DeliveryTarget)
 
 export function useDeliveryTargets(agentId: string) {
   return useQuery({
-    queryKey: ['delivery-targets', agentId],
+    queryKey: deliveryTargetsKey(agentId),
     queryFn: () => request({ schema: TARGET_LIST, of: agentId, path: `/api/delivery-targets?${new URLSearchParams({ agentId })}` }).then((page) => page.data),
   })
 }

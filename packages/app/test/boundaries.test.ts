@@ -4,7 +4,6 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, normalize } from 'node:path'
 
 const SRC = new URL('../src/', import.meta.url)
-const ALLOWED = new Set<string>([])
 
 function zoneOf(file: string) {
   const [top, feature] = file.split('/')
@@ -36,10 +35,5 @@ function crossings() {
 }
 
 test('shared code imports no feature or app, and a feature imports no app or other feature', () => {
-  assert.deepEqual(crossings().filter((crossing) => !ALLOWED.has(crossing)), [])
-})
-
-test('the allowlist holds only crossings that still exist', () => {
-  const found = new Set(crossings())
-  assert.deepEqual([...ALLOWED].filter((crossing) => !found.has(crossing)), [])
+  assert.deepEqual(crossings(), [])
 })

@@ -5,7 +5,7 @@ import { Provider, type ProviderId } from '@openhut/common/models/provider.ts'
 import { foundNotice } from '@/lib/models'
 import { request } from '@/lib/api-client'
 import { toastError } from '@/lib/toast'
-import { AGENTS_KEY, PROVIDERS_KEY } from '@/lib/query-keys'
+import { ADMIN_KEY, AGENTS_KEY, codexSignInKey, PROVIDERS_KEY, SEAT_USAGE_KEY } from '@/lib/query-keys'
 
 const pathOf = (id: ProviderId) => `/api/providers/${id}`
 
@@ -57,7 +57,7 @@ export function useCodexSignIn(onSignedIn: () => void) {
   const start = useMutation({ mutationFn: () => request({ schema: CodexSignIn, path: '/api/admin/codex-sign-ins', method: 'POST' }) })
   const id = start.data?.id
   const poll = useQuery({
-    queryKey: ['codex-sign-in', id],
+    queryKey: codexSignInKey(id),
     enabled: !!id,
     queryFn: () => request({ schema: CodexSignIn, path: `/api/admin/codex-sign-ins/${encodeURIComponent(id ?? '')}` }),
     refetchInterval: (query) => query.state.data?.status === 'complete' ? false : 2500,
@@ -79,14 +79,12 @@ export function useCodexSignIn(onSignedIn: () => void) {
   return { signIn: start.data, error: start.error ?? poll.error, restart: () => start.mutate() }
 }
 
-const ADMIN_KEY = ['admin']
-
 export function useAdmin() {
   return useQuery({ queryKey: ADMIN_KEY, queryFn: () => request({ schema: Admin, computer: 'local', path: '/api/admin' }) })
 }
 
 export function useSeatUsage(enabled: boolean) {
-  return useQuery({ queryKey: ['seat-usage'], queryFn: () => request({ schema: SeatUsage, computer: 'local', path: '/api/admin/seat-usage' }), retry: false, enabled })
+  return useQuery({ queryKey: SEAT_USAGE_KEY, queryFn: () => request({ schema: SeatUsage, computer: 'local', path: '/api/admin/seat-usage' }), retry: false, enabled })
 }
 
 export function useStartSeatSignIn() {

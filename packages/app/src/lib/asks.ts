@@ -4,6 +4,7 @@ import type { Ask } from '@openhut/common/asks/ask.ts'
 
 export type AskRow = ComponentType<{ agent: Agent; ask: Ask; compact: boolean }>
 export type AskExtra = ComponentType<{ agent: Agent; ask: Ask }>
+export type AskKinds = { rows: Record<string, AskRow | undefined>; extras: Record<string, AskExtra | undefined>; cards: Record<string, AskExtra | undefined> }
 
 export type DiffLine = { kind: 'gone' | 'added' | 'same'; text: string }
 

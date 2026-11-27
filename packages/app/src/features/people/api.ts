@@ -3,7 +3,7 @@ import * as z from 'zod/mini'
 import { List } from '@openhut/common/api.ts'
 import { Invite, Person, type MemberRole } from '@openhut/common/team/team.ts'
 import { request } from '@/lib/api-client'
-import { PEOPLE_KEY } from '@/lib/query-keys'
+import { INVITES_KEY, PEOPLE_KEY } from '@/lib/query-keys'
 
 const Deleted = z.object({ id: z.string(), deleted: z.boolean() })
 
@@ -23,7 +23,6 @@ export function useRemovePerson() {
   })
 }
 
-const INVITES_KEY = ['invites']
 const Invites = List(Invite)
 
 export function useInvites({ enabled }: { enabled: boolean }) {
