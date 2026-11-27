@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowRight01Icon, Cancel01Icon, Key01Icon } from '@hugeicons/core-free-icons'
+import { Cancel01Icon, Key01Icon } from '@hugeicons/core-free-icons'
 import { Deleted, List } from '@openhut/common/api.ts'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { AgentSecret } from '@openhut/common/agents/secret.ts'
@@ -9,8 +9,7 @@ import { DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { ConfirmButton } from '@/components/confirm-button'
 import { ErrorNote } from '@/components/error-note'
-import { DialogCard, I, Loading, ROW, ROW_VALUE } from '@/components/kit'
-import { agentPath } from '@/app/routes'
+import { DialogCard, I, Loading } from '@/components/kit'
 import { Quiet } from '@/features/agents/request-card'
 import { request } from '@/lib/api-client'
 import { formValues } from '@/lib/form'
@@ -39,11 +38,6 @@ function useDeleteSecret(agentId: string) {
     mutationFn: (id: string) => request({ schema: DELETED_SECRET, of: agentId, path: `/api/agent-secrets/${encodeURIComponent(id)}`, method: 'DELETE' }),
     onSuccess: ({ id }) => client.setQueryData<AgentSecret[]>(secretsKey(agentId), (all) => all?.filter((each) => each.id !== id)),
   })
-}
-
-export function KeysRow({ agent }: { agent: Agent }) {
-  const count = useSecrets(agent.id).data?.length
-  return <a className={ROW} href={agentPath({ agentId: agent.id, dialog: 'keys' })}><I icon={Key01Icon} size={15} className="text-hue-amber" />Keys<span className={ROW_VALUE}>{count || ''}<I icon={ArrowRight01Icon} size={12} className="text-mute" /></span></a>
 }
 
 export function KeysDialog({ agent, onClose }: { agent: Agent; onClose: () => void }) {

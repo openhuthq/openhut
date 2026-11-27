@@ -1,12 +1,11 @@
-import { Activity01Icon, AlertCircleIcon, ArrowRight01Icon, Cancel01Icon, CancelCircleIcon, CheckmarkCircle02Icon, HourglassIcon, SecurityCheckIcon } from '@hugeicons/core-free-icons'
+import { AlertCircleIcon, Cancel01Icon, CancelCircleIcon, CheckmarkCircle02Icon, HourglassIcon, SecurityCheckIcon } from '@hugeicons/core-free-icons'
 import type { ConnectionEvent } from '@openhut/common/connections/connection.ts'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { DialogTitle } from '@/components/ui/dialog'
 import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
-import { DialogCard, I, Loading, ROW, ROW_VALUE } from '@/components/kit'
-import { agentPath } from '@/app/routes'
+import { DialogCard, I, Loading } from '@/components/kit'
 import { Quiet } from '@/features/agents/request-card'
 import { connectionBrand } from '@/features/connections/catalog'
 import { useAgentEvents, useConnections } from '@/features/connections/api'
@@ -29,10 +28,6 @@ function outcomeOf(event: ConnectionEvent) {
   if (!event.approvedBy) return OUTCOMES[event.outcome]
   if (event.outcome === 'denied') return { ...OUTCOMES.denied, word: `${event.approvedBy} said no` }
   return { icon: SecurityCheckIcon, hue: 'text-hue-amber', word: `${event.approvedBy} said yes${event.outcome === 'failed' ? ', then it failed' : ''}` }
-}
-
-export function ActivityRow({ agent }: { agent: Agent }) {
-  return <a className={ROW} href={agentPath({ agentId: agent.id, dialog: 'activity' })}><I icon={Activity01Icon} size={15} className="text-hue-green" />Activity<span className={ROW_VALUE}><I icon={ArrowRight01Icon} size={12} className="text-mute" /></span></a>
 }
 
 export function ActivityDialog({ agent, onClose }: { agent: Agent; onClose: () => void }) {

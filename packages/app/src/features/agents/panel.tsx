@@ -13,6 +13,7 @@ import { listedChannels } from '@/features/agents/channel-kinds'
 import { useConnections } from '@/features/connections/api'
 import { connectionBrand } from '@/features/connections/catalog'
 import { Face } from '@/features/agents/face'
+import { RetryApply } from '@/features/agents/status'
 import { PanelThreads } from '@/features/threads/thread-list'
 import { useGitHubFace } from '@/features/agents/github-face'
 import { formValues } from '@/lib/form'
@@ -27,7 +28,7 @@ export function Panel({ agent, threadId, naming, collapsed = false, onBrowser }:
     <div className={cn('flex w-[340px] shrink-0 flex-col gap-7 p-6 transition-[opacity,translate] duration-[160ms] ease-out phone:w-full', collapsed && 'translate-x-2 opacity-0')}>
       <div className="grid shrink-0 grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3">
         {agent.canEdit ? <a href={agentPath({ agentId: agent.id, dialog: 'customize' })} aria-label={`Customize ${agent.name}`} title="Customize" className="flex"><Face agent={agent} size={40} /></a> : <Face agent={agent} size={40} />}
-        <div className="grid min-w-0"><AgentName agent={agent} editing={naming && agent.canEdit} /></div>
+        <div className="grid min-w-0 gap-0.5"><AgentName agent={agent} editing={naming && agent.canEdit} />{agent.applyError && <RetryApply agent={agent} />}</div>
         <HeadActions agent={agent} onBrowser={onBrowser} />
         <Connected agent={agent} />
       </div>

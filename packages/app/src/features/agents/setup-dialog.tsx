@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch'
 import { ConfirmDialog, useConfirming } from '@/components/confirm-button'
 import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
-import { I, PILL, ROW } from '@/components/kit'
+import { I, PILL, ROW, Status } from '@/components/kit'
 import { agentPath } from '@/app/routes'
 import { AccessPicker } from '@/features/agents/access'
 import { useChannels, useCreateGrant, useDeleteAgent, useDeleteChannel, useDeleteGrant, useGrants, useMemory, useSkills, useUpdateAgent } from '@/features/agents/api'
@@ -182,6 +182,7 @@ function ChannelsPane({ agent }: { agent: Agent }) {
         const channel = channels.data?.find((each) => each.kind === kind)
         return <div key={kind} className={LINE}>
           <Glyph name={kind} size={18} /><span className="min-w-0 flex-1 truncate">{KINDS[kind]}</span>
+          {channel?.offline && <span title={channel.offline}><Status tone="bad">Offline</Status></span>}
           {channel?.status === 'connected'
             ? <Switch checked aria-label={`Disconnect ${KINDS[kind]}`} disabled={!agent.canEdit} onCheckedChange={() => setLeaving(kind)} />
             : <Button type="button" variant="ghost" className={PILL} disabled={!agent.canEdit} onClick={() => open(kind)}>{channel ? 'Finish' : 'Connect'}</Button>}

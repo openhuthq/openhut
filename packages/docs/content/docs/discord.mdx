@@ -9,7 +9,7 @@ icon: logo:discord
 
 ### Make the bot
 
-On the agent, under **Channels**, **Add**, then Discord, then **Open Discord**. **New Application**, give it the agent's name. On **Bot**, turn **Public Bot** off and **Message Content Intent** on, then **Reset Token** and copy it. Paste it in the sheet and press **Next**. OpenHut checks both switches before it goes on.
+In the agent's **Setup › Channels**, **Connect** Discord, then **Open Discord**. **New Application**, give it the agent's name. On **Bot**, turn **Public Bot** off and **Message Content Intent** on, then **Reset Token** and copy it. Paste it in the sheet and press **Next**. OpenHut checks both switches before it goes on.
 
 </Step>
 <Step>
@@ -28,6 +28,6 @@ Pick its channels from the list and press **Connect**. A private channel shows a
 </Step>
 </Steps>
 
-Open Discord again under **Channels** to change its channels or add it to another server.
+Open Discord again in **Setup › Channels** to change its channels or add it to another server.
 
-OpenHut holds the bot's connection to Discord, not the agent, so the bot token never reaches the agent. While OpenHut restarts the bot is offline for a few seconds, and when it's back it reads what it missed in threads from the last day. If the bot can't connect, for example because Discord no longer accepts its token, its row under **Channels** says **Offline** instead of **Connected**; hover it to see why.
+OpenHut holds the bot's connection to Discord, not the agent, so the bot token never reaches the agent. While OpenHut restarts the bot is offline for a few seconds, and when it's back it reads what it missed in threads from the last day. If the bot can't connect, for example because Discord no longer accepts its token, its row in **Setup › Channels** says **Offline**; hover it to see why.

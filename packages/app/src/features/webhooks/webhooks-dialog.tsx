@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { ArrowRight01Icon, Cancel01Icon, Delete02Icon, RefreshIcon, Tick02Icon, UnfoldMoreIcon, WebhookIcon } from '@hugeicons/core-free-icons'
+import { Cancel01Icon, Delete02Icon, RefreshIcon, Tick02Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { DialogTitle } from '@/components/ui/dialog'
@@ -9,8 +9,7 @@ import { Tooltip } from '@/components/ui/tooltip'
 import { CopyButton } from '@/components/copy-button'
 import { useConfirming } from '@/components/confirm-button'
 import { ErrorNote } from '@/components/error-note'
-import { DialogCard, I, Loading, ROW, ROW_VALUE, TINY_ICON } from '@/components/kit'
-import { agentPath } from '@/app/routes'
+import { DialogCard, I, Loading, TINY_ICON } from '@/components/kit'
 import { Details, Quiet } from '@/features/agents/request-card'
 import { PlacePicker } from '@/features/agents/notify'
 import { SOFT_TRIGGER } from '@/features/models/model-picker'
@@ -21,15 +20,6 @@ import { ago } from '@/lib/format'
 import { formValues } from '@/lib/form'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
-
-export function WebhooksRow({ agent }: { agent: Agent }) {
-  const webhooks = useWebhooks(agent.id, agent.canEdit).data
-  if (!agent.canEdit) return null
-  return <a className={ROW} href={agentPath({ agentId: agent.id, dialog: 'webhooks' })}><I icon={WebhookIcon} size={15} className="text-hue-violet" />Webhooks<span className={ROW_VALUE}>
-    {webhooks && (webhooks.length || 'None yet')}
-    <I icon={ArrowRight01Icon} size={12} className="text-mute" />
-  </span></a>
-}
 
 export function WebhooksDialog({ agent, onClose }: { agent: Agent; onClose: () => void }) {
   const webhooks = useWebhooks(agent.id)

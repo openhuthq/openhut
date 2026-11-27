@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowRight01Icon, Notification01Icon, SparklesIcon, Tick02Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
+import { SparklesIcon, Tick02Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import { List } from '@openhut/common/api.ts'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
@@ -8,8 +8,7 @@ import { DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Textarea } from '@/components/ui/textarea'
 import { ErrorNote } from '@/components/error-note'
-import { DialogCard, I, Loading, ROW, ROW_VALUE } from '@/components/kit'
-import { agentPath } from '@/app/routes'
+import { DialogCard, I, Loading } from '@/components/kit'
 import { Face } from '@/features/agents/face'
 import { FIELD_MENU, SOFT_TRIGGER } from '@/features/models/model-picker'
 import { PlaceIcon } from '@/features/routines/target-picker'
@@ -68,16 +67,6 @@ function PlaceOption({ name, platform, picked, onClick }: { name: string; platfo
     <span className="min-w-0 flex-1 truncate text-ink">{name}</span>
     <span className="grid w-3.5 shrink-0 place-items-center">{picked && <I icon={Tick02Icon} size={14} className="text-ink" />}</span>
   </DropdownMenuItem>
-}
-
-export function NotifyRow({ agent }: { agent: Agent }) {
-  const notify = useNotify(agent.id, agent.canEdit)
-  if (!agent.canEdit || notify.isError) return null
-  const place = notify.data?.default
-  return <a className={ROW} href={agentPath({ agentId: agent.id, dialog: 'notify' })}><I icon={Notification01Icon} size={15} className="text-hue-amber" />Notify me<span className={ROW_VALUE}>
-    {notify.data && <span className="truncate">{place ? placeName(place) : 'Here'}</span>}
-    <I icon={ArrowRight01Icon} size={12} className="text-mute" />
-  </span></a>
 }
 
 export function NotifyDialog({ agent, onClose }: { agent: Agent; onClose: () => void }) {
