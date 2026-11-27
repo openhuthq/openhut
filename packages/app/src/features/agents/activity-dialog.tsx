@@ -4,7 +4,7 @@ import type { Agent } from '@openhut/common/agents/agent.ts'
 import { ErrorNote } from '@/components/error-note'
 import { Glyph } from '@/components/glyph'
 import { I, Loading } from '@/components/kit'
-import { Quiet } from '@/features/agents/request-card'
+import { EmptyScene } from '@/components/empty-art'
 import { connectionBrand } from '@/features/connections/catalog'
 import { useAgentEvents, useConnections } from '@/features/connections/api'
 import { ago } from '@/lib/format'
@@ -46,6 +46,6 @@ export function ActivityList({ agent }: { agent: Agent }) {
             <span className="w-14 shrink-0 text-right text-[12px] text-mute">{ago(event.at)} ago</span>
           </div>
         })}</div>
-        : <Quiet agent={agent} line={`All quiet. ${agent.name} hasn't used any apps yet.`} />)}
+        : <EmptyScene kind="activity" title="All quiet" line={`${agent.name} hasn\u2019t used your apps yet. Everything it does shows up here.`} />)}
   </>
 }

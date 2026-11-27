@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { ConfirmButton } from '@/components/confirm-button'
 import { ErrorNote } from '@/components/error-note'
 import { I, Loading } from '@/components/kit'
-import { Quiet } from '@/features/agents/request-card'
+import { EmptyScene } from '@/components/empty-art'
 import { request } from '@/lib/api-client'
 import { formValues } from '@/lib/form'
 import { ago } from '@/lib/format'
@@ -46,7 +46,7 @@ export function KeysList({ agent }: { agent: Agent }) {
       {!secrets.data && !secrets.error && <Loading />}
       {secrets.data && (secrets.data.length
         ? secrets.data.map((secret) => <KeyRow key={secret.id} agent={agent} secret={secret} />)
-        : <Quiet agent={agent} line={`Nothing in the vault yet. When ${agent.name} needs a key, it asks in the chat.`} />)}
+        : <EmptyScene kind="vault" title="The vault is empty" line={`When ${agent.name} needs a key, it asks in the chat and keeps it here.`} />)}
   </>
 }
 
