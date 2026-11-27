@@ -2,7 +2,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 REPO="${1:?image.sh <repository, like ghcr.io/openhuthq> <tags> [docker buildx build flags]; BUILD names the build, OUT (dist) gets install.sh; RUNTIME_IMAGE or MAIN_IMAGE uses that image instead of building it; ONLY=runtime or ONLY=main stops after that image and prints it}"
-TAGS="${2:?image.sh <repository> <tags>}"
+TAGS="${2?image.sh <repository> <tags, or empty to push by digest only>}"
 shift 2
 OUT="${OUT:-dist}"
 if [ -z "${BUILD:-}" ]; then

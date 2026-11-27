@@ -160,7 +160,7 @@ jobs:
         run: |
           [ -z "$BUILD_INPUT" ] || export BUILD="${BUILD_INPUT#v}"
           mkdir -p digests
-          ONLY=runtime scripts/image.sh "$REPO" ci --platform "linux/$ARCH" --output type=image,push-by-digest=true,push=true \
+          ONLY=runtime scripts/image.sh "$REPO" "" --platform "linux/$ARCH" --output "type=image,name=$REPO/openhut-runtime,push-by-digest=true,push=true" \
             --cache-from "type=gha,scope=runtime-publish-$ARCH" --cache-to "type=gha,scope=runtime-publish-$ARCH,mode=min" > "digests/runtime-$ARCH"
           cat "digests/runtime-$ARCH"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -215,7 +215,7 @@ jobs:
           first="${TAGS%% *}"
           runtime="$REPO/openhut-runtime@$(docker buildx imagetools inspect "$REPO/openhut-runtime:${first#v}" --format '{{json .Manifest}}' | jq -r .digest)"
           echo "$runtime" > digests/runtime
-          RUNTIME_IMAGE="$runtime" ONLY=main scripts/image.sh "$REPO" ci --platform "linux/$ARCH" --output type=image,push-by-digest=true,push=true \
+          RUNTIME_IMAGE="$runtime" ONLY=main scripts/image.sh "$REPO" "" --platform "linux/$ARCH" --output "type=image,name=$REPO/openhut,push-by-digest=true,push=true" \
             --cache-from "type=gha,scope=main-publish-$ARCH" --cache-to "type=gha,scope=main-publish-$ARCH,mode=min" > "digests/main-$ARCH"
           cat digests/runtime "digests/main-$ARCH"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
