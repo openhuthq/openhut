@@ -5,6 +5,7 @@
     "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
     "typecheck": { "dependsOn": ["^typecheck"] },
     "test": { "dependsOn": ["^build"] },
+    "@openhut/site#test": { "dependsOn": [] },
     "dev": { "cache": false, "persistent": true }
   }
 }

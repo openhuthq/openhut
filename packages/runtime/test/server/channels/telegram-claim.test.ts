@@ -67,7 +67,7 @@ test('a bot token alone makes a linking channel with a one-time Start link, and 
   assert.equal((await channelService.get({ actor: stranger, id: made.id })).qr, null)
 
   queue.push(message(1, '/start not-the-right-code-at-all', 555551111, 'Eve'), message(2, `/start ${code}`, 123456789, 'Sam'))
-  const owned = await until(() => channelService.get({ actor, id: made.id }), (channel) => channel.status === 'connected')
+  const owned = await until(() => channelService.get({ actor, id: made.id }), (channel) => channel.status === 'connected' && sent.length === 2)
   assert.equal(owned.ownerAddress, '123456789')
   assert.deepEqual(owned.names, { 123456789: 'Sam' })
   assert.deepEqual(sent.map((each) => [each.chat_id, each.text]), [[555551111, 'That link expired or was already used. Open the newest one in OpenHut.'], [123456789, 'Hi Sam, you\'re in. Ask me anything.']])
