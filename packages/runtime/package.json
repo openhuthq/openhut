@@ -9,12 +9,15 @@
     "test": "node --no-node-snapshot --test --test-force-exit --test-concurrency=1 --import ./test/server/env.ts \"test/server/**/*.test.ts\" \"test/core/**/*.test.ts\" \"test/plugins/**/*.test.ts\" && node --no-node-snapshot --test --test-force-exit --import ./test/tmp.ts \"test/agentd/**/*.test.ts\""
   },
   "dependencies": {
+    "@chat-adapter/discord": "4.45.0",
+    "@chat-adapter/state-pg": "4.45.0",
     "@electric-sql/pglite": "0.5.8",
     "@fastify/websocket": "11.3.7",
     "@json-render/core": "0.23.2",
     "@modelcontextprotocol/sdk": "1.32.2",
     "@openhut/common": "*",
     "ai": "7.0.172",
+    "chat": "4.45.0",
     "convex": "1.51.0",
     "croner": "11.0.0",
     "env-var": "7.5.0",

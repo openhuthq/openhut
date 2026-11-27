@@ -27,9 +27,8 @@ import { agentState } from '@/components/status-badge'
 import { troubleOf } from '@/features/agents/status'
 import { useAgents, useUpdateAgent } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
-import { deleteUpload, saveFile, threadPath, uploadFile, useClearChat, useHomeFiles, useResumeMirror, useThread, useThumb, useTouchThread, type ThreadWithMessages } from '@/features/threads/api'
-import { Notified, PLATFORM_WORD, placeName, sourceOf, startedIn, type SourcedThread } from '@/features/threads/places'
-import type { Place } from '@openhut/common/channels/channel.ts'
+import { deleteUpload, saveFile, threadPath, uploadFile, useClearChat, useHomeFiles, useThread, useThumb, useTouchThread, type ThreadWithMessages } from '@/features/threads/api'
+import { Notified, PLATFORM_WORD, placeName, startedIn, type SourcedThread } from '@/features/threads/places'
 import { PlaceIcon } from '@/features/routines/target-picker'
 import { doneText, WebhookSetup, WebhookSetupCard } from '@/features/webhooks/setup-card'
 import { saidAfter } from '@/lib/said-after'
@@ -101,7 +100,7 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
   return <ChatFiles value={files}><CardReply value={thread.readOnly ? undefined : (text) => { if (busy) return false; send(text); return true }}><ChatFrame agent={agent} thread={thread} tools={<>{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={thread.readOnly ? <ContinueBar thread={thread} /> : <Composer agent={agent} threadId={thread.id} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void chat.stop()} />}>
     {shown.length ? <>
       <Day iso={thread.updatedAt} />
-      {shown.map((message, index) => <Message key={message.id} agent={agent} thread={thread} message={message} said={(text) => said(index, text)} seen={message === mine} mirrors={thread.mirrorPaused || thread.readOnly ? [] : thread.mirrors ?? []} live={busy && message === last} onRetry={!busy && !thread.readOnly && message === last ? () => void chat.regenerate() : undefined} />)}
+      {shown.map((message, index) => <Message key={message.id} agent={agent} thread={thread} message={message} said={(text) => said(index, text)} seen={message === mine} live={busy && message === last} onRetry={!busy && !thread.readOnly && message === last ? () => void chat.regenerate() : undefined} />)}
     </> : !watching && <ChatEmpty agent={agent} />}
     {!busy && live.ending.filter((stream) => !shown.some((message) => message.id === stream.turnId)).map((stream) => <AgentReply key={stream.turnId} agent={agent} message={{ id: stream.turnId, role: 'assistant', parts: [{ type: 'text', text: stream.text }] }} live={false} />)}
     {watching && <AgentReply agent={agent} threadId={thread.id} step={live.agent.step} message={{ id: live.streaming?.turnId ?? 'live', role: 'assistant', parts: live.streaming?.text ? [{ type: 'text', text: live.streaming.text }] : [] }} live />}
@@ -239,30 +238,20 @@ function ChatFrame({ agent, thread, composer, tools, onTitle, onFiles, children 
 }
 
 function ThreadSource({ thread }: { thread: SourcedThread }) {
-  const origin = thread.origin
-  const resume = useResumeMirror(thread)
-  const paused = !!thread.mirrorPaused && !!thread.mirrors?.length
-  const mirrors = thread.readOnly ? [] : (thread.mirrors ?? []).filter((mirror) => paused || !(origin?.platform === mirror.platform && placeName(mirror) === sourceOf(thread).label))
-  if (!origin?.url && !mirrors.length) return null
-  const started = origin?.url && <a href={origin.url} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-1 text-mute no-underline hover:text-ink">
+  const url = thread.origin?.url
+  if (!url) return null
+  return <a href={url} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-1 text-[12.5px] text-mute no-underline hover:text-ink phone:hidden">
     <span className="truncate">Started in {startedIn(thread)}</span><I icon={ArrowUpRight01Icon} size={12} />
   </a>
-  return <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-mute phone:hidden">
-    {started}
-    {started && mirrors.length > 0 && <span aria-hidden="true">·</span>}
-    {mirrors.length > 0 && !paused && <span className="truncate">Also posting to {mirrors.map(placeName).join(', ')}</span>}
-    {paused && <span className="truncate">Paused posting to {mirrors.map(placeName).join(', ')}</span>}
-    {paused && <><span aria-hidden="true">·</span><Button type="button" variant="link" className="h-auto p-0 text-[12.5px] font-normal text-ink" disabled={resume.isPending} onClick={() => resume.mutate(undefined, { onError: toastError })}>Resume</Button></>}
-  </span>
 }
 
 function ContinueBar({ thread }: { thread: SourcedThread }) {
-  const place = thread.mirrors?.[0]
+  const place = thread.place
   const where = place ? PLATFORM_WORD[place.platform] ?? place.platform : 'the other app'
   return <div className="shrink-0 px-8 pb-5 phone:px-3 phone:pb-3">
     <div className="mx-auto flex max-w-[640px] items-center gap-2.5 rounded-xl bg-sidebar py-2.5 pr-2.5 pl-3.5 text-[13.5px] text-body phone:flex-wrap">
       {place && <PlaceIcon platform={place.platform} size={16} />}
-      <span className="min-w-0 flex-1">This conversation continues in {place ? placeName(place) : where}</span>
+      <span className="min-w-0 flex-1">This conversation continues in {place?.chat_name ? placeName(place) : where}</span>
       {thread.continueUrl && <a href={thread.continueUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'secondary', size: 'sm' })}>Open in {where}<span className="text-[11px] text-mute">↗</span></a>}
     </div>
   </div>
@@ -361,10 +350,10 @@ function useOffline(agent: Agent) {
   return home && !home.online
 }
 
-function Message({ agent, thread, message, said, seen, mirrors = [], live, onRetry }: { agent: Agent; thread: SourcedThread; message: AgentMessage; said: (text: string) => boolean; seen: boolean; mirrors?: Place[]; live: boolean; onRetry?: () => void }) {
+function Message({ agent, thread, message, said, seen, live, onRetry }: { agent: Agent; thread: SourcedThread; message: AgentMessage; said: (text: string) => boolean; seen: boolean; live: boolean; onRetry?: () => void }) {
   const webhook = webhookOf(message.metadata)
   if (webhook && !callOf(message.metadata) && message.role === 'user') return <WebhookMessage webhook={webhook} at={thread.createdAt} />
-  return message.role === 'user' ? <UserMessage message={message} mirrors={mirrors} seen={seen ? thread.id : undefined} /> : <AgentReply agent={agent} threadId={thread.id} message={message} said={said} live={live} onRetry={onRetry} />
+  return message.role === 'user' ? <UserMessage message={message} seen={seen ? thread.id : undefined} /> : <AgentReply agent={agent} threadId={thread.id} message={message} said={said} live={live} onRetry={onRetry} />
 }
 
 function AgentReply({ agent, threadId: liveThread, step, message, said, live, onRetry }: { agent: Agent; threadId?: string; step?: string; message: AgentMessage; said?: (text: string) => boolean; live: boolean; onRetry?: () => void }) {
@@ -398,7 +387,7 @@ function AgentReply({ agent, threadId: liveThread, step, message, said, live, on
 
 const Authored = z.object({ author: z.string() })
 
-function UserMessage({ message, mirrors, seen }: { message: AgentMessage; mirrors: Place[]; seen?: string }) {
+function UserMessage({ message, seen }: { message: AgentMessage; seen?: string }) {
   const text = textOf(message)
   const files = message.parts.flatMap((part) => part.type === 'file' ? [part] : [])
   const author = z.safeParse(Authored, message.metadata).data?.author
@@ -416,7 +405,6 @@ function UserMessage({ message, mirrors, seen }: { message: AgentMessage; mirror
   return <div className="flex flex-col items-end gap-1.5">
     {files.length > 0 && <div className="flex max-w-[78%] flex-wrap justify-end gap-1.5">{files.map((file) => <SentFile key={file.url} name={file.filename ?? nameOf(file.url)} path={file.url} mediaType={file.mediaType} />)}</div>}
     {text && <CopyMenu text={text}><div className="max-w-[78%] rounded-[12px_12px_4px_12px] bg-soft px-3.5 py-2 text-[14px]/[1.5] [overflow-wrap:anywhere] whitespace-pre-wrap text-ink pointer-coarse:select-none">{body}</div></CopyMenu>}
-    {mirrors.length > 0 && <span className="inline-flex items-center gap-1.5 text-[12px] text-mute"><PlaceIcon platform={mirrors[0]?.platform ?? 'app'} size={12} />Sent to {mirrors.map(placeName).join(', ')}</span>}
     {seen && <SeenBy threadId={seen} />}
   </div>
 }

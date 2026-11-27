@@ -6,6 +6,7 @@ import { defineTool } from '../../core/plugin.ts'
 import { apply } from '../../server/agents/apply.ts'
 import { agentService } from '../../server/agents/agent-service.ts'
 import { channelService } from '../../server/channels/channel-service.ts'
+import { chat } from '../../server/chat/index.ts'
 import { db } from '../../server/platform/db.ts'
 import { emit, log } from '../../server/platform/events.ts'
 import { HttpError } from '../../server/platform/http-error.ts'
@@ -27,7 +28,7 @@ export const notifyTool = defineTool({
     const wanted = place?.replace(/^#/, '').trim().toLowerCase()
     const to = wanted ? places.find((each) => each.chat_id === wanted || each.chat_name.replace(/^#/, '').toLowerCase() === wanted) : notifyOf((await db.selectFrom('agent').select('notify').where('id', '=', agent.id).executeTakeFirst())?.notify ?? null).default
     if (!to) return { text: `${wanted ? `You can't post in ${place}.` : 'You have no default place to notify.'} ${places.length ? `Pass place as one of: ${places.map((each) => each.chat_name).join(', ')}.` : 'You aren\'t connected to any channel you can post in.'}`, isError: true }
-    await channelService.send({ agentId: agent.id, place: to, text })
+    await chat.send({ agentId: agent.id, place: to, text })
     const kept = (sent.get(agent.id) ?? []).filter((each) => Date.now() - each.at < KEPT_MS)
     sent.set(agent.id, [...kept, { at: Date.now(), place: to, text }])
     log.info({ event: 'agent.notified', agent: agent.id, platform: to.platform })

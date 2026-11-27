@@ -6,7 +6,7 @@ import { Thread } from '@openhut/common/threads/thread.ts'
 export const Origin = z.object({ platform: z.enum(['app', 'discord', 'webhook', 'routine']), label: z.string(), url: z.optional(z.string()) })
 export type Origin = z.infer<typeof Origin>
 
-export const SourcedThread = z.extend(Thread, { origin: z.optional(Origin), mirrors: z.optional(z.array(Place)), waiting: z.optional(z.boolean()), mirrorPaused: z.optional(z.boolean()), readOnly: z.optional(z.boolean()), continueUrl: z.optional(z.nullable(z.string())) })
+export const SourcedThread = z.extend(Thread, { origin: z.optional(Origin), place: z.optional(z.nullable(Place)), waiting: z.optional(z.boolean()), readOnly: z.optional(z.boolean()), continueUrl: z.optional(z.nullable(z.string())) })
 export type SourcedThread = z.infer<typeof SourcedThread>
 
 export const NotifySettings = z.object({ default: z.nullable(Place), rules: z.string() })

@@ -47,7 +47,7 @@ test('the base Hermes settings, the app chat and the openhut MCP server and plug
   assert.deepEqual(yaml.terminal, { backend: 'local' })
   assert.equal(yaml.agent.api_max_retries, 30)
   assert.deepEqual(yaml.tools, { tool_search: { enabled: 'off' } })
-  assert.deepEqual(yaml.platform_toolsets, { api_server: ['hermes-api-server', 'openhut'] })
+  assert.deepEqual(yaml.platform_toolsets, { api_server: ['hermes-api-server', 'openhut', 'openhut-local'] })
   assert.deepEqual(yaml.mcp_servers, { openhut: { url: 'http://10.200.3.1:8081/api/v1/mcp', headers: { Authorization: 'Agent ag_chantest.token' } } })
   assert.deepEqual(yaml.plugins.enabled, ['openhut'])
   assert.deepEqual(yaml.plugins.entries.openhut, { allow_gateway_injection: true, settings: manifest() })
@@ -72,18 +72,10 @@ test('Slack before any channel is picked: no Slack settings, so it answers nowhe
   assert.ok(!Object.keys(render([{ kind: 'slack', audience: { ownerAddress: '', open: false, allowed: [] } }]).env).some((key) => key.startsWith('SLACK_')))
 })
 
-test('Discord in its channels: the bot token, anyone in only those channels', () => {
-  const { config: yaml, env } = render([{ kind: 'discord', botToken: 'fake.bot.token', audience: { ownerAddress: '', open: false, allowed: ['1234567890123456789', '9876543210987654321'] } }])
-  assert.equal(env.DISCORD_BOT_TOKEN, 'fake.bot.token')
-  assert.equal(env.DISCORD_ALLOWED_CHANNELS, '1234567890123456789,9876543210987654321')
-  assert.equal(env.DISCORD_HOME_CHANNEL, '1234567890123456789')
-  assert.equal(env.DISCORD_ALLOW_ALL_USERS, 'true')
-  assert.equal(env.DISCORD_ALLOWED_USERS, undefined)
-  assert.deepEqual(yaml.discord, { require_mention: true, unauthorized_dm_behavior: 'ignore', gateway_restart_notification: false })
-})
-
-test('Discord with no channels: no Discord settings, so it answers nowhere', () => {
-  assert.ok(!Object.keys(render([{ kind: 'discord', botToken: 'fake.bot.token', audience: { ownerAddress: '', open: false, allowed: [] } }]).env).some((key) => key.startsWith('DISCORD_')))
+test('Discord stays on the server: Hermes gets no bot token and no Discord settings', () => {
+  const { config: yaml, env } = render([{ kind: 'discord', audience: { ownerAddress: '', open: false, allowed: ['1234567890123456789'] } }])
+  assert.ok(!Object.keys(env).some((key) => key.startsWith('DISCORD_')))
+  assert.equal(yaml.discord, undefined)
 })
 
 test('WhatsApp open to anyone: bot mode, everyone allowed, approvals still off', () => {
@@ -247,7 +239,7 @@ Your owner's instructions below override this section.
   assert.doesNotMatch(TALK_PROMPT, /Claude|GPT|Hermes/)
 })
 
-test('the restart key moves only for what Hermes reads at boot: the token, the provider and the channel set, not the prompt, model, grants, keys or run-code', () => {
+test('the restart key moves only for what Hermes reads at boot: the token, the provider and the channel set, not the prompt, Discord, model, grants, keys or run-code', () => {
   const key = (over: Partial<Omit<HermesCtx, 'gateway'>> = {}) => hermesFiles({ agent, token: 'ag_chantest.token', channelKey: 'k'.repeat(32), channels: [], connections: [], secrets: [], ...over })['restart.key']
   const telegram = (allowed: string[]): RenderedChannel => ({ kind: 'telegram', audience: { open: false, ownerAddress: '123456789', allowed } })
   const base = key()
@@ -264,6 +256,6 @@ test('the restart key moves only for what Hermes reads at boot: the token, the p
     { token: 'ag_chantest.other' },
     { agent: { ...agent, slots: slots('codex:gpt-5.5') } },
     { channels: [telegram([])] },
-    { channels: [{ kind: 'discord', audience: { open: false, ownerAddress: '', allowed: ['1'] }, botToken: 'x' } as RenderedChannel] },
   ]) assert.notEqual(key(restart), base, JSON.stringify(restart))
+  assert.equal(key({ channels: [{ kind: 'discord', audience: { open: false, ownerAddress: '', allowed: ['1'] } }] }), base, 'Discord runs on the server, so it never restarts Hermes')
 })

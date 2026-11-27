@@ -28,7 +28,7 @@ const MAX_FAILURES = 3
 const CRON_SAMPLE = 100
 const SILENT = /^\s*\[?(SILENT|NO[_ ]REPLY)\]?\s*$/i
 const OFFSET = /(Z|[+-]\d\d:?\d\d)$/i
-const CHAT_SESSION = /^openhut-\S+$/
+const CHAT_SESSION = /^(ag_|th_|openhut-)\S+$/
 const PLATFORM_NAMES: Record<string, string> = { slack: 'Slack', whatsapp: 'WhatsApp', telegram: 'Telegram', discord: 'Discord' }
 
 export const Origin = z.looseObject({

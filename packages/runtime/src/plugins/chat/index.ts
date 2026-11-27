@@ -14,7 +14,7 @@ export const chat = definePlugin({
   afterTurn: async (input) => notified(input),
   hermes: ({ agent, channelKey }) => ({
     prompt: notifyPrompt(agent.notify),
-    config: { platform_toolsets: { api_server: ['hermes-api-server', 'openhut'] } },
+    config: { platform_toolsets: { api_server: ['hermes-api-server', 'openhut', 'openhut-local'] } },
     env: {
       API_SERVER_KEY: channelKey,
       ...(config.agentHostNet ? { API_SERVER_HOST: '127.0.0.1', API_SERVER_PORT: String(AGENT_API_PORT_BASE + agent.net) } : { API_SERVER_HOST: '0.0.0.0', API_SERVER_PORT: '8642' }),

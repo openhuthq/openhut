@@ -37,14 +37,7 @@ ctx = Ctx(); m.register(ctx)
 assert sorted(tools) == ["list_things", "post_message"] and {t["toolset"] for t in tools.values()} == {"openhut-local"}, tools
 assert tools["post_message"]["schema"] == settings["tools"][0]
 assert sorted(hooks) == ["post_llm_call", "pre_gateway_dispatch", "pre_llm_call", "pre_tool_call", "subagent_stop", "transform_llm_output"], hooks
-assert hooks["pre_llm_call"](is_first_turn=True) is None, "only a Discord thread asks for OpenHut context"
-here, thread = m.origin, {"platform": "discord", "chat_id": "777", "thread_id": "777", "parent_chat_id": "666"}
-m.origin = lambda: thread
-ANSWERS["/thread-context"] = lambda body: (200, {"object": "thread_context", "context": "Alert: cpu 99%"})
-assert hooks["pre_llm_call"](is_first_turn=False) is None
-assert hooks["pre_llm_call"](is_first_turn=True) == {"context": "Alert: cpu 99%"}
-assert calls[-1] == ("/thread-context", {"origin": thread}), calls[-1]
-m.origin = here
+assert hooks["pre_llm_call"](is_first_turn=True) is None
 assert [p.pattern for p, _ in actions] == ["^card:"]
 stamped = {"action": "modify", "args": {"origin": {"platform": "slack", "chat_id": "C1"}}}
 assert [hooks["pre_tool_call"](tool_name=n) for n in ("mcp__openhut__list_routines", "mcp__openhut__any_new_tool", "terminal", "mcp__github__x")] == [stamped, stamped, None, None]
@@ -82,10 +75,6 @@ assert hooks["pre_gateway_dispatch"](event=event("hello", "999000111"), gateway=
 assert hooks["pre_gateway_dispatch"](event=event("hello", "555000111"), gateway=Runner()) == {"action": "allow", "reason": "openhut member"}
 assert os.environ["TELEGRAM_ALLOWED_USERS"] == "123456789,555000111", "a member who just joined goes on Hermes's list before Hermes restarts"
 before = len(calls)
-assert hooks["pre_gateway_dispatch"](event=Event("hi", Source(Platform.DISCORD, "42", "42", "Sam"))) == {"action": "skip", "reason": "openhut discord dm"}
-assert len(calls) == before, "a Discord DM is dropped here, without asking the gateway"
-assert hooks["pre_gateway_dispatch"](event=Event("hi", Source(Platform.DISCORD, "777", "42", "Sam", "thread"))) is None
-before = len(calls)
 assert hooks["subagent_stop"](parent_session_id="s1", child_status="completed", tool_call_history=[{"tool": "terminal"}], duration_ms=12) is None
 assert len(calls) == before and m.notices.qsize() == 1, "an observer hook returns at once and is sent from the notices thread"
 class Drained(Exception): pass
@@ -120,7 +109,7 @@ assert calls[-1] == ("/wakes/inbox:ru_abc123", {"said": "Chased Acme."}), calls[
 before = len(calls)
 hooks["post_llm_call"](user_message="[OpenHut inbox:ru_other1] not ours", assistant_response="x")
 hooks["post_llm_call"](user_message="hello", assistant_response="x")
-assert len(calls) == before, "only a wake this plugin injected is reported"
+assert len(calls) == before and m.notices.empty(), "only a wake this plugin injected is reported, and a turn is never sent to the gateway"
 while not m.notices.empty(): m.notices.get()
 assert hooks["pre_llm_call"](turn_id="tu_1", user_message="hi") is None
 hooks["post_llm_call"](turn_id="tu_1", user_message="hi", assistant_response="x")
