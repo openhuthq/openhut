@@ -198,7 +198,7 @@ function Session({ gone, title, status, time }: { gone: boolean; title: string; 
 }
 
 const MARK: Record<Progress, ReactElement> = {
-  idle: <circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" strokeWidth="1.5" />,
+  idle: <circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="1.9 1.24" />,
   queued: <circle cx="7" cy="7" r="6" fill="none" stroke="#8a8a8a" strokeWidth="1.5" strokeDasharray="2.2 1.9" />,
   working: <><circle cx="7" cy="7" r="6" fill="none" stroke="#CDA23A" strokeWidth="1.5" /><path d="M7 4a3 3 0 0 1 0 6z" fill="#CDA23A" /></>,
   review: <><circle cx="7" cy="7" r="6" fill="none" stroke="#D9824A" strokeWidth="1.5" /><circle cx="7" cy="7" r="2.2" fill="#D9824A" /></>,
