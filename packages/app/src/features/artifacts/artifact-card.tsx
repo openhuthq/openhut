@@ -5,7 +5,7 @@ import type { IconSvgElement } from '@hugeicons/react'
 import { I } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { artifactPath } from '@/app/routes'
-import { request } from '@/lib/api-client'
+import { request, RequestError } from '@/lib/api-client'
 import { PHONE } from '@/lib/media'
 import { toastError } from '@/lib/toast'
 import { usePath } from '@/lib/router'
@@ -28,13 +28,15 @@ export function fetchArtifact(id: string) {
   return request({ schema: ArtifactView, path: `/api/artifacts/${encodeURIComponent(id)}` })
 }
 
+export const retryUnlessGone = (count: number, error: Error) => !(error instanceof RequestError && error.status === 404) && count < 2
+
 export function kindIcon({ kind, title }: { kind: ArtifactKind; title: string }) {
   return kind === 'file' && /\.(csv|tsv|xlsx?)$/i.test(title) ? GridTableIcon : KIND[kind].icon
 }
 
-export function KindTile({ kind, title, small }: { kind: ArtifactKind; title: string; small?: boolean }) {
+export function KindTile({ kind, title, small, large }: { kind: ArtifactKind; title: string; small?: boolean; large?: boolean }) {
   const icon = kindIcon({ kind, title })
-  return <span className={cn('grid shrink-0 place-items-center', small ? 'size-[22px] rounded-md' : 'size-9 rounded-[9px]', KIND[kind].tone)}><I icon={icon} size={small ? 13 : 18} /></span>
+  return <span className={cn('grid shrink-0 place-items-center', small && 'size-[22px] rounded-md', large && 'size-10 rounded-[10px]', !small && !large && 'size-9 rounded-[9px]', KIND[kind].tone)}><I icon={icon} size={small ? 13 : 18} /></span>
 }
 
 export function ArtifactCardLink({ agentId, threadId, card }: { agentId: string; threadId: string; card: ArtifactCard }) {

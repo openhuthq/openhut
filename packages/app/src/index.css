@@ -184,6 +184,10 @@
   .msg-t :is(h1, h2, h3, h4, h5, h6) + * { margin-top: 0 }
   .msg-t :is(h1, h2) { font-size: 15px }
   .msg-t :is(h3, h4, h5, h6) { font-size: 14px }
+  .msg-t.doc { font-size: 15px; line-height: 1.55 }
+  .msg-t.doc h1 { font-size: 20px }
+  .msg-t.doc h2 { font-size: 17px }
+  .msg-t.doc :is(h3, h4, h5, h6) { font-size: 15px }
   .msg-t a { color: inherit; text-decoration: underline; text-underline-offset: 2px }
   .msg-t blockquote { border-left: 2px solid var(--mid); padding-left: 12px; color: var(--mute) }
   .msg-t hr { border: 0; border-top: 1px solid var(--hair); margin: 16px 0 }

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent, type PointerEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as z from 'zod/mini'
-import { ArrowLeft01Icon, Cancel01Icon, Copy01Icon, Delete02Icon, LinkSquare02Icon, MoreHorizontalIcon, Share03Icon } from '@hugeicons/core-free-icons'
+import { ArrowExpand01Icon, ArrowLeft01Icon, ArrowShrink01Icon, Cancel01Icon, Copy01Icon, Delete02Icon, LinkSquare02Icon, MoreHorizontalIcon, Share03Icon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
@@ -23,8 +23,8 @@ import { copyText } from '@/lib/clipboard'
 import { personName } from '@/lib/format'
 import { toast, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
-import { ACCESS_WORD, ArtifactView, DOCK_FROM, keptSrc, paneWidth, type ArtifactAccess, type ShownSrc } from '@/features/artifacts/artifact'
-import { ACCESS_ICON, artifactKey, fetchArtifact, KindTile } from '@/features/artifacts/artifact-card'
+import { ACCESS_WORD, ArtifactView, DOCK_FROM, keptSrc, paneWidth, sizeOf, type ArtifactAccess, type ShownSrc } from '@/features/artifacts/artifact'
+import { ACCESS_ICON, artifactKey, fetchArtifact, KindTile, retryUnlessGone } from '@/features/artifacts/artifact-card'
 
 const SPLIT_KEY = 'openhut.artifactSplit'
 const STEP = 24
@@ -35,10 +35,25 @@ const NOTE: Record<ArtifactAccess, string> = {
   link: 'Anyone with the link can view it. No sign-in.',
 }
 
-export function ArtifactDock({ agent, artifactId, row, onClose }: { agent: Agent; artifactId: string; row: HTMLElement | null; onClose: () => void }) {
+export function ArtifactDock({ agent, artifactId, row, enlarged, onEnlarge, onClose }: { agent: Agent; artifactId: string; row: HTMLElement | null; enlarged: boolean; onEnlarge: (enlarged: boolean) => void; onClose: () => void }) {
   const split = useSplit(row)
+  const sheet = split.total > 0 && split.total < DOCK_FROM
+  useEffect(() => { if (sheet) onEnlarge(false) }, [sheet, onEnlarge])
+  useEffect(() => {
+    if (!enlarged) return
+    const escape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape' || document.querySelector('[role=dialog], [role=menu]')) return
+      event.stopImmediatePropagation()
+      onEnlarge(false)
+    }
+    window.addEventListener('keydown', escape, true)
+    return () => window.removeEventListener('keydown', escape, true)
+  }, [enlarged, onEnlarge])
   if (!split.total) return null
-  if (split.total < DOCK_FROM) return <Dialog size="window" label="Artifact" onClose={onClose}>
+  if (enlarged && !sheet) return <section aria-label="Artifact" className="flex min-w-0 flex-1 flex-col bg-card">
+    <ArtifactPane agent={agent} artifactId={artifactId} enlarged onEnlarge={onEnlarge} onClose={onClose} />
+  </section>
+  if (sheet) return <Dialog size="window" label="Artifact" onClose={onClose}>
     <ArtifactPane agent={agent} artifactId={artifactId} sheet onClose={onClose} />
   </Dialog>
   const width = paneWidth({ total: split.total, fraction: split.fraction })
@@ -49,7 +64,7 @@ export function ArtifactDock({ agent, artifactId, row, onClose }: { agent: Agent
       {split.dragging && <span className="pointer-events-none absolute top-1/2 left-1/2 z-10 -translate-1/2 rounded-md bg-ink px-1.5 py-0.5 font-mono text-[11px] whitespace-nowrap text-white">{width} px</span>}
     </div>
     <section aria-label="Artifact" className="flex w-(--pw) shrink-0 flex-col bg-card" style={{ '--pw': `${width}px` } as CSSProperties}>
-      <ArtifactPane agent={agent} artifactId={artifactId} still={split.dragging} onClose={onClose} />
+      <ArtifactPane agent={agent} artifactId={artifactId} still={split.dragging} enlarged={false} onEnlarge={onEnlarge} onClose={onClose} />
     </section>
   </>
 }
@@ -105,8 +120,8 @@ function saveFraction(fraction: number) {
   try { localStorage.setItem(SPLIT_KEY, String(fraction)) } catch { return }
 }
 
-function ArtifactPane({ agent, artifactId, sheet, still, onClose }: { agent: Agent; artifactId: string; sheet?: boolean; still?: boolean; onClose: () => void }) {
-  const view = useQuery({ queryKey: artifactKey(artifactId), queryFn: () => fetchArtifact(artifactId) })
+function ArtifactPane({ agent, artifactId, sheet, still, enlarged, onEnlarge, onClose }: { agent: Agent; artifactId: string; sheet?: boolean; still?: boolean; enlarged?: boolean; onEnlarge?: (enlarged: boolean) => void; onClose: () => void }) {
+  const view = useQuery({ queryKey: artifactKey(artifactId), queryFn: () => fetchArtifact(artifactId), retry: retryUnlessGone })
   const client = useQueryClient()
   const { confirming, setConfirming, box } = useConfirming()
   const remove = useMutation({
@@ -120,8 +135,9 @@ function ArtifactPane({ agent, artifactId, sheet, still, onClose }: { agent: Age
   const actions = confirming
     ? <ConfirmPills box={box} question="Delete for everyone?" action="Delete" danger busy={remove.isPending} onCancel={() => setConfirming(false)} onConfirm={() => remove.mutate()} />
     : <>
-      {data?.canManage && <SharePopover agent={agent} view={data} icon={sheet} />}
-      {data && <MoreMenu view={data} onDelete={() => setConfirming(true)} />}
+      {data?.canManage && <SharePopover key={data.id} agent={agent} view={data} icon={sheet} />}
+      {data && <MoreMenu key={data.id} view={data} onDelete={() => setConfirming(true)} />}
+      {onEnlarge && data && <Button type="button" size="icon" className="text-ink" aria-label={enlarged ? 'Shrink' : 'Enlarge'} title={enlarged ? 'Shrink' : 'Enlarge'} onClick={() => onEnlarge(!enlarged)}><I icon={enlarged ? ArrowShrink01Icon : ArrowExpand01Icon} size={16} /></Button>}
       {!sheet && close}
     </>
   return <div className="flex min-h-0 w-full flex-1 flex-col bg-card">
@@ -139,7 +155,7 @@ function ArtifactPane({ agent, artifactId, sheet, still, onClose }: { agent: Age
   </div>
 }
 
-export function Viewer({ view }: { view: Pick<ArtifactView, 'id' | 'kind' | 'src' | 'title'> & { ver?: number } }) {
+export function Viewer({ view }: { view: Pick<ArtifactView, 'id' | 'kind' | 'src' | 'title'> & { ver?: number; size?: number } }) {
   const kept = useRef<ShownSrc>(undefined)
   kept.current = keptSrc({ kept: kept.current, key: `${view.id}:${view.ver ?? ''}`, src: view.src, now: Date.now() })
   const src = kept.current.src
@@ -148,7 +164,14 @@ export function Viewer({ view }: { view: Pick<ArtifactView, 'id' | 'kind' | 'src
     case 'pdf': return <iframe title={view.title} src={src} referrerPolicy="no-referrer" className="block size-full border-0 bg-card" />
     case 'image': return <div className="grid size-full place-items-center overflow-auto p-4"><img src={src} alt={view.title} className="max-h-full max-w-full rounded-lg object-contain" /></div>
     case 'md': return <Notes src={src} />
-    case 'file': return <div className="grid size-full place-items-center"><a href={src} download={view.title} className={buttonVariants({ variant: 'secondary' })}>Download</a></div>
+    case 'file': return <div className="flex size-full flex-col items-center justify-center gap-3 p-6 text-center">
+      <KindTile kind="file" title={view.title} large />
+      <div className="flex flex-col gap-0.5">
+        <span className="text-[15px] break-all text-ink">{view.title}</span>
+        {view.size !== undefined && <span className="text-[13px] text-mute">{sizeOf(view.size)}</span>}
+      </div>
+      <a href={src} download={view.title} className={buttonVariants({ variant: 'secondary' })}>Download</a>
+    </div>
   }
 }
 

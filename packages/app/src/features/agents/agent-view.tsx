@@ -45,6 +45,8 @@ export function AgentView({ agentId, threadId, artifactId, dialog, detail }: { a
   useEffect(() => saveSide(picked), [picked])
   const side: Side = artifactId ? 'artifact' : picked
   const [row, setRow] = useState<HTMLDivElement | null>(null)
+  const [enlarged, setEnlarged] = useState(false)
+  useEffect(() => setEnlarged(false), [artifactId])
   const leave = () => navigate(threadRoute({ agentId, threadId: threadId ?? agentId }), true)
   const [details, setDetails] = useState(false)
   const [browsing, setBrowsing] = useState(false)
@@ -63,14 +65,14 @@ export function AgentView({ agentId, threadId, artifactId, dialog, detail }: { a
   return <>
     <SyncFace agent={agent.data} />
     <div ref={setRow} className="relative flex min-w-0 flex-1">
-    <div className="group/chat relative flex min-w-0 flex-1" data-threads={!phone && (side === 'threads' || side === 'browser') ? '' : undefined}>
+    <div hidden={!!artifactId && enlarged} className="group/chat relative flex min-w-0 flex-1" data-threads={!phone && (side === 'threads' || side === 'browser') ? '' : undefined}>
       <Chat key={threadId} agent={agent.data} threadId={threadId ?? agent.data.id} actions={actions}
         tools={phone && <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Details" title="Details" onClick={() => setDetails(true)}><I icon={InformationCircleIcon} size={20} /></Button>}
         onTitle={phone ? () => setDetails(true) : undefined} />
       {!phone && side === 'threads' && <FloatingThreads agent={agent.data} threadId={threadId} onClose={() => setSide(null)} />}
       {hasBrowser && dialog !== 'browser' && <BrowserCard agent={agent.data} open={side === 'browser'} onClose={() => setSide(null)} onBrowsing={setBrowsing} />}
     </div>
-    {artifactId && <ArtifactDock key={artifactId} agent={agent.data} artifactId={artifactId} row={row} onClose={leave} />}
+    {artifactId && <ArtifactDock key={artifactId} agent={agent.data} artifactId={artifactId} row={row} enlarged={enlarged} onEnlarge={setEnlarged} onClose={leave} />}
     </div>
     {phone && details && <Dialog size="window" label={agent.data.name} className="phone:bg-sidebar" onClose={() => setDetails(false)}>
       <div className={cn('flex flex-1 flex-col p-6', GLASS)}><PanelThreads agent={agent.data} threadId={threadId} /></div>

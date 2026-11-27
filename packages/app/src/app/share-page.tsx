@@ -1,20 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
 import { Hut } from '@/components/hut'
 import { ErrorNote } from '@/components/error-note'
-import { I } from '@/components/kit'
-import { kindIcon } from '@/features/artifacts/artifact-card'
+import { KindTile, retryUnlessGone } from '@/features/artifacts/artifact-card'
 import { SharedArtifact } from '@/features/artifacts/artifact'
 import { Viewer } from '@/features/artifacts/artifact-pane'
 import { request, RequestError } from '@/lib/api-client'
 
 export function SharePage({ token }: { token: string }) {
-  const shared = useQuery({ queryKey: ['share', token], queryFn: () => request({ schema: SharedArtifact, path: `/api/share/${encodeURIComponent(token)}` }), retry: false })
+  const shared = useQuery({ queryKey: ['share', token], queryFn: () => request({ schema: SharedArtifact, path: `/api/share/${encodeURIComponent(token)}` }), retry: retryUnlessGone })
   const gone = shared.error instanceof RequestError && shared.error.status === 404
   const data = shared.data
   return <main className="flex h-dvh flex-col bg-card text-ink">
     <title>{data ? `${data.title} · OpenHut` : 'OpenHut'}</title>
     <header className="flex h-12 shrink-0 items-center gap-2.5 border-b border-hair px-4">
-      {data && <I icon={kindIcon(data)} size={16} className="shrink-0 text-mute" />}
+      {data && <KindTile kind={data.kind} title={data.title} small />}
       {data && <b className="min-w-0 truncate font-medium">{data.title}</b>}
       {data && <span className="shrink-0 text-[13px] text-mute phone:hidden">by {data.agentName}</span>}
       <a href="https://openhut.dev" target="_blank" rel="noreferrer" className="ml-auto flex shrink-0 items-center gap-1.5 text-[13px] text-mute no-underline hover:text-ink"><Hut className="size-5" />Made with OpenHut</a>

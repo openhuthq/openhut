@@ -470,7 +470,7 @@ function workOf(message: AgentMessage): Work | undefined {
 }
 
 export function ChatMarkdown({ text }: { text: string }) {
-  return <div className="msg-t"><Markdown remarkPlugins={[remarkGfm]} components={{ a: OutLink, pre: CodeBlock, input: TaskBox, table: WideTable }}>{bullets(text)}</Markdown></div>
+  return <div className="msg-t doc"><Markdown remarkPlugins={[remarkGfm]} components={{ a: OutLink, pre: CodeBlock, input: TaskBox, table: WideTable }}>{bullets(text)}</Markdown></div>
 }
 
 function OutLink({ href, children }: { href?: string; children?: ReactNode }) {
