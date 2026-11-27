@@ -46,7 +46,8 @@ function ThreadView({ thread, fetchedAt, agent, asks, actions, tools, onTitle }:
     prepareSendMessagesRequest: ({ messages, trigger }) => ({ body: { trigger, message: trigger === 'submit-message' ? messages.at(-1) : undefined } }),
     prepareReconnectToStreamRequest: () => ({ api: `${threadPath(thread.id)}/stream` }),
   }), [thread.id, agent.id])
-  const chat = useChat<AgentMessage>({ id: thread.id, messages: thread.messages.map(uiMessageOf), transport, onFinish: () => touch(thread) })
+  const [status, setStatus] = useState('')
+  const chat = useChat<AgentMessage>({ id: thread.id, messages: thread.messages.map(uiMessageOf), transport, onData: (part) => { if (part.type === 'data-status') setStatus(part.data.text) }, onFinish: () => { setStatus(''); touch(thread) } })
   const attachments = useAttachments({ agentId: agent.id, threadId: thread.id })
   const files = useMemo(() => ({ agentId: agent.id, threadId: thread.id, save: (path: string) => void saveFile({ agentId: agent.id, threadId: thread.id, path }).catch(toastError) }), [agent.id, thread.id])
   const streaming = chat.status === 'submitted' || chat.status === 'streaming'
@@ -73,9 +74,9 @@ function ThreadView({ thread, fetchedAt, agent, asks, actions, tools, onTitle }:
     {shown.length ? <>
       <Welcome agent={agent} />
       <Day iso={thread.updatedAt} />
-      {shown.map((message, index) => <Message key={message.id} agent={agent} thread={thread} message={message} said={(text) => said(index, text)} seen={message === mine} live={message === last && (chat.status === 'streaming' || (busy && message.role === 'assistant'))} onRetry={!busy && !thread.readOnly && message === last ? () => void chat.regenerate() : undefined} />)}
+      {shown.map((message, index) => <Message key={message.id} agent={agent} thread={thread} message={message} said={(text) => said(index, text)} seen={message === mine} live={message === last && (chat.status === 'streaming' || (busy && message.role === 'assistant'))} step={message === last && status ? status : undefined} onRetry={!busy && !thread.readOnly && message === last ? () => void chat.regenerate() : undefined} />)}
     </> : !waiting && <ChatEmpty agent={agent} />}
-    {waiting && <AgentReply agent={agent} threadId={thread.id} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
+    {waiting && <AgentReply agent={agent} threadId={thread.id} message={{ id: 'waiting', role: 'assistant', parts: [] }} step={status || undefined} live />}
     <asks.Pending agent={agent} shown={new Set(chat.messages.flatMap(changesOf))} />
     {!agent.runsHere && !busy && last?.role === 'user' && !troubleOf(agent) && <p className="m-0 text-right text-[12.5px] text-mute">{agent.runsNowhere ? `No computer runs ${agent.name} now. ${agent.canManage ? 'Run it here to get an answer.' : `Ask an admin to run ${agent.name} on their computer.`}` : `Sent to ${agent.runsOnName ?? 'your other computer'}. ${agent.name} answers when it’s on.`}</p>}
     {chat.error && !busy && !(last && workOf(last)?.error) && <Alert variant="error-outline" role="alert"><span>{plainError(chat.error.message)}</span><Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={retry}>Try again</Button></Alert>}

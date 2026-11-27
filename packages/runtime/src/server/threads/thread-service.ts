@@ -24,7 +24,7 @@ import { plugins } from '../../core/plugins.ts'
 import { providers } from '../models/providers/index.ts'
 import { turnWork } from './work.ts'
 import { liveThreads, type LiveTurnHandle } from './live.ts'
-import { turns, type TurnEnd, type TurnRun } from './turns.ts'
+import { statusChunk, turns, type TurnEnd, type TurnRun } from './turns.ts'
 
 const TURN_MS = 15 * 60_000
 const SEED = 20
@@ -532,7 +532,7 @@ function together({ asked, shared }: { asked: ChatMessage[]; shared: boolean }):
 }
 
 function answerStream({ live, ...input }: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal; work: TurnWork; retry?: boolean; live: LiveTurnHandle }): ReadableStream<UIMessageChunk> {
-  const tapped = pipeJsonRender(relayed({ ...input, live })).pipeThrough(new TransformStream<UIMessageChunk, UIMessageChunk>({
+  const tapped = pipeJsonRender(relayed(input)).pipeThrough(new TransformStream<UIMessageChunk, UIMessageChunk>({
     transform: (chunk, controller) => {
       toLive({ live, chunk })
       controller.enqueue(chunk)
@@ -546,7 +546,7 @@ async function afterTurn({ agentId, threadId, since }: { agentId: string; thread
   return parts.flatMap((part) => part ? [part as UIMessageChunk] : [])
 }
 
-function relayed(input: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal; work: TurnWork; retry?: boolean; live: LiveTurnHandle }): ReadableStream<UIMessageChunk> {
+function relayed(input: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal; work: TurnWork; retry?: boolean }): ReadableStream<UIMessageChunk> {
   return new ReadableStream({
     start: (controller) => {
       const writer = { write: (chunk: UIMessageChunk) => controller.enqueue(chunk) }
@@ -600,19 +600,25 @@ function foldCard(message: UIMessage): UIMessage {
   }) }
 }
 
-async function relay({ agent, session, message, writer, signal, work, retry = false, live }: { agent: AgentRow; session: string; message: ChatMessage; writer: { write: (chunk: UIMessageChunk) => void }; signal: AbortSignal; work?: TurnWork; retry?: boolean; live?: LiveTurnHandle }): Promise<string | undefined> {
+async function relay({ agent, session, message, writer, signal, work, retry = false }: { agent: AgentRow; session: string; message: ChatMessage; writer: { write: (chunk: UIMessageChunk) => void }; signal: AbortSignal; work?: TurnWork; retry?: boolean }): Promise<string | undefined> {
   await apply.settled(agent.id)
   const asked = await openAiOf({ agentId: agent.id, message })
   let text = 0
   let open = false
   let finish: string | null | undefined
   let ended = false
+  let status = ''
+  const say = (text: string) => {
+    if (text !== status) writer.write(statusChunk(text))
+    status = text
+  }
   for await (const event of autonomous.chat({ agent, session, message: asked, system: CHAT_NOTE, signal: AbortSignal.any([signal, AbortSignal.timeout(TURN_MS)]) })) {
     if (event.type === 'dropped') throw text || !retry ? new Error(dropped(agent.name)) : new LostTurn()
     if (event.type === 'error' && event.lost && !text) throw new LostTurn()
     if (event.type === 'error') throw new Error(modelFailure({ name: agent.name, message: event.message }))
     if (event.type === 'done') ({ finish, ended } = event)
-    if (event.type === 'status') live?.step(event.text)
+    if (event.type === 'status') say(event.text)
+    if (event.type === 'tool' || event.type === 'text') say('')
     if (event.type === 'tool') {
       if (open) writer.write({ type: 'text-end', id: `t${text}` })
       if (open) writer.write({ type: STEP, data: {} })

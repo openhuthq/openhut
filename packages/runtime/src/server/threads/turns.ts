@@ -1,4 +1,5 @@
 import { readUIMessageStream, type UIMessage, type UIMessageChunk } from 'ai'
+import { WAITING, type TurnStatus } from '@openhut/common/threads/thread.ts'
 import { db } from '../platform/db.ts'
 import { emit, log } from '../platform/events.ts'
 import { messageOf } from '../platform/http-error.ts'
@@ -10,6 +11,8 @@ type Turn = { id: string; thread: string; agentId: string; chunks: UIMessageChun
 export type TurnRun = { signal: AbortSignal; write: (chunk: UIMessageChunk) => void }
 export type TurnEnd = { message: UIMessage; failed: boolean }
 
+export const statusChunk = (text: string): UIMessageChunk => ({ type: 'data-status', data: { text } satisfies TurnStatus, transient: true })
+
 const active = new Map<string, Turn[]>()
 const lanes = new Map<string, Promise<void>>()
 
@@ -17,6 +20,7 @@ export const turns = {
   start({ id, thread, agentId, run, save }: { id: string; thread: string; agentId: string; run: (turn: TurnRun) => Promise<void>; save: (end: TurnEnd) => Promise<void> }): Promise<void> {
     const turn: Turn = { id, thread, agentId, chunks: [], saved: 0, saving: Promise.resolve(), ended: false, abort: new AbortController(), listeners: new Set() }
     active.set(thread, [...active.get(thread) ?? [], turn])
+    if (lanes.has(agentId)) send({ turn, chunk: statusChunk(WAITING) })
     changed(turn)
     const queued = db.insertInto('thread_turn').values({ id, thread_id: thread }).execute()
       .catch((err: unknown) => log.warn({ event: 'turn.queue_failed', thread, error: messageOf(err) }))
@@ -71,24 +75,22 @@ export const turns = {
 async function go({ turn, run, save }: { turn: Turn; run: (turn: TurnRun) => Promise<void>; save: (end: TurnEnd) => Promise<void> }): Promise<void> {
   const timer = setInterval(() => { turn.saving = turn.saving.then(() => persist(turn)) }, SAVE_MS).unref()
   let failed = false
+  if (turn.chunks.length) send({ turn, chunk: statusChunk('') })
   try {
-    await run({
-      signal: turn.abort.signal,
-      write: (chunk) => {
-        turn.chunks.push(chunk)
-        for (const listener of turn.listeners) listener(chunk)
-      },
-    })
+    await run({ signal: turn.abort.signal, write: (chunk) => send({ turn, chunk }) })
   } catch (err) {
     failed = true
-    const chunk: UIMessageChunk = { type: 'error', errorText: messageOf(err) }
-    turn.chunks.push(chunk)
-    for (const listener of turn.listeners) listener(chunk)
+    send({ turn, chunk: { type: 'error', errorText: messageOf(err) } })
     throw err
   } finally {
     clearInterval(timer)
     await end({ turn, save, failed })
   }
+}
+
+function send({ turn, chunk }: { turn: Turn; chunk: UIMessageChunk }): void {
+  turn.chunks.push(chunk)
+  for (const listener of turn.listeners) listener(chunk)
 }
 
 async function end({ turn, save, failed }: { turn: Turn; save: (end: TurnEnd) => Promise<void>; failed: boolean }): Promise<void> {

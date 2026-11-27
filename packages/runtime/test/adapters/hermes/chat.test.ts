@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { WAITING } from '@openhut/common/threads/thread.ts'
 import { chat } from '../../../src/adapters/hermes/chat.ts'
 import type { ChatEvent } from '../../../src/core/agent.ts'
 import { config } from '../../../src/server/platform/config.ts'
@@ -16,7 +17,18 @@ const chunk = (delta: object) => frame({ id: RUN, object: 'chat.completion.chunk
 
 const seen: string[] = []
 let stream: ServerResponse | undefined
+let queuedFor = 0
 const hermes = createServer((req, res) => {
+  if (req.method === 'GET') return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ run_id: RUN, status: queuedFor-- > 0 ? 'queued' : 'running' }))
+  if (queuedFor > 0) {
+    res.writeHead(200, { 'content-type': 'text/event-stream' })
+    res.write(chunk({ role: 'assistant' }))
+    const beat = setInterval(() => res.write(': keepalive\n\n'), 10)
+    return setTimeout(() => {
+      clearInterval(beat)
+      res.end(`${chunk({ content: 'Yes.' })}${frame({ id: RUN, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] })}data: [DONE]\n\n`)
+    }, 100)
+  }
   seen.push(`${req.method} ${req.url} ${req.headers.authorization === `Bearer ${'k'.repeat(48)}` ? 'auth' : 'no-auth'}${stream?.writableEnded === false ? ' while streaming' : ''}`)
   req.resume()
   if (req.url === `/v1/runs/${RUN}/stop`) return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ run_id: RUN, status: 'stopping' }))
@@ -47,4 +59,16 @@ test('a long tool call streams as it starts, and stopping the turn stops the Her
   ])
   await new Promise((resolve) => setTimeout(resolve, 50))
   assert.deepEqual(seen, ['POST /v1/chat/completions auth', `POST /v1/runs/${RUN}/stop auth while streaming`, 'stream closed'])
+})
+
+test('a turn Hermes holds behind an earlier one says it is waiting, and stops saying so when it starts', async () => {
+  queuedFor = 2
+  const events: ChatEvent[] = []
+  for await (const event of chat({ agent, session: agent.id, message: { role: 'user', content: 'are you working?' }, system: '', signal: new AbortController().signal })) events.push(event)
+  assert.deepEqual(events, [
+    { type: 'status', text: WAITING },
+    { type: 'status', text: '' },
+    { type: 'text', delta: 'Yes.' },
+    { type: 'done', finish: 'stop', ended: true },
+  ])
 })

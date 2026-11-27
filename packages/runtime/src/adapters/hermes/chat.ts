@@ -1,4 +1,5 @@
 import * as z from 'zod/mini'
+import { WAITING } from '@openhut/common/threads/thread.ts'
 import type { ChatEvent } from '../../core/agent.ts'
 import { config } from '../../server/platform/config.ts'
 import { HttpError } from '../../server/platform/http-error.ts'
@@ -11,6 +12,7 @@ const LOST = new Set(['unknown_execution', 'queue_full'])
 const STOP_TRIES = 3
 const STOP_MS = 5000
 const Status = z.object({ text: z.string() })
+const Run = z.object({ status: z.string() })
 const Chunk = z.object({
   id: z.optional(z.string()),
   choices: z.optional(z.array(z.object({ delta: z.optional(z.object({ content: z.optional(z.nullable(z.string())) })), finish_reason: z.optional(z.nullable(z.string())) }))),
@@ -26,8 +28,22 @@ export async function* chat({ agent, session, message, system, signal }: { agent
   try {
     const body = await call({ agent, session, message, system, signal: open.signal })
     let finish: string | null | undefined
+    let heard = false
+    let waiting = false
     for await (const event of sseEvents({ body, signal: open.signal })) {
       if (signal.aborted) continue
+      if (event?.name === 'comment') {
+        if (heard || !run) continue
+        const now = await queued({ agent, run })
+        if (now === waiting) continue
+        waiting = now
+        yield { type: 'status', text: waiting ? WAITING : '' }
+        continue
+      }
+      if (waiting) {
+        waiting = false
+        yield { type: 'status', text: '' }
+      }
       if (!event) {
         yield { type: 'dropped' }
         return
@@ -37,6 +53,7 @@ export async function* chat({ agent, session, message, system, signal }: { agent
         return
       }
       if (event.name === 'hermes.tool.progress') {
+        heard = true
         yield { type: 'tool', progress: parseJson(event.data) }
         continue
       }
@@ -53,13 +70,23 @@ export async function* chat({ agent, session, message, system, signal }: { agent
       }
       finish = chunk?.choices?.[0]?.finish_reason ?? finish
       const delta = chunk?.choices?.[0]?.delta?.content
-      if (delta) yield { type: 'text', delta }
+      if (!delta) continue
+      heard = true
+      yield { type: 'text', delta }
     }
     signal.throwIfAborted()
     yield { type: 'done', finish, ended: false }
   } finally {
     signal.removeEventListener('abort', stop)
   }
+}
+
+async function queued({ agent, run }: { agent: { id: string; net: number; channel_key: string }; run: string }): Promise<boolean> {
+  const res = await forward.fetch({ agent, path: `/v1/runs/${encodeURIComponent(run)}`, init: {
+    headers: { authorization: `Bearer ${unseal(agent.channel_key)}` }, signal: AbortSignal.timeout(STOP_MS),
+  } }).catch(() => undefined)
+  const found = res?.ok ? z.safeParse(Run, await res.json().catch(() => undefined)).data : await res?.body?.cancel().catch(() => undefined)
+  return found?.status === 'queued'
 }
 
 async function stopRun({ agent, run }: { agent: { id: string; net: number; channel_key: string }; run: string }): Promise<void> {
@@ -112,11 +139,13 @@ async function* sseEvents({ body, signal }: { body: ReadableStream<Uint8Array>; 
       if (next.done) return
       buffer += decoder.decode(next.value, { stream: true }).replace(/\r\n/g, '\n')
       for (let end = buffer.indexOf('\n\n'); end >= 0; end = buffer.indexOf('\n\n')) {
-        const lines = buffer.slice(0, end).split('\n').filter((line) => !line.startsWith(':'))
+        const frame = buffer.slice(0, end)
+        const lines = frame.split('\n').filter((line) => !line.startsWith(':'))
         buffer = buffer.slice(end + 2)
         const name = lines.find((line) => line.startsWith('event:'))?.slice(6).trim() ?? 'message'
         const data = lines.filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trimStart()).join('\n')
         if (data) yield { name, data }
+        else if (!lines.length && frame.startsWith(':')) yield { name: 'comment', data: '' }
       }
     }
   } finally {
