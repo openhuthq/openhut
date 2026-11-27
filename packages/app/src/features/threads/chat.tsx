@@ -110,7 +110,6 @@ function ThreadView({ thread, fetchedAt, agent, actions, tools, onTitle }: { thr
     {waiting && <AgentReply agent={agent} threadId={thread.id} message={{ id: 'waiting', role: 'assistant', parts: [] }} live />}
     <PendingAsks agent={agent} shown={new Set(chat.messages.flatMap(changesOf))} />
     {!agent.runsHere && !busy && last?.role === 'user' && !troubleOf(agent) && <p className="m-0 text-right text-[12.5px] text-mute">{agent.runsNowhere ? `No computer runs ${agent.name} now. ${agent.canManage ? 'Run it here to get an answer.' : `Ask an admin to run ${agent.name} on their computer.`}` : `Sent to ${agent.runsOnName ?? 'your other computer'}. ${agent.name} answers when it’s on.`}</p>}
-    {!thread.readOnly && <TypingNow threadId={thread.id} />}
     {chat.error && !busy && !(last && workOf(last)?.error) && <Alert variant="error-outline" role="alert"><span>{plainError(chat.error.message)}</span><Button type="button" variant="secondary" size="sm" className="ml-auto" onClick={retry}>Try again</Button></Alert>}
   </ChatFrame></CardReply></ChatFiles>
 }
@@ -292,7 +291,8 @@ function Composer({ agent, threadId, busy, quiet, attachments, clear, onSend, on
   return <div className="shrink-0 px-8 pb-5 transition-[padding] group-data-[threads]/chat:pr-[396px] phone:px-3 phone:pb-3">
     {(!ready || state === 'not_answering') && !busy && !quiet && <NotReady agent={agent} />}
     {starting && <p className={cn(HINT, 'mx-auto mb-2 flex max-w-[840px] items-center gap-1.5')} role="status"><Spinner className="mt-0 size-3" />Starting… your message will send.</p>}
-    <form className="mx-auto flex max-w-[840px] flex-col gap-2 rounded-[22px] border border-ink bg-sidebar px-3 pt-3 pb-2.5 shadow-[0_6px_24px_-12px_oklch(0%_0_0/.18)] transition-[border-color,box-shadow] focus-within:shadow-[0_8px_28px_-12px_oklch(0%_0_0/.26)]" onSubmit={submit}>
+    <form className="relative mx-auto flex max-w-[840px] flex-col gap-2 rounded-[22px] border border-ink bg-sidebar px-3 pt-3 pb-2.5 shadow-[0_6px_24px_-12px_oklch(0%_0_0/.18)] transition-[border-color,box-shadow] focus-within:shadow-[0_8px_28px_-12px_oklch(0%_0_0/.26)]" onSubmit={submit}>
+      <TypingNow threadId={threadId} />
       {attachments.items.length > 0 && <div className="flex flex-wrap gap-1.5">{attachments.items.map((each) => <FileChip key={each.key} name={each.name} image={each.image} thumb={each.thumb} busy={!each.file} onRemove={() => attachments.remove(each.key)} />)}</div>}
       <Input ref={picker} type="file" multiple hidden onChange={(event) => { attachments.add(Array.from(event.currentTarget.files ?? [])); event.currentTarget.value = '' }} />
       <Textarea variant="composer" name="text" rows={2} aria-label="Message" placeholder={placeholderOf(agent)} disabled={!ready} autoFocus={!touch}
