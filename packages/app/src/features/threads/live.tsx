@@ -25,38 +25,23 @@ function answeringLine({ answering, people }: { answering: string[]; people: Liv
 const AGENT_WORD: Record<AgentLive['state'], string> = { idle: 'Idle', thinking: 'Working', working: 'Working', replying: 'Replying' }
 const PERSON_WORD: Record<LivePerson['state'], string> = { viewing: 'Viewing', typing: 'Typing' }
 
-export function busyAgent(agent: AgentLive): boolean {
-  return agent.state !== 'idle'
-}
-
-function Bubble() {
-  return <span className="absolute -top-2 left-1/2 flex h-[9px] -translate-x-1/2 items-center gap-[2px] rounded-full bg-ink px-[3px]" aria-hidden="true">
-    {['', '[animation-delay:.16s]', '[animation-delay:.32s]'].map((delay) => <i key={delay} className={cn('size-[3px] animate-pulse rounded-full bg-white', delay)} />)}
-  </span>
-}
-
 export function PresenceFaces({ agent, threadId }: { agent: Agent; threadId: string }) {
   const { people, agent: live } = usePresence(threadId)
   const me = useOwner()
-  if (!people.some((person) => person.email !== me)) return null
-  return <><Popover>
-    <PopoverTrigger render={<Button type="button" variant="bare" className="flex h-8 items-center gap-2 rounded-lg px-1.5 text-[13px] font-normal text-body hover:bg-hover" aria-label={`${people.length} here`} />}>
-      <span className="flex items-center">
-        {people.map((person) => <span key={person.id} className="relative -ml-1.5 first:ml-0" title={nameOf(person)}>
-          <PersonFace name={nameOf(person)} email={person.email} size={24} />
-          <i className="absolute -right-px -bottom-px size-2 rounded-full border-[1.5px] border-card bg-pass" />
-          {person.state === 'typing' && <Bubble />}
-        </span>)}
-        <span className={cn('relative -ml-1.5', busyAgent(live) && 'animate-pulse')}><Face agent={agent} size={24} /></span>
-      </span>
-      {people.length} here
+  const others = people.filter((person) => person.email !== me)
+  if (!others.length) return null
+  const extra = others.length - 3
+  return <Popover>
+    <PopoverTrigger render={<Button type="button" variant="bare" className="flex h-8 items-center gap-1 rounded-full transition-opacity hover:opacity-75" aria-label={`Here: ${namesLine(others.map(nameOf))}`} title={namesLine(others.map(nameOf))} />}>
+      {others.slice(0, extra > 0 ? 2 : 3).map((person) => <PersonFace key={person.id} name={nameOf(person)} email={person.email} size={28} />)}
+      {extra > 0 && <span className="grid size-7 place-items-center rounded-full bg-soft text-[11px] font-semibold text-body">+{extra + 1}</span>}
     </PopoverTrigger>
     <PopoverContent className="w-[280px] gap-0 p-2">
       <p className="m-0 px-2 pt-1 pb-1.5 text-[12px] text-mute">In this thread</p>
       <Row face={<Face agent={agent} size={24} />} name={agent.name} state={AGENT_WORD[live.state]} tone={live.state === 'replying' ? 'text-success-foreground' : undefined} />
       {people.map((person) => <Row key={person.id} face={<PersonFace name={nameOf(person)} email={person.email} size={24} />} name={nameOf(person)} you={person.email === me} state={PERSON_WORD[person.state]} />)}
     </PopoverContent>
-  </Popover><span className="mx-1.5 h-4 w-px bg-hair phone:hidden" /></>
+  </Popover>
 }
 
 function Row({ face, name, you, state, tone }: { face: ReactNode; name: string; you?: boolean; state: string; tone?: string }) {
@@ -70,12 +55,14 @@ function Row({ face, name, you, state, tone }: { face: ReactNode; name: string; 
 export function TypingNow({ threadId }: { threadId: string }) {
   const me = useOwner()
   const typing = usePresence(threadId).typing.filter((person) => person.email !== me)
-  if (!typing.length) return null
-  return <div className="flex items-center gap-2 text-[12.5px] text-mute" role="status">
-    <span className="flex items-center">{typing.slice(0, 3).map((person) => <span key={person.id} className="-ml-1 first:ml-0"><PersonFace name={nameOf(person)} email={person.email} size={16} /></span>)}</span>
-    <span><span className="text-body">{typingLine(typing.map((person) => nameOf(person)))}</span></span>
-    <span className="opacity-50"><Dots /></span>
-  </div>
+  return typing.slice(0, 3).map((person) => <div key={person.id} className="flex gap-3" role="status" aria-label={`${nameOf(person)} is typing`}>
+    <PersonFace name={nameOf(person)} email={person.email} size={28} />
+    <span className="grid gap-1"><span className="text-[12px] text-mute">{nameOf(person)}</span>
+      <span className="flex h-[37px] w-fit items-center gap-[5px] rounded-[4px_12px_12px_12px] bg-soft px-3.5">
+        {['', '[animation-delay:.15s]', '[animation-delay:.3s]'].map((delay) => <i key={delay} className={cn('size-[6px] animate-typing-dot rounded-full bg-mute', delay)} />)}
+      </span>
+    </span>
+  </div>)
 }
 
 export function SeenBy({ threadId }: { threadId: string }) {

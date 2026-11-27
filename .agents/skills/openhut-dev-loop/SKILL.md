@@ -24,3 +24,4 @@ OpenHut is a web app. You see a change in a browser in seconds.
 
 **Gotchas**
 - Two worktrees can each run `npm run dev`: ports step to the next free one. Stop your own processes by PID (`lsof -tiTCP:<port>`), never `pkill -f`.
+- Dev has one user, so teammates in a thread can't be seen. To fake them, in the page's console: `(await import('/src/lib/thread-live.ts')).liveThreads.receive({ type: 'presence', thread: '<thread id>', people: [{ id: '2', name: 'Zaid Haddad', email: 'zaid@example.com', state: 'typing' }], agent: { state: 'idle' } })`. Vite serves the same module, so the app shows them until the server's next presence event.

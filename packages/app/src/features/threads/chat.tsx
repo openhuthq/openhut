@@ -6,7 +6,7 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { SpecDataPart } from '@json-render/core'
 import { useJsonRenderMessage } from '@json-render/react'
-import { ArrowLeft01Icon, ArrowUp02Icon, ArrowUpRight01Icon, Attachment01Icon, Cancel01Icon, Copy01Icon, EraserIcon, File01Icon, Image01Icon, PlayIcon } from '@hugeicons/core-free-icons'
+import { ArrowDown02Icon, ArrowLeft01Icon, ArrowUp02Icon, ArrowUpRight01Icon, Attachment01Icon, Cancel01Icon, Copy01Icon, EraserIcon, File01Icon, Image01Icon, PlayIcon } from '@hugeicons/core-free-icons'
 import { openhut, type OpenHutAgent } from '@/lib/openhut'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { ChatCall, fileInHome, MAX_FILE_BYTES, MAX_FILES, ToolProgress, Work, type ChatFile, type ChatMessage } from '@openhut/common/threads/thread.ts'
@@ -175,6 +175,7 @@ function ChatFrame({ agent, thread, composer, tools, onTitle, onFiles, children 
   const log = useRef<HTMLDivElement>(null)
   const sidebar = useContext(SidebarContext)
   const pinned = useRef(true)
+  const [away, setAway] = useState(false)
   useEffect(() => {
     const element = log.current
     if (element && pinned.current) element.scrollTop = element.scrollHeight
@@ -184,8 +185,14 @@ function ChatFrame({ agent, thread, composer, tools, onTitle, onFiles, children 
     if (!element) return
     const observer = new ResizeObserver(() => { if (pinned.current) element.scrollTop = element.scrollHeight })
     observer.observe(element)
+    if (element.firstElementChild) observer.observe(element.firstElementChild)
     return () => observer.disconnect()
   }, [])
+  useEffect(() => {
+    pinned.current = true
+    setAway(false)
+    if (log.current) log.current.scrollTop = log.current.scrollHeight
+  }, [thread?.id])
   const dragOver = (event: DragEvent) => {
     if (onFiles && event.dataTransfer.types.includes('Files')) event.preventDefault()
   }
@@ -204,11 +211,15 @@ function ChatFrame({ agent, thread, composer, tools, onTitle, onFiles, children 
       {!onTitle && <a href={agentPath({ agentId: agent.id, dialog: 'setup', detail: 'general' })} aria-label={`Set up ${agent.name}`} className="group absolute top-3 left-1/2 flex max-w-[50%] -translate-x-1/2 flex-col items-center gap-2 text-ink no-underline phone:hidden">
         <Face agent={agent} size={56} /><span className="max-w-full truncate rounded-full bg-soft px-3.5 py-1 text-[14px] font-medium group-hover:bg-mid">{agent.name}</span>
       </a>}
-      <span className="float ml-auto flex items-center gap-0.5 phone:h-10 phone:justify-self-end phone:rounded-full phone:bg-card phone:px-1">{thread && <PresenceFaces agent={agent} threadId={thread.id} />}{tools}</span>
+      <span className="float ml-auto flex items-center gap-0.5 phone:h-10 phone:justify-self-end phone:rounded-full phone:bg-card phone:px-1">{tools}</span>
     </div>
-    <div ref={log} className="fade-t flex flex-1 flex-col overflow-auto px-8 py-5 transition-[padding] group-data-[threads]/chat:pr-[396px] phone:px-4" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80 }}>
+    <div ref={log} className="fade-t flex flex-1 flex-col overflow-auto px-8 py-5 transition-[padding] group-data-[threads]/chat:pr-[396px] phone:px-4" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80; setAway(!pinned.current) }}>
       <div className="mx-auto flex w-full max-w-[840px] flex-1 flex-col gap-4">{children}</div>
     </div>
+    {away && <div className="relative h-0 px-8 group-data-[threads]/chat:pr-[396px] phone:px-3"><div className="relative mx-auto max-w-[840px]">
+      <Button type="button" variant="bare" aria-label="Scroll to the latest message" title="Scroll to bottom" className="absolute -top-12 left-1/2 grid size-9 -translate-x-1/2 place-items-center rounded-full border border-hair bg-card text-ink shadow-pop hover:bg-hover"
+        onClick={() => log.current?.scrollTo({ top: log.current.scrollHeight, behavior: 'smooth' })}><I icon={ArrowDown02Icon} size={18} /></Button>
+    </div></div>}
     {composer}
   </section>
 }
@@ -290,7 +301,7 @@ function Composer({ agent, threadId, busy, quiet, attachments, clear, onSend, on
       <div className="flex items-center gap-1">
         <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Attach files" title="Attach files" disabled={!ready} onClick={() => picker.current?.click()}><I icon={Attachment01Icon} size={16} /></Button>
         {clear}
-        <span className="ml-auto"><Button type="submit" variant="send" className="rounded-full" onMouseDown={(event) => event.preventDefault()} aria-label={busy ? 'Stop' : 'Send'} title={busy ? 'Stop' : 'Send (Enter). Shift+Enter for a new line'} disabled={!busy && (!ready || nothing || attachments.uploading)}>{busy ? <span className="size-2.5 rounded-[2px] bg-white" /> : <I icon={ArrowUp02Icon} className="text-white" />}</Button></span>
+        <span className="ml-auto flex items-center gap-2"><PresenceFaces agent={agent} threadId={threadId} /><Button type="submit" variant="send" className="rounded-full" onMouseDown={(event) => event.preventDefault()} aria-label={busy ? 'Stop' : 'Send'} title={busy ? 'Stop' : 'Send (Enter). Shift+Enter for a new line'} disabled={!busy && (!ready || nothing || attachments.uploading)}>{busy ? <span className="size-2.5 rounded-[2px] bg-white" /> : <I icon={ArrowUp02Icon} className="text-white" />}</Button></span>
       </div>
     </form>
   </div>

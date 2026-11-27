@@ -45,6 +45,7 @@
   --animate-spin: spin .8s linear infinite;
   --animate-spin-slow: spin 1.2s linear infinite;
   --animate-hop: hop .75s cubic-bezier(.3, 0, .3, 1);
+  --animate-typing-dot: typing-dot 1.2s ease-in-out infinite;
 }
 
 @theme inline {
@@ -213,6 +214,7 @@
 @keyframes hop-rest { 0%, 26%, 100% { transform: none } 4% { transform: scale(1.1, .86) } 11% { transform: scale(.93, 1.1) translateY(-16%) } 16% { transform: scale(.97, 1.04) translateY(-4%) } 20% { transform: scale(1.08, .9) } }
 @keyframes pop { 0% { opacity: 0; scale: .4 } 60% { opacity: 1; scale: 1.1 } 100% { scale: 1 } }
 @keyframes bob { 50% { translate: 0 -5px } }
+@keyframes typing-dot { 0%, 60%, 100% { translate: 0 0; opacity: .35 } 30% { translate: 0 -3px; opacity: .9 } }
 @keyframes sweep { 50% { rotate: -14deg } }
 @keyframes jig { 25% { rotate: -8deg } 75% { rotate: 8deg } }
 @keyframes stepin { from { opacity: 0; translate: 12px 0 } }
