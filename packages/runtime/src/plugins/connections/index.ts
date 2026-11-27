@@ -123,6 +123,8 @@ function keyed({ input, fields }: { input: z.infer<typeof ConnectApp>; fields: R
     return { kind: 'mcp', name, url: input.url, header: token ? `Authorization: Bearer ${token}` : fields.header }
   }
   if (input.app === 'postgres') return { kind: 'postgres', name, dsn: fields.dsn }
+  if (input.app === 'clickhouse') return { kind: 'clickhouse', name, dsn: fields.dsn }
+  if (input.app === 'betterstack') return { kind: 'betterstack', name, token: fields.token }
   if (input.app === 'convex') return { kind: 'convex', name, deployKey: fields.deployKey }
   if (input.app === 'excalidraw') return { kind: 'excalidraw', name }
   throw new HttpError(400, `${CONNECTION_TITLES[input.app]} connects by signing in, not with fields.`)

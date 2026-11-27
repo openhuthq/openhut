@@ -24,6 +24,8 @@ import { cn } from '@/lib/utils'
 
 const ROLE_SQL = `create role openhut_reader login password 'choose-a-password';
 grant pg_read_all_data to openhut_reader;`
+const CLICKHOUSE_SQL = `CREATE USER openhut_reader IDENTIFIED BY 'choose-a-password';
+GRANT SELECT ON *.* TO openhut_reader;`
 
 type FlowProps = { me: Me; item: Integration; close: () => void; returned: string | undefined }
 
@@ -34,6 +36,8 @@ export function ConnectSheet({ me, item, onClose }: { me: Me; item: Integration;
   if (GOOGLE_KINDS.some((kind) => kind === item.name)) return <GoogleSheet {...props} />
   switch (item.name) {
     case 'postgres': return <PostgresSheet {...props} />
+    case 'clickhouse': return <ClickHouseSheet {...props} />
+    case 'betterstack': return <BetterStackSheet {...props} />
     case 'convex': return <ConvexSheet {...props} />
     case 'mcp': return <McpSheet {...props} />
     case 'github': return <GitHubSheet {...props} />
@@ -75,6 +79,56 @@ function PostgresSheet({ item, close, returned }: FlowProps) {
         <Field label="Password"><Input mono name="password" type="password" required placeholder="••••••••" autoComplete="off" /></Field>
       </div>}
     <span className="flex items-center gap-2 text-[12px] text-mute">Use a read-only role.<CopyButton text={ROLE_SQL} label="Copy SQL" className={PILL} /></span>
+  </SetupSheet>
+}
+
+function ClickHouseSheet({ item, close, returned }: FlowProps) {
+  const create = useCreateConnection()
+  const [mode, setMode] = useState('fields')
+  const name = useNameField(item)
+  return <SetupSheet {...sheetOf(item)} onClose={close} error={formError(create.error, ['dsn', 'name']) ?? returned}
+    onSubmit={(event) => {
+      const field = formValues(event)
+      create.mutate({ kind: 'clickhouse', name: field('name').trim(), dsn: mode === 'dsn' ? field('dsn') : clickhouseDsn(field) })
+    }}
+    foot={FOOT(close, create.isPending, 'Test and connect')}>
+    {name(fieldError(create.error, 'name'))}
+    <ToggleGroup variant="segmented" aria-label="How to enter it" className="w-fit" value={mode} onPick={setMode}>
+      <ToggleGroupItem className="text-[13px]" value="fields">Address</ToggleGroupItem>
+      <ToggleGroupItem className="text-[13px]" value="dsn">Connection string</ToggleGroupItem>
+    </ToggleGroup>
+    {mode === 'dsn'
+      ? <Field label="Connection string" error={fieldError(create.error, 'dsn')}><Input mono name="dsn" required placeholder="https://openhut_reader:…@abc.clickhouse.cloud:8443/default" autoComplete="off" /></Field>
+      : <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2.5">
+        <div className="col-span-2"><Field label="Address" error={fieldError(create.error, 'dsn')}><Input mono name="url" type="url" required placeholder="https://abc.clickhouse.cloud:8443" autoComplete="off" /></Field></div>
+        <Field label="User"><Input mono name="user" required defaultValue="openhut_reader" autoComplete="off" /></Field>
+        <Field label="Password"><Input mono name="password" type="password" placeholder="••••••••" autoComplete="off" /></Field>
+        <Field label="Database"><Input mono name="database" placeholder="default" autoComplete="off" /></Field>
+      </div>}
+    <span className="flex items-center gap-2 text-[12px] text-mute">Use a user that can only read.<CopyButton text={CLICKHOUSE_SQL} label="Copy SQL" className={PILL} /></span>
+  </SetupSheet>
+}
+
+function clickhouseDsn(field: (name: string) => string): string {
+  const url = new URL(field('url'))
+  url.username = encodeURIComponent(field('user'))
+  url.password = encodeURIComponent(field('password'))
+  url.pathname = field('database') ? `/${encodeURIComponent(field('database'))}` : ''
+  return url.toString().replace(/\/$/, '')
+}
+
+function BetterStackSheet({ item, close, returned }: FlowProps) {
+  const create = useCreateConnection()
+  const name = useNameField(item)
+  return <SetupSheet {...sheetOf(item)} onClose={close} error={formError(create.error, ['token', 'name']) ?? returned}
+    onSubmit={(event) => {
+      const field = formValues(event)
+      create.mutate({ kind: 'betterstack', name: field('name').trim(), token: field('token').trim() })
+    }}
+    foot={FOOT(close, create.isPending, 'Test and connect')}>
+    {name(fieldError(create.error, 'name'))}
+    <Field label="Telemetry API token" error={fieldError(create.error, 'token')}><Input mono name="token" type="password" required placeholder="Paste the token" autoComplete="off" /></Field>
+    <span className="flex items-center gap-2 text-[12px] text-mute">From API tokens › Team-based tokens, the one marked Telemetry.<a className={cn(buttonVariants({ variant: 'secondary' }), PILL)} href="https://betterstack.com/settings/api-tokens/0" target="_blank" rel="noreferrer">Open Better Stack</a></span>
   </SetupSheet>
 }
 

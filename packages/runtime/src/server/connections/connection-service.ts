@@ -11,6 +11,8 @@ import { deleted } from '../platform/responses.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { newId, unseal } from '../platform/secrets.ts'
 import type { Connector, ConnectorContext, ToolSpec } from '../integrations/connector.ts'
+import { betterstack } from '../integrations/betterstack/betterstack.ts'
+import { clickhouse } from '../integrations/clickhouse/clickhouse.ts'
 import { convex } from '../integrations/convex/convex.ts'
 import { github } from '../integrations/github/github.ts'
 import { google } from '../integrations/google/google.ts'
@@ -48,6 +50,8 @@ const redirectUrl = () => `${callbackBase()}/api/connection-authorizations/callb
 export const callbackBase = (): string => publicAddress()
 const CONNECTORS: Record<ConnectionKind, Connector> = {
   postgres: postgres.connector,
+  clickhouse: clickhouse.connector,
+  betterstack: betterstack.connector,
   convex: convex.connector,
   posthog: mcp.connector({ url: MCP_SERVERS.posthog, redirectUrl }),
   linear: mcp.connector({ url: MCP_SERVERS.linear, redirectUrl }),
@@ -87,8 +91,8 @@ export const connectionService = {
     return connection
   },
 
-  async create({ actor, kind = 'postgres', name, dsn, deployKey, url, header }: { actor: Caller } & CreateConnection): Promise<Connection> {
-    const { config, account } = await keyedConfig({ kind, dsn, deployKey, url, header })
+  async create({ actor, kind = 'postgres', name, dsn, deployKey, token, url, header }: { actor: Caller } & CreateConnection): Promise<Connection> {
+    const { config, account } = await keyedConfig({ kind, dsn, deployKey, token, url, header })
     return connectionService.save({ actor, kind, name, config, account, signIn: false })
   },
 
@@ -104,7 +108,7 @@ export const connectionService = {
     const url = typeof before.url === 'string' ? before.url : undefined
     const clean = token?.trim()
     if (clean !== undefined && /\s/.test(clean)) throw new HttpError(400, 'Paste the token as it is, with no spaces.', { param: 'token' })
-    const { config, account } = await keyedConfig({ kind, dsn, deployKey, url, header: clean ? `Authorization: Bearer ${clean}` : undefined })
+    const { config, account } = await keyedConfig({ kind, dsn, deployKey, token: clean, url, header: clean ? `Authorization: Bearer ${clean}` : undefined })
     return connectionService.save({ actor, kind, name: row.name, config, account, signIn: false, id })
   },
 
@@ -366,7 +370,15 @@ async function record({ agentId, connectionId, tool, reason, outcome, ms = 0, ap
   await db.insertInto('connection_event').values({ agent_id: agentId, connection_id: connectionId, tool, reason: reason.slice(0, 500), outcome, ms, approved_by: approvedBy, problem: outcome === 'failed' ? problemOf(error) : null }).execute()
 }
 
-async function keyedConfig({ kind, dsn, deployKey, url, header }: Omit<CreateConnection, 'name'>): Promise<{ config: Secret; account: string }> {
+async function keyedConfig({ kind, dsn, deployKey, token, url, header }: Omit<CreateConnection, 'name'>): Promise<{ config: Secret; account: string }> {
+  if (kind === 'clickhouse') {
+    if (!dsn) throw new HttpError(400, 'Paste the ClickHouse address.', { param: 'dsn' })
+    return { config: { dsn }, account: await clickhouse.probe(dsn) }
+  }
+  if (kind === 'betterstack') {
+    if (!token) throw new HttpError(400, 'Paste the Telemetry API token.', { param: 'token' })
+    return { config: { token: token.trim() }, account: await betterstack.probe(token.trim()) }
+  }
   if (kind === 'convex') {
     if (!deployKey) throw new HttpError(400, 'Paste the deploy key.', { param: 'deployKey' })
     return { config: { deployKey: deployKey.trim() }, account: await convex.probe(deployKey.trim()) }
