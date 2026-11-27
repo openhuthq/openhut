@@ -1,4 +1,4 @@
-import { ArrowRight01Icon, Cancel01Icon, CancelCircleIcon, CircleIcon, Clock01Icon, Loading02Icon } from '@hugeicons/core-free-icons'
+import { Cancel01Icon, CancelCircleIcon, CircleIcon, Loading02Icon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import type { Routine } from '@openhut/common/routines/routine.ts'
 import { Button } from '@/components/ui/button'
@@ -6,7 +6,7 @@ import { DialogTitle } from '@/components/ui/dialog'
 import { useConfirming } from '@/components/confirm-button'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorNote } from '@/components/error-note'
-import { DialogCard, I, Loading, ROW, ROW_VALUE, SPLIT_DIALOG } from '@/components/kit'
+import { DialogCard, I, Loading, SPLIT_DIALOG } from '@/components/kit'
 import { agentPath } from '@/app/routes'
 import { Face } from '@/features/agents/face'
 import { useRoutines, useStopRoutine, useUpdateRoutine } from '@/features/routines/api'
@@ -18,17 +18,6 @@ import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 const DAY_MS = 86_400_000
-
-export function RoutinesRow({ agent }: { agent: Agent }) {
-  const routines = useRoutines(agent.id).data
-  const stopped = routines?.filter((each) => each.stopped).length ?? 0
-  const active = (routines?.length ?? 0) - stopped
-  return <a className={ROW} href={agentPath({ agentId: agent.id, dialog: 'routines' })}><I icon={Clock01Icon} size={15} className="text-mute" />Routines<span className={ROW_VALUE}>
-    {routines && (active || stopped ? active : 'None yet')}
-    {stopped > 0 && <><span className="text-mute">·</span><i className="size-1.5 rounded-full bg-fail" />{stopped} stopped</>}
-    <I icon={ArrowRight01Icon} size={12} className="text-mute" />
-  </span></a>
-}
 
 export function RoutinesDialog({ agent, open, onClose }: { agent: Agent; open: string | undefined; onClose: () => void }) {
   const routines = useRoutines(agent.id)

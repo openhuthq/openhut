@@ -42,10 +42,12 @@ export function startedIn(thread: SourcedThread): string {
   return source.platform === 'discord' ? `Discord ${source.label}` : source.label
 }
 
-export const PREVIEW_THREADS = 5
-
-export function threadsOf(threads: SourcedThread[], agentId: string): SourcedThread[] {
-  const mine = threads.filter((thread) => thread.agentId === agentId)
-  const newest = mine.filter((thread) => thread.id !== agentId).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
-  return [...mine.filter((thread) => thread.id === agentId), ...newest]
+export function threadsOf({ threads, agent }: { threads: SourcedThread[]; agent: { id: string; createdAt: string } }): SourcedThread[] {
+  const mine = threads.filter((thread) => thread.agentId === agent.id)
+  const newest = mine.filter((thread) => thread.id !== agent.id).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+  const main = mine.find((thread) => thread.id === agent.id) ?? {
+    id: agent.id, object: 'thread', agentId: agent.id, title: '', origin: { platform: 'app', label: '' }, place: null, readOnly: false, continueUrl: null,
+    waiting: false, preview: '', archivedAt: null, createdAt: agent.createdAt, updatedAt: agent.createdAt,
+  }
+  return [main, ...newest]
 }

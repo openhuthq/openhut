@@ -68,6 +68,7 @@
   --color-mute: var(--mute);
   --color-mute-2: var(--mute-2);
   --color-tint: var(--tint);
+  --color-wait: var(--wait);
   --color-hue-slate: var(--hue-slate);
   --color-hue-sky: var(--hue-sky);
   --color-hue-blue: var(--hue-blue);
@@ -110,7 +111,7 @@
     color-scheme: light;
     --sidebar: #f7f7f7; --hover: oklch(0% 0 0 / .035); --picked: oklch(0% 0 0 / .08); --canvas: oklch(98.8% .001 290); --card: #ffffff; --soft: oklch(0% 0 0 / .06); --mid: oklch(0% 0 0 / .16);
     --hair: oklch(0% 0 0 / .08); --ink: #0b0b0c; --body: oklch(32% .004 290); --mute: oklch(45% .0033 290); --mute-2: oklch(56% .0031 290);
-    --tint: oklch(0% 0 0 / .04);
+    --tint: oklch(0% 0 0 / .04); --wait: #D9824A;
     --primary: #0b0b0c; --primary-hover: #26262a; --breeze: var(--ink);
     --night: #0b0b0c; --night-muted: #9a9aa2;
     --pass: oklch(61.7% .208 142.85); --fail: oklch(55% .185 27);
@@ -246,6 +247,7 @@
 @utility no-scrollbar { scrollbar-width: none; &::-webkit-scrollbar { display: none } }
 @utility fade-t { mask-image: linear-gradient(to bottom, transparent, #000 24px) }
 @utility fade-b { mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent) }
+@utility fade-b-lg { mask-image: linear-gradient(to bottom, #000 calc(100% - 48px), transparent) }
 @utility fade-r { mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent) }
 @utility fade-y { mask-image: linear-gradient(to bottom, transparent, #000 12px, #000 calc(100% - 16px), transparent) }
 

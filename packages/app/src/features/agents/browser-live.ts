@@ -3,6 +3,7 @@ import { openChannel, type Channel } from '../../lib/live-socket.ts'
 
 const RETRY_MS = 3000
 const ACTIONS_SHOWN = 12
+const BUSY_MS = 15_000
 const MOUSE_EVENTS = { down: 'mousePressed', up: 'mouseReleased', move: 'mouseMoved', wheel: 'mouseWheel' } as const
 const KEY_CODES: Record<string, number> = {
   Backspace: 8, Tab: 9, Enter: 13, Escape: 27, ' ': 32, PageUp: 33, PageDown: 34, End: 35, Home: 36,
@@ -22,10 +23,16 @@ export function useLive({ path, canvas }: { path: string; canvas: RefObject<HTML
   const [actions, setActions] = useState<Action[]>([])
   const [error, setError] = useState<string>()
   const [rate, setRate] = useState(0)
+  const [busy, setBusy] = useState(false)
   const channel = useRef<Channel>(undefined)
   const frames = useRef(0)
+  const seenAt = useRef(0)
   useEffect(() => {
-    const count = setInterval(() => { setRate(frames.current); frames.current = 0 }, 1000)
+    const count = setInterval(() => {
+      setRate(frames.current)
+      frames.current = 0
+      setBusy(Date.now() - seenAt.current < BUSY_MS)
+    }, 1000)
     return () => clearInterval(count)
   }, [])
   useEffect(() => {
@@ -41,6 +48,8 @@ export function useLive({ path, canvas }: { path: string; canvas: RefObject<HTML
             const ack = () => open.send(JSON.stringify({ type: 'ack', seq: message.seq }))
             void paint({ canvas: canvas.current, data: message.data, viewWidth: viewWidthOf(message.metadata) }).finally(ack)
             frames.current += 1
+            seenAt.current = Date.now()
+            setBusy(true)
             setState('live')
             setError(undefined)
           }
@@ -51,7 +60,12 @@ export function useLive({ path, canvas }: { path: string; canvas: RefObject<HTML
             setHeld(hold.held)
             setMine(hold.mine)
           }
-          if (message?.type === 'closed') setState('closed')
+          if (message?.type === 'closed') {
+            seenAt.current = 0
+            setBusy(false)
+            setState('closed')
+          }
+          if (message?.type === 'command') seenAt.current = Date.now()
           if (message?.type === 'command' && typeof message.action === 'string') pending.set(String(message.id), { action: message.action, url: typeof message.url === 'string' ? message.url : '' })
           if (message?.type === 'result') {
             const action = pending.get(String(message.id))
@@ -78,7 +92,7 @@ export function useLive({ path, canvas }: { path: string; canvas: RefObject<HTML
     }
   }, [path, canvas])
   const send = (message: object) => channel.current?.send(JSON.stringify(message))
-  return { state, page, held, mine, actions, error, fps: rate, hold: (held: boolean) => send({ type: 'hold', held }), mouse: (event: Mouse) => send(mouseInput(event)), key: (event: Key) => send(keyInput(event)) }
+  return { state, busy, page, held, mine, actions, error, fps: rate, hold: (held: boolean) => send({ type: 'hold', held }), mouse: (event: Mouse) => send(mouseInput(event)), key: (event: Key) => send(keyInput(event)) }
 }
 
 export function holdOf(message: Record<string, unknown>) {

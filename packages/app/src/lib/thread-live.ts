@@ -200,6 +200,18 @@ export function usePresence(thread: string): { people: LivePerson[]; typing: Liv
   return presenceOf(useSyncExternalStore(liveThreads.subscribe, () => liveThreads.joined(thread) ? liveThreads.get(thread) : liveThreads.board(thread)))
 }
 
+export function busyOf({ live, board }: { live: ThreadLive | undefined; board: LiveThreadBoard | undefined }): boolean {
+  return [live, board].some((each) => !!each && each.agent.state !== 'idle')
+}
+
+export function useWorking(thread: string): boolean {
+  return useSyncExternalStore(liveThreads.subscribe, () => busyOf({ live: liveThreads.joined(thread) ? liveThreads.get(thread) : undefined, board: liveThreads.board(thread) }))
+}
+
+export function agentWorking(board: LiveAgentBoard | undefined): boolean {
+  return !!board && (board.threads.some((thread) => thread.agent.state !== 'idle') || board.subagents.some((child) => child.status === 'working'))
+}
+
 export function useAgentsLive(): Map<string, LiveAgentBoard> {
   return useSyncExternalStore(liveThreads.subscribe, liveThreads.agents)
 }
