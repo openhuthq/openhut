@@ -1,13 +1,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs'
+import { constants, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 
 const skip = process.platform !== 'linux' && 'needs /proc (Linux)'
 const data = realpathSync(mkdtempSync(`${tmpdir()}/home-`))
 process.env.AGENTD_DATA = data
 process.env.OPENHUT_FAKE_SANDBOX = '1'
-const { agentHome } = await import('../../../src/agentd/home/home.ts')
+const { agentHome, listSkills } = await import('../../../../src/agentd/adapters/hermes/home.ts')
+const { openInside, readInside } = await import('../../../../src/agentd/home/safe-fs.ts')
 const id = 'ag_hometest'
 const root = `${data}/agents/${id}`
 mkdirSync(`${root}/memories`, { recursive: true })
@@ -57,4 +58,45 @@ test('a symlinked memory file is never read or written', { skip }, () => {
   assert.equal(agentHome.read({ id, path: 'memories/USER.md' }), null)
   assert.throws(() => agentHome.write({ id, path: 'memories/USER.md', body: Buffer.from('pwned') }), /not saved/)
   assert.equal(readFileSync(`${data}/secret`, 'utf8'), 'TOP SECRET')
+})
+
+const skillsBase = realpathSync(mkdtempSync(`${tmpdir()}/skills-`))
+const skillDir = `${skillsBase}/skills`
+const skillsSecret = `${skillsBase}/skillsSecret`
+mkdirSync(`${skillDir}/research/arxiv`, { recursive: true })
+mkdirSync(`${skillDir}/invoices`, { recursive: true })
+mkdirSync(`${skillsSecret}/keys`, { recursive: true })
+writeFileSync(`${skillDir}/research/arxiv/SKILL.md`, '---\nname: arxiv\n---\nSearch papers.\n')
+writeFileSync(`${skillDir}/invoices/SKILL.md`, '---\nname: invoices\n---\nChase late invoices.\n')
+writeFileSync(`${skillDir}/.bundled_manifest`, 'arxiv:abc\n')
+writeFileSync(`${skillsSecret}/keys/SKILL.md`, 'TOP SECRET')
+
+test('lists skills at any depth with their first lines and the bundled manifest', { skip }, () => {
+  const { skills, bundled } = listSkills(skillDir)
+  assert.deepEqual(skills.map((skill) => skill.path), ['invoices', 'research/arxiv'])
+  assert.match(skills[0].head, /name: invoices/)
+  assert.equal(bundled, 'arxiv:abc\n')
+})
+
+const opens = (path: string) => readInside({ root: skillDir, file: `${path}/SKILL.md`, limit: 100 }) !== undefined || openInside({ root: skillDir, file: `${path}/SKILL.md`, flags: constants.O_WRONLY }) !== undefined
+
+test('a symlinked file, a symlinked folder and a hard link are never read or written', { skip }, () => {
+  mkdirSync(`${skillDir}/linkfile`)
+  symlinkSync(`${skillsSecret}/keys/SKILL.md`, `${skillDir}/linkfile/SKILL.md`)
+  symlinkSync(`${skillsSecret}/keys`, `${skillDir}/linkdir`)
+  mkdirSync(`${skillDir}/hard`)
+  linkSync(`${skillsSecret}/keys/SKILL.md`, `${skillDir}/hard/SKILL.md`)
+  for (const path of ['linkfile', 'linkdir', 'hard']) {
+    assert.equal(opens(path), false)
+  }
+  assert.deepEqual(listSkills(skillDir).skills.map((skill) => skill.path), ['invoices', 'research/arxiv'])
+  assert.equal(readFileSync(`${skillsSecret}/keys/SKILL.md`, 'utf8'), 'TOP SECRET')
+})
+
+test('a skills folder swapped for a symlink shows nothing from where it points', { skip }, () => {
+  renameSync(skillDir, `${skillsBase}/skills-real`)
+  symlinkSync(skillsSecret, skillDir)
+  assert.deepEqual(listSkills(skillDir).skills, [])
+  assert.equal(opens('keys'), false)
+  assert.equal(readFileSync(`${skillsSecret}/keys/SKILL.md`, 'utf8'), 'TOP SECRET')
 })

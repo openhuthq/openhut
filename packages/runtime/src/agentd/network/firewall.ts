@@ -1,8 +1,8 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { AS_ROOT, box, ID } from './host.ts'
-import { FIREWALL } from './sandbox/docker.ts'
-import { errorText, EXEC } from './util.ts'
+import { AS_ROOT, box } from '../host.ts'
+import { errorText, EXEC } from '../util.ts'
+import { FIREWALL, ID } from './ports.ts'
 
 const run = promisify(execFile)
 const FRESH_MS = 5_000

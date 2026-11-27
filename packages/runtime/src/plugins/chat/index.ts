@@ -1,6 +1,6 @@
 import { definePlugin } from '../../core/plugin.ts'
 import { config } from '../../server/platform/config.ts'
-import { AGENT_API_PORT_BASE } from '../../agentd/sandbox/sandbox.ts'
+import { AGENT_API_PORT, AGENT_API_PORT_BASE } from '../../agentd/network/ports.ts'
 import { deliverAppWakes } from './wakes.ts'
 import { threadController } from '../../server/threads/thread-controller.ts'
 import { createTables } from './tables.ts'
@@ -17,7 +17,7 @@ export const chat = definePlugin({
     config: { platform_toolsets: { api_server: ['hermes-api-server', 'openhut'] } },
     env: {
       API_SERVER_KEY: channelKey,
-      ...(config.agentHostNet ? { API_SERVER_HOST: '127.0.0.1', API_SERVER_PORT: String(AGENT_API_PORT_BASE + agent.net) } : { API_SERVER_HOST: '0.0.0.0', API_SERVER_PORT: '8642' }),
+      ...(config.agentHostNet ? { API_SERVER_HOST: '127.0.0.1', API_SERVER_PORT: String(AGENT_API_PORT_BASE + agent.net) } : { API_SERVER_HOST: '0.0.0.0', API_SERVER_PORT: String(AGENT_API_PORT) }),
     },
   }),
   start: deliverAppWakes,

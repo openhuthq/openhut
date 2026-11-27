@@ -5,7 +5,7 @@ import { text } from 'node:stream/consumers'
 import type { SandboxSpec } from '../../../src/agentd/sandbox/sandbox.ts'
 
 process.env.OPENHUT_FAKE_SANDBOX ??= '1'
-const { sandboxes: box } = await import('../../../src/agentd/sandbox/index.ts')
+const { box } = await import('../../../src/agentd/host.ts')
 const { ok, reason } = await box.ready()
 const skip = ok ? false : `${box.name} is not ready: ${reason}`
 const real = box.name !== 'memory'
