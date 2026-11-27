@@ -99,7 +99,7 @@ function ThreadView({ thread, fetchedAt, agent, actions, tools, onTitle }: { thr
   const waiting = busy && chat.status !== 'streaming' && !(last?.role === 'assistant' && last.id === thread.activeTurn)
   const mine = [...shown].reverse().find((message) => message.role === 'user' && !webhookOf(message.metadata) && (z.safeParse(Authored, message.metadata).data?.author ?? me) === me)
   const said = saidAfter(shown)
-  const clear = agent.canEdit && chat.messages.length > 0 && !busy && !attachments.uploading && <ClearChat agent={agent} threadId={thread.id} attachments={attachments} />
+  const clear = agent.canEdit && <ClearChat agent={agent} threadId={thread.id} attachments={attachments} disabled={!chat.messages.length || busy || attachments.uploading} />
   return <ChatFiles value={files}><CardReply value={thread.readOnly ? undefined : (text) => { if (busy) return false; send(text); return true }}><ChatFrame agent={agent} thread={thread} tools={<>{actions}{clear}{tools}</>} onTitle={onTitle} onFiles={attachments.add} composer={thread.readOnly ? <ContinueBar thread={thread} /> : <Composer agent={agent} threadId={thread.id} busy={busy} quiet={!chat.messages.length} attachments={attachments} onSend={send} onStop={() => void stopThread({ agentId: agent.id, threadId: thread.id }).catch(toastError)} />}>
     {shown.length ? <>
       <Welcome agent={agent} />
@@ -317,10 +317,10 @@ function NotReady({ agent }: { agent: Agent }) {
   return <Alert variant="warning" className="max-w-[840px]" role="status" title={agent.healthDetail || undefined}><b>{agent.name} isn't ready.</b> {reason} {state === 'no_seat' && <a href="/settings/models">Open Settings › Models</a>}</Alert>
 }
 
-function ClearChat({ agent, threadId, attachments }: { agent: Agent; threadId: string; attachments: Attachments }) {
+function ClearChat({ agent, threadId, attachments, disabled }: { agent: Agent; threadId: string; attachments: Attachments; disabled: boolean }) {
   const clearChat = useClearChat({ agentId: agent.id, threadId })
   const uploads = attachments.items.flatMap((item) => item.file ? [item.file.path] : [])
-  return <ConfirmIcon label="Clear chat" text="Clear" icon={EraserIcon} question="Clear this chat? Memory stays; files you sent are deleted." action="Clear" busy={clearChat.isPending}
+  return <ConfirmIcon label="Clear chat" text="Clear chat" disabled={disabled} icon={EraserIcon} question="Clear this chat? Memory stays; files you sent are deleted." action="Clear" busy={clearChat.isPending}
     onConfirm={(done) => clearChat.mutate({ uploads }, { onSuccess: () => { attachments.clear(); done() }, onError: toastError })} />
 }
 

@@ -56,11 +56,11 @@ export function ConfirmDialog({ open, onOpenChange, question, detail, action, li
   </AlertDialog>
 }
 
-export function ConfirmIcon({ label, text, icon, danger, question, action, busy, onConfirm }: { label: string; text?: string; icon: IconSvgElement; danger?: boolean; question: string; action: string; busy: boolean; onConfirm: (done: () => void) => void }) {
+export function ConfirmIcon({ label, text, icon, danger, disabled, question, action, busy, onConfirm }: { label: string; text?: string; icon: IconSvgElement; danger?: boolean; disabled?: boolean; question: string; action: string; busy: boolean; onConfirm: (done: () => void) => void }) {
   const { confirming, setConfirming, box } = useConfirming()
   const phone = useMedia(PHONE)
   if (phone) return <ConfirmButton variant="bare" size="icon-sm" className={cn(TINY_ICON, danger && 'text-fail')} label={label} question={question} detail="" action={action} onConfirm={() => onConfirm(() => {})}><I icon={icon} size={16} /></ConfirmButton>
-  if (!confirming && text) return <Button type="button" variant="bare" className={cn(HEADER_ACTION, danger && 'text-fail')} aria-label={label} onClick={() => setConfirming(true)}><I icon={icon} size={15} />{text}</Button>
+  if (!confirming && text) return <Button type="button" variant="bare" className={cn(HEADER_ACTION, danger && 'text-fail')} aria-label={label} disabled={disabled} onClick={() => setConfirming(true)}><I icon={icon} size={15} />{text}</Button>
   if (!confirming) return <Tooltip label={label}><Button type="button" variant="bare" className={cn(TINY_ICON, danger && 'text-fail')} aria-label={label} onClick={() => setConfirming(true)}><I icon={icon} size={16} /></Button></Tooltip>
   return <div ref={box} role="group" aria-label={question} className="flex min-w-0 animate-grow items-center gap-1.5">
     <span className="min-w-0 truncate text-[12px] text-mute">{question}</span>
