@@ -3,5 +3,5 @@ import { definePlugin } from '../../core/plugin.ts'
 
 export const onboarding = definePlugin({
   name: 'onboarding',
-  hermes: ({ agent }) => ({ prompt: isStarter(agent) ? INTERVIEW_PROMPT : '' }),
+  agent: ({ agent }) => ({ instructions: isStarter(agent) ? INTERVIEW_PROMPT : '' }),
 })

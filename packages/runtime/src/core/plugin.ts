@@ -3,28 +3,9 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import type { Kysely } from 'kysely'
 import type { Database } from '../server/platform/db-schema.ts'
 import type { GatewayAgent } from '../server/agents/agent-service.ts'
-import type { Slots } from '../server/models/model-slots.ts'
-import type { RenderedChannel } from '../plugins/channels/index.ts'
+import type { AgentCtx, AgentEvents, AgentPart, Handler } from './agent.ts'
 import type { Origin } from '../server/inbox/routines.ts'
 import type { Caller } from '../server/team/identity.ts'
-
-export type HermesCtx = {
-  agent: { id: string; name: string; instructions: string; slots: Slots; net: number; code_execution: boolean; web_browser: boolean; notify?: string | null }
-  gateway: string
-  token: string
-  channelKey: string
-  channels: RenderedChannel[]
-  connections: { name: string; kind: string }[]
-  secrets: { name: string; hosts: string[] }[]
-}
-
-export type HermesPart = {
-  prompt?: string
-  config?: Record<string, unknown>
-  env?: Record<string, string>
-  auth?: object
-  restart?: unknown
-}
 
 export type ToolResult = string | { text: string; isError: boolean } | { send: { target: string; message: string } }
 
@@ -56,9 +37,9 @@ export type AskKind<I extends z.ZodObject = z.ZodObject, A extends z.ZodObject |
 export type Plugin = {
   name: string
   asks?: Record<string, AskKind<z.ZodObject, z.ZodObject | undefined>>
-  hermes?: (ctx: HermesCtx) => HermesPart
+  agent?: (ctx: AgentCtx) => AgentPart
   tools?: Record<string, Tool>
-  hooks?: Record<string, (x: { agent: GatewayAgent; args: Record<string, unknown>; origin: unknown }) => Promise<unknown>>
+  on?: { [E in keyof AgentEvents]?: Handler<E> }
   wakes?: {
     due: (x: { agentId: string }) => Promise<Wake[]>
     picked: (x: { agentId: string; id: string }) => Promise<void>

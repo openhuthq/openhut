@@ -3,8 +3,6 @@ import { CARD_PROMPT } from '@openhut/common/cards/card.ts'
 import { APP_PLATFORM, definePlugin } from '../../core/plugin.ts'
 import { cardService } from '../../server/cards/card-service.ts'
 
-const Reply = z.object({ response_text: z.string(), platform: z.string().nullish() })
-const Chat = z.object({ chat_id: z.string().optional(), thread_id: z.string().optional() })
 const Clicked = z.object({
   channel: z.object({ id: z.string() }).optional(),
   message: z.object({ ts: z.string().optional(), thread_ts: z.string().optional() }).optional(),
@@ -14,14 +12,12 @@ const Clicked = z.object({
 
 export const cards = definePlugin({
   name: 'cards',
-  hermes: () => ({ prompt: CARD_PROMPT }),
-  hooks: {
-    transform_llm_output: async ({ agent, args, origin }) => {
-      const { response_text: text, platform } = Reply.parse(args)
-      if (!platform || platform === APP_PLATFORM) return undefined
-      const chat = Chat.safeParse(origin).data
-      const rendered = (await cardService.render({ agent, text, channel: platform, chatId: chat?.chat_id, threadId: chat?.thread_id })).text
-      return rendered === text ? undefined : rendered
+  agent: () => ({ instructions: CARD_PROMPT }),
+  on: {
+    'reply.drafted': async ({ agent, event: { text, source } }) => {
+      if (!source || source.platform === APP_PLATFORM) return undefined
+      const rendered = (await cardService.render({ agent, text, channel: source.platform, chatId: source.chatId, threadId: source.threadId })).text
+      return rendered === text ? undefined : { text: rendered }
     },
   },
   slackAction: {

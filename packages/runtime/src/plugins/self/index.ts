@@ -11,7 +11,7 @@ const SelfChange = z.object({ name: z.string().min(1).max(40).optional(), instru
 
 export const self = definePlugin({
   name: 'self',
-  hermes: ({ agent }) => ({ prompt: agent.instructions }),
+  agent: ({ agent }) => ({ instructions: agent.instructions }),
   tools: {
     get_self: defineTool({
       description: 'Your name, instructions and channels, where post_message can post (postTo), the connections you have, and the ones you can ask for. Read it before you ask to change any of them.',

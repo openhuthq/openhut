@@ -7,7 +7,8 @@ import { log, emit } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { newId, seal, unseal } from '../platform/secrets.ts'
 import { deleted } from '../platform/responses.ts'
-import { agentd, containerStates, features } from '../platform/agentd.ts'
+import { features } from '../platform/agentd.ts'
+import { agent } from '../../core/agent.ts'
 import { slack, SlackSecrets } from '../integrations/slack/slack.ts'
 import { telegram, TelegramSecrets } from '../integrations/telegram/telegram.ts'
 import { discord } from '../integrations/discord/discord.ts'
@@ -265,7 +266,7 @@ async function setupOf({ body, facts }: { body: CreateChannel; facts: AgentFacts
     }
     case 'whatsapp': {
       if (facts.row && !(await features()).whatsapp) throw new HttpError(409, 'This computer can\'t link WhatsApp. Run the agent on a Linux computer you added to use it.', { param: 'kind' })
-      if (facts.row && (await containerStates())?.[facts.id] !== 'running') throw new HttpError(409, `Start ${facts.value.name} first, then connect WhatsApp.`)
+      if (facts.row && (await agent.status())?.[facts.id] !== 'running') throw new HttpError(409, `Start ${facts.value.name} first, then connect WhatsApp.`)
       return { status: 'linking', account: null }
     }
   }
@@ -275,7 +276,7 @@ async function disconnect(row: Row): Promise<void> {
   switch (row.kind) {
     case 'whatsapp':
       whatsappPairing.stop(row.agent_id)
-      await agentd.delete({ id: row.agent_id, paths: ['platforms/whatsapp/session'] }).catch((err: unknown) => log.warn({ event: 'channel.disconnect_failed', agent: row.agent_id, error: messageOf(err) }))
+      await agent.content.remove(row.agent_id, [{ kind: 'session', name: 'whatsapp' }]).catch((err: unknown) => log.warn({ event: 'channel.disconnect_failed', agent: row.agent_id, error: messageOf(err) }))
       return
     case 'slack': return
     case 'telegram':

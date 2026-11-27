@@ -5,7 +5,7 @@ import { memoryService } from './memory-service.ts'
 import { skillService } from './skill-service.ts'
 import { channelService } from '../channels/channel-service.ts'
 import { routineService } from '../inbox/routines.ts'
-import { agentd } from '../platform/agentd.ts'
+import { agent } from '../../core/agent.ts'
 import { db } from '../platform/db.ts'
 import { emit, log } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
@@ -123,7 +123,7 @@ async function keep({ agent, control }: { agent: Held; control: Held }): Promise
 }
 
 async function leave(row: Pick<AgentRow, 'id'>): Promise<void> {
-  await agentd.remove({ id: row.id, trash: true }).catch((err: unknown) => log.warn({ event: 'agent.remove_failed', agent: row.id, error: messageOf(err) }))
+  await agent.remove(row.id, { keep: true }).catch((err: unknown) => log.warn({ event: 'agent.remove_failed', agent: row.id, error: messageOf(err) }))
   await db.deleteFrom('agent').where('id', '=', row.id).execute()
   emit({ name: 'agent.synced', target: { type: 'agent', id: row.id } })
 }

@@ -8,7 +8,7 @@ import { AGENT_HOME, ChatMessage, fileInHome, MAX_FILES, MessageValue, ToolProgr
 import type { Place } from '@openhut/common/channels/channel.ts'
 import type { ThreadLive } from '@openhut/common/live.ts'
 import type { Deleted } from '@openhut/common/api.ts'
-import { agentd } from '../platform/agentd.ts'
+import { agent as autonomous } from '../../core/agent.ts'
 import { db, findRow } from '../platform/db.ts'
 import type { Database } from '../platform/db-schema.ts'
 import { emit, listen, log } from '../platform/events.ts'
@@ -191,7 +191,7 @@ export const threadService = {
     const sent = said.flatMap((each) => filesOf(each.message)).map((file) => file.url)
     const names = [...new Set([...sent, ...uploads].flatMap((path) => uploadName(path) ?? []))]
     for (let start = 0; start < names.length; start += MAX_REMOVED) {
-      await agentd.delete({ id: agent.id, paths: names.slice(start, start + MAX_REMOVED).map(uploadPath) })
+      await autonomous.content.remove(agent.id, names.slice(start, start + MAX_REMOVED).map((name) => ({ kind: 'upload', name })))
         .catch((err: unknown) => log.warn({ event: 'thread.uploads_kept', agent: agent.id, error: messageOf(err) }))
     }
     return deleted({ id, object: 'thread' })
@@ -202,7 +202,7 @@ export const threadService = {
     await agentService.requireUse({ actor, id })
     const name = uploadName(path)
     if (!name) throw new HttpError(400, 'Only files you sent in a chat can be deleted here.', { param: 'path' })
-    const { removed } = await agentd.delete({ id, paths: [uploadPath(name)] })
+    const removed = await autonomous.content.remove(id, [{ kind: 'upload', name }])
     if (!removed.length) throw new HttpError(404, 'That upload isn\'t in the agent\'s uploads folder. It may have been deleted already.', { param: 'path' })
     return deleted({ id: path, object: 'file' })
   },
@@ -215,8 +215,8 @@ export const threadService = {
       return inside ? [{ path, inside }] : []
     })
     if (!wanted.length) return []
-    const { files } = await agentd.stat({ id, paths: wanted.map((each) => `home/${each.inside}`) })
-    const sizes = new Map(files.map((file) => [file.path.slice('home/'.length), file.size]))
+    const files = await autonomous.content.stat(id, wanted.map((each) => ({ kind: 'file', name: each.inside })))
+    const sizes = new Map(files.map((file) => [file.ref.name, file.size]))
     return wanted.flatMap(({ path, inside }) => {
       const size = sizes.get(inside)
       return size === undefined ? [] : [{ object: 'file' as const, name: inside.slice(inside.lastIndexOf('/') + 1), path, size }]
@@ -227,8 +227,7 @@ export const threadService = {
     id = await threadService.agentIdOf(id)
     await agentService.requireUse({ actor, id })
     if (!Buffer.isBuffer(body) || !body.length) throw new HttpError(400, 'Send the file\'s bytes as the request body, with Content-Type: application/octet-stream. Empty files can\'t be attached.')
-    const saved = await agentd.write({ id, path: uploadPath(safeFileName(file.name)), body })
-    const path = saved.path.slice('home/'.length)
+    const path = (await autonomous.content.write({ id, ref: { kind: 'upload', name: safeFileName(file.name) }, body, by: 'person' })).name
     return { object: 'file', name: path.slice(path.lastIndexOf('/') + 1), path: `${AGENT_HOME}/${path}`, size: body.length, mediaType: file.type && MEDIA_TYPE.test(file.type) ? file.type : 'application/octet-stream' }
   },
 
@@ -237,7 +236,7 @@ export const threadService = {
     await agentService.requireUse({ actor, id })
     const inside = fileInHome(path)
     if (!inside) throw new HttpError(400, 'Only files in the agent\'s own folder can be saved.', { param: 'path' })
-    const body = await agentd.read({ id, path: `home/${inside}` })
+    const body = await autonomous.content.read(id, { kind: 'file', name: inside })
     if (body === null) throw new HttpError(404, 'That file isn\'t in the agent\'s home folder. It may have been moved or deleted.', { param: 'path' })
     const name = inside.slice(inside.lastIndexOf('/') + 1)
     return reply.header('content-type', 'application/octet-stream').header('x-content-type-options', 'nosniff').header('content-disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`).send(body)
@@ -739,7 +738,7 @@ async function imagesOf({ agentId, files }: { agentId: string; files: FilePart[]
   const images: ImagePart[] = []
   let total = 0
   for (const file of files.filter((each) => IMAGE_TYPES.includes(each.mediaType))) {
-    const bytes = await agentd.read({ id: agentId, path: `home/${fileInHome(file.url) ?? ''}` }).catch(() => null)
+    const bytes = await autonomous.content.read(agentId, { kind: 'file', name: fileInHome(file.url) ?? '' }).catch(() => null)
     const body = bytes?.toString('base64')
     const type = bytes && imageTypeOf(bytes.subarray(0, 12))
     if (!body || !type || body.length > MAX_IMAGE_BASE64 || total + body.length > MAX_IMAGES_BASE64) continue
@@ -803,6 +802,3 @@ type AgentRow = Selectable<Database['agent']>
 type Chat = { id: string; agent: AgentRow; row?: Selectable<Database['chat_thread']> }
 type TurnWork = ReturnType<typeof turnWork>
 
-function uploadPath(name: string): string {
-  return `home/uploads/${name}`
-}

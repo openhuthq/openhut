@@ -1,6 +1,6 @@
 import type { WebSocket } from '@fastify/websocket'
 import type { FastifyRequest } from 'fastify'
-import { liveBrowser } from '../platform/agentd.ts'
+import { agent } from '../../core/agent.ts'
 import { emit } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { sameOrigin } from '../platform/live-service.ts'
@@ -17,7 +17,7 @@ export const browserService = {
       const actor = await who(req)
       const row = await agentService.requireUse({ actor, id: agentId })
       if (!row.web_browser) throw new HttpError(409, `Turn on Browser for ${row.name} first.`)
-      const live = liveBrowser({ id: agentId, fps, onLine: (line) => socket.send(line), onEnd: () => socket.close() })
+      const live = agent.attach({ id: agentId, what: 'browser', fps, onLine: (line) => socket.send(line), onEnd: () => socket.close() })
       socket.on('message', (data) => {
         const line = String(data)
         if (line.length > MAX_LINE) return socket.close(1009, 'That message is too long.')

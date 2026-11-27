@@ -14,7 +14,7 @@ export const github = definePlugin({
   name: 'github',
   migrate: createTables,
   routes: () => ({ '/api/agent-faces': faceController, '/api/github-app': serverAppController }),
-  hermes: ({ agent, connections }) => ({ prompt: connections.some(({ kind }) => kind === 'github') ? trailerNote(agent.name) : '' }),
+  agent: ({ agent, connections }) => ({ instructions: connections.some(({ kind }) => kind === 'github') ? trailerNote(agent.name) : '' }),
   connectorCall: async ({ agentId, kind, tool, args }) => {
     if (kind !== 'github' || !settings.githubFooter()) return args
     const signing = signingOf({ tool, args })

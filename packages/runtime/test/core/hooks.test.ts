@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { AddressInfo } from 'node:net'
-import { manifest } from '../../src/core/hooks.ts'
+import { manifest } from '../../src/adapters/hermes/events.ts'
 import { gatewayServer } from '../../src/server/gateway/gateway-server.ts'
 import { activity } from '../../src/server/gateway/activity.ts'
 import { db, migrate } from '../../src/server/platform/db.ts'

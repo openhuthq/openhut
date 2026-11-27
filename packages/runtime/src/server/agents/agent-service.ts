@@ -8,7 +8,8 @@ import type { Database } from '../platform/db-schema.ts'
 import { config } from '../platform/config.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 import { agentToken, newId, sameSecret, unseal } from '../platform/secrets.ts'
-import { agentd, containerStates, features, type AgentFiles, type Change } from '../platform/agentd.ts'
+import { agentd, features, type Change } from '../platform/agentd.ts'
+import { agent, type AgentCtx } from '../../core/agent.ts'
 import { forward } from '../relay/forward.ts'
 import { log, emit } from '../platform/events.ts'
 import { liveService } from '../platform/live-service.ts'
@@ -19,7 +20,6 @@ import { audienceOf } from '../channels/audience.ts'
 import { DiscordSecrets } from '../integrations/discord/discord.ts'
 import { resolveSlots } from '../models/model-slots.ts'
 import { providerService } from '../models/provider-service.ts'
-import { hermesFiles } from '../../core/hermes.ts'
 import type { RenderedChannel } from '../../plugins/channels/index.ts'
 import { recordsService, type Held } from '../platform/records.ts'
 import { HERE, HOME } from '../team/home.ts'
@@ -42,12 +42,12 @@ const moving = new Set<string>()
 
 export const agentService = {
   async list({ actor }: { actor: Caller }): Promise<Agent[]> {
-    const [all, states] = await Promise.all([everything(), containerStates()])
+    const [all, states] = await Promise.all([everything(), agent.status()])
     return Promise.all(all.filter((facts) => mayUse({ access: accessOf(facts), actor })).map((facts) => agentOf({ facts, actor, states })))
   },
 
   async get({ actor, id }: { actor: Caller; id: string }): Promise<Agent> {
-    const [facts, states] = await Promise.all([agentService.find({ id }), containerStates()])
+    const [facts, states] = await Promise.all([agentService.find({ id }), agent.status()])
     if (!mayUse({ access: accessOf(facts), actor })) throw new HttpError(404, 'That agent doesn\'t exist. It may have been deleted.')
     return agentOf({ facts, actor, states })
   },
@@ -116,7 +116,7 @@ export const agentService = {
   },
 
   async wipe(): Promise<void> {
-    for (const { id } of await db.selectFrom('agent').select('id').execute()) await agentd.remove({ id, trash: true }).catch((err: unknown) => log.warn({ event: 'agent.wipe_failed', agent: id, error: messageOf(err) }))
+    for (const { id } of await db.selectFrom('agent').select('id').execute()) await agent.remove(id, { keep: true }).catch((err: unknown) => log.warn({ event: 'agent.wipe_failed', agent: id, error: messageOf(err) }))
     await db.deleteFrom('agent').execute()
   },
 
@@ -136,14 +136,14 @@ export const agentService = {
   },
 
   async stopAll(): Promise<void> {
-    for (const [id, state] of Object.entries((await containerStates()) ?? {})) {
-      if (state === 'running') await agentd.stop({ id }).catch((err: unknown) => log.warn({ event: 'agent.stop_failed', agent: id, error: messageOf(err) }))
+    for (const [id, state] of Object.entries((await agent.status()) ?? {})) {
+      if (state === 'running') await agent.stop(id).catch((err: unknown) => log.warn({ event: 'agent.stop_failed', agent: id, error: messageOf(err) }))
     }
   },
 
   async statuses({ workspace }: { workspace?: string } = {}): Promise<Record<string, { status: AgentStatus; health: AgentHealth | null; detail?: string }>> {
     const rows = await db.selectFrom('agent').selectAll().execute()
-    const states = await containerStates()
+    const states = await agent.status()
     const mine = workspace ? rows.filter((row) => (row.workspace ?? HOME) === workspace) : rows
     return Object.fromEntries(await Promise.all(mine.map(async (row) => {
       const { health, detail } = await healthOf({ row, state: states?.[row.id] })
@@ -181,14 +181,14 @@ export const agentService = {
   },
 
   async sync({ computer }: { computer: string }): Promise<void> {
-    const { states } = await agentd.ps({ on: computer })
+    const states = await agent.status({ on: computer }) ?? {}
     const here = async (id: string) => {
       const row = await db.selectFrom('agent').select('runs_on').where('id', '=', id).executeTakeFirst()
       return !moving.has(id) && !!row && (row.runs_on ?? HERE) === computer
     }
     for (const id of Object.keys(states)) {
       if (moving.has(id) || await here(id)) continue
-      await agentd.remove({ id, on: computer, trash: true })
+      await agent.remove(id, { on: computer, keep: true })
       log.info({ event: 'agent.stray_removed', agent: id, computer })
     }
     for (const row of await db.selectFrom('agent').selectAll().execute()) {
@@ -272,7 +272,7 @@ async function updated({ actor, id, patch }: { actor: Caller; id: string; patch:
 }
 
 async function put({ row, on }: { row: AgentRow; on?: string }): Promise<Change> {
-  const { change } = await applied(row, agentd.apply({ id: row.id, on, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running', restart: false }))
+  const change = await applied(row, agent.setup({ ctx: await ctxOf(row), on, browser: row.web_browser, running: row.wanted === 'running', restart: false }))
   if (change === 'pending') restartWhenQuiet(row.id)
   return change
 }
@@ -283,7 +283,7 @@ function restartWhenQuiet(id: string): void {
   void activity.quiet({ agentId: id, ms: config.quietMs })
     .then(async () => {
       const row = await rowOf(id)
-      await applied(row, agentd.apply({ id, net: row.net, files: await filesOf(row), browser: row.web_browser, running: row.wanted === 'running' }))
+      await applied(row, agent.setup({ ctx: await ctxOf(row), browser: row.web_browser, running: row.wanted === 'running' }))
     })
     .catch((err: unknown) => log.warn({ event: 'agent.restart_failed', agent: id, error: messageOf(err) }))
     .finally(() => {
@@ -328,18 +328,18 @@ async function move({ facts, from, to }: { facts: AgentFacts; from: string; to: 
   if (moving.has(facts.id)) throw new HttpError(409, `${facts.value.name} is already moving. Wait for it to finish.`, { param: 'runsOn' })
   moving.add(facts.id)
   try {
-    await agentd.stop({ id: facts.id, on: from })
+    await agent.stop(facts.id, { on: from })
     try {
       await copyHome({ id: facts.id, from, to })
       await place(to)
       await runSet.settle(facts.id)
     } catch (err) {
       await place(from).catch(() => undefined)
-      await agentd.remove({ id: facts.id, on: to }).catch(() => undefined)
+      await agent.remove(facts.id, { on: to }).catch(() => undefined)
       await runSet.settle(facts.id).catch((again: unknown) => log.error({ event: 'agent.move_undo_failed', agent: facts.id, error: messageOf(again) }))
       throw new HttpError(502, `Couldn’t move ${facts.value.name}, so it stays where it was. ${messageOf(err)}`, { param: 'runsOn' })
     }
-    await agentd.remove({ id: facts.id, on: from, trash: true }).catch((err: unknown) => log.warn({ event: 'agent.move_cleanup_failed', agent: facts.id, error: messageOf(err) }))
+    await agent.remove(facts.id, { on: from, keep: true }).catch((err: unknown) => log.warn({ event: 'agent.move_cleanup_failed', agent: facts.id, error: messageOf(err) }))
     emit({ name: 'agent.moved', target: { type: 'agent', id: facts.id, from, to } })
   } finally {
     moving.delete(facts.id)
@@ -415,7 +415,7 @@ async function agentOf({ facts, actor, states }: { facts: AgentFacts; actor: Cal
 
 async function watchHealth(): Promise<void> {
   if (!liveService.followed()) return healths.clear()
-  const states = await containerStates()
+  const states = await agent.status()
   if (!states) return
   for (const row of await db.selectFrom('agent').selectAll().execute()) {
     const seen = `${statusOf(states[row.id])}:${(await healthOf({ row, state: states[row.id] })).health}`
@@ -427,7 +427,7 @@ async function watchHealth(): Promise<void> {
 const reconcileSafely = () => reconcile().catch((err: unknown) => log.error({ event: 'reconcile.failed', error: messageOf(err) }))
 
 async function reconcile(): Promise<void> {
-  const states = await containerStates()
+  const states = await agent.status()
   if (!states) return
   for (const row of await db.selectFrom('agent').selectAll().where('wanted', '=', 'running').execute()) {
     if (moving.has(row.id) || !forward.online(row.runs_on ?? HERE)) continue
@@ -446,14 +446,14 @@ async function tellAgent(id: string): Promise<void> {
   await apply.request(id).catch((err: unknown) => log.warn({ event: 'agent.reapply_failed', agent: id, error: messageOf(err) }))
 }
 
-async function filesOf(row: AgentRow): Promise<AgentFiles> {
+async function ctxOf(row: AgentRow): Promise<Omit<AgentCtx, 'gateway'>> {
   const channels = await db.selectFrom('channel').selectAll().where('agent_id', '=', row.id).orderBy('kind').execute()
   const slots = resolveSlots({ model: row.model, catalog: providerService.catalog })
-  return hermesFiles({
+  return {
     agent: { ...row, slots }, token: agentToken({ id: row.id, epoch: row.token_epoch }), channelKey: unseal(row.channel_key),
     channels: channels.filter((channel) => channel.kind !== 'telegram' || channel.status === 'connected').map(renderedChannel), connections: await connectionService.reachable({ agent: row }),
     secrets: (await db.selectFrom('agent_secret').select(['name', 'hosts']).where('agent_id', '=', row.id).orderBy('name').execute()).map(({ name, hosts }) => ({ name, hosts: JSON.parse(hosts) as string[] })),
-  })
+  }
 }
 
 function renderedChannel(channel: Selectable<Database['channel']>): RenderedChannel {

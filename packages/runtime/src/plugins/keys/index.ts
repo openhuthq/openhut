@@ -13,9 +13,9 @@ export const keys = definePlugin({
   name: 'keys',
   migrate: createTables,
   routes: () => ({ '/api/agent-secrets': secretController }),
-  hermes: ({ secrets }) => ({
-    prompt: keysNote(secrets),
-    env: Object.fromEntries(secrets.map(({ name }) => [`OPENHUT_SECRET_${name}`, secretPlaceholder(name)])),
+  agent: ({ secrets }) => ({
+    instructions: keysNote(secrets),
+    secrets: Object.fromEntries(secrets.map(({ name }) => [`OPENHUT_SECRET_${name}`, secretPlaceholder(name)])),
     restart: null,
   }),
   asks: {

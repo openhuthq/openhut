@@ -13,13 +13,17 @@ Your owner's instructions below override this section.
 
 export const base = definePlugin({
   name: 'base',
-  hermes: ({ agent }) => ({
-    prompt: TALK_PROMPT,
-    config: {
-      terminal: { backend: 'local' },
-      agent: { api_max_retries: 30, disabled_toolsets: ['browser', 'cronjob', 'connections', ...(agent.code_execution ? [] : ['code_execution'])] },
-      approvals: { mode: 'off' },
-      tools: { tool_search: { enabled: 'off' } },
+  agent: ({ agent }) => ({
+    instructions: TALK_PROMPT,
+    native: {
+      hermes: {
+        config: {
+          terminal: { backend: 'local' },
+          agent: { api_max_retries: 30, disabled_toolsets: ['browser', 'cronjob', 'connections', ...(agent.code_execution ? [] : ['code_execution'])] },
+          approvals: { mode: 'off' },
+          tools: { tool_search: { enabled: 'off' } },
+        },
+      },
     },
     restart: null,
   }),

@@ -8,33 +8,28 @@ const DONE_FOR_MS = 10_000
 const STALE_MS = 60 * 60_000
 const TITLE = 80
 
-const Start = z.object({ child_session_id: z.string().min(1), child_goal: z.string().default('') })
-const Stop = z.object({ child_session_id: z.string().min(1), child_status: z.string().nullish() })
 
 type Item = Subagent & { endedAt?: number }
 
 const live = new Map<string, Map<string, Item>>()
 
 export const subagentService = {
-  started({ agentId, args }: { agentId: string; args: Record<string, unknown> }): null {
-    const found = Start.safeParse(args)
-    if (!found.success) return null
+  started({ agentId, child, goal }: { agentId: string; child: string; goal: string }): undefined {
     const items = live.get(agentId) ?? new Map<string, Item>()
     live.set(agentId, items)
-    items.set(found.data.child_session_id, { id: found.data.child_session_id, object: 'subagent', title: titleOf(found.data.child_goal), status: 'working', startedAt: new Date().toISOString() })
+    items.set(child, { id: child, object: 'subagent', title: titleOf(goal), status: 'working', startedAt: new Date().toISOString() })
     publish(agentId)
-    return null
+    return undefined
   },
 
-  stopped({ agentId, args }: { agentId: string; args: Record<string, unknown> }): null {
-    const found = Stop.safeParse(args)
-    const item = found.success ? live.get(agentId)?.get(found.data.child_session_id) : undefined
-    if (!found.success || !item) return null
-    item.status = found.data.child_status === 'completed' ? 'done' : 'failed'
+  stopped({ agentId, child, status }: { agentId: string; child: string; status: string }): undefined {
+    const item = live.get(agentId)?.get(child)
+    if (!item) return undefined
+    item.status = status === 'completed' ? 'done' : 'failed'
     item.endedAt = Date.now()
     publish(agentId)
     if (item.status === 'done') setTimeout(() => publish(agentId), DONE_FOR_MS + 1).unref()
-    return null
+    return undefined
   },
 
   async list({ actor, agentId }: { actor: Caller; agentId: string }): Promise<Subagent[]> {

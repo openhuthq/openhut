@@ -1,6 +1,5 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 import { durable } from '../../core/durable.ts'
-import { forgetStates } from '../platform/agentd.ts'
 import { emit, log } from '../platform/events.ts'
 import { HttpError, messageOf } from '../platform/http-error.ts'
 
@@ -23,7 +22,6 @@ const task = durable<{ agentId: string }>('agent-apply', 'latest', async ({ agen
   }
   applying.delete(agentId)
   errors.delete(agentId)
-  forgetStates()
   emit({ name: 'agent.applied', target: { type: 'agent', id: agentId } })
 })
 

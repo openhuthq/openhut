@@ -2,8 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { starterInstructions } from '@openhut/common/asks/ask.ts'
-import { hermesFiles } from '../../../src/core/hermes.ts'
-import type { HermesCtx } from '../../../src/core/plugin.ts'
+import { render } from '../../../src/adapters/hermes/render.ts'
+import type { AgentCtx } from '../../../src/core/agent.ts'
 import { config } from '../../../src/server/platform/config.ts'
 import { resolveSlots } from '../../../src/server/models/model-slots.ts'
 
@@ -21,7 +21,7 @@ const slots = (model: string) => resolveSlots({ model, catalog: (provider) => ca
 const agent = { id: 'ag_golden00', name: 'Dev', instructions: '# Dev\n\nShip it.', slots: slots('claude:sonnet'), net: 7, code_execution: true, web_browser: false }
 const base = { agent, token: 'ag_golden00.token', channelKey: 'k'.repeat(32), channels: [], connections: [], secrets: [] }
 const audience = (allowed: string[], open = false) => ({ ownerAddress: '+15551234567', open, allowed })
-const cases: Record<string, { mode: 'test' | 'claude'; ctx: Omit<HermesCtx, 'gateway'> }> = {
+const cases: Record<string, { mode: 'test' | 'claude'; ctx: Omit<AgentCtx, 'gateway'> }> = {
   minimal: { mode: 'test', ctx: base },
   everything: {
     mode: 'test',
@@ -49,7 +49,7 @@ function rendered(): Record<string, unknown> {
     config.version = '0.0.0-golden'
     return Object.fromEntries(Object.entries(cases).map(([name, { mode, ctx }]) => {
       config.modelMode = mode
-      return [name, hermesFiles(ctx)]
+      return [name, render(ctx)]
     }))
   } finally {
     config.modelMode = before.mode

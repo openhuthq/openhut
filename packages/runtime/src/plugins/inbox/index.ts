@@ -16,7 +16,7 @@ export const inbox = definePlugin({
   migrate: createTables,
   routes: () => ({ '/api/routines': routineController, '/api/webhooks': webhookController, '/api/delivery-targets': deliveryTargetController, '/inbox': inboxReceiver, '/api/agents/:id/webhooks': setupController }),
   start: () => inboxService.start(),
-  hermes: () => ({ prompt: WEBHOOK_SETUP_PROMPT }),
+  agent: () => ({ instructions: WEBHOOK_SETUP_PROMPT }),
   afterTurn: async (input) => setupCard(input),
   tools: {
     show_webhook_setup: showWebhookSetup,

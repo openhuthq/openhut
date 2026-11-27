@@ -39,7 +39,7 @@ export const connections = definePlugin({
     '/api/agent-tools': permissionController,
     '/api/connection-authorizations': connectionAuthorizationController,
   }),
-  hermes: ({ connections: list }) => ({ prompt: connectedApps(list) }),
+  agent: ({ connections: list }) => ({ instructions: connectedApps(list) }),
   tools: {
     list_tools: defineTool({
       description: 'List the tools you may call, one line each.',

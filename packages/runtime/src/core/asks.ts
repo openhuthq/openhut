@@ -85,7 +85,7 @@ export function asksPlugin(list: Plugin[]): Plugin {
     name: 'asks',
     migrate: createTables,
     routes: () => ({ '/api/asks': controller }),
-    hermes: () => ({ prompt: ASK_PROMPT }),
+    agent: () => ({ instructions: ASK_PROMPT }),
     tools,
     afterTurn: async ({ agentId, since }) => {
       const ids = await asks.inChat({ agentId, since })

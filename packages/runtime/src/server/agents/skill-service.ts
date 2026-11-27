@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { SkillRecord, type Skill, type UpdateSkill } from '@openhut/common/agents/skill.ts'
-import { agentd } from '../platform/agentd.ts'
+import { agent } from '../../core/agent.ts'
 import { db } from '../platform/db.ts'
 import { emit } from '../platform/events.ts'
 import { HttpError } from '../platform/http-error.ts'
@@ -16,9 +16,9 @@ export const skillService = {
   async list({ agentId }: { actor: Caller; agentId: string }): Promise<Skill[]> {
     const facts = await agentService.find({ id: agentId })
     if (!facts.row) return (await records(facts)).map(({ path, body }) => skillOf({ agentId, path, head: body, builtIn: new Set(), body: null })).sort((a, b) => a.name.localeCompare(b.name))
-    const { skills, bundled } = await agentd.skills({ id: agentId })
+    const { items: skills, bundled } = await agent.content.list(agentId, 'skill')
     const builtIn = new Set(bundled.split('\n').map((line) => line.split(':')[0]).filter(Boolean))
-    return skills.map(({ path, head }) => skillOf({ agentId, path, head, builtIn, body: null }))
+    return skills.map(({ name: path, head }) => skillOf({ agentId, path, head, builtIn, body: null }))
       .sort((a, b) => Number(a.builtIn) - Number(b.builtIn) || a.name.localeCompare(b.name))
   },
 
@@ -27,7 +27,7 @@ export const skillService = {
     const found = (await skillService.list({ actor, agentId })).find((skill) => skill.id === id)
     if (!found) throw new HttpError(404, MISSING)
     const facts = await agentService.find({ id: agentId })
-    const body = facts.row ? (await agentd.read({ id: agentId, path: skillFile(path) }))?.toString('utf8') : (await records(facts)).find((each) => each.path === path)?.body
+    const body = facts.row ? (await agent.content.read(agentId, { kind: 'skill', name: path }))?.toString('utf8') : (await records(facts)).find((each) => each.path === path)?.body
     if (body === undefined) throw new HttpError(404, MISSING)
     return { ...found, body }
   },
@@ -46,7 +46,7 @@ export const skillService = {
     const facts = await editable({ actor, agentId: skill.agentId })
     if (skill.builtIn) throw new HttpError(400, 'Built-in skills come with OpenHut and can\'t be deleted. Only skills the agent learned can.')
     await recordsService.remove({ collection: 'skill', workspace: facts.workspace, id: recordIdOf({ agentId: skill.agentId, path: skill.path }) })
-    if (facts.row) await agentd.delete({ id: skill.agentId, paths: [`skills/${skill.path}`] })
+    if (facts.row) await agent.content.remove(skill.agentId, [{ kind: 'skill', name: skill.path }])
     emit({ name: 'skill.deleted', actor, target: { type: 'skill', id, agentId: skill.agentId } })
     return { id, object: 'skill', deleted: true }
   },
@@ -55,7 +55,7 @@ export const skillService = {
     const row = await db.selectFrom('agent').select(['workspace', 'shared']).where('id', '=', agentId).executeTakeFirst()
     if (!row) return
     for (const path of await learned(agentId)) {
-      const body = (await agentd.read({ id: agentId, path: skillFile(path) }))?.toString('utf8')
+      const body = (await agent.content.read(agentId, { kind: 'skill', name: path }))?.toString('utf8')
       const id = recordIdOf({ agentId, path })
       if (body === undefined || sent.get(id) === body) continue
       await recordsService.put({ collection: 'skill', id, parent: agentId, ...placeOf(row), value: { path, body }, queue: true, reapply: () => null })
@@ -69,11 +69,11 @@ export const skillService = {
       return value && SKILL_ID.test(`${agentId}${SEPARATOR}${value.path.replaceAll('/', SEPARATOR)}`) ? [[value.path, value.body] as const] : []
     }))
     for (const [path, body] of wanted) {
-      if ((await agentd.read({ id: agentId, path: skillFile(path) }))?.toString('utf8') !== body) await writeSkill({ agentId, path, body })
+      if ((await agent.content.read(agentId, { kind: 'skill', name: path }))?.toString('utf8') !== body) await writeSkill({ agentId, path, body })
       sent.set(recordIdOf({ agentId, path }), body)
     }
     for (const path of await learned(agentId)) {
-      if (!wanted.has(path) && await recordsService.held(recordIdOf({ agentId, path })) > 0) await agentd.delete({ id: agentId, paths: [`skills/${path}`] })
+      if (!wanted.has(path) && await recordsService.held(recordIdOf({ agentId, path })) > 0) await agent.content.remove(agentId, [{ kind: 'skill', name: path }])
     }
   },
 }
@@ -96,17 +96,13 @@ async function records(facts: AgentFacts): Promise<SkillRecord[]> {
 }
 
 async function learned(agentId: string): Promise<string[]> {
-  const { skills, bundled } = await agentd.skills({ id: agentId })
+  const { items: skills, bundled } = await agent.content.list(agentId, 'skill')
   const builtIn = new Set(bundled.split('\n').map((line) => line.split(':')[0]).filter(Boolean))
-  return skills.map(({ path, head }) => skillOf({ agentId, path, head, builtIn, body: null })).filter((skill) => !skill.builtIn).map((skill) => skill.path)
+  return skills.map(({ name: path, head }) => skillOf({ agentId, path, head, builtIn, body: null })).filter((skill) => !skill.builtIn).map((skill) => skill.path)
 }
 
 async function writeSkill({ agentId, path, body }: { agentId: string; path: string; body: string }): Promise<void> {
-  await agentd.write({ id: agentId, path: skillFile(path), body, create: true })
-}
-
-function skillFile(path: string): string {
-  return `skills/${path}/SKILL.md`
+  await agent.content.write({ id: agentId, ref: { kind: 'skill', name: path }, body, by: 'person', create: true })
 }
 
 function partsOf(id: string): { agentId: string; path: string } {

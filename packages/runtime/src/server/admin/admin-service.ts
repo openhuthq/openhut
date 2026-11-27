@@ -4,7 +4,8 @@ import { db } from '../platform/db.ts'
 import { config } from '../platform/config.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { createHash } from 'node:crypto'
-import { agentd, containerStates, features } from '../platform/agentd.ts'
+import { agentd, features } from '../platform/agentd.ts'
+import { agent } from '../../core/agent.ts'
 import { installing as installRunning, lastUpdate, request, type LastUpdate } from './update-request.ts'
 import { settings } from '../platform/settings.ts'
 import { emit } from '../platform/events.ts'
@@ -33,7 +34,7 @@ export const adminService = {
   },
 
   async status(): Promise<Admin> {
-    const [{ health, installing, last }, states, agents, latestBuild, available] = await Promise.all([probe(), containerStates(), db.selectFrom('agent').select('id').execute(), adminService.latestBuild(), features()])
+    const [{ health, installing, last }, states, agents, latestBuild, available] = await Promise.all([probe(), agent.status(), db.selectFrom('agent').select('id').execute(), adminService.latestBuild(), features()])
     return {
       object: 'admin',
       seat: { set: !!settings.seatToken(), mode: config.modelMode, updatedAt: settings.seatAt(), download: null },
@@ -53,7 +54,7 @@ export const adminService = {
     const windows = seatLimits.latest()
     const resetsAt = windows.find((window) => window.kind === 'seven_day')?.resetsAt
     const since = (resetsAt ? Date.parse(resetsAt) : Date.now()) - WEEK_MS
-    const [{ usage }, agents] = await Promise.all([agentd.usage({ since: since / 1000 }), db.selectFrom('agent').select(['id', 'name']).orderBy('created_at').execute()])
+    const [{ cost: usage }, agents] = await Promise.all([agent.activity(since / 1000), db.selectFrom('agent').select(['id', 'name']).orderBy('created_at').execute()])
     return {
       object: 'seat_usage', windows, since: new Date(since).toISOString(),
       agents: agents.map((agent) => ({ agentId: agent.id, agentName: agent.name, costUsd: usage[agent.id] ?? 0 })),

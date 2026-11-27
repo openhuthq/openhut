@@ -1,7 +1,7 @@
 import * as z from 'zod'
 import { CreateChannel, type Audience, type ChannelKind } from '@openhut/common/channels/channel.ts'
 import * as mini from 'zod/mini'
-import { defineAsk, definePlugin, type HermesPart } from '../../core/plugin.ts'
+import { defineAsk, definePlugin } from '../../core/plugin.ts'
 import { db } from '../../server/platform/db.ts'
 import { config } from '../../server/platform/config.ts'
 import { WHATSAPP_PORT_BASE } from '../../agentd/network/ports.ts'
@@ -18,13 +18,6 @@ import { createTables } from './tables.ts'
 
 const INVITE = /^\/start(?:@\w+)?\s+([\w-]{16,64})$/
 const TELEGRAM_USER = /^[1-9]\d{4,14}$/
-const Dispatched = z.object({
-  event: z.object({
-    text: z.string(),
-    source: z.object({ platform: z.string(), user_id: z.coerce.string().nullish(), user_name: z.string().nullish(), chat_id: z.coerce.string().nullish() }).nullish(),
-  }),
-})
-
 export type RenderedChannel =
   | { kind: Extract<ChannelKind, 'slack'>; audience: Audience }
   | { kind: Extract<ChannelKind, 'telegram'>; audience: Audience }
@@ -36,11 +29,10 @@ export const channels = definePlugin({
   migrate: createTables,
   routes: () => ({ '/api/channels': channelController, '/api/agents/:id/places': placeController }),
   start: () => void channelService.resumeTelegramClaims().catch((err: unknown) => log.warn({ event: 'telegram.claim_resume_failed', error: messageOf(err) })),
-  hermes: ({ agent, channels: list, gateway, token }) => {
+  agent: ({ agent, channels: list, gateway, token }) => {
     const parts = list.map((channel) => partOf({ channel, gateway, token, net: agent.net }))
     return {
-      config: Object.assign({}, ...parts.map((part) => part.config)),
-      env: Object.assign({}, ...parts.map((part) => part.env)),
+      native: { hermes: { config: Object.assign({}, ...parts.map((part) => part.config)), env: Object.assign({}, ...parts.map((part) => part.env)) } },
       restart: list.map((channel) => channel.kind === 'telegram' ? channel.kind : channel),
     }
   },
@@ -85,18 +77,17 @@ export const channels = definePlugin({
       },
     }),
   },
-  hooks: {
-    pre_gateway_dispatch: async ({ agent, args }) => {
-      const event = Dispatched.safeParse(args).data?.event
-      const userId = event?.source?.user_id
-      if (event?.source?.platform !== 'telegram' || !userId) return undefined
+  on: {
+    'message.arriving': async ({ agent, event }) => {
+      const userId = event.source?.userId
+      if (event.source?.platform !== 'telegram' || !userId) return undefined
       const code = INVITE.exec(event.text.trim())?.[1]
-      if (!code) return await channelService.telegramMember({ agentId: agent.id, userId }) ? { action: 'allow', reason: 'openhut member' } : { action: 'skip', reason: 'openhut stranger' }
-      const chatId = Number(event.source?.chat_id)
+      if (!code) return await channelService.telegramMember({ agentId: agent.id, userId }) ? { allow: 'openhut member' } : { skip: 'openhut stranger' }
+      const chatId = Number(event.source.chatId)
       if (TELEGRAM_USER.test(userId) && Number.isSafeInteger(chatId)) {
-        await channelService.telegramJoin({ agentId: agent.id, code, person: { userId, name: event.source?.user_name?.slice(0, 100) || 'there', chatId } }).catch(() => undefined)
+        await channelService.telegramJoin({ agentId: agent.id, code, person: { userId, name: event.source.userName?.slice(0, 100) || 'there', chatId } }).catch(() => undefined)
       }
-      return { action: 'skip', reason: 'openhut invite' }
+      return { skip: 'openhut invite' }
     },
   },
 })
@@ -121,7 +112,7 @@ function alreadyDone(status: number) {
   }
 }
 
-function partOf({ channel, gateway, token, net }: { channel: RenderedChannel; gateway: string; token: string; net: number }): HermesPart {
+function partOf({ channel, gateway, token, net }: { channel: RenderedChannel; gateway: string; token: string; net: number }): { config: Record<string, unknown>; env: Record<string, string> } {
   switch (channel.kind) {
     case 'slack': return { config: slack.config, env: slack.env({ token, gateway, channels: channel.audience.allowed }) }
     case 'telegram': return { config: telegram.config({ gateway }), env: telegram.env({ botToken: token, audience: channel.audience }) }
