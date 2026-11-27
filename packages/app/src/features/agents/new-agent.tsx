@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ComponentType, type ReactNode } from 'react'
 import { Cancel01Icon, PlusSignIcon, Tick02Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 import type { IconSvgElement } from '@hugeicons/react'
 import type { ProviderId } from '@openhut/common/models/provider.ts'
@@ -11,8 +11,6 @@ import { ErrorNote } from '@/components/error-note'
 import { DialogCard, I, FIELD_MENU, SOFT_TRIGGER } from '@/components/kit'
 import { useCreateAgent } from '@/features/agents/api'
 import { useAgents } from '@/lib/queries/agents'
-import { useStartSeatSignIn } from '@/features/models/api'
-import { ModelsStep, SeatSignIn } from '@/features/models/models-settings'
 import { runsOnChoices } from '@/features/agents/form'
 import { firstModel, stepOf } from '@/lib/models'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -32,28 +30,30 @@ const NAMES = ['Juniper', 'Scout', 'Pepper', 'Atlas', 'Maple', 'Biscuit', 'Nova'
 
 const PICKER = cn(SOFT_TRIGGER, 'w-[270px] min-w-0 max-w-full gap-2 phone:w-auto phone:flex-1')
 
-export function NewAgentDialog({ onClose }: { onClose: () => void }) {
+export type ModelSteps = ComponentType<{ step: ProviderId | undefined; signing: boolean; prepare: boolean; onSigned: () => void }>
+
+export function NewAgentDialog({ onClose, modelSteps }: { onClose: () => void; modelSteps: ModelSteps }) {
   return <DialogCard onClose={onClose} className="max-h-[calc(100vh-32px)] w-[480px] p-6">
     <Button type="button" size="icon-sm" aria-label="Close" title="Close" className="absolute top-3 right-3 rounded-full" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
     <DialogTitle className="text-[15px]/[22px] font-medium">New agent</DialogTitle>
-    <AgentForm />
+    <AgentForm modelSteps={modelSteps} />
   </DialogCard>
 }
 
 // behind: a dialog (New agent, Settings) is open over this page and shows the ?open= key step itself.
-export function FirstAgent({ behind = false }: { behind?: boolean }) {
+export function FirstAgent({ behind = false, modelSteps }: { behind?: boolean; modelSteps: ModelSteps }) {
   return <div className="flex min-h-0 w-full flex-1 flex-col text-center text-ink">
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center-safe overflow-y-auto px-6 py-6">
       <div className="flex w-[360px] max-w-full flex-col items-center">
         <h1 className="m-0 text-[30px]/[36px] font-bold tracking-[-.03em] text-balance phone:text-[28px]/[34px]">Make your first agent.</h1>
         <p className="m-0 mt-2 max-w-[320px] text-[15px]/[22px] text-balance text-body">Give it a job in your first chat.</p>
-        <div className="mt-8 flex w-full flex-col items-center gap-3 text-[13px]/[18px]"><AgentForm steps={!behind} /></div>
+        <div className="mt-8 flex w-full flex-col items-center gap-3 text-[13px]/[18px]"><AgentForm steps={!behind} modelSteps={modelSteps} /></div>
       </div>
     </div>
   </div>
 }
 
-function AgentForm({ steps = true }: { steps?: boolean }) {
+function AgentForm({ steps = true, modelSteps: Steps }: { steps?: boolean; modelSteps: ModelSteps }) {
   const createAgent = useCreateAgent()
   const touch = useMedia(TOUCH)
   const providers = useComputerProviders('local')
@@ -63,7 +63,6 @@ function AgentForm({ steps = true }: { steps?: boolean }) {
   const me = useMe().data?.user
   const computers = runsOnChoices(useComputers().data)
   const [wanted, setWanted] = useState<ProviderId>()
-  const seat = useStartSeatSignIn()
   const [signing, setSigning] = useState(false)
   const opened = useOpen()
   const setup = steps ? stepOf(opened) : undefined
@@ -72,8 +71,6 @@ function AgentForm({ steps = true }: { steps?: boolean }) {
   const admin = useIsAdmin()
   const model = picked ?? firstModel(providers)
   const none = Boolean(providers && !providers.some((provider) => provider.connected))
-  const { mutate: prepare, isIdle } = seat
-  useEffect(() => { if (none && admin && isIdle) prepare() }, [none, admin, isIdle, prepare])
   const added = wanted && providers?.find((provider) => provider.id === wanted)?.connected
   useEffect(() => {
     if (!added || !wanted) return
@@ -91,8 +88,7 @@ function AgentForm({ steps = true }: { steps?: boolean }) {
     const field = formValues(event)
     if (model) createAgent.mutate({ name: field('name').trim() || name, face: field('face'), model, runsOn, ...access })
   }}>
-    {signing && <SeatSignIn start={seat} onClose={() => setSigning(false)} onDone={() => setSigning(false)} />}
-    {setup && setup !== 'claude' && <ModelsStep id={setup} />}
+    <Steps step={setup} signing={signing} prepare={none && admin} onSigned={() => setSigning(false)} />
     <FacePicker initial={null} compact />
     <Input name="name" required maxLength={40} defaultValue={name} placeholder={name} aria-label="Name" autoFocus={!touch} autoComplete="off" spellCheck={false} enterKeyHint="go"
       className="h-auto w-full rounded-none border-0 bg-transparent p-0 text-center text-[22px]/[1.3] font-semibold shadow-none focus-visible:ring-0 text-ink outline-none placeholder:text-mute-2" />

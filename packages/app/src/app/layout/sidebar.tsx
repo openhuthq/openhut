@@ -1,4 +1,4 @@
-import { createContext, useState, type ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 import { Delete02Icon, Logout01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SidebarLeftIcon, StopIcon } from '@hugeicons/core-free-icons'
 import type { OpenHutAgent } from '@/lib/openhut'
 import { Button } from '@/components/ui/button'
@@ -31,8 +31,6 @@ const ROUND = 'float phone:size-10 phone:rounded-full phone:bg-card phone:text-i
 
 
 export type Contact = { agent: OpenHutAgent; threads: SourcedThread[] }
-
-export const SidebarContext = createContext<{ collapsed: boolean } | null>(null)
 
 export function ShowSidebar({ onExpand, onNew }: { onExpand: () => void; onNew: () => void }) {
   return <span className={cn('absolute top-[env(safe-area-inset-top)] left-0 z-10 flex h-[52px] items-center gap-0.5 pl-3 phone:hidden animate-[fadein_120ms_80ms_ease-out_backwards]')}>

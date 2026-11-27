@@ -4,29 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, normalize } from 'node:path'
 
 const SRC = new URL('../src/', import.meta.url)
-const ALLOWED = new Set<string>([
-  'features/agents/agent-view.tsx -> features/connections/add-app',
-  'features/agents/agent-view.tsx -> features/connections/tool-permissions',
-  'features/agents/agent-view.tsx -> features/routines/routines-dialog',
-  'features/agents/agent-view.tsx -> features/threads/chat',
-  'features/agents/agent-view.tsx -> features/threads/thread-list',
-  'features/agents/agent-view.tsx -> features/threads/threads-dialog',
-  'features/agents/agent-view.tsx -> features/webhooks/webhooks-dialog',
-  'features/agents/new-agent.tsx -> features/models/api',
-  'features/agents/new-agent.tsx -> features/models/models-settings',
-  'features/agents/panel.tsx -> features/threads/thread-list',
-  'features/agents/sidebar.tsx -> features/auth/api',
-  'features/agents/sidebar.tsx -> features/settings/update-pill',
-  'features/agents/sidebar.tsx -> features/threads/thread-list',
-  'features/settings/admin.tsx -> features/connections/github-app',
-  'features/settings/settings-view.tsx -> features/connections/connections-view',
-  'features/settings/settings-view.tsx -> features/models/models-settings',
-  'features/settings/settings-view.tsx -> features/people/people',
-  'features/threads/chat.tsx -> app/phone-page',
-  'features/threads/chat.tsx -> features/agents/sidebar',
-  'features/threads/chat.tsx -> features/asks/card',
-  'features/webhooks/webhooks-dialog.tsx -> features/agents/notify',
-])
+const ALLOWED = new Set<string>([])
 
 function zoneOf(file: string) {
   const [top, feature] = file.split('/')

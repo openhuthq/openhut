@@ -2,6 +2,7 @@ import { ComputersSettings } from '@/features/settings/computers'
 import { ModelsSettings, ModelsStep } from '@/features/models/models-settings'
 import { stepOf } from '@/lib/models'
 import { AdminSettings } from '@/features/settings/admin'
+import { GitHubDialogs, GitHubRow } from '@/features/connections/github-app'
 import { PeopleSettings } from '@/features/people/people'
 import { AppsSettings, AppsSheet } from '@/features/connections/connections-view'
 import { tabsFor } from '@/features/settings/tabs'
@@ -32,15 +33,15 @@ export function SettingsView({ tab: asked, onClose }: { tab: string; onClose: ()
         <p className="m-0 text-[12.5px]/[18px] text-mute">{current?.subtitle}</p>
       </div>
       <div key={tab} className="no-scrollbar fade-b flex min-h-0 flex-1 flex-col overflow-y-auto px-6 pt-[18px] pb-10">
-        <div className="flex flex-col gap-9"><Tab tab={tab} /></div>
+        <div className="flex flex-col gap-9"><Tab tab={tab} opened={opened} /></div>
       </div>
     </>}
   </AppWindow>
 }
 
-function Tab({ tab }: { tab: string }) {
+function Tab({ tab, opened }: { tab: string; opened: string | null }) {
   switch (tab) {
-    case 'admin': return <AdminSettings />
+    case 'admin': return <AdminSettings githubRow={<GitHubRow />} githubDialog={(extra) => <GitHubDialogs opened={opened} extra={extra} />} />
     case 'computers': return <ComputersSettings />
     case 'models': return <ModelsSettings />
     case 'apps': return <AppsSettings />

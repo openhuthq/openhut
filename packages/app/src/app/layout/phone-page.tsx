@@ -1,12 +1,7 @@
-import { createContext, useContext, useEffect, useRef, type PointerEvent, type ReactNode } from 'react'
+import { useEffect, useRef, type PointerEvent, type ReactNode } from 'react'
 import { slide } from '@/lib/media'
+import { PhoneBack } from '@/lib/layout'
 import { navigate } from '@/lib/router'
-
-const Back = createContext(() => navigate('/'))
-
-export function usePhoneBack() {
-  return useContext(Back)
-}
 
 export function PhonePage({ children }: { children: ReactNode }) {
   const page = useRef<HTMLDivElement>(null)
@@ -42,7 +37,7 @@ export function PhonePage({ children }: { children: ReactNode }) {
     if (moved > page.current.offsetWidth / 3 || (fast && moved > 30)) back()
     else slide({ element: page.current, to: '0 0' })
   }
-  return <Back value={back}>
+  return <PhoneBack value={back}>
     <div ref={page} className="rides-keyboard fixed inset-0 z-10 flex animate-[pushin_.42s_var(--ease-spring)] bg-card pt-[env(safe-area-inset-top)] pb-[calc(var(--safe-bottom)+var(--kb))] shadow-[-12px_0_32px_oklch(0%_0_0/.1)]">
       {children}
       <div aria-hidden className="absolute inset-y-0 left-0 z-30 w-7 touch-none"
@@ -52,5 +47,5 @@ export function PhonePage({ children }: { children: ReactNode }) {
         }}
         onPointerMove={move} onPointerUp={end} onPointerCancel={end} />
     </div>
-  </Back>
+  </PhoneBack>
 }

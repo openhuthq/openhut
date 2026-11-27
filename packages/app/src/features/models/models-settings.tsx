@@ -236,6 +236,16 @@ function usageLine(usage: SeatUsage | undefined) {
 
 const DOWNLOAD_POLL_MS = 1000
 
+export function NewAgentSteps({ step, signing, prepare, onSigned }: { step: ProviderId | undefined; signing: boolean; prepare: boolean; onSigned: () => void }) {
+  const seat = useStartSeatSignIn()
+  const { mutate, isIdle } = seat
+  useEffect(() => { if (prepare && isIdle) mutate() }, [prepare, isIdle, mutate])
+  return <>
+    {signing && <SeatSignIn start={seat} onClose={onSigned} onDone={onSigned} />}
+    {step && step !== 'claude' && <ModelsStep id={step} />}
+  </>
+}
+
 export function SeatSignIn({ start: prepared, onClose = () => open(), onDone = () => open() }: { start?: ReturnType<typeof useStartSeatSignIn>; onClose?: () => void; onDone?: () => void }) {
   const own = useStartSeatSignIn()
   const start = prepared ?? own

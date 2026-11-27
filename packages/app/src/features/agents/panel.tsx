@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Settings02Icon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
@@ -9,20 +9,8 @@ import { DialogCard, I, TINY_ICON } from '@/components/kit'
 import { agentPath } from '@/config/paths'
 import { useUpdateAgent } from '@/lib/queries/agents'
 import { Face } from '@/components/agent-face'
-import { PanelThreads } from '@/features/threads/thread-list'
 import { useGitHubFace } from '@/features/agents/github-face'
 import { formValues } from '@/lib/form'
-
-export function FloatingThreads({ agent, threadId, onClose }: { agent: Agent; threadId: string | undefined; onClose: () => void }) {
-  useEffect(() => {
-    const esc = (event: KeyboardEvent) => { if (event.key === 'Escape' && !document.querySelector('[role=dialog]')) onClose() }
-    document.addEventListener('keydown', esc)
-    return () => document.removeEventListener('keydown', esc)
-  }, [onClose])
-  return <section aria-label="Threads" className="absolute top-[56px] right-3 z-20 flex h-[min(520px,calc(100%-196px))] w-[360px] flex-col rounded-2xl border border-hair bg-card p-4 pb-3 shadow-pop">
-    <PanelThreads agent={agent} threadId={threadId} onClose={onClose} />
-  </section>
-}
 
 export function SyncFace({ agent }: { agent: Agent }) {
   useGitHubFace(agent)

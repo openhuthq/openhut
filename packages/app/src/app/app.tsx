@@ -1,12 +1,13 @@
-import { useRef } from 'react'
+import { lazy, Suspense, useRef } from 'react'
 import { routeOf } from '@/app/routes'
 import { Gate } from '@/app/gate'
-import { Shell, type ShellRoute } from '@/app/shell'
+import { Shell, type ShellRoute } from '@/app/layout/shell'
 import { useMe } from '@/lib/queries/people'
-import { SettingsView } from '@/features/settings/settings-view'
 import { navigate, Redirect, usePath } from '@/lib/router'
 import { RequestError } from '@/lib/api-client'
 import { InvitePage, ResetPage, SetupPage, SignInPage } from '@/features/auth/pages'
+
+const SettingsView = lazy(() => import('@/app/routes/settings').then((module) => ({ default: module.SettingsView })))
 
 type Background = { path: string; route: ShellRoute }
 
@@ -31,6 +32,6 @@ function SignedIn({ path }: { path: string }) {
   if (me.error instanceof RequestError && me.error.status === 401) return <Redirect to="/login" />
   return <Gate me={me}>
     <Shell route={route.page === 'settings' || route.page === 'connections' ? background.current.route : route} overlay={route.page === 'settings' || route.page === 'connections' ? route.page : undefined} />
-    {settings && <SettingsView tab={settings} onClose={close} />}
+    {settings && <Suspense fallback={null}><SettingsView tab={settings} onClose={close} /></Suspense>}
   </Gate>
 }

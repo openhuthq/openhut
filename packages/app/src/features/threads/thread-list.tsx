@@ -1,4 +1,4 @@
-import type { MouseEvent, ReactElement } from 'react'
+import { useEffect, type MouseEvent, type ReactElement } from 'react'
 import { ArchiveIcon, Cancel01Icon, GlobalIcon, HistoryIcon, PlusSignIcon, WebhookIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
@@ -92,4 +92,15 @@ export function PanelThreads({ agent, threadId, onClose }: { agent: Agent; threa
       {mine.map((thread) => <ThreadRow key={thread.id} agentId={agent.id} thread={thread} active={thread.id === open} />)}
     </div>
   </div>
+}
+
+export function FloatingThreads({ agent, threadId, onClose }: { agent: Agent; threadId: string | undefined; onClose: () => void }) {
+  useEffect(() => {
+    const esc = (event: KeyboardEvent) => { if (event.key === 'Escape' && !document.querySelector('[role=dialog]')) onClose() }
+    document.addEventListener('keydown', esc)
+    return () => document.removeEventListener('keydown', esc)
+  }, [onClose])
+  return <section aria-label="Threads" className="absolute top-[56px] right-3 z-20 flex h-[min(520px,calc(100%-196px))] w-[360px] flex-col rounded-2xl border border-hair bg-card p-4 pb-3 shadow-pop">
+    <PanelThreads agent={agent} threadId={threadId} onClose={onClose} />
+  </section>
 }

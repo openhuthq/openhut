@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { GLASS, I, ICON_BUTTON, TINY_ICON } from '@/components/kit'
 import { Tooltip } from '@/components/ui/tooltip'
-import { PanelThreads } from '@/features/threads/thread-list'
+import { PanelThreads, FloatingThreads } from '@/features/threads/thread-list'
 import { cn } from '@/lib/utils'
 import { ErrorNote } from '@/components/error-note'
+import { ErrorBoundary } from '@/components/error-boundary'
 import { useQueryClient } from '@tanstack/react-query'
 import { AGENT_DIALOGS, agentPath, goneAgentPath, type AgentDialog } from '@/config/paths'
 import { useAgent, useAgents } from '@/lib/queries/agents'
@@ -15,19 +16,23 @@ import { BrowserCard, BrowserDialog } from '@/features/agents/browser'
 import { ChannelDialog } from '@/features/agents/channels'
 import { CustomizeDialog } from '@/features/agents/customize'
 import { NewAgentDialog } from '@/features/agents/new-agent'
-import { AgentActions, DoesDialog, FloatingThreads, SyncFace } from '@/features/agents/panel'
+import { NewAgentSteps } from '@/features/models/models-settings'
+import { AgentActions, DoesDialog, SyncFace } from '@/features/agents/panel'
 import { RoutinesDialog } from '@/features/routines/routines-dialog'
 import { ToolPermissionsDialog } from '@/features/connections/tool-permissions'
 import { WebhooksDialog } from '@/features/webhooks/webhooks-dialog'
-import { NotifyDialog } from '@/features/agents/notify'
+import { NotifyDialog, PlacePicker } from '@/features/agents/notify'
 import { ThreadsDialog } from '@/features/threads/threads-dialog'
 import { Chat } from '@/features/threads/chat'
+import { AskCards, PendingAsks } from '@/features/asks/card'
 import { RequestError } from '@/lib/api-client'
 import { AGENTS_KEY } from '@/lib/query-keys'
 import { PHONE, useMedia } from '@/lib/media'
 import { navigate, open, Redirect, useOpen } from '@/lib/router'
 import { SetupDialog } from '@/features/agents/setup-dialog'
 import { AddAppDialog } from '@/features/connections/add-app'
+
+const ASKS = { Cards: AskCards, Pending: PendingAsks }
 
 export function AgentView({ agentId, threadId, dialog, detail }: { agentId: string; threadId?: string; dialog: AgentDialog | undefined; detail: string | undefined }) {
   const agent = useAgent(agentId)
@@ -56,9 +61,9 @@ export function AgentView({ agentId, threadId, dialog, detail }: { agentId: stri
   return <>
     <SyncFace agent={agent.data} />
     <div className="group/chat relative flex min-w-0 flex-1" data-threads={!phone && side ? '' : undefined}>
-      <Chat key={threadId} agent={agent.data} threadId={threadId ?? agent.data.id} actions={actions}
+      <ErrorBoundary key={threadId}><Chat agent={agent.data} threadId={threadId ?? agent.data.id} asks={ASKS} actions={actions}
         tools={phone && <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Details" title="Details" onClick={() => setDetails(true)}><I icon={InformationCircleIcon} size={20} /></Button>}
-        onTitle={phone ? () => setDetails(true) : undefined} />
+        onTitle={phone ? () => setDetails(true) : undefined} /></ErrorBoundary>
       {!phone && side === 'threads' && <FloatingThreads agent={agent.data} threadId={threadId} onClose={() => setSide(null)} />}
       {hasBrowser && dialog !== 'browser' && <BrowserCard agent={agent.data} open={side === 'browser'} onClose={() => setSide(null)} onBrowsing={setBrowsing} />}
     </div>
@@ -73,7 +78,7 @@ function Dialogs({ agent, dialog, detail, onClose }: { agent: Agent; dialog: Age
   const close = onClose ?? (() => navigate(agentPath({ agentId: agent.id })))
   switch (dialog) {
     case 'setup': return <SetupDialog agent={agent} tab={detail} onClose={close}><SetupChild agent={agent} /></SetupDialog>
-    case 'new': return <NewAgentDialog onClose={close} />
+    case 'new': return <NewAgentDialog onClose={close} modelSteps={NewAgentSteps} />
     case 'does': return <DoesDialog agent={agent} onClose={close} />
     case 'customize': return agent.canEdit ? <CustomizeDialog agent={agent} onClose={close} /> : null
     case 'memory':
@@ -86,7 +91,7 @@ function Dialogs({ agent, dialog, detail, onClose }: { agent: Agent; dialog: Age
     case 'apps': return detail ? <ToolPermissionsDialog agent={agent} connectionId={detail} onClose={close} /> : null
     case 'activity':
     case 'keys': return <SetupDialog agent={agent} tab={dialog} onClose={close}><SetupChild agent={agent} /></SetupDialog>
-    case 'webhooks': return <WebhooksDialog agent={agent} onClose={close} />
+    case 'webhooks': return <WebhooksDialog agent={agent} placePicker={(props) => <PlacePicker agentId={agent.id} none="Here in the web app" label="Runs in" className="w-[260px]" {...props} />} onClose={close} />
     case 'threads': return <ThreadsDialog agent={agent} onClose={close} />
     case 'notify': return agent.canEdit ? <NotifyDialog agent={agent} onClose={close} /> : null
     case 'browser': return agent.browser && agent.canEdit ? <BrowserDialog agent={agent} onClose={close} /> : null
