@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Globe02Icon, PencilEdit02Icon, PlayIcon, Settings02Icon, StopIcon } from '@hugeicons/core-free-icons'
+import { FlashIcon, Globe02Icon, Link01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, Settings02Icon, StopIcon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { DialogClose, DialogTitle } from '@/components/ui/dialog'
@@ -30,8 +30,7 @@ export function Panel({ agent, threadId, naming, collapsed = false, onBrowser }:
   useGitHubFace(agent)
   return <aside data-details inert={collapsed} className={cn('still flex shrink-0 justify-end overflow-hidden border-hair transition-[width] duration-[240ms] ease-(--ease-spring) phone:w-full phone:flex-1 phone:border-l-0', collapsed ? 'w-0' : 'w-[340px] border-l-[0.5px]', GLASS)}>
     <div className={cn('flex w-[340px] shrink-0 flex-col gap-7 p-6 transition-[opacity,translate] duration-[160ms] ease-out phone:w-full', collapsed && 'translate-x-2 opacity-0')}>
-      <div className="grid shrink-0 grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3">
-        {agent.canEdit ? <a href={agentPath({ agentId: agent.id, dialog: 'customize' })} aria-label={`Customize ${agent.name}`} title="Customize" className="flex"><Face agent={agent} size={40} /></a> : <Face agent={agent} size={40} />}
+      <div className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3">
         <div className="grid min-w-0 gap-0.5"><AgentName agent={agent} editing={naming && agent.canEdit} />{agent.applyError ? <RetryApply agent={agent} /> : <StatusLine agent={agent} />}</div>
         <HeadActions agent={agent} onBrowser={onBrowser} />
         <WhatItDoes agent={agent} />
@@ -80,15 +79,15 @@ function Capabilities({ agent }: { agent: Agent }) {
   const routines = (useRoutines(agent.id).data ?? []).filter((routine) => !routine.stopped).length
   const can = [agent.browser && 'Browse', agent.codeExecution && 'Run code', routines > 0 && (routines === 1 ? '1 routine' : `${routines} routines`)].filter((each) => typeof each === 'string')
   const lines = [
-    apps.length > 0 && { label: 'Uses', tab: 'connections', marks: apps.map(connectionBrand), words: apps.map((each) => each.name) },
-    channels.length > 0 && { label: 'Talks on', tab: 'channels', marks: channels.map((each) => each.kind), words: channels.map((each) => CHANNEL_WORD[each.kind] ?? each.kind) },
-    can.length > 0 && { label: 'Can', tab: 'general', marks: [], words: can, joiner: ' · ' },
+    apps.length > 0 && { label: 'Uses', icon: Link01Icon, tab: 'connections', marks: apps.map(connectionBrand), words: apps.map((each) => each.name) },
+    channels.length > 0 && { label: 'Talks on', icon: Message01Icon, tab: 'channels', marks: channels.map((each) => each.kind), words: channels.map((each) => CHANNEL_WORD[each.kind] ?? each.kind) },
+    can.length > 0 && { label: 'Can', icon: FlashIcon, tab: 'general', marks: [], words: can, joiner: ' · ' },
   ].filter((each) => !!each)
   if (!lines.length) return null
   return <div className="col-span-full -my-1 flex flex-col">
-    {lines.map(({ label, tab, marks, words, joiner }) => <a key={label} href={agentPath({ agentId: agent.id, dialog: 'setup', detail: tab })}
-      className={cn('-mx-2 grid grid-cols-[64px_minmax(0,1fr)] items-center rounded-md px-2 py-1 text-[13px]/[20px] text-ink no-underline', HOVER)}>
-      <span className="text-mute">{label}</span>
+    {lines.map(({ label, icon, tab, marks, words, joiner }) => <a key={label} href={agentPath({ agentId: agent.id, dialog: 'setup', detail: tab })}
+      className={cn('-mx-2 grid grid-cols-[16px_minmax(0,1fr)] items-center gap-2.5 rounded-md px-2 py-1 text-[13px]/[20px] text-ink no-underline', HOVER)}>
+      <Tooltip label={label}><span role="img" aria-label={label} className="grid place-items-center text-mute"><I icon={icon} size={16} /></span></Tooltip>
       <span className="flex min-w-0 items-center gap-2">
         {marks.length > 0 && <span className="flex shrink-0 items-center">{marks.slice(0, 3).map((mark, index) => <span key={index} className="grid size-[22px] place-items-center rounded-full bg-card shadow-[0_0_0_1.5px_var(--sidebar)] [&+&]:-ml-1.5"><Glyph name={mark} size={16} /></span>)}</span>}
         <span className="min-w-0 truncate">{joiner ? words.join(joiner) : namesOf(words)}</span>
