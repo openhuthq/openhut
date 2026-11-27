@@ -1,3 +1,5 @@
+import { fileInHome } from '@openhut/common/threads/thread.ts'
+
 const FENCE = /^\s{0,3}(```|~~~)/
 const ROW = /^\s{0,3}\|/
 const DELIMITER = /^\s{0,3}\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/
@@ -21,4 +23,8 @@ export function bullets(text: string): string {
     if (FENCE.test(line)) fenced = !fenced
     return fenced ? line : line.replace(/^(\s*)• /, '$1- ')
   }).join('\n')
+}
+
+export function media(text: string): string {
+  return text.replace(/^[ \t]*MEDIA:[ \t]*(\S+)[ \t]*$/gm, (line, path: string) => /\.[A-Za-z0-9]{1,10}$/.test(path) && fileInHome(path) !== undefined ? `![](${path})` : line)
 }

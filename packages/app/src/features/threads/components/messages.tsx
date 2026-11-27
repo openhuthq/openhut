@@ -24,7 +24,7 @@ import { homePathsIn, linkHomeFiles } from '@/features/threads/files'
 import { errorUnder, legacyWork, withoutCards } from '@/features/threads/steps'
 import { RetryButton, WorkLine } from '@/features/threads/components/work'
 import { MessageCard } from '@/features/threads/components/card'
-import { bullets, settled } from '@/features/threads/markdown'
+import { bullets, media, settled } from '@/features/threads/markdown'
 import { copyText } from '@/lib/clipboard'
 import { toast } from '@/lib/toast'
 import { TOUCH, useMedia } from '@/lib/media'
@@ -88,7 +88,7 @@ export function AgentReply({ agent, threadId: liveThread, step, message, said, l
       {work && <WorkLine agent={agent} work={work} notes={replyOf(message.parts).notes} live={live} answered={blocks.length > 0} onRetry={onRetry} />}
       {step && !work && <span className="flex min-w-0 items-center gap-2 text-[12.5px] text-mute" role="status">{!blocks.length && <Spinner className="mt-0 size-3.5 shrink-0" />}<span className="truncate">{step}</span></span>}
       {blocks.map((block, index) => block.type === 'text'
-        ? <div key={index} className={cn('msg-t', live && index === blocks.length - 1 && 'caret')}><Markdown remarkPlugins={plugins} components={{ a: ChatLink, code: FileCode, pre: Code, input: TaskBox, table: WideTable }}>{live ? settled(bullets(block.text)) : bullets(block.text)}</Markdown></div>
+        ? <div key={index} className={cn('msg-t', live && index === blocks.length - 1 && 'caret')}><Markdown remarkPlugins={plugins} components={{ a: ChatLink, code: FileCode, pre: Code, input: TaskBox, table: WideTable, img: ChatImage }}>{live ? settled(bullets(media(block.text))) : bullets(media(block.text))}</Markdown></div>
         : hasSpec && <MessageCard key={index} spec={spec} loading={live} />)}
       {ids.length > 0 && <asks.Cards agent={agent} ids={ids} />}
       {message.parts.map((part, index) => part.type === 'data-webhook-setup' && <WebhookSetupCard key={index} agentId={agentId} card={part.data} done={said?.(doneText(part.data)) ?? false} />)}
@@ -149,6 +149,22 @@ function WideTable({ children }: { children?: ReactNode }) {
 
 function TaskBox({ checked }: { checked?: boolean }) {
   return <span className={cn('task-box', checked && 'done')} role="img" aria-label={checked ? 'Done' : 'Not done'}>{checked && ICONS.check}</span>
+}
+
+const MEDIA_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }
+
+function ChatImage({ src, alt }: { src?: string | Blob; alt?: string }) {
+  const path = typeof src === 'string' ? homeFile(src) : undefined
+  if (!path) return typeof src === 'string' ? <img src={src} alt={alt ?? ''} /> : null
+  return <HomeImage path={path} />
+}
+
+function HomeImage({ path }: { path: string }) {
+  const { agentId, threadId, save } = useContext(ChatFiles)
+  const mediaType = MEDIA_TYPES[path.slice(path.lastIndexOf('.') + 1).toLowerCase()] ?? ''
+  const thumb = useThumb({ agentId, threadId, path, mediaType })
+  if (!thumb) return <FileChip name={nameOf(path)} image onOpen={() => save(path)} />
+  return <button type="button" className="block max-w-[520px] cursor-zoom-in overflow-hidden rounded-lg border border-hair p-0" onClick={() => save(path)} aria-label={`Save ${nameOf(path)}`}><img src={thumb} alt={nameOf(path)} className="block h-auto w-full" /></button>
 }
 
 function homeFile(text: string) {
