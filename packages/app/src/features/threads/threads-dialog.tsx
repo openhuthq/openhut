@@ -7,13 +7,12 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ErrorNote } from '@/components/error-note'
 import { DialogCard, HOVER, I, Loading } from '@/components/kit'
 import { threadRoute } from '@/app/routes'
-import { Face, lookOf } from '@/features/agents/face'
+import { Face } from '@/features/agents/face'
 import { ThreadRow } from '@/features/agents/sidebar'
 import { useThreads } from '@/features/threads/api'
 import { sourceOf, type Origin, type SourcedThread } from '@/features/threads/places'
 import { ago } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { SWATCHES } from '@/lib/face'
 
 type Filter = 'all' | Origin['platform']
 
@@ -41,7 +40,7 @@ export function ThreadsDialog({ agent, onClose }: { agent: Agent; onClose: () =>
       <ErrorNote message={threads.error?.message} />
       {!threads.data && !threads.error && <Loading />}
       {main && <MainRow agent={agent} thread={main} />}
-      {rest.map((thread) => <ThreadRow key={thread.id} agentId={agent.id} thread={thread} accent={SWATCHES[lookOf(agent).body].shade} active={false} />)}
+      {rest.map((thread) => <ThreadRow key={thread.id} agentId={agent.id} thread={thread} active={false} />)}
       {threads.data && !shown.length && <p className="m-0 px-2 py-6 text-center text-[13px] text-mute">No threads here yet.</p>}
     </div>
   </DialogCard>
