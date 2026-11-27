@@ -74,6 +74,9 @@ export type ToolCall = z.infer<typeof ToolCall>
 export const Work = z.object({ calls: z.array(ToolCall), ms: z.number(), error: z.optional(z.string()) })
 export type Work = z.infer<typeof Work>
 
+export const WAITING = 'Waiting for an earlier task to finish'
+export type TurnStatus = { text: string }
+
 export const ToolProgress = z.looseObject({ tool: z.optional(z.string()), name: z.optional(z.string()), label: z.optional(z.string()) })
 export type ToolProgress = z.infer<typeof ToolProgress>
 

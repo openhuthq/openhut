@@ -7,7 +7,7 @@ import type { SpecDataPart } from '@json-render/core'
 import { useJsonRenderMessage } from '@json-render/react'
 import { ArrowUpRight01Icon, Copy01Icon } from '@hugeicons/core-free-icons'
 import type { Agent } from '@openhut/common/agents/agent.ts'
-import { ChatCall, fileInHome, ToolProgress, Work, type ChatMessage } from '@openhut/common/threads/thread.ts'
+import { ChatCall, fileInHome, ToolProgress, Work, type ChatMessage, type TurnStatus } from '@openhut/common/threads/thread.ts'
 import { DropdownMenuItem, LongPressMenu } from '@/components/ui/dropdown-menu'
 import { Spinner } from '@/components/ui/spinner'
 import { Dots, I } from '@/components/kit'
@@ -36,7 +36,7 @@ import { callOf } from '@/lib/webhook-call'
 import { CallCardMessage } from '@/components/call-card'
 import { FileChip } from '@/features/threads/components/file-drop'
 
-export type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; work: Work; spec: SpecDataPart; asks: string[]; notified: Notified; 'webhook-setup': WebhookSetup; artifact: unknown; step: Record<string, never> }>
+export type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; work: Work; spec: SpecDataPart; asks: string[]; notified: Notified; 'webhook-setup': WebhookSetup; artifact: unknown; step: Record<string, never>; status: TurnStatus }>
 type AgentPart = AgentMessage['parts'][number]
 
 export const ChatFiles = createContext<{ agentId: string; threadId: string; save: (path: string) => void }>({ agentId: '', threadId: '', save: () => undefined })
@@ -62,10 +62,10 @@ export function Day({ iso }: { iso: string }) {
   return <div className="flex items-center gap-3 text-[11.5px] text-mute-2"><span className="h-px flex-1 bg-hair" />{label}<span className="h-px flex-1 bg-hair" /></div>
 }
 
-export function Message({ agent, thread, message, said, seen, live, onRetry }: { agent: Agent; thread: SourcedThread; message: AgentMessage; said: (text: string) => boolean; seen: boolean; live: boolean; onRetry?: () => void }) {
+export function Message({ agent, thread, message, said, seen, live, step, onRetry }: { agent: Agent; thread: SourcedThread; message: AgentMessage; said: (text: string) => boolean; seen: boolean; live: boolean; step?: string; onRetry?: () => void }) {
   const webhook = webhookOf(message.metadata)
   if (webhook && !callOf(message.metadata) && message.role === 'user') return <WebhookMessage webhook={webhook} at={thread.createdAt} />
-  return message.role === 'user' ? <UserMessage message={message} seen={seen ? thread.id : undefined} /> : <AgentReply agent={agent} threadId={thread.id} message={message} said={said} live={live} onRetry={onRetry} />
+  return message.role === 'user' ? <UserMessage message={message} seen={seen ? thread.id : undefined} /> : <AgentReply agent={agent} threadId={thread.id} message={message} said={said} live={live} step={step} onRetry={onRetry} />
 }
 
 export function AgentReply({ agent, threadId: liveThread, step, message, said, live, onRetry }: { agent: Agent; threadId?: string; step?: string; message: AgentMessage; said?: (text: string) => boolean; live: boolean; onRetry?: () => void }) {

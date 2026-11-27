@@ -2,7 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { UIMessageChunk } from 'ai'
 import { db, migrate } from '../../../src/server/platform/db.ts'
-import { turns, type TurnEnd, type TurnRun } from '../../../src/server/threads/turns.ts'
+import { WAITING } from '@openhut/common/threads/thread.ts'
+import { statusChunk, turns, type TurnEnd, type TurnRun } from '../../../src/server/threads/turns.ts'
 
 await migrate()
 
@@ -70,17 +71,21 @@ test('stop aborts the running turn, and what it said so far is still saved', asy
   assert.deepEqual(saved[0].message.parts.flatMap((part) => part.type === 'text' ? [part.text] : []), ['Half'])
 })
 
-test('a second turn for the same agent waits for the first, but already counts as the thread\'s working turn', async () => {
+test('a second turn for the same agent waits for the first, says so in its stream, and already counts as the thread\'s working turn', async () => {
   const first = gate()
   const order: string[] = []
-  const one = turns.start({ id: 'msg_q1', thread: 'th_q1', agentId: 'ag_q', run: async () => { order.push('one'); await first.opened; order.push('one done') }, save: async () => undefined })
-  const two = turns.start({ id: 'msg_q2', thread: 'th_q2', agentId: 'ag_q', run: async () => { order.push('two') }, save: async () => undefined })
+  const one = turns.start({ id: 'msg_q1', thread: 'th_q1', agentId: 'ag_q', run: async ({ write }) => { order.push('one'); write({ type: 'start', messageId: 'msg_q1' }); await first.opened; order.push('one done') }, save: async () => undefined })
+  const two = turns.start({ id: 'msg_q2', thread: 'th_q2', agentId: 'ag_q', run: async ({ write }) => { order.push('two'); write({ type: 'start', messageId: 'msg_q2' }) }, save: async () => undefined })
   assert.equal(turns.current('th_q2'), 'msg_q2')
+  const firstChunks = read(turns.subscribe({ thread: 'th_q1' }))
+  const second = read(turns.subscribe({ thread: 'th_q2' }))
   await new Promise((resolve) => setTimeout(resolve, 20))
   assert.deepEqual(order, ['one'])
   first.open()
   await Promise.all([one, two])
   assert.deepEqual(order, ['one', 'one done', 'two'])
+  assert.deepEqual(await second, [statusChunk(WAITING), statusChunk(''), { type: 'start', messageId: 'msg_q2' }])
+  assert.deepEqual(await firstChunks, [{ type: 'start', messageId: 'msg_q1' }])
 })
 
 test('a failed turn ends its stream with the error and is saved as failed', async () => {
