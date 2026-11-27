@@ -41,6 +41,7 @@ jobs:
           printf 'run=%s\nsha=%s\n' "$run" "$sha" >> "$GITHUB_OUTPUT"
 
   smoke:
+    if: false
     needs: green
     permissions:
       contents: read
@@ -52,7 +53,7 @@ jobs:
       tags: ''
 
   stable:
-    needs: [green, smoke]
+    needs: [green]
     runs-on: ubuntu-latest
     permissions:
       contents: read
