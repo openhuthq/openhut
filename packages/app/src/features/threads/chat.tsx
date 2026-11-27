@@ -102,6 +102,7 @@ function ThreadView({ thread, agent, tools, onTitle }: { thread: ThreadWithMessa
       <Day iso={thread.updatedAt} />
       {shown.map((message, index) => <Message key={message.id} agent={agent} thread={thread} message={message} said={(text) => said(index, text)} seen={message === mine} mirrors={thread.mirrorPaused || thread.readOnly ? [] : thread.mirrors ?? []} live={busy && message === last} onRetry={!busy && message === last ? () => void chat.regenerate() : undefined} />)}
     </> : !watching && <ChatEmpty agent={agent} />}
+    {!busy && live.ending.filter((stream) => !shown.some((message) => message.id === stream.turnId)).map((stream) => <AgentReply key={stream.turnId} agent={agent} message={{ id: stream.turnId, role: 'assistant', parts: [{ type: 'text', text: stream.text }] }} live={false} />)}
     {watching && <AgentReply agent={agent} threadId={thread.id} step={live.agent.step} message={{ id: live.streaming?.turnId ?? 'live', role: 'assistant', parts: live.streaming?.text ? [{ type: 'text', text: live.streaming.text }] : [] }} live />}
     {chat.status === 'submitted' && last?.role === 'user' && <AgentReply agent={agent} threadId={thread.id} message={withStream({ message: { id: 'waiting', role: 'assistant', parts: [] }, text: own ?? '' })} live />}
     <PendingAsks agent={agent} shown={new Set(chat.messages.flatMap(changesOf))} />

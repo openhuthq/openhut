@@ -94,3 +94,15 @@ test('a thread nobody opened reads its typing and agent state from the agents bo
   assert.equal(liveThreads.joined('th_2'), false)
   assert.deepEqual(liveThreads.get('th_2').people, [])
 })
+
+test('a turn that starts before the last one refetched keeps the last text until its refetch', async () => {
+  delta(1, 'First answer')
+  const done = liveThreads.finish({ thread: 'th_1', turnId: 'turn_1' })
+  liveThreads.receive({ type: 'turn', thread: 'th_1', turnId: 'turn_2', state: 'started' })
+  delta(1, 'Second', 'turn_2')
+  assert.deepEqual(liveThreads.get('th_1').ending?.map((stream) => stream.text), ['First answer'])
+  assert.equal(liveThreads.get('th_1').stream?.text, 'Second')
+  await done
+  assert.deepEqual(liveThreads.get('th_1').ending, [])
+  assert.equal(liveThreads.get('th_1').stream?.text, 'Second')
+})
