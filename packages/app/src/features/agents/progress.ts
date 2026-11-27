@@ -1,7 +1,5 @@
-export type Progress = 'idle' | 'queued' | 'working' | 'review' | 'done' | 'failed'
-
-export function summaryOf({ working, waiting, activity }: { working: number; waiting: number; activity: 'idle' | 'working' | 'waiting' }): Progress | undefined {
-  if (waiting || activity === 'waiting') return 'review'
+export function summaryOf({ working, waiting, activity }: { working: number; waiting: number; activity: 'idle' | 'working' | 'waiting' }): 'waiting' | 'working' | undefined {
+  if (waiting || activity === 'waiting') return 'waiting'
   if (working || activity === 'working') return 'working'
   return undefined
 }

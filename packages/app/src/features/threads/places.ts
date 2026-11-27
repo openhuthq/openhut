@@ -42,9 +42,10 @@ export function startedIn(thread: SourcedThread): string {
   return source.platform === 'discord' ? `Discord ${source.label}` : source.label
 }
 
-export const SIDEBAR_THREADS = 3
+export const PREVIEW_THREADS = 5
 
-export function firstThreads(threads: SourcedThread[]): SourcedThread[] {
-  const waiting = threads.filter((thread) => thread.waiting)
-  return [...waiting, ...threads.filter((thread) => !thread.waiting).slice(0, Math.max(0, SIDEBAR_THREADS - waiting.length))]
+export function threadsOf(threads: SourcedThread[], agentId: string): SourcedThread[] {
+  const mine = threads.filter((thread) => thread.agentId === agentId)
+  const newest = mine.filter((thread) => thread.id !== agentId).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+  return [...mine.filter((thread) => thread.id === agentId), ...newest]
 }

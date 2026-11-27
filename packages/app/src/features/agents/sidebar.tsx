@@ -1,7 +1,6 @@
-import { createContext, useEffect, useState, type MouseEvent, type ReactElement } from 'react'
-import { ArchiveIcon, ArrowDown01Icon, ArrowRight01Icon, BubbleChatIcon, Clock01Icon, Delete02Icon, Logout01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SidebarLeftIcon, StopIcon, WebhookIcon } from '@hugeicons/core-free-icons'
-import type { OpenHutAgent } from '@/lib/openhut'
-import { Subagent } from '@openhut/common/agents/subagent.ts'
+import { createContext, useState, type ReactElement } from 'react'
+import { Delete02Icon, Logout01Icon, Message01Icon, PencilEdit02Icon, PlayIcon, PlusSignIcon, Settings02Icon, SidebarLeftIcon, StopIcon } from '@hugeicons/core-free-icons'
+import { HERE, type OpenHutAgent } from '@/lib/openhut'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, LongPressMenu } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/components/confirm-button'
@@ -9,8 +8,10 @@ import { Glyph } from '@/components/glyph'
 import { Hut } from '@/components/hut'
 import { GLASS, HOVER, I, ICON_BUTTON, PICKED, SURFACE } from '@/components/kit'
 import { PersonFace } from '@/components/custom/person-face'
-import { agentPath, threadRoute } from '@/app/routes'
-import { firstThreads, sourceOf, startedIn, type SourcedThread } from '@/features/threads/places'
+import { agentPath } from '@/app/routes'
+import type { SourcedThread } from '@/features/threads/places'
+import { ThreadMark } from '@/features/threads/thread-list'
+import { useComputers } from '@/features/computers/api'
 import { useDeleteAgent, useUpdateAgent } from '@/features/agents/api'
 import { Face } from '@/features/agents/face'
 import { toneOf, troubleOf, wordOf } from '@/features/agents/status'
@@ -24,9 +25,8 @@ import { PHONE, useMedia } from '@/lib/media'
 import { navigate } from '@/lib/router'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
-import { useAgentsLive, usePresence, type LiveAgentBoard } from '@/lib/thread-live'
-import { useArchiveThread } from '@/features/threads/api'
-import { summaryOf, type Progress } from '@/features/agents/progress'
+import { useAgentsLive, type LiveAgentBoard } from '@/lib/thread-live'
+import { summaryOf } from '@/features/agents/progress'
 
 const ROUND = 'float phone:size-10 phone:rounded-full phone:bg-card phone:text-ink'
 
@@ -43,8 +43,8 @@ export function ShowSidebar({ onExpand, onNew }: { onExpand: () => void; onNew: 
   </span>
 }
 
-export function Sidebar({ contacts, activeId, threadId, collapsed, onCollapse, onNew }: {
-  contacts: Contact[] | undefined; activeId: string | undefined; threadId: string | undefined; collapsed: boolean; onCollapse: () => void; onNew: () => void
+export function Sidebar({ contacts, activeId, collapsed, onCollapse, onNew }: {
+  contacts: Contact[] | undefined; activeId: string | undefined; collapsed: boolean; onCollapse: () => void; onNew: () => void
 }) {
   const phone = useMedia(PHONE)
   return <aside inert={collapsed} className={cn('pushable still shrink-0 overflow-hidden border-hair transition-[width] duration-[240ms] ease-(--ease-spring)', collapsed ? 'w-0' : 'w-[280px] border-r-[0.5px]', contacts?.length === 0 ? 'phone:hidden' : 'phone:w-full phone:border-r-0', GLASS)}>
@@ -60,7 +60,7 @@ export function Sidebar({ contacts, activeId, threadId, collapsed, onCollapse, o
     <h1 className="m-0 hidden px-5 pt-1 pb-3 text-[32px]/[1.1] font-bold tracking-[-.02em] phone:block">Agents</h1>
     <nav className="flex min-h-0 flex-col gap-1 overflow-auto px-3 pt-1 phone:gap-0 phone:px-2">
       {!!contacts?.length && <div className="flex flex-col gap-1 phone:gap-0">
-      {contacts.map(({ agent, threads }) => <AgentRow key={agent.id} agent={agent} threads={threads} active={agent.id === activeId} threadId={agent.id === activeId ? threadId : undefined} phone={phone} />)}
+      {contacts.map(({ agent, threads }) => <AgentRow key={agent.id} agent={agent} threads={threads} active={agent.id === activeId} phone={phone} />)}
       </div>}
       {contacts?.length === 0 && <Button type="button" variant="bare" onClick={onNew} className={cn('grid h-auto w-full grid-cols-[40px_1fr] items-center gap-3 rounded-lg px-2.5 py-2 text-left font-normal text-inherit', HOVER)}>
         <span className="grid size-10 place-items-center rounded-[24%] border-[1.5px] border-dashed border-mute-2 text-mute"><I icon={PlusSignIcon} size={16} /></span>
@@ -81,73 +81,30 @@ export function Sidebar({ contacts, activeId, threadId, collapsed, onCollapse, o
   </aside>
 }
 
-const FIRST = 5
-
-const FADE_MS = 1500
-
-function useSubagents(agentId: string): (Subagent & { gone: boolean })[] {
-  const data = useAgentsLive().get(agentId)?.subagents
-  const [faded, setFaded] = useState<Set<string>>(new Set())
-  const done = (data ?? []).filter((item) => item.status === 'done' && !faded.has(item.id)).map((item) => item.id).join(' ')
-  useEffect(() => {
-    if (!done) return
-    const timer = window.setTimeout(() => setFaded((now) => new Set([...now, ...done.split(' ')])), FADE_MS)
-    return () => clearTimeout(timer)
-  }, [done])
-  return (data ?? []).map((item) => ({ ...item, gone: faded.has(item.id) }))
-}
-
-function AgentRow({ agent, threads, active, threadId, phone }: { agent: OpenHutAgent; threads: SourcedThread[]; active: boolean; threadId: string | undefined; phone: boolean }) {
-  const children = useSubagents(agent.id)
-  const activity = useAgentsLive().get(agent.id)?.activity ?? 'idle'
-  const [expanded, setExpanded] = useState(active)
-  useEffect(() => { if (active) setExpanded(true) }, [active])
-  const working = children.filter((child) => child.status === 'working').length
-  useTick(working > 0)
-  const listed = threads.filter((thread) => thread.id !== agent.id)
-  const sessions = firstThreads(listed)
+function AgentRow({ agent, threads, active, phone }: { agent: OpenHutAgent; threads: SourcedThread[]; active: boolean; phone: boolean }) {
+  const live = useAgentsLive().get(agent.id)
+  const activity = live?.activity ?? 'idle'
+  const working = live?.subagents?.filter((child) => child.status === 'working').length ?? 0
   const waiting = threads.filter((each) => each.waiting).length
-  const subagents = children.filter((child) => !child.gone).length
+  const where = useComputers().data?.find((computer) => computer.id === (agent.runsOn ?? HERE))?.name
   const thread = threads[0]
-  const shown = subagents + sessions.length
-  const open = (phone || expanded) && shown > 0
   const idle = agent.online ? troubleOf(agent) ?? (agent.summary || 'Say hello') : 'Offline'
   const line = lineOf({ working, waiting, activity, idle })
   const summary = summaryOf({ working, waiting, activity })
-  const [more, setMore] = useState(false)
-  const rows = children.map((child) => <Session key={child.id} gone={child.gone} title={child.title} status={child.status} time={ago(child.startedAt)} />)
-  const cut = children.findIndex((_, index) => children.slice(0, index + 1).filter((child) => !child.gone).length > FIRST)
-  const toggle = () => setExpanded(!open)
-  return <div className="flex flex-col">
-    <div className="group/agent relative">
-    <RowMenu agent={agent}><a href={agentPath({ agentId: agent.id })} aria-current={active ? 'page' : undefined}
-      className={cn('row grid h-10 w-full shrink-0 data-popup-open:bg-picked grid-cols-[28px_1fr_auto] items-center gap-2.5 rounded-lg px-2 text-left text-inherit no-underline phone:h-auto phone:grid-cols-[52px_1fr_auto] phone:gap-3.5 phone:rounded-2xl phone:px-3 phone:py-3', HOVER, !phone && active && !(open && sessions.some((each) => each.id === threadId)) && PICKED)}
-      title={agent.online ? undefined : 'Offline'}>
-      <span className={cn('relative', !agent.online && 'opacity-45')}><Face agent={agent} size={phone ? 52 : 28} /><Live agent={agent} className="-right-0.5 -bottom-0.5 size-2.5 border-[1.5px] phone:size-3.5 phone:border-2" /></span>
-      <span className="grid min-w-0 gap-0.5">
-        <span className={cn('truncate text-[13.5px] font-semibold phone:text-[17px]', !agent.online && 'text-mute')}>{agent.name}</span>
-        <span className={cn('hidden truncate text-[13px] phone:block', agent.online ? 'text-body' : 'text-mute', agent.online && !working && troubleOf(agent) && 'text-fail')}>{line}</span>
+  return <RowMenu agent={agent}><a href={agentPath({ agentId: agent.id })} aria-current={active ? 'page' : undefined}
+    className={cn('row grid w-full shrink-0 data-popup-open:bg-picked grid-cols-[40px_1fr_auto] items-center gap-3 rounded-lg px-2.5 py-2 text-left text-inherit no-underline phone:grid-cols-[52px_1fr_auto] phone:gap-3.5 phone:rounded-2xl phone:px-3 phone:py-3', HOVER, !phone && active && PICKED)}
+    title={agent.online ? undefined : 'Offline'}>
+    <span className={cn('relative', !agent.online && 'opacity-45')}><Face agent={agent} size={phone ? 52 : 40} /><Live agent={agent} className="-right-0.5 -bottom-0.5 phone:size-3.5" /></span>
+    <span className="grid min-w-0 gap-0.5">
+      <span className="flex min-w-0 items-center gap-2">
+        <span className={cn('min-w-0 flex-1 truncate text-[14px] font-semibold phone:text-[17px]', !agent.online && 'text-mute')}>{agent.name}</span>
+        {summary && <span className="phone:hidden"><ThreadMark status={summary} /></span>}
       </span>
-      {thread && <span className="hidden self-start pt-1 text-[12px] text-mute tabular-nums phone:block">{ago(thread.updatedAt)}</span>}
-      <span className={cn('flex items-center text-[11.5px] text-mute tabular-nums phone:hidden', shown > 0 && 'transition-opacity group-hover/agent:opacity-0 group-focus-within/agent:opacity-0')}>{open ? listed.length || '' : summary && <Mark status={summary} />}</span>
-    </a></RowMenu>
-    {shown > 0 && !phone && <Button type="button" variant="bare" aria-label={open ? `Collapse ${agent.name}` : `Expand ${agent.name}`} aria-expanded={open} onClick={toggle}
-      className={cn('absolute top-2 right-1 grid size-6 place-items-center rounded-md text-mute opacity-0 transition-opacity group-hover/agent:opacity-100 focus-visible:opacity-100', HOVER)}>
-      <I icon={open ? ArrowDown01Icon : ArrowRight01Icon} size={14} />
-    </Button>}
-    </div>
-    {open && <div className="relative flex flex-col gap-px pt-0.5 pb-2.5 pl-[38px] [--mark:14px] [--mark-gap:8px] before:absolute before:top-0 before:bottom-2.5 before:left-[22px] before:w-px before:bg-hair phone:gap-0.5 phone:pt-1.5 phone:pb-2 phone:pl-[48px] phone:[--mark:28px] phone:[--mark-gap:10px] phone:before:hidden">
-      {more ? rows : rows.slice(0, cut === -1 ? rows.length : cut)}
-      {subagents > FIRST && <Button type="button" variant="bare" onClick={() => setMore(!more)} className={cn(MORE, HOVER)}>
-        {more ? 'Show less' : `Show ${subagents - FIRST} more`}
-      </Button>}
-      {sessions.map((each) => <ThreadRow key={each.id} agentId={agent.id} thread={each} active={threadId === each.id} />)}
-      {listed.length > sessions.length && <a href={agentPath({ agentId: agent.id, dialog: 'threads' })} className={cn(MORE, 'no-underline', HOVER)}>Show all ({listed.length})</a>}
-    </div>}
-  </div>
+      <span className={cn('truncate text-[13px]', agent.online ? 'text-body' : 'text-mute', agent.online && !working && troubleOf(agent) && 'text-fail')}>{[where, line].filter(Boolean).join(' · ')}</span>
+    </span>
+    {thread && <span className="hidden self-start pt-1 text-[12px] text-mute tabular-nums phone:block">{ago(thread.updatedAt)}</span>}
+  </a></RowMenu>
 }
-
-const MORE = 'flex h-[30px] w-full items-center justify-start rounded-lg pr-2 pl-[30px] text-[12.5px] phone:pl-[46px] font-normal text-mute'
 
 function lineOf({ working, waiting, activity, idle }: { working: number; waiting: number; activity: LiveAgentBoard['activity']; idle: string }) {
   if (working) return `Working on ${working} ${working === 1 ? 'task' : 'tasks'}`
@@ -156,61 +113,6 @@ function lineOf({ working, waiting, activity, idle }: { working: number; waiting
   if (activity === 'waiting') return 'Waiting on you'
   return idle
 }
-
-const SOURCE_ICON = { app: BubbleChatIcon, webhook: WebhookIcon, routine: Clock01Icon }
-
-const ROW = 'grid h-[30px] shrink-0 grid-cols-[var(--mark,28px)_1fr_auto] items-center gap-(--mark-gap,10px) rounded-lg px-2 text-inherit no-underline'
-
-export function ThreadRow({ agentId, thread, active }: { agentId: string; thread: SourcedThread; active: boolean }) {
-  const source = sourceOf(thread)
-  const busy = usePresence(thread.id).agent.state !== 'idle'
-  const archive = useArchiveThread(thread)
-  const main = thread.id === thread.agentId
-  const where = startedIn(thread)
-  const status = thread.waiting ? 'review' : busy ? 'working' : 'idle'
-  const onArchive = (event: MouseEvent) => {
-    event.preventDefault()
-    event.stopPropagation()
-    archive.mutate(undefined, { onSuccess: () => active && navigate(agentPath({ agentId })), onError: toastError })
-  }
-  return <div className="group/thread relative">
-  <a href={threadRoute({ agentId, threadId: thread.id })} aria-current={active ? 'page' : undefined} className={cn(ROW, HOVER, active && PICKED)}>
-    <span className="grid place-items-center text-mute-2"><Mark status={status} /></span>
-    <span className="truncate text-[13px] font-medium text-ink">{thread.title}</span>
-    <span className={cn('flex items-center gap-[5px] text-[11.5px] text-mute tabular-nums', !main && 'group-hover/thread:invisible group-focus-within/thread:invisible')}>
-      <span role="img" aria-label={where} title={where} className="grid place-items-center">{source.platform === 'discord' ? <Glyph name="discord" size={12} /> : <I icon={SOURCE_ICON[source.platform]} size={12} />}</span>
-      {ago(thread.updatedAt)}
-    </span>
-  </a>
-  {!main && <Button type="button" variant="bare" aria-label={`Archive ${thread.title}`} title="Archive" disabled={archive.isPending} onClick={onArchive}
-    className={cn('absolute top-1/2 right-1 grid size-6 -translate-y-1/2 place-items-center rounded-md text-mute opacity-0 transition-opacity group-hover/thread:opacity-100 group-focus-within/thread:opacity-100', HOVER)}>
-    <I icon={ArchiveIcon} size={14} />
-  </Button>}
-  </div>
-}
-
-function Session({ gone, title, status, time }: { gone: boolean; title: string; status: Progress; time: string }) {
-  return <div title="Sub-agent" className={cn(ROW, 'overflow-hidden transition-[height,opacity] duration-500 ease-out', HOVER, gone && 'h-0 opacity-0')}>
-    <span className="grid place-items-center text-mute-2"><Mark status={status} /></span>
-    <span className={cn('min-w-0 truncate text-[13px] font-medium', status === 'done' ? 'text-body' : 'text-ink')}>{title}</span>
-    <span className="text-[11.5px] text-mute tabular-nums">{time}</span>
-  </div>
-}
-
-const MARK: Record<Progress, ReactElement> = {
-  idle: <circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="1.9 1.24" />,
-  queued: <circle cx="7" cy="7" r="6" fill="none" stroke="#8a8a8a" strokeWidth="1.5" strokeDasharray="2.2 1.9" />,
-  working: <><circle cx="7" cy="7" r="6" fill="none" stroke="#CDA23A" strokeWidth="1.5" /><path d="M7 4a3 3 0 0 1 0 6z" fill="#CDA23A" /></>,
-  review: <><circle cx="7" cy="7" r="6" fill="none" stroke="#D9824A" strokeWidth="1.5" /><circle cx="7" cy="7" r="2.2" fill="#D9824A" /></>,
-  done: <><circle cx="7" cy="7" r="7" fill="#8A90CF" /><path d="M4.2 7.2l1.9 1.9 3.7-3.9" stroke="#fff" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></>,
-  failed: <><circle cx="7" cy="7" r="6" fill="none" stroke="#a3a3a3" strokeWidth="1.5" /><path d="M5.2 5.2l3.6 3.6M8.8 5.2l-3.6 3.6" stroke="#a3a3a3" strokeWidth="1.6" strokeLinecap="round" /></>,
-}
-
-function Mark({ status }: { status: Progress }) {
-  return <svg role="img" aria-label={MARK_LABEL[status]} width="14" height="14" viewBox="0 0 14 14" className={cn('shrink-0', (status === 'done' || status === 'failed') && 'animate-[pop_.4s_ease-out] motion-reduce:animate-none')}>{MARK[status]}</svg>
-}
-
-const MARK_LABEL: Record<Progress, string> = { idle: 'Idle', queued: 'Queued', working: 'Working', review: 'Needs you', done: 'Done', failed: 'Failed' }
 
 function RowMenu({ agent, children }: { agent: OpenHutAgent; children: ReactElement }) {
   const update = useUpdateAgent(agent.id)
@@ -260,13 +162,4 @@ function You() {
       <DropdownMenuItem className="h-8 gap-2.5 px-2 text-[13px]" disabled={signOut.isPending} onClick={() => signOut.mutate(undefined, { onError: toastError })}><I icon={Logout01Icon} size={15} className="text-mute" />Sign out</DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
-}
-
-function useTick(ticking: boolean): void {
-  const [, setNow] = useState(0)
-  useEffect(() => {
-    if (!ticking) return
-    const tick = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(tick)
-  }, [ticking])
 }
