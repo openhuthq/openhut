@@ -16,7 +16,7 @@ const shared = { ...process.env, PORT: String(PORT), OPENHUT_GATEWAY_PORT: Strin
 rmSync(SOCK, { force: true })
 const agentd = spawn(process.execPath, ['packages/runtime/src/agentd/agentd.ts'], { env: { ...shared, AGENTD_DATA: `${DATA}/agentd` }, stdio: 'inherit' })
 while (!existsSync(SOCK) && agentd.exitCode === null) await sleep(100)
-const app = spawn(process.execPath, ['--env-file-if-exists=.env', 'packages/runtime/src/server/app.ts'], {
+const app = spawn(process.execPath, ['--no-node-snapshot', '--env-file-if-exists=.env', 'packages/runtime/src/server/app.ts'], {
   env: { ...shared, OPENHUT_DATA: DATA, OPENHUT_DEV_KEY_SHA256: createHash('sha256').update('dev').digest('hex') },
   stdio: 'inherit',
 })

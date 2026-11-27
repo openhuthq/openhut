@@ -9,6 +9,7 @@ import { seal } from '../../../src/server/platform/secrets.ts'
 import { fakeAgentd, refresh, signIn } from '../../server/agents/signed-in.ts'
 import { appWakes } from './app-wakes.ts'
 import { runsOnServer } from '../../../src/plugins/chat/wakes.ts'
+import { LostTurn } from '../../../src/server/threads/thread-service.ts'
 
 await migrate()
 await db.insertInto('person').values({ id: 'usr_appwownr', email: 'appw@example.com', role: 'owner', removed_at: null }).execute()
@@ -21,11 +22,13 @@ const owner = { id: 'usr_appwownr', email: 'appw@example.com', role: 'owner' as 
 const app = { platform: 'api_server', chat_id: 'openhut-msg_appwchat' }
 const whatsapp = { platform: 'whatsapp', chat_id: '15550005555@s.whatsapp.net', chat_type: 'dm' }
 let fail = 0
+let lose = false
 const picked: (Date | null)[] = []
 const { told, deliver, settled } = appWakes({
   reply: async ({ text }) => {
     const run = /inbox:(ru_[a-z0-9]+)/.exec(text)?.[1]
     if (run) picked.push((await db.selectFrom('inbox_source').select('run_picked_at').where('run_id', '=', run).executeTakeFirstOrThrow()).run_picked_at)
+    if (lose) throw new LostTurn()
     if (fail-- > 0) throw new Error('The agent didn\'t answer.')
     return 'Acme paid.'
   },
@@ -87,4 +90,20 @@ test('every webhook call runs on the server in a web thread of its own, its mess
   ])
   assert.equal(runsOnServer({ id: 'inbox:ru_x', text: '', origin: whatsapp }), false)
   assert.equal(runsOnServer({ id: 'inbox:ru_x', text: '', origin: { platform: 'discord', chat_id: '1' } }), true)
+})
+
+test('a wake whose turn is still lost after the fresh-session fallback is not tried again', async (t) => {
+  await db.insertInto('inbox_source').values({ id: 'wh_appwlost', agent_id: 'ag_appwagnt', kind: 'webhook', name: 'Lost', origin: JSON.stringify({ platform: 'api_server', chat_id: 'openhut-inbox' }) }).execute()
+  const before = told.length
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  lose = true
+  await inboxService.deliver({ agentId: 'ag_appwagnt', sourceId: 'wh_appwlost', kind: 'webhook', body: '{"lost":true}' })
+  deliver('ag_appwagnt')
+  for (let i = 0; i < 20; i++) {
+    await new Promise((resolve) => setImmediate(resolve))
+    t.mock.timers.tick(30_000)
+  }
+  await settled()
+  lose = false
+  assert.equal(told.length - before, 1)
 })

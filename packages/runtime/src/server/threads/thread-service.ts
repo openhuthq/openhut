@@ -303,7 +303,20 @@ export const threadService = {
     await pipeUIMessageStreamToResponse({ response: reply.raw, stream })
   },
 
-  async runRoutine({ agentId, threadId = agentId, text, metadata }: { agentId: string; threadId?: string; text: string; metadata?: Record<string, unknown> }): Promise<string> {
+  newMessageId: (): string => nextId(),
+
+  async updateMetadata({ threadId, messageId, change }: { threadId: string; messageId: string; change: (metadata: Record<string, unknown>) => Record<string, unknown> }): Promise<void> {
+    const chat = await chatOf(threadId)
+    const found = (await saidOf(chat)).find((each) => each.id === messageId)
+    if (!found) return
+    const metadata = found.message.metadata && typeof found.message.metadata === 'object' ? found.message.metadata as Record<string, unknown> : {}
+    const message = { ...found.message, metadata: change(metadata) }
+    await recordsService.put({ collection: 'message', id: messageId, parent: chat.id, workspace: workspaceOf(chat.agent), value: { message, ...found.session && { session: found.session } } satisfies MessageValue, queue: true })
+    cache.delete(chat.id)
+    emit({ name: 'thread.updated', target: { type: 'thread', id: chat.id, agentId: chat.agent.id } })
+  },
+
+  async runRoutine({ agentId, threadId = agentId, text, metadata, messageId }: { agentId: string; threadId?: string; text: string; metadata?: Record<string, unknown>; messageId?: string }): Promise<string> {
     await idle(agentId)
     busy.add(agentId)
     let live: LiveTurnHandle | undefined
@@ -313,24 +326,35 @@ export const threadService = {
       const agent = chat.agent
       const last = (await saidOf(chat)).at(-1)?.message
       const retried = last?.role === 'user' && textOf(last) === text ? last : undefined
-      const asked: ChatMessage | undefined = chat.row ? retried ?? { id: nextId(), role: 'user', parts: [{ type: 'text', text }], metadata: { author: chat.row.title, ...metadata } } : undefined
+      const asked: ChatMessage | undefined = chat.row ? retried ?? { id: messageId ?? nextId(), role: 'user', parts: [{ type: 'text', text }], metadata: { author: chat.row.title, ...metadata } } : undefined
       if (asked && !retried) await write({ chat, message: asked })
       const said = await saidOf(chat)
       const id = nextId()
-      const session = sessionOf(said, asked ? undefined : id)
-      const message = asked ? await seeded({ said, session, message: asked }) : { id, role: 'user' as const, parts: [{ type: 'text', text }] }
+      const first = asked ? said[0]?.id : id
+      let session = sessionOf(said, first)
       const started = Date.now()
       const work = turnWork({ agent, started })
+      const signal = AbortSignal.timeout(TURN_MS)
       const turn = liveThreads.turn({ thread: chat.id, agentId, turnId: id, answering: answering(said) })
       live = turn
-      const chunks = async function* (): AsyncGenerator<UIMessageChunk> {
-        yield* answerStream({ agent, session, message, signal: AbortSignal.timeout(TURN_MS), work, live: turn })
-        const done = work.done({})
-        if (done) yield { type: 'data-work', id: 'work', data: done }
-        yield* await afterTurn({ agentId, since: started })
+      const attempt = async (retry: boolean): Promise<UIMessage> => {
+        const message = asked ? await seeded({ said, session, message: asked }) : { id, role: 'user' as const, parts: [{ type: 'text', text }] }
+        const chunks = async function* (): AsyncGenerator<UIMessageChunk> {
+          yield* answerStream({ agent, session, message, signal, work, retry, live: turn })
+          const done = work.done({})
+          if (done) yield { type: 'data-work', id: 'work', data: done }
+          yield* await afterTurn({ agentId, since: started })
+        }
+        let built: UIMessage = { id, role: 'assistant', parts: [] }
+        for await (const each of readUIMessageStream({ message: built, stream: ReadableStream.from(chunks()), terminateOnError: true })) built = each
+        return built
       }
-      let built: UIMessage = { id, role: 'assistant', parts: [] }
-      for await (const each of readUIMessageStream({ message: built, stream: ReadableStream.from(chunks()), terminateOnError: true })) built = each
+      const built = await attempt(true).catch((err: unknown) => {
+        if (!(err instanceof LostTurn)) throw err
+        log.warn({ event: 'agent.session_lost', agent: agentId, session })
+        session = `${sessionOf([], first)}.${nextId()}`
+        return attempt(false)
+      })
       const answer = foldCard(built)
       const reply = textOf(answer)
       const stored = z.safeParse(ChatMessage, { ...answer, id, ...!chat.row && { metadata: { wake: true } } }).data
@@ -621,7 +645,7 @@ async function relay({ agent, session, message, writer, signal, work, retry = fa
         continue
       }
       const chunk = z.safeParse(Chunk, parseJson(event.data)).data
-      if (chunk?.error?.message === 'unknown_execution' && !text) throw new LostTurn()
+      if (chunk?.error && LOST.has(chunk.error.message) && !text) throw new LostTurn()
       if (chunk?.error) throw new Error(modelFailure({ name: agent.name, message: chunk.error.message }))
       finish = chunk?.choices?.[0]?.finish_reason ?? finish
       const delta = chunk?.choices?.[0]?.delta?.content
@@ -651,7 +675,9 @@ export function discordPlace(origin: { chat_id: string; chat_name?: string | nul
   }
 }
 
-class LostTurn extends Error {}
+export class LostTurn extends Error {}
+
+const LOST = new Set(['unknown_execution', 'queue_full'])
 
 const dropped = (name: string): string => `Stopped: the connection to ${name} dropped before it answered. Ask again.`
 

@@ -135,6 +135,6 @@ COPY --from=deps /opt/openhut/node_modules /opt/openhut/node_modules
 COPY --from=tree /opt/openhut /opt/openhut
 COPY install/updater.sh /usr/local/lib/openhut-updater.sh
 RUN test -n "$RUNTIME_IMAGE" && printf '%s\n' "$RUNTIME_IMAGE" > /opt/openhut/RUNTIME_IMAGE && ln -sf /opt/openhut/install/openhut /usr/local/bin/openhut
-ENV OPENHUT_HOST=0.0.0.0 OPENHUT_CLAUDE=/opt/openhut/bin/claude-musl
+ENV OPENHUT_HOST=0.0.0.0 OPENHUT_CLAUDE=/opt/openhut/bin/claude-musl NODE_OPTIONS=--no-node-snapshot
 EXPOSE 80 443 8787
 ENTRYPOINT ["/opt/openhut/install/main-start.sh"]

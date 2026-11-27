@@ -11,7 +11,7 @@ import { answerErrors, HttpError } from '../../../src/server/platform/http-error
 import { seal } from '../../../src/server/platform/secrets.ts'
 import { validatorCompiler } from 'fastify-type-provider-zod'
 import { threadController } from '../../../src/server/threads/thread-controller.ts'
-import { imageTypeOf, safeFileName, shownCall, threadService } from '../../../src/server/threads/thread-service.ts'
+import { imageTypeOf, LostTurn, safeFileName, shownCall, threadService } from '../../../src/server/threads/thread-service.ts'
 import { HERE } from '../../../src/server/team/home.ts'
 import { agentService } from '../../../src/server/agents/agent-service.ts'
 import { connectionService } from '../../../src/server/connections/connection-service.ts'
@@ -33,6 +33,8 @@ await db.insertInto('agent').values([
 ]).execute()
 
 const lost = new Set<string>()
+const full = new Set<string>()
+let lostAll = false
 const dropsOnce = new Set<string>()
 const seen: { auth?: string; session?: string; body?: { stream: boolean; messages: { role: string; content: unknown }[] } } = {}
 const hermes = createServer((req, res) => {
@@ -49,7 +51,8 @@ const hermes = createServer((req, res) => {
     ]).execute()
     if (seen.body?.messages.at(-1)?.content === 'cloud dies') await fake.offline(true)
     res.writeHead(200, { 'content-type': 'text/event-stream' })
-    if (lost.has(seen.session)) return res.end(`data: ${JSON.stringify({ error: { message: 'unknown_execution', code: 'unknown_execution' } })}\n\n`)
+    if (full.has(seen.session)) return res.end(`data: ${JSON.stringify({ error: { message: 'queue_full' } })}\n\n`)
+    if (lost.has(seen.session) || lostAll) return res.end(`data: ${JSON.stringify({ error: { message: 'unknown_execution', code: 'unknown_execution' } })}\n\n`)
     if (seen.body?.messages.at(-1)?.content === 'tool then down') return res.end(`event: hermes.tool.progress\ndata: {"tool":"terminal","label":"ls","toolCallId":"t","status":"running"}\n\ndata: ${JSON.stringify({ error: { message: 'overloaded' } })}\n\n`)
     const ending = (finish: string) => `event: hermes.tool.progress\ndata: {"tool":"skill_view","label":"tone","toolCallId":"s","status":"running"}\n\nevent: hermes.tool.progress\ndata: {"tool":"skill_view","toolCallId":"s","status":"completed"}\n\ndata: ${JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: finish }] })}\n\ndata: [DONE]\n\n`
     if (seen.body?.messages.at(-1)?.content === 'tool only') return res.end(ending('stop'))
@@ -181,6 +184,45 @@ test('a Hermes session that lost a turn (its gateway was killed mid-turn) moves 
   assert.equal(seen.session, fresh)
   assert.deepEqual(seen.body?.messages.slice(1), [{ role: 'user', content: 'And now?' }])
   lost.clear()
+})
+
+test('a full Hermes queue for the session moves the chat to a fresh session too', async () => {
+  const thread = { id: 'ag_chatrunn' }
+  const stuck = seen.session ?? ''
+  full.add(stuck)
+  const res = await say(thread.id, 'Queue full?')
+  assert.match(res.body, /214 orders\./)
+  assert.match(String(seen.session), new RegExp(`^${stuck.split('.')[0]}\\.`))
+  assert.notEqual(seen.session, stuck)
+  full.clear()
+})
+
+test('a webhook turn whose session is lost carries on in a fresh one, and a turn lost again fails as LostTurn', async () => {
+  await db.insertInto('agent').values({ id: 'ag_chatlost', name: 'Loser', owner_id: 'usr_chatownr', instructions: '# Loser', model: 'sonnet', net: 77, channel_key: seal('k'.repeat(48)), wanted: 'running', workspace: WS }).execute()
+  const id = await threadService.open({ agentId: 'ag_chatlost', title: 'CI', origin: { platform: 'webhook', label: 'CI' }, mirrors: [] })
+  assert.equal(await threadService.runRoutine({ agentId: 'ag_chatlost', threadId: id, text: 'first call' }), 'Let me check.214 orders.')
+  const old = seen.session ?? ''
+  full.add(old)
+  assert.equal(await threadService.runRoutine({ agentId: 'ag_chatlost', threadId: id, text: 'second call' }), 'Let me check.214 orders.')
+  assert.match(String(seen.session), new RegExp(`^${old}\\.`))
+  assert.match(JSON.stringify(seen.body?.messages.at(-1)), /Earlier in this chat/)
+  full.clear()
+  lostAll = true
+  await assert.rejects(threadService.runRoutine({ agentId: 'ag_chatlost', threadId: id, text: 'third call' }), LostTurn)
+  lostAll = false
+})
+
+test('a webhook call into an archived thread brings it back, its message takes the given id, and its metadata can be updated later', async () => {
+  await db.insertInto('agent').values({ id: 'ag_chatunar', name: 'Unarchiver', owner_id: 'usr_chatownr', instructions: '# Unarchiver', model: 'sonnet', net: 78, channel_key: seal('k'.repeat(48)), wanted: 'running', workspace: WS }).execute()
+  const id = await threadService.open({ agentId: 'ag_chatunar', title: 'CI', origin: { platform: 'webhook', label: 'CI' }, mirrors: [] })
+  await threadService.runRoutine({ agentId: 'ag_chatunar', threadId: id, text: 'run 1 failed' })
+  await db.updateTable('chat_thread').set({ archived_at: new Date() }).where('id', '=', id).execute()
+  const messageId = threadService.newMessageId()
+  await threadService.runRoutine({ agentId: 'ag_chatunar', threadId: id, text: 'run 2 failed', messageId, metadata: { call: { webhookId: 'wh_x' } } })
+  assert.equal((await db.selectFrom('chat_thread').select('archived_at').where('id', '=', id).executeTakeFirstOrThrow()).archived_at, null)
+  await threadService.updateMetadata({ threadId: id, messageId, change: (metadata) => ({ ...metadata, call: { webhookId: 'wh_x', seen: 2 } }) })
+  const asked = (await messagesOf(id)).find((message) => message.id === messageId)
+  assert.deepEqual(asked?.metadata, { author: 'CI', call: { webhookId: 'wh_x', seen: 2 } })
 })
 
 test('threads need the enrolled key, and a stopped agent says so before anything is sent', async () => {

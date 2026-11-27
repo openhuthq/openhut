@@ -10,7 +10,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 test('in local mode the server listens on a socket only its own user can open, and stamps its build on every answer', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'oh-sock-'))
   const socket = join(dir, 'app.sock')
-  const child = spawn(process.execPath, [new URL('../../src/server/app.ts', import.meta.url).pathname], { env: { ...process.env, OPENHUT_DATA: dir, OPENHUT_SOCKET: socket }, stdio: 'ignore' })
+  const child = spawn(process.execPath, ['--no-node-snapshot', new URL('../../src/server/app.ts', import.meta.url).pathname], { env: { ...process.env, OPENHUT_DATA: dir, OPENHUT_SOCKET: socket }, stdio: 'ignore' })
   try {
     const answered = (path = '/health') => new Promise<string | false>((done) => get({ socketPath: socket, path }, (res) => done(res.resume() && String(res.headers['x-openhut-build']))).on('error', () => done(false)))
     for (let i = 0; i < 150 && !(await answered()); i++) await sleep(100)

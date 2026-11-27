@@ -28,4 +28,4 @@ caddy() {
 [ -n "${OPENHUT_PROXY:-}" ] || caddy &
 cd $J
 umask 077
-exec su-exec openhut node $J/packages/runtime/src/server/app.ts
+exec su-exec openhut node --no-node-snapshot $J/packages/runtime/src/server/app.ts

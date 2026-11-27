@@ -10,6 +10,21 @@ export const WEBHOOK_NAME_MAX = 60
 export const WebhookThreads = z.enum(['group', 'each'])
 export type WebhookThreads = z.infer<typeof WebhookThreads>
 
+export const WebhookCard = z.object({
+  title: z.string(),
+  status: z.optional(z.string()),
+  details: z.optional(z.string()),
+  link: z.optional(z.string()),
+  icon: z.optional(z.object({ path: z.string(), hex: z.string() })),
+})
+export type WebhookCard = z.infer<typeof WebhookCard>
+
+export const WebhookCallRow = z.object({ status: z.optional(z.string()), details: z.optional(z.string()), at: Timestamp, seen: z.optional(z.number()) })
+export type WebhookCallRow = z.infer<typeof WebhookCallRow>
+
+export const WebhookCallMeta = z.object({ webhookId: z.string(), card: z.optional(WebhookCard), calls: z.optional(z.array(WebhookCallRow)), seen: z.optional(z.number()) })
+export type WebhookCallMeta = z.infer<typeof WebhookCallMeta>
+
 export const Webhook = z.object({
   id: z.string(),
   object: z.literal('webhook'),
@@ -24,6 +39,9 @@ export const Webhook = z.object({
   threads: WebhookThreads,
   lastAt: z.nullable(Timestamp),
   lastPayload: z.nullable(z.string()),
+  preview: z.nullable(WebhookCard),
+  filter: z.nullable(z.string()),
+  skipped: z.number(),
   createdAt: Timestamp,
 })
 export type Webhook = z.infer<typeof Webhook>

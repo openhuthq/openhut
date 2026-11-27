@@ -3,7 +3,7 @@ import { wakes } from '../../core/wakes.ts'
 import { db } from '../../server/platform/db.ts'
 import { log } from '../../server/platform/events.ts'
 import { messageOf } from '../../server/platform/http-error.ts'
-import { threadService } from '../../server/threads/thread-service.ts'
+import { LostTurn, threadService } from '../../server/threads/thread-service.ts'
 import { inboxService } from '../../server/inbox/inbox-service.ts'
 
 const TICK_MS = 15_000
@@ -45,18 +45,17 @@ export async function deliver(agentId: string): Promise<void> {
 async function run({ agentId, wake }: { agentId: string; wake: Wake }): Promise<void> {
   const item = wake.id.startsWith('inbox:') ? wake.id.slice('inbox:'.length) : undefined
   await wakes.report({ agentId, id: wake.id, body: { picked: true } })
-  const threadId = item ? await inboxService.threadFor({ agentId, id: item }) : await threadService.bySession({ agentId, session: wake.origin.chat_id })
-  const metadata = item ? await inboxService.webhookCall({ agentId, id: item }) : undefined
+  const { threadId, messageId, metadata } = item ? await inboxService.turnFor({ agentId, id: item }) : { threadId: await threadService.bySession({ agentId, session: wake.origin.chat_id }), messageId: undefined, metadata: undefined }
   for (let attempt = 0; ; attempt++) {
     try {
-      const said = await threadService.runRoutine({ agentId, threadId, text: wake.text, metadata })
+      const said = await threadService.runRoutine({ agentId, threadId, text: wake.text, metadata, messageId })
       await wakes.report({ agentId, id: wake.id, body: { said } })
       if (wake.id.startsWith('inbox:')) await inboxService.answered({ agentId, id: wake.id.slice('inbox:'.length), threadId, said })
         .catch((err: unknown) => log.warn({ event: 'wake.post_failed', agent: agentId, wake: wake.id, error: messageOf(err) }))
       return
     } catch (err) {
       log.warn({ event: 'wake.run_failed', agent: agentId, wake: wake.id, attempt, error: messageOf(err) })
-      if (attempt >= RETRIES) return
+      if (err instanceof LostTurn || attempt >= RETRIES) return
       await new Promise((resolve) => setTimeout(resolve, RETRY_MS).unref())
     }
   }
