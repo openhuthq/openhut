@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  checks:
+  typecheck:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -25,7 +25,15 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm ci --no-audit --no-fund
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: modules
+        with:
+          path: |
+            node_modules
+            packages/*/node_modules
+          key: modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - if: steps.modules.outputs.cache-hit != 'true'
+        run: npm ci --no-audit --no-fund
       - name: No high or critical advisory in what we ship, and the lock resolves only from the npm registry (npm ci already failed if it was out of date)
         run: |
           npm audit --omit=dev --audit-level=high
@@ -39,32 +47,50 @@ jobs:
           chmod +x "$t/bin/docker"
           PATH="$t/bin:$PATH" DOCKER_CONFIG="$t/saved" TMPDIR="$t/tmp" D=docker sh -c "set -eu; die() { echo \"\$*\"; exit 1; }; $(sed -n '/^pull() {$/,/^}$/p' install/install.sh); pull ghcr.io/openhuthq/openhut@sha256:test"
           [ -z "$(ls -A "$t/tmp")" ] || { echo "::error::pull() left its temporary Docker config behind"; exit 1; }
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: .turbo/cache
-          key: turbo-${{ github.sha }}
-          restore-keys: turbo-
-      - name: Typecheck and test (a branch runs only the packages it affects; main runs everything)
+          key: turbo-typecheck-${{ github.sha }}
+          restore-keys: turbo-typecheck-
+      - name: Typecheck (a branch runs only the packages it affects; main runs everything)
         run: |
-          if [ "$GITHUB_REF_NAME" = main ]; then npx turbo run typecheck test --cache-dir=.turbo/cache
-          else TURBO_SCM_BASE=$(git merge-base origin/main HEAD) npx turbo run typecheck test --affected --cache-dir=.turbo/cache; fi
-      - uses: actions/cache/save@v4
+          if [ "$GITHUB_REF_NAME" = main ]; then npx turbo run typecheck --cache-dir=.turbo/cache
+          else TURBO_SCM_BASE=$(git merge-base origin/main HEAD) npx turbo run typecheck --affected --cache-dir=.turbo/cache; fi
+
+  test:
+    # The runtime suite runs one file at a time, so it is split across machines (TEST_SHARD, node --test-shard).
+    strategy:
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
+    runs-on: ubuntu-latest
+    env:
+      TEST_SHARD: ${{ matrix.shard }}/6
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: modules
+        with:
+          path: |
+            node_modules
+            packages/*/node_modules
+          key: modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - if: steps.modules.outputs.cache-hit != 'true'
+        run: npm ci --no-audit --no-fund
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: .turbo/cache
-          key: turbo-${{ github.sha }}
-
-  server:
-    if: github.ref == 'refs/heads/main'
-    permissions:
-      contents: read
-      packages: write
-    uses: ./.github/workflows/runtime-image.yml
-    secrets: inherit
-    with:
-      # Every main push pushes the runtime image (tagged by commit), without the slow smoke; Promote (promote.yml) smoke-tests
-      # that commit before it tags it stable.
-      smoke: false
-      tags: ${{ github.sha }}
+          key: turbo-test-${{ matrix.shard }}-${{ github.sha }}
+          restore-keys: turbo-test-${{ matrix.shard }}-
+      - name: Test this shard (a branch runs only the packages it affects; main runs everything)
+        run: |
+          if [ "$GITHUB_REF_NAME" = main ]; then npx turbo run test --cache-dir=.turbo/cache
+          else TURBO_SCM_BASE=$(git merge-base origin/main HEAD) npx turbo run test --affected --cache-dir=.turbo/cache; fi
 
   browser:
     # The browser run is part of the gate: a fresh dev stack, the web App in Chrome, no sign-in (scripts/web-e2e.sh).
@@ -86,7 +112,7 @@ jobs:
           path: ${{ runner.temp }}/web-e2e
 
   gate:
-    needs: [checks, server, browser]
+    needs: [typecheck, test, browser]
     if: always()
     runs-on: ubuntu-latest
     steps:
