@@ -18,8 +18,6 @@ import { NewAgentDialog } from '@/features/agents/new-agent'
 import { AgentActions, DoesDialog, FloatingThreads, SyncFace } from '@/features/agents/panel'
 import { RoutinesDialog } from '@/features/routines/routines-dialog'
 import { ToolPermissionsDialog } from '@/features/agents/tool-permissions'
-import { ActivityDialog } from '@/features/agents/activity-dialog'
-import { KeysDialog } from '@/features/agents/secrets'
 import { WebhooksDialog } from '@/features/webhooks/webhooks-dialog'
 import { NotifyDialog } from '@/features/agents/notify'
 import { ThreadsDialog } from '@/features/threads/threads-dialog'
@@ -86,8 +84,8 @@ function Dialogs({ agent, dialog, detail, onClose }: { agent: Agent; dialog: Age
     case 'telegram':
     case 'discord': return <ChannelDialog agent={agent} kind={dialog} onClose={close} />
     case 'apps': return detail ? <ToolPermissionsDialog agent={agent} connectionId={detail} onClose={close} /> : null
-    case 'activity': return <ActivityDialog agent={agent} onClose={close} />
-    case 'keys': return <KeysDialog agent={agent} onClose={close} />
+    case 'activity':
+    case 'keys': return <SetupDialog agent={agent} tab={dialog} onClose={close}><SetupChild agent={agent} /></SetupDialog>
     case 'webhooks': return <WebhooksDialog agent={agent} onClose={close} />
     case 'threads': return <ThreadsDialog agent={agent} onClose={close} />
     case 'notify': return agent.canEdit ? <NotifyDialog agent={agent} onClose={close} /> : null

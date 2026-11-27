@@ -1,15 +1,14 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Cancel01Icon, Key01Icon } from '@hugeicons/core-free-icons'
+import { Key01Icon } from '@hugeicons/core-free-icons'
 import { Deleted, List } from '@openhut/common/api.ts'
 import type { Agent } from '@openhut/common/agents/agent.ts'
 import { AgentSecret } from '@openhut/common/agents/secret.ts'
 import { Button } from '@/components/ui/button'
-import { DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { ConfirmButton } from '@/components/confirm-button'
 import { ErrorNote } from '@/components/error-note'
-import { DialogCard, I, Loading } from '@/components/kit'
+import { I, Loading } from '@/components/kit'
 import { Quiet } from '@/features/agents/request-card'
 import { request } from '@/lib/api-client'
 import { formValues } from '@/lib/form'
@@ -40,21 +39,15 @@ function useDeleteSecret(agentId: string) {
   })
 }
 
-export function KeysDialog({ agent, onClose }: { agent: Agent; onClose: () => void }) {
+export function KeysList({ agent }: { agent: Agent }) {
   const secrets = useSecrets(agent.id)
-  return <DialogCard onClose={onClose} className="max-h-[min(640px,calc(100vh-48px))] w-[480px] gap-0 overflow-hidden p-0">
-    <div className="flex items-center gap-3 px-6 pt-6 pb-3">
-      <DialogTitle className="min-w-0 flex-1 text-[15px]/[22px] font-medium">Keys</DialogTitle>
-      <Button type="button" size="icon-sm" aria-label="Close" title="Close" tabIndex={-1} className="-mr-2" onClick={onClose}><I icon={Cancel01Icon} size={15} /></Button>
-    </div>
-    <div className="flex min-h-0 flex-1 flex-col overflow-auto px-4 pb-5">
+  return <>
       <ErrorNote message={secrets.error?.message} />
       {!secrets.data && !secrets.error && <Loading />}
       {secrets.data && (secrets.data.length
         ? secrets.data.map((secret) => <KeyRow key={secret.id} agent={agent} secret={secret} />)
-        : <Quiet agent={agent} line={`No keys yet. When ${agent.name} needs one, it asks in the chat.`} />)}
-    </div>
-  </DialogCard>
+        : <Quiet agent={agent} line={`Nothing in the vault yet. When ${agent.name} needs a key, it asks in the chat.`} />)}
+  </>
 }
 
 function KeyRow({ agent, secret }: { agent: Agent; secret: AgentSecret }) {

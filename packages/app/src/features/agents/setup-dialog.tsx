@@ -14,6 +14,8 @@ import { agentPath } from '@/app/routes'
 import { AccessPicker } from '@/features/agents/access'
 import { Face } from '@/features/agents/face'
 import { MemoryEditor } from '@/features/agents/memory-dialog'
+import { KeysList } from '@/features/agents/secrets'
+import { ActivityList } from '@/features/agents/activity-dialog'
 import { SkillsBrowser, type Crumb } from '@/features/agents/skills-dialog'
 import { useChannels, useCreateGrant, useDeleteAgent, useDeleteChannel, useDeleteGrant, useGrants, useUpdateAgent } from '@/features/agents/api'
 import { ORDER } from '@/features/agents/channel-kinds'
@@ -41,11 +43,12 @@ const SETUP_TABS = [
   { slug: 'skills', name: 'Skills', icon: BookOpen01Icon, hue: 'text-hue-amber' },
   { slug: 'routines', name: 'Routines', icon: HistoryIcon, hue: 'text-hue-green' },
   { slug: 'webhooks', name: 'Webhooks', icon: WebhookIcon, hue: 'text-hue-sky' },
+  { slug: 'keys', name: 'Vault', icon: Key01Icon, hue: 'text-hue-amber' },
+  { slug: 'activity', name: 'Activity', icon: Analytics01Icon, hue: 'text-hue-blue' },
 ] as const
 
 const LINE = 'flex h-[42px] w-full items-center gap-3 text-[13.5px] text-ink no-underline'
 const VALUE = 'ml-auto inline-flex min-w-0 items-center gap-1.5 text-[13.5px] text-body'
-const GROUP = 'flex flex-col [&+&]:mt-2.5 [&+&]:border-t-[0.5px] [&+&]:border-hair [&+&]:pt-2.5'
 const REUSED = '-mx-2.5 flex flex-col [&>*]:h-[42px] [&>*]:gap-3 [&>*]:text-[13.5px]'
 const KINDS: Record<ChannelKind, string> = { slack: 'Slack', discord: 'Discord', whatsapp: 'WhatsApp', telegram: 'Telegram' }
 
@@ -76,6 +79,8 @@ function Pane({ agent, tab }: { agent: Agent; tab: typeof SETUP_TABS[number]['sl
     case 'skills': return <SkillsPane agent={agent} />
     case 'routines': return <RoutinesPane agent={agent} />
     case 'webhooks': return <WebhooksPane agent={agent} />
+    case 'keys': return <><Head title="Vault" subtitle={`Keys and secrets ${agent.name} uses`} /><Body><KeysList agent={agent} /></Body></>
+    case 'activity': return <><Head title="Activity" subtitle={`What ${agent.name} did with your apps`} /><Body>{agent.canEdit && <div className="mb-2"><NotifyLine agent={agent} /></div>}<ActivityList agent={agent} /></Body></>
     default: return <GeneralPane agent={agent} />
   }
 }
@@ -122,12 +127,10 @@ function GeneralPane({ agent }: { agent: Agent }) {
           {agent.canEdit && <span className={VALUE}>Edit<I icon={ArrowRight01Icon} size={12} className="shrink-0 text-mute" /></span>}
         </Button>
       </div>
-      <Section title="Job">
+      <Section title="Agent">
         <Go icon={PencilEdit02Icon} label="What it does" value={<span className="max-w-[300px] truncate">{agent.summary || 'Not set yet'}</span>} to="does" />
-        <div className={REUSED}><ModelRows agent={agent} /></div>
-      </Section>
-      <Section title="Access">
         <div className={REUSED}>
+          <ModelRows agent={agent} />
           <RunsOnRow agent={agent} />
           <AccessPicker owner={agent.owner ?? agent.ownerId} value={{ shared: agent.shared, people: agent.people }} title="Who can use it" className={cn(ROW, 'data-disabled:hover:bg-transparent')} disabled={!agent.canManage}
             onChange={(access) => updateAgent.mutate(access, { onError: toastError })} />
@@ -138,11 +141,6 @@ function GeneralPane({ agent }: { agent: Agent }) {
         <label className={LINE} title={browser ? undefined : 'This computer can’t give agents a browser.'}><I icon={Globe02Icon} size={15} className="text-mute" />Browser
           {!browser && <span className="ml-auto text-[12.5px] text-mute">Not on this computer</span>}
           <Switch className={cn(browser && 'ml-auto')} checked={agent.browser} aria-label="Browser" disabled={!browser || !agent.canEdit || updateAgent.isPending} onCheckedChange={() => change({ browser: !agent.browser })} /></label>
-        <Go icon={Key01Icon} label="Keys" to="keys" />
-      </Section>
-      <Section title="Activity">
-        {agent.canEdit && <NotifyLine agent={agent} />}
-        <Go icon={Analytics01Icon} label="Activity" to="activity" />
       </Section>
       {agent.canEdit && <Section title="Stop or delete">
         <StopStart agent={agent} />
