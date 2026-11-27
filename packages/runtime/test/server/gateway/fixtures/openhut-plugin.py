@@ -59,12 +59,14 @@ assert hooks["transform_llm_output"](response_text="Plain.", platform="slack") i
 import dataclasses, enum
 class Platform(enum.Enum):
     TELEGRAM = "telegram"
+    DISCORD = "discord"
 @dataclasses.dataclass
 class Source:
     platform: Platform
     chat_id: str
     user_id: str
     user_name: str
+    chat_type: str = "dm"
 @dataclasses.dataclass
 class Event:
     text: str
@@ -74,11 +76,15 @@ class Runner: pass
 event = lambda text, user="123456789": Event(text, Source(Platform.TELEGRAM, user, user, "Alex"), raw_message=Runner())
 assert hooks["pre_gateway_dispatch"](event=event("/start abcdefghijklmnop"), gateway=Runner(), session_store=None) == {"action": "skip", "reason": "openhut invite"}
 assert hooks["pre_gateway_dispatch"](event=event("hello"), gateway=Runner()) is None
-assert calls[-1] == ("/hooks/pre_gateway_dispatch", {"args": {"event": {"text": "hello", "source": {"platform": "telegram", "chat_id": "123456789", "user_id": "123456789", "user_name": "Alex"}, "raw_message": None}, "gateway": None}, "origin": {"platform": "slack", "chat_id": "C1"}}), calls[-1]
+assert calls[-1] == ("/hooks/pre_gateway_dispatch", {"args": {"event": {"text": "hello", "source": {"platform": "telegram", "chat_id": "123456789", "user_id": "123456789", "user_name": "Alex", "chat_type": "dm"}, "raw_message": None}, "gateway": None}, "origin": {"platform": "slack", "chat_id": "C1"}}), calls[-1]
 stranger = {"action": "skip", "reason": "openhut stranger"}
 assert hooks["pre_gateway_dispatch"](event=event("hello", "999000111"), gateway=Runner()) == stranger, "a stranger the gateway has no answer for gets nothing"
 assert hooks["pre_gateway_dispatch"](event=event("hello", "555000111"), gateway=Runner()) == {"action": "allow", "reason": "openhut member"}
 assert os.environ["TELEGRAM_ALLOWED_USERS"] == "123456789,555000111", "a member who just joined goes on Hermes's list before Hermes restarts"
+before = len(calls)
+assert hooks["pre_gateway_dispatch"](event=Event("hi", Source(Platform.DISCORD, "42", "42", "Sam"))) == {"action": "skip", "reason": "openhut discord dm"}
+assert len(calls) == before, "a Discord DM is dropped here, without asking the gateway"
+assert hooks["pre_gateway_dispatch"](event=Event("hi", Source(Platform.DISCORD, "777", "42", "Sam", "thread"))) is None
 before = len(calls)
 assert hooks["subagent_stop"](parent_session_id="s1", child_status="completed", tool_call_history=[{"tool": "terminal"}], duration_ms=12) is None
 assert len(calls) == before and m.notices.qsize() == 1, "an observer hook returns at once and is sent from the notices thread"
