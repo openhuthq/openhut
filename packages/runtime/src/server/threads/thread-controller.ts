@@ -28,6 +28,8 @@ export const threadController: FastifyPluginAsyncZod = async (app) => {
 
   app.post('/:id/chat', ChatRequest, async (req, reply) => threadService.chat({ actor: await who(req), id: req.params.id, body: req.body, reply }))
 
+  app.post('/:id/stop', IdRequest, async (req) => threadService.stop({ actor: await who(req), id: req.params.id }))
+
   app.post('/:id/files', UploadRequest, async (req) => threadService.upload({ actor: await who(req), id: req.params.id, file: req.query, body: req.body }))
 
   app.delete('/:id/files', DownloadRequest, async (req) => threadService.removeFile({ actor: await who(req), id: req.params.id, path: req.query.path }))

@@ -42,6 +42,7 @@ const JPEG = Buffer.from([0xff, 0xd8, 0xff])
 const MEDIA_TYPE = /^[\w.+-]+\/[\w.+-]+$/
 export const busy = new Set<string>()
 const cache = new Map<string, Promise<Said[]>>()
+const turns = new Map<string, AbortController>()
 const IDLE_POLL_MS = 1000
 const IDLE_WAIT_MS = 10 * 60_000
 const SILENT = /^\s*\[?(SILENT|NO[_ ]REPLY)\]?\s*$/i
@@ -88,6 +89,13 @@ export const threadService = {
   async live({ actor, id }: { actor: Caller; id: string }): Promise<ThreadLive> {
     await agentService.requireVisible({ actor, id: await threadService.agentIdOf(id) })
     return liveThreads.catchUp(id)
+  },
+
+  async stop({ actor, id }: { actor: Caller; id: string }): Promise<Thread> {
+    const chat = await chatOf(id)
+    await runner({ actor, id: chat.agent.id })
+    turns.get(chat.id)?.abort()
+    return threadOf({ chat, said: await saidOf(chat), waiting: await waitingOn() })
   },
 
   agentIdOf: async (id: string): Promise<string> => (await chatOf(id)).agent.id,
@@ -245,9 +253,9 @@ export const threadService = {
     const said = await nextSaid({ chat, stored: await saidOf(chat), body, author: actor.email })
     if (agent.wanted !== 'running') throw new HttpError(409, `${agent.name} is stopped. Start it and try again.`)
     busy.add(agent.id)
-    reply.raw.on('close', () => busy.delete(agent.id))
     const abort = new AbortController()
-    reply.raw.on('close', () => abort.abort())
+    turns.set(chat.id, abort)
+    const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(TURN_MS)])
     const started = Date.now()
     const answerId = nextId()
     let session = sessionOf({ said, base: chat.id })
@@ -258,7 +266,7 @@ export const threadService = {
     const live = liveThreads.turn({ thread: chat.id, agentId: agent.id, turnId: answerId, answering: authorsOf(waiting) })
     const answer = async (writer: { write: (chunk: UIMessageChunk) => void }, retry: boolean) => {
       const message = await seeded({ said, session, message: asked })
-      for await (const chunk of answerStream({ agent, session, message, signal: abort.signal, work, retry, live })) {
+      for await (const chunk of answerStream({ agent, session, message, signal, work, retry, live })) {
         if (chunk.type === 'text-delta' || chunk.type === SPEC_DATA_PART_TYPE) answered = true
         writer.write(chunk)
       }
@@ -283,15 +291,21 @@ export const threadService = {
       },
       onError: messageOf,
       onEnd: async ({ messages: answered, isAborted }) => {
-        const answer = z.safeParse(ChatMessage, answered.map(foldCard).find((each) => each.role === 'assistant')).data
-        if (answer?.parts.some((part) => part.type !== 'step-start')) await write({ chat, message: { ...answer, id: answerId, metadata: { answered: waiting.at(-1)?.id } }, session })
-        live.end()
-        busy.delete(agent.id)
-        log.info({ event: 'agent.chat', agent: agent.id, ms: Date.now() - started, aborted: isAborted })
+        try {
+          const answer = z.safeParse(ChatMessage, answered.map(foldCard).find((each) => each.role === 'assistant')).data
+          if (answer?.parts.some((part) => part.type !== 'step-start')) await write({ chat, message: { ...answer, id: answerId, metadata: { answered: waiting.at(-1)?.id } }, session })
+        } finally {
+          live.end()
+          turns.delete(chat.id)
+          busy.delete(agent.id)
+        }
+        log.info({ event: 'agent.chat', agent: agent.id, ms: Date.now() - started, aborted: isAborted || abort.signal.aborted })
       },
     })
+    const [toClient, toServer] = stream.tee()
+    void toServer.pipeTo(new WritableStream())
     reply.hijack()
-    await pipeUIMessageStreamToResponse({ response: reply.raw, stream })
+    await pipeUIMessageStreamToResponse({ response: reply.raw, stream: toClient })
   },
 
   newMessageId: (): string => nextId(),
