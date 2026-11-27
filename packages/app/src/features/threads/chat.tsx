@@ -65,7 +65,7 @@ const RETRY_TRIES = 45
 export function Chat({ agent, threadId, tools, onTitle }: { agent: Agent; threadId: string; tools?: ReactNode; onTitle?: () => void }) {
   const thread = useThread({ agentId: agent.id, threadId })
   if (agentState(agent) === 'stopped') return <ChatFrame agent={agent} tools={tools} onTitle={onTitle}><Asleep agent={agent} /></ChatFrame>
-  if (!thread.data) return <ChatFrame agent={agent} tools={tools} onTitle={onTitle}><div className="m-auto"><ErrorNote message={thread.error?.message} /></div></ChatFrame>
+  if (!thread.data) return <ChatFrame agent={agent} tools={tools} onTitle={onTitle} composer={<ComposerSkeleton />}><div className="m-auto"><ErrorNote message={thread.error?.message} /></div></ChatFrame>
   return <ThreadView key={thread.data.id} thread={thread.data} agent={agent} tools={tools} onTitle={onTitle} />
 }
 
@@ -267,6 +267,10 @@ function Day({ iso }: { iso: string }) {
   const days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(iso).setHours(0, 0, 0, 0)) / 86_400_000)
   const label = days === 0 ? 'Today' : days === 1 ? 'Yesterday' : date.toLocaleDateString('en', { weekday: 'long', month: 'short', day: 'numeric' })
   return <div className="flex items-center gap-3 text-[11.5px] text-mute-2"><span className="h-px flex-1 bg-hair" />{label}<span className="h-px flex-1 bg-hair" /></div>
+}
+
+function ComposerSkeleton() {
+  return <div className="shrink-0 px-8 pb-5 phone:px-3 phone:pb-3"><div className="mx-auto h-[51px] max-w-[640px] rounded-xl border border-[oklch(0%_0_0/.12)] bg-card" /></div>
 }
 
 function Composer({ agent, threadId, busy, quiet, attachments, onSend, onStop }: { agent: Agent; threadId: string; busy: boolean; quiet: boolean; attachments: Attachments; onSend: (text: string) => void; onStop: () => void }) {

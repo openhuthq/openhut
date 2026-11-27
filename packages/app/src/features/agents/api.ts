@@ -47,6 +47,7 @@ export function useAgent(agentId: string) {
       client.setQueryData<OpenHutAgent[]>(AGENTS_KEY, (list) => list?.map((each) => each.id === agent.id ? { ...each, status: agent.status, health: agent.health, healthDetail: agent.healthDetail, wanted: agent.wanted } : each))
       return agent
     },
+    placeholderData: () => client.getQueryData<OpenHutAgent[]>(AGENTS_KEY)?.find((each) => each.id === agentId),
   })
 }
 

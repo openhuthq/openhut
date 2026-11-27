@@ -4,7 +4,7 @@ import type { Agent } from '@openhut/common/agents/agent.ts'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import type { IconSvgElement } from '@hugeicons/react'
-import { I, ICON_BUTTON } from '@/components/kit'
+import { GLASS, I, ICON_BUTTON } from '@/components/kit'
 import { cn } from '@/lib/utils'
 import { Tooltip } from '@/components/ui/tooltip'
 import { ErrorNote } from '@/components/error-note'
@@ -47,7 +47,10 @@ export function AgentView({ agentId, threadId, dialog, detail }: { agentId: stri
   useEffect(() => { if (!phone) saveShown(shown) }, [phone, shown])
   const open = shown ?? !narrow
   if (away) return <Redirect to={away} />
-  if (!agent.data) return <section className="grid flex-1 place-items-center bg-card">{!gone && <ErrorNote message={agent.error?.message} />}</section>
+  if (!agent.data) return <>
+    <section className="grid flex-1 place-items-center bg-card">{!gone && <ErrorNote message={agent.error?.message} />}</section>
+    {!phone && open && <aside className={cn('w-[320px] shrink-0 border-l-[0.5px] border-hair', GLASS)} />}
+  </>
   const label = open ? 'Hide panel' : 'Show panel'
   const toggle = phone && !open && <Button type="button" variant="bare" className={ICON_BUTTON} aria-label="Show details" title="Show details" onClick={() => setShown(true)}><I icon={InformationCircleIcon} size={20} /></Button>
   const dialogs = <Dialogs agent={agent.data} dialog={dialog} detail={detail} />

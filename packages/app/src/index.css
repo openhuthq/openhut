@@ -3,6 +3,10 @@
 @import 'tailwindcss/utilities.css' layer(utilities) source(none);
 @source './';
 
+@layer base {
+  [hidden]:where(:not([hidden='until-found'])) { display: none !important; }
+}
+
 @custom-variant mobile (@media (max-width: 900px));
 @custom-variant narrow (@media (max-width: 720px));
 @custom-variant phone (@media (max-width: 640px));

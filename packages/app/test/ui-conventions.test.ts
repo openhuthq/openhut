@@ -38,3 +38,8 @@ test('a Back button inside a dialog carries data-back, so Esc steps back one vie
   const unmarked = screens().flatMap(({ file, source }) => [...source.matchAll(/<Button\b(?:(?!<Button\b)[^\n])*?>Back<\/Button>/g)].filter((match) => !match[0].includes('data-back')).map(() => file))
   assert.deepEqual(unmarked, [])
 })
+
+test('the hidden attribute hides an element even when its classes set a display', () => {
+  const css = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8')
+  assert.match(css, /\[hidden\]:where\(:not\(\[hidden='until-found'\]\)\) \{ display: none !important; \}/)
+})
