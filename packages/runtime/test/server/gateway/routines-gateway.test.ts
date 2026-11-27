@@ -36,11 +36,11 @@ test('the wakes poll and MCP keepalives are not activity, so an idle Cloud compu
   assert.equal(activity.recent(60_000), false)
 })
 
-test('the agent sees three routine tools, and origin is not in the schema it gets', async () => {
+test('the agent sees four routine tools, and origin is not in the schema it gets', async () => {
   const client = await mcp()
   const { tools } = await client.listTools()
   const names = tools.map((tool) => tool.name)
-  for (const name of ['schedule_routine', 'list_routines', 'cancel_routine']) assert.ok(names.includes(name), name)
+  for (const name of ['schedule_routine', 'list_routines', 'run_routine', 'cancel_routine']) assert.ok(names.includes(name), name)
   const schedule = tools.find((tool) => tool.name === 'schedule_routine')
   assert.deepEqual(Object.keys(schedule?.inputSchema.properties ?? {}).sort(), ['at', 'cron', 'name', 'plan', 'until'])
   await client.close()

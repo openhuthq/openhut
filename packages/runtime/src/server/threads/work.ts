@@ -39,6 +39,7 @@ const BUILT_IN: Record<string, [string, string, Kind]> = {
   schedule_routine: ['Schedule a follow-up', 'Scheduled a follow-up', 'change'],
   list_routines: ['List follow-ups', 'Listed follow-ups', 'read'],
   cancel_routine: ['Cancel a follow-up', 'Canceled a follow-up', 'delete'],
+  run_routine: ['Run a follow-up now', 'Ran a follow-up', 'other'],
 }
 const VERBS: Record<string, string> = {
   query: 'Queried', list: 'Listed', get: 'Read', read: 'Read', search: 'Searched', find: 'Found', fetch: 'Fetched', check: 'Checked', describe: 'Described',

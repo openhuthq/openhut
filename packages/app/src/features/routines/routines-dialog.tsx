@@ -9,14 +9,14 @@ import { ErrorNote } from '@/components/error-note'
 import { DialogCard, I, Loading, SPLIT_DIALOG } from '@/components/kit'
 import { agentPath } from '@/config/paths'
 import { Face } from '@/components/agent-face'
-import { useStopRoutine, useUpdateRoutine } from '@/features/routines/api'
+import { useRunRoutine, useStopRoutine, useUpdateRoutine } from '@/features/routines/api'
 import { useRoutines } from '@/lib/queries/routines'
 import { TargetPicker } from '@/features/routines/target-picker'
 import { PlaceIcon } from '@/components/place-icon'
 import { Switch } from '@/components/ui/switch'
 import { dateOf, dayOf, nextOf, onceOf, scheduleOf, timeOf } from '@/lib/when'
 import { navigate } from '@/lib/router'
-import { toastError } from '@/lib/toast'
+import { toast, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 const DAY_MS = 86_400_000
@@ -56,6 +56,8 @@ function Split({ agent, routines, open }: { agent: Agent; routines: Routine[]; o
 function Detail({ agent, routine, now }: { agent: Agent; routine: Routine; now: Date }) {
   const { confirming, setConfirming, box } = useConfirming()
   const stop = useStopRoutine(agent.id)
+  const run = useRunRoutine(agent.id)
+  const running = run.isPending || routine.last?.status === 'open'
   const action = routine.stopped ? 'Clear' : 'Stop'
   return <section className="flex min-w-0 flex-1 flex-col">
     <div className="no-scrollbar flex min-h-0 flex-1 flex-col gap-5 overflow-auto px-7 pt-6 pb-8">
@@ -87,7 +89,10 @@ function Detail({ agent, routine, now }: { agent: Agent; routine: Routine; now: 
             <Button type="button" variant="danger" disabled={stop.isPending || !agent.canEdit} onClick={() => stop.mutate(routine.id, { onSuccess: () => navigate(agentPath({ agentId: agent.id, dialog: 'routines' }), true), onError: toastError })}>{action}</Button></span></>
         : <>
           <span className="text-[13px] text-body">{routine.stopped ? 'Want it running again?' : 'Want it different?'} <Button type="button" variant="link" onClick={() => navigate(agentPath({ agentId: agent.id }))}>Tell {agent.name}</Button>.</span>
-          {agent.canEdit && <Button type="button" variant="danger" className="ml-auto" onClick={() => setConfirming(true)}>{action}</Button>}
+          {agent.canEdit && <span className="ml-auto flex gap-2">
+            {!routine.stopped && <Button type="button" variant="secondary" disabled={running} onClick={() => run.mutate(routine.id, { onSuccess: () => toast('Started', `${agent.name} runs it now and posts in ${routine.place}.`), onError: toastError })}>{running ? 'Running…' : 'Run now'}</Button>}
+            <Button type="button" variant="danger" onClick={() => setConfirming(true)}>{action}</Button>
+          </span>}
         </>}
     </div>
   </section>

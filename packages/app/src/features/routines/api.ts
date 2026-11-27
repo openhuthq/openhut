@@ -23,6 +23,14 @@ export function useUpdateRoutine(agentId: string) {
   })
 }
 
+export function useRunRoutine(agentId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => request({ schema: Routine, of: agentId, path: `/api/routines/${encodeURIComponent(id)}/runs`, method: 'POST' }),
+    onSuccess: (routine) => client.setQueryData<Routine[]>(routinesKey(agentId), (routines) => routines?.map((each) => each.id === routine.id ? routine : each)),
+  })
+}
+
 const TARGET_LIST = List(DeliveryTarget)
 
 export function useDeliveryTargets(agentId: string) {
