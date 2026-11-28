@@ -112,12 +112,22 @@ function Blocked({ agent, call }: { agent: Agent; call: ToolCall }) {
   const connectionId = call.connectionId
   return <div className="flex max-w-[560px] min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-sidebar px-3.5 py-2.5">
     <Mark call={call} size={18} />
-    <span className="min-w-0 flex-1 text-[13px] text-ink">{connectionId ? `${call.label} is set to Never` : call.error}</span>
-    {connectionId && <span className="flex shrink-0 gap-1.5">
+    {connectionId ? <AppBlocked agent={agent} call={call} connectionId={connectionId} /> : <span className="min-w-0 flex-1 text-[13px] text-ink">{call.error}</span>}
+  </div>
+}
+
+const NOW_SET = { allow: 'Always allow', ask: 'Ask first' }
+
+function AppBlocked({ agent, call, connectionId }: { agent: Agent; call: ToolCall; connectionId: string }) {
+  const now = useAgentTools({ agentId: agent.id, connectionId }).data?.find((tool) => tool.name === call.tool)?.permission
+  if (now && now !== 'deny') return <span className="min-w-0 flex-1 text-[13px] text-mute">{call.label} was set to Never. It’s {NOW_SET[now]} now.</span>
+  return <>
+    <span className="min-w-0 flex-1 text-[13px] text-ink">{call.label} is set to Never</span>
+    <span className="flex shrink-0 gap-1.5">
       {call.kind === 'read' && agent.canEdit && <AllowReads agent={agent} connectionId={connectionId} app={call.app ?? 'the app'} />}
       <Button type="button" variant="ghost" className={PILL} onClick={() => navigate(`${agentPath({ agentId: agent.id, dialog: 'apps', detail: connectionId })}#${encodeURIComponent(call.tool)}`)}>Change permission</Button>
-    </span>}
-  </div>
+    </span>
+  </>
 }
 
 function AllowReads({ agent, connectionId, app }: { agent: Agent; connectionId: string; app: string }) {

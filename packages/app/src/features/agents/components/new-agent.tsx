@@ -11,7 +11,7 @@ import { ErrorNote } from '@/components/error-note'
 import { DialogCard, I, FIELD_MENU, SOFT_TRIGGER } from '@/components/kit'
 import { useCreateAgent } from '@/features/agents/api/agents'
 import { useAgents } from '@/lib/queries/agents'
-import { runsOnChoices } from '@/features/agents/form'
+import { checkName, runsOnChoices } from '@/features/agents/form'
 import { firstModel, stepOf } from '@/lib/models'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { DEVICE_ICONS } from '@/components/custom/device'
@@ -90,7 +90,7 @@ function AgentForm({ steps = true, modelSteps: Steps }: { steps?: boolean; model
   }}>
     <Steps step={setup} signing={signing} prepare={none && admin} onSigned={() => setSigning(false)} />
     <FacePicker initial={null} compact />
-    <Input name="name" required maxLength={40} defaultValue={name} placeholder={name} aria-label="Name" autoFocus={!touch} autoComplete="off" spellCheck={false} enterKeyHint="go"
+    <Input name="name" required maxLength={40} defaultValue={name} placeholder={name} aria-label="Name" onInput={(event) => checkName(event.currentTarget)} autoFocus={!touch} autoComplete="off" spellCheck={false} enterKeyHint="go"
       className="h-auto w-full rounded-none border-0 bg-transparent p-0 text-center text-[22px]/[1.3] font-semibold shadow-none focus-visible:ring-0 text-ink outline-none placeholder:text-mute-2" />
     <div className="flex w-full flex-col divide-y divide-hair border-y border-hair text-left">
       <Row title="Model"><ModelPicker providers={providers} value={model} onPick={setPicked} onSetUp={admin ? setUp : undefined} label="Model" className={PICKER} /></Row>

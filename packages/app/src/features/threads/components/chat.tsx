@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import * as z from 'zod/mini'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
@@ -24,6 +24,7 @@ import { saidAfter } from '@/lib/said-after'
 import { CardReply } from '@/features/threads/components/card'
 import { plainError, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
+import { stillPinned } from '@/lib/more-below'
 import { useJoinThread } from '@/lib/thread-live'
 import { webhookOf } from '@/features/threads/components/webhook-message'
 import { ChatAsks, ChatFiles, Day, Message, AgentReply, Authored, changesOf, workOf, uiMessageOf, type AgentMessage, type AskSlots } from '@/features/threads/components/messages'
@@ -66,7 +67,7 @@ function ThreadView({ thread, fetchedAt, agent, asks, actions, tools, onTitle }:
   const retry = () => void (thread.activeTurn ? chat.resumeStream() : chat.regenerate())
   const shown = agent.runsHere ? chat.messages : chat.messages.filter((message) => message.role === 'user' || message.parts.some((part) => part.type !== 'step-start'))
   const last = shown.at(-1)
-  const waiting = busy && chat.status !== 'streaming' && !(last?.role === 'assistant' && last.id === thread.activeTurn)
+  const waiting = busy && !(last?.role === 'assistant' && (streaming || last.id === thread.activeTurn))
   const mine = [...shown].reverse().find((message) => message.role === 'user' && !webhookOf(message.metadata) && (z.safeParse(Authored, message.metadata).data?.author ?? me) === me)
   const said = saidAfter(shown)
   const clear = agent.canEdit && chat.messages.length > 0 && <ClearChat agent={agent} threadId={thread.id} attachments={attachments} disabled={busy || attachments.uploading} />
@@ -88,23 +89,27 @@ function ChatFrame({ agent, thread, composer, tools, onTitle, onFiles, children 
   const log = useRef<HTMLDivElement>(null)
   const sidebar = useContext(SidebarContext)
   const pinned = useRef(true)
+  const lastTop = useRef(0)
   const [away, setAway] = useState(false)
-  useEffect(() => {
+  const stick = () => {
     const element = log.current
-    if (element && pinned.current) element.scrollTop = element.scrollHeight
-  })
-  useEffect(() => {
+    if (!element || !pinned.current) return
+    element.scrollTop = element.scrollHeight
+    lastTop.current = element.scrollTop
+  }
+  useLayoutEffect(stick)
+  useLayoutEffect(() => {
     const element = log.current
     if (!element) return
-    const observer = new ResizeObserver(() => { if (pinned.current) element.scrollTop = element.scrollHeight })
+    const observer = new ResizeObserver(stick)
     observer.observe(element)
     if (element.firstElementChild) observer.observe(element.firstElementChild)
     return () => observer.disconnect()
   }, [])
-  useEffect(() => {
+  useLayoutEffect(() => {
     pinned.current = true
     setAway(false)
-    if (log.current) log.current.scrollTop = log.current.scrollHeight
+    stick()
   }, [thread?.id])
   return <section className="flex min-w-0 flex-1 flex-col bg-card" {...fileDrop(onFiles)}>
     <title>{`${agent.name} · OpenHut`}</title>
@@ -113,12 +118,18 @@ function ChatFrame({ agent, thread, composer, tools, onTitle, onFiles, children 
       {onTitle
         ? <Button type="button" variant="bare" className="float flex h-10 min-w-0 items-center gap-2 rounded-full bg-card pr-4 pl-1.5 text-ink" onClick={onTitle}><Face agent={agent} size={28} /><span className="truncate text-[16px] font-semibold">{agent.name}</span></Button>
         : <>{thread && thread.id !== agent.id && <span className="min-w-0 truncate text-[13px] text-mute">{thread.title}</span>}{thread && <ThreadSource thread={thread} />}{agent.applyError && <RetryApply agent={agent} />}</>}
-      {!onTitle && <a href={agentPath({ agentId: agent.id, dialog: 'setup', detail: 'general' })} aria-label={`Set up ${agent.name}`} className="group absolute top-3 left-1/2 flex max-w-[50%] -translate-x-1/2 flex-col items-center gap-2 text-ink no-underline phone:hidden">
-        <Face agent={agent} size={56} /><span className="max-w-full truncate rounded-full bg-soft px-3.5 py-1 text-[14px] font-medium group-hover:bg-mid">{agent.name}</span>
-      </a>}
+      {!onTitle && <span className="absolute top-3 left-1/2 flex max-w-[50%] -translate-x-1/2 flex-col items-center gap-2 phone:hidden">
+        <a href={agentPath(agent.canEdit ? { agentId: agent.id, dialog: 'customize' } : { agentId: agent.id, dialog: 'setup', detail: 'general' })} aria-label={agent.canEdit ? `Customize ${agent.name}` : `Set up ${agent.name}`} title={agent.canEdit ? 'Customize' : undefined} className="rounded-full"><Face agent={agent} size={56} /></a>
+        <a href={agentPath({ agentId: agent.id, dialog: 'setup', detail: 'general' })} aria-label={`Set up ${agent.name}`} className="max-w-full truncate rounded-full bg-soft px-3.5 py-1 text-[14px] font-medium text-ink no-underline hover:bg-mid">{agent.name}</a>
+      </span>}
       <span className="float ml-auto flex items-center gap-0.5 phone:h-10 phone:justify-self-end phone:rounded-full phone:bg-card phone:px-1">{tools}</span>
     </div>
-    <div ref={log} className="fade-t flex flex-1 flex-col overflow-auto px-8 py-5 transition-[padding] group-data-[threads]/chat:pr-[396px] phone:px-4" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80; setAway(!pinned.current) }}>
+    <div ref={log} className="fade-t flex flex-1 flex-col overflow-auto px-8 py-5 transition-[padding] group-data-[threads]/chat:pr-[396px] phone:px-4" aria-live="polite" onScroll={(event) => {
+      const element = event.currentTarget
+      pinned.current = stillPinned({ pinned: pinned.current, scrollHeight: element.scrollHeight, scrollTop: element.scrollTop, clientHeight: element.clientHeight, lastTop: lastTop.current })
+      lastTop.current = element.scrollTop
+      setAway(!pinned.current)
+    }}>
       <div className="mx-auto flex w-full max-w-[840px] flex-1 flex-col gap-4">{children}</div>
     </div>
     {away && <div className="relative h-0 px-8 group-data-[threads]/chat:pr-[396px] phone:px-3"><div className="relative mx-auto max-w-[840px]">

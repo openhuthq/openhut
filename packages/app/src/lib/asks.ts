@@ -46,6 +46,6 @@ export function toolOutcome(ask: Pick<Ask, 'status' | 'input'>): string | undefi
 }
 
 export function toolDetails(ask: Pick<Ask, 'input'>): string[] {
-  const args = ask.input.arguments && typeof ask.input.arguments === 'object' && Object.keys(ask.input.arguments).length ? JSON.stringify(ask.input.arguments, null, 2).split('\n') : []
+  const args = ask.input.arguments && typeof ask.input.arguments === 'object' ? Object.entries(ask.input.arguments).flatMap(([key, value]) => `${key}: ${typeof value === 'string' ? value : JSON.stringify(value, null, 2)}`.split('\n')) : []
   return [String(ask.input.name ?? ask.input.tool ?? ''), ...args]
 }
