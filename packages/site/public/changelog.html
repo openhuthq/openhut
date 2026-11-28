@@ -102,6 +102,9 @@ img{max-width:100%}
 .shot img.mid{max-width:min(100%,640px)}
 figcaption{margin-top:10px;font-size:13px;color:var(--mute)}
 .item.big h2{font-size:clamp(30px,4vw,44px);line-height:1.1;letter-spacing:-.035em}
+.item ul{margin:12px 0 0;padding-left:20px;font-size:16px;line-height:1.55;color:var(--body);max-width:56ch}
+.item li{margin-top:6px}
+.item li b{font-weight:600;color:var(--ink)}
 .more{padding-top:40px;border-top:1px solid var(--hair);font-size:14px;color:var(--mute)}
 .more a{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
 @media (max-width:720px){
@@ -134,27 +137,6 @@ figcaption{margin-top:10px;font-size:13px;color:var(--mute)}
         <figure class="shot"><img src="/changelog/pages.jpg" alt="Ops's Order sync failures page open beside the chat, with Private and Share" width="1024" height="516" loading="lazy"></figure>
       </div>
     </article>
-    <article class="item" id="logs">
-      <div class="when"><time datetime="2026-11-27">Nov 27, 2026</time></div>
-      <div>
-        <h2>ClickHouse and Better Stack</h2>
-        <p>Agents can query a ClickHouse database and search your logs in Better Stack, read-only.</p>
-      </div>
-    </article>
-    <article class="item" id="threads">
-      <div class="when"><time datetime="2026-11-27">Nov 27, 2026</time></div>
-      <div>
-        <h2>Every thread in one place</h2>
-        <p>Each conversation an agent has shows up in the web app, whether it started there, in Discord, from a webhook or from a routine. Open Threads at the top of the chat to find one, and archive the ones you're done with.</p>
-      </div>
-    </article>
-    <article class="item" id="live-threads">
-      <div class="when"><time datetime="2026-11-27">Nov 27, 2026</time></div>
-      <div>
-        <h2>Live for everyone</h2>
-        <p>Replies appear as the agent writes them, for everyone in the thread. You see who's here and who's typing, and a reply keeps going if you close the tab.</p>
-      </div>
-    </article>
     <article class="item" id="webhook-threads">
       <div class="when"><time datetime="2026-11-27">Nov 27, 2026</time></div>
       <div>
@@ -171,67 +153,31 @@ figcaption{margin-top:10px;font-size:13px;color:var(--mute)}
         <figure class="shot"><img src="/changelog/setup.jpg" alt="Setup for Ops: General with Name and picture, What it does, Model, Runs on and Who can use it" width="900" height="700" loading="lazy"></figure>
       </div>
     </article>
-    <article class="item" id="discord-channels">
+    <article class="item" id="also-nov-27">
       <div class="when"><time datetime="2026-11-27">Nov 27, 2026</time></div>
       <div>
-        <h2>Agents answer in Discord channels</h2>
-        <p>People can talk to an agent in the Discord channels you pick, private ones included. Its replies are saved in OpenHut first, so they show in the app too.</p>
+        <h2>Also new</h2>
+        <ul>
+          <li><b>Every thread in one place.</b> Chats from the app, Discord, webhooks and routines all show under Threads.</li>
+          <li><b>Live for everyone.</b> Replies stream to everyone in the thread, and keep going if you close the tab.</li>
+          <li><b>Discord channels.</b> Agents answer in the Discord channels you pick.</li>
+          <li><b>ClickHouse and Better Stack.</b> Agents can query ClickHouse and search your logs, read-only.</li>
+        </ul>
       </div>
     </article>
-    <article class="item" id="updates">
-      <div class="when"><time datetime="2026-11-27">Nov 27, 2026</time></div>
-      <div>
-        <h2>Updates keep chats going</h2>
-        <p>Agents keep running through OpenHut updates and restarts, and a chat picks up where it left off.</p>
-      </div>
-    </article>
+
     <article class="item" id="own-server">
       <div class="when"><time datetime="2026-11-26">Nov 26, 2026</time></div>
       <div>
         <h2>Run OpenHut on your own server</h2>
         <p>One command installs it on a Linux server with Docker, HTTPS included, or behind a reverse proxy you already have. Your team signs in from the browser: copy an invite link from People and send it yourself.</p>
-      </div>
-    </article>
-    <article class="item" id="asks">
-      <div class="when"><time datetime="2026-11-26">Nov 26, 2026</time></div>
-      <div>
-        <h2>Agents ask, you approve</h2>
-        <p>An agent can ask for a channel, an app, a key or a webhook. A card shows up in the chat, and nothing changes until you approve it. When you ask it to, it changes its own name and instructions right away, with Undo.</p>
-      </div>
-    </article>
-    <article class="item" id="live-changes">
-      <div class="when"><time datetime="2026-11-26">Nov 26, 2026</time></div>
-      <div>
-        <h2>Changes without a restart</h2>
-        <p>A new name, instructions, apps, keys or model reach an agent on its next turn, in the same chat. The few changes that need a restart wait until it's done working.</p>
-      </div>
-    </article>
-    <article class="item" id="permissions">
-      <div class="when"><time datetime="2026-11-26">Nov 26, 2026</time></div>
-      <div>
-        <h2>Choose what an agent may do in each app</h2>
-        <p>Set each action to Always allow, Ask first or Never, per agent. When it asks first, you approve it from the chat.</p>
-      </div>
-    </article>
-    <article class="item" id="github">
-      <div class="when"><time datetime="2026-11-26">Nov 26, 2026</time></div>
-      <div>
-        <h2>GitHub without a token in the agent</h2>
-        <p>Set up one GitHub App for your server, then pick the repositories each agent can reach. Its pushes go through OpenHut, which adds the key on the way, and each commit says which agent wrote it.</p>
-      </div>
-    </article>
-    <article class="item" id="webhooks">
-      <div class="when"><time datetime="2026-11-26">Nov 26, 2026</time></div>
-      <div>
-        <h2>Webhooks and routines</h2>
-        <p>Give an agent an address that other services call, like a DigitalOcean alert, and each call reaches it as a message. Agents also set up routines to follow up on their own. Find both in the agent's Setup.</p>
-      </div>
-    </article>
-    <article class="item" id="replies">
-      <div class="when"><time datetime="2026-11-26">Nov 26, 2026</time></div>
-      <div>
-        <h2>Clearer replies</h2>
-        <p>Agents answer first and keep it short by default. In the app, replies show tables, task lists and highlighted code with a Copy button, and every message gets an answer or a reason why not.</p>
+        <p>Also new:</p>
+        <ul>
+          <li><b>Agents ask, you approve.</b> An agent asks for a channel, an app, a key or a webhook, and nothing changes until you approve.</li>
+          <li><b>Choose what an agent may do.</b> Set each app action to Always allow, Ask first or Never.</li>
+          <li><b>GitHub without a token.</b> Pick the repositories each agent can reach; OpenHut adds the key on the way.</li>
+          <li><b>Webhooks and routines.</b> Other services can call an agent, and agents follow up on their own.</li>
+        </ul>
       </div>
     </article>
 
@@ -241,24 +187,11 @@ figcaption{margin-top:10px;font-size:13px;color:var(--mute)}
         <h2>Run agents on Claude, Codex or an API key</h2>
         <p>Sign in with the Claude or ChatGPT plan you already pay for, or add a key from OpenRouter, OpenAI or xAI. Keys stay on your server, and agents never see them.</p>
         <figure class="shot"><img src="/changelog/models.jpg" alt="Settings, Models: Claude signed in, Codex, and API keys for OpenRouter, OpenAI and xAI" width="963" height="490" loading="lazy"></figure>
-      </div>
-    </article>
-
-    <article class="item" id="memory">
-      <div class="when"><time datetime="2026-11-18">Nov 18, 2026</time><span class="ver">0.3.0</span></div>
-      <div>
-        <h2>See what an agent remembers</h2>
-        <p>Agents save notes about people and your business as they work. Open Memory to read, fix or remove any of them, and Skills to see what it has learned to do.</p>
-        <figure class="shot"><img src="/changelog/memory.jpg" alt="Support's memory: two notes about people and three about the business" width="990" height="660" loading="lazy"></figure>
-      </div>
-    </article>
-
-    <article class="item" id="faces">
-      <div class="when"><time datetime="2026-11-18">Nov 18, 2026</time><span class="ver">0.3.0</span></div>
-      <div>
-        <h2>Give every agent its own face</h2>
-        <p>Pick the colour, eyes, hair, a hat, glasses and a background, or hit Shuffle until one feels right.</p>
-        <figure class="shot"><img class="mid" src="/changelog/faces.jpg" alt="The Customize face dialog, choosing a hat for a green agent wearing a headset" width="642" height="503" loading="lazy"></figure>
+        <p>Also in 0.3.0:</p>
+        <ul>
+          <li><b>See what an agent remembers.</b> Read, fix or remove its notes in Memory.</li>
+          <li><b>Give every agent its own face.</b> Pick the colour, eyes, hair, a hat and glasses, or hit Shuffle.</li>
+        </ul>
       </div>
     </article>
 
@@ -271,38 +204,12 @@ figcaption{margin-top:10px;font-size:13px;color:var(--mute)}
       </div>
     </article>
 
-    <article class="item" id="new-agent">
-      <div class="when"><time datetime="2026-11-17">Nov 17, 2026</time><span class="ver">0.1.0</span></div>
-      <div>
-        <h2>A new agent in one step</h2>
-        <p>Pick a face, a name and a model, then tell it its job in the chat.</p>
-        <figure class="shot"><img class="dlg" src="/changelog/new-agent.jpg" alt="The New agent dialog: a face, the name Juniper, Sonnet 5.5 as the model, and Create" width="514" height="625" loading="lazy"></figure>
-      </div>
-    </article>
-
-    <article class="item" id="computers">
-      <div class="when"><time datetime="2026-11-17">Nov 17, 2026</time><span class="ver">0.1.0</span></div>
-      <div>
-        <h2>Add more computers</h2>
-        <p>When your server runs out of room, add another Linux machine with one command. Move an agent between computers from Runs on, with its memory and chats.</p>
-      </div>
-    </article>
-
     <article class="item" id="channels">
       <div class="when"><time datetime="2026-11-15">Nov 15, 2026</time><span class="ver">Preview</span></div>
       <div>
         <h2>Talk to agents in Slack, WhatsApp, Telegram or Discord</h2>
-        <p>Each agent gets its own Slack app, WhatsApp number, Telegram bot or Discord bot, and answers in the channels you pick.</p>
+        <p>Each agent gets its own Slack app, WhatsApp number, Telegram bot or Discord bot, and answers in the channels you pick. Connect a database or an app once, then pick which agents can use it.</p>
         <figure class="shot"><img class="dlg" src="/changelog/slack-dialog.jpg" alt="Connecting Support to Slack, picking channels from a dropdown" width="1064" height="1146" loading="lazy"></figure>
-      </div>
-    </article>
-
-    <article class="item" id="connections">
-      <div class="when"><time datetime="2026-11-15">Nov 15, 2026</time><span class="ver">Preview</span></div>
-      <div>
-        <h2>Agents see only what you allow</h2>
-        <p>Connect a database or an app once, then pick which agents can use it. They never see the password.</p>
-        <figure class="shot"><img class="dlg" src="/changelog/connection-agents.jpg" alt="A Postgres connection used only by the Dev and Support agents" width="828" height="924" loading="lazy"></figure>
       </div>
     </article>
 
