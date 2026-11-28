@@ -26,7 +26,7 @@ import { turnWork } from './work.ts'
 import { liveThreads, type LiveTurnHandle } from './live.ts'
 import { statusChunk, turns, type TurnEnd, type TurnRun } from './turns.ts'
 
-const TURN_MS = 15 * 60_000
+const TURN_MS = 2 * 60 * 60_000
 const SEED = 20
 const SEED_CHARS = 2000
 const SpecPatch = z.object({ type: z.literal('patch'), patch: z.looseObject({ op: z.string(), path: z.string() }) })

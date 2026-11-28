@@ -1,7 +1,7 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 import { log } from '../platform/events.ts'
 
-const TURN_MS = 15 * 60_000
+const TURN_MS = 2 * 60 * 60_000
 const open = new Map<string, number>()
 const lastSeen = new Map<string, number>()
 const turns = new Map<string, Map<string, number>>()
