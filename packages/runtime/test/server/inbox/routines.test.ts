@@ -154,6 +154,7 @@ test('a routine is backed up as a record, and a routine record from another comp
 test('changing the time zone moves the next run of repeating routines', async () => {
   const id = idOf(await routineService.schedule({ agentId: 'ag_rtnfirst', input: { name: 'Morning note', plan: 'Say hi.', cron: '0 9 * * *', origin: app } }))
   const before = new Date((await rowOf(id))?.next_run_at ?? 0)
+  assert.match(await routineService.listForAgent({ agentId: 'ag_rtnfirst' }), /^Times are in Europe\/Berlin\.\n.*GMT\+1/)
   await routineService.setTimeZone('America/New_York')
   const after = new Date((await rowOf(id))?.next_run_at ?? 0)
   assert.equal(before.getUTCHours(), 8)

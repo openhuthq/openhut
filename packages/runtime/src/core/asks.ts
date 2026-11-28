@@ -43,7 +43,7 @@ export const asks = {
     const actor = await agentService.ownerOf({ id: agentId })
     const before = await found.auto.before({ agentId })
     const id = newId('ask')
-    const title = await found.title({ agentId, input: parsed })
+    const title = await found.title({ agentId, input: parsed, applied: true })
     const note = await found.run({ actor, ask: { id, agentId, input: parsed, description: said, origin: from }, answer: found.answer ? parsed : undefined })
     await db.insertInto('ask').values({ id, agent_id: agentId, kind, input: JSON.stringify({ ...parsed, before }), title, why: said, origin: JSON.stringify(from), status: 'done', told: true, answered_at: new Date(), reply: `Done: ${title}.` }).execute()
     emit({ name: 'ask.done', actor, target: { type: 'ask', id, agentId, kind }, properties: { auto: true } })
@@ -165,7 +165,7 @@ async function approving({ actor, id, answer }: { actor: Caller; id: string; ans
   if (given && !given.success) throw new HttpError(400, `That answer isn't valid. ${z.prettifyError(given.error)}`)
   const edits = given?.data ? pick({ from: given.data, keys: Object.keys(kind.input.shape) }) : {}
   const final = { ...input, ...edits }
-  const title = Object.keys(edits).length ? await kind.title({ agentId: row.agent_id, input: final }) : row.title
+  const title = await Promise.resolve().then(() => kind.title({ agentId: row.agent_id, input: final, applied: true })).catch(() => row.title)
   const note = await kind.run({ actor, ask: { ...askFor(row), input: final }, answer: given?.data })
   return answered({ actor, row, status: 'done', set: { input: JSON.stringify(final), title, reply: `Approved and done: ${title}.${note ? ` ${note}` : ''}` } })
 }

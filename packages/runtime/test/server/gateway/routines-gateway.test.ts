@@ -54,7 +54,7 @@ test('a routine scheduled over MCP with the plugin\'s origin runs as a wake: lis
   const scheduled = await client.callTool({ name: 'schedule_routine', arguments: { name: 'Remind Mo', plan: 'Board update.', cron: '0 9 * * 5', origin } })
   assert.match(textOf(scheduled), /^Scheduled rt_[a-z0-9]+, next .+\. Reports go to your WhatsApp\.$/)
   const id = /rt_[a-z0-9]+/.exec(textOf(scheduled))?.[0] ?? ''
-  assert.match(textOf(await client.callTool({ name: 'list_routines', arguments: {} })), new RegExp(`^${id} Remind Mo · 0 9 \\* \\* 5 · next `))
+  assert.match(textOf(await client.callTool({ name: 'list_routines', arguments: {} })), new RegExp(`^Times are in \\S+\\.\\n${id} Remind Mo · 0 9 \\* \\* 5 · next `))
 
   await db.updateTable('inbox_source').set({ next_run_at: new Date(Date.now() - 60_000) }).where('id', '=', id).execute()
   await inboxService.tick()

@@ -29,8 +29,16 @@ const GIT_READ: ToolSpec = {
 }
 const GIT_PUSH: ToolSpec = {
   name: 'git_push',
-  description: 'Ask to push a branch with git. Call it before you push when pushing waits for your owner, with the repository (owner/name) and branch; once approved, push within 10 minutes.',
-  schema: { type: 'object', properties: { repo: { type: 'string' }, branch: { type: 'string' } }, required: ['repo'] },
+  description: 'Ask to push a branch with git. Call it before you push when pushing waits for your owner, with the repository (owner/name), the branch and the files the push changes (from git diff --numstat against the remote branch, or against the default branch for a new one), so your owner sees what goes out; once approved, push within 10 minutes.',
+  schema: {
+    type: 'object',
+    properties: {
+      repo: { type: 'string' },
+      branch: { type: 'string' },
+      files: { type: 'array', maxItems: 300, items: { type: 'object', properties: { path: { type: 'string' }, added: { type: 'integer' }, removed: { type: 'integer' } }, required: ['path'] } },
+    },
+    required: ['repo'],
+  },
   annotations: { title: 'Push branches', readOnlyHint: false, destructiveHint: false },
   meta: { operation: 'create' },
 }

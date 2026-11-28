@@ -105,3 +105,23 @@ test('after a restart, a turn that was cut off is folded from its saved chunks',
   assert.deepEqual(found, [{ thread: 'th_crash', id: 'msg_crash', text: ['Before the crash'] }])
   assert.equal((await db.selectFrom('thread_chunk').select('seq').where('turn_id', '=', 'msg_crash').execute()).length, 0)
 })
+
+test('a hung turn can\'t hold the agent\'s queue: a stop, the agent stopping or its deadline ends it, and the next turn runs', async () => {
+  const saved: TurnEnd[] = []
+  const hung = () => new Promise<void>(() => undefined)
+  const first = turns.start({ id: 'msg_hung1', thread: 'th_hung1', agentId: 'ag_hung', run: hung, save: async (end) => { saved.push(end) }, graceMs: 10 })
+  const ran = gate()
+  const second = turns.start({ id: 'msg_hung2', thread: 'th_hung2', agentId: 'ag_hung', run: async ({ write }) => { for (const chunk of text('t1', 'Here')) write(chunk); ran.open() }, save: async () => undefined })
+  const reader = turns.subscribe({ thread: 'th_hung2' })?.getReader()
+  assert.deepEqual((await reader?.read())?.value, statusChunk(WAITING), 'the queued turn says it waits')
+  await reader?.cancel()
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  turns.stopAgent('ag_hung')
+  await assert.rejects(first, /stopped responding/)
+  await ran.opened
+  await second
+  assert.equal(turns.current('th_hung1'), null)
+  const third = turns.start({ id: 'msg_hung3', thread: 'th_hung3', agentId: 'ag_hung', run: hung, save: async () => undefined, deadlineMs: 20, graceMs: 10 })
+  await assert.rejects(third, /stopped responding/)
+  assert.equal(turns.current('th_hung3'), null)
+})
