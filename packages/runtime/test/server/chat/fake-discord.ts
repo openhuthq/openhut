@@ -14,6 +14,7 @@ export const sent: { channel: string; content: string }[] = []
 export const typing: string[] = []
 export const renamed: { id: string; name: string }[] = []
 export const identified: string[] = []
+export const deleted = new Set<string>()
 const threads = new Map<string, string>()
 const sockets = new Set<WebSocket>()
 let seq = 0
@@ -37,6 +38,7 @@ const server = createServer(async (req, res) => {
   if (path === '/gateway/bot') return json(200, { url: `ws://127.0.0.1:${port()}`, shards: 1, session_start_limit: { total: 1000, remaining: 1000, reset_after: 0, max_concurrency: 1 } })
   if (path === '/users/@me') return json(200, { id: BOT, username: 'pulse', discriminator: '0', bot: true })
   if (path === '/users/@me/guilds') return json(200, [])
+  if (deleted.has(/^\/channels\/(\d+)/.exec(path)?.[1] ?? '')) return json(404, { message: 'Unknown Channel', code: 10003 })
   let m = /^\/channels\/(\d+)\/messages\/(\d+)\/threads$/.exec(path)
   if (m && req.method === 'POST') {
     threads.set(m[2], m[1])

@@ -2,6 +2,8 @@ import { replyText } from '@openhut/common/threads/reply.ts'
 import type { ChatMessage } from '@openhut/common/threads/thread.ts'
 import { durable } from '../../core/durable.ts'
 import { channelService } from '../channels/channel-service.ts'
+import { gone } from '../integrations/discord/discord.ts'
+import { log } from '../platform/events.ts'
 import { messageOf } from '../platform/http-error.ts'
 import { threadService, type ThreadPlace } from '../threads/thread-service.ts'
 import { bots } from './bots.ts'
@@ -27,8 +29,10 @@ const deliver = durable<{ threadId: string; messageId: string }>('chat-deliver',
     if (sent.threadId) await threadService.moved({ id: threadId, place: { ...place, thread_id: sent.threadId, url: sent.url } })
     await threadService.updateMetadata({ threadId, messageId, change: (metadata) => ({ ...metadata, delivery: 'sent', ref: sent.messageId }) })
   } catch (err) {
-    if (last) await threadService.updateMetadata({ threadId, messageId, change: (metadata) => ({ ...metadata, delivery: 'failed', error: messageOf(err) }) })
-    throw err
+    const deleted = gone(err)
+    if (last || deleted) await threadService.updateMetadata({ threadId, messageId, change: (metadata) => ({ ...metadata, delivery: 'failed', error: messageOf(err) }) })
+    if (!deleted) throw err
+    log.info({ event: 'chat.discord_gone', agent: where.agentId, place: place.url })
   }
 })
 
