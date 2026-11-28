@@ -92,7 +92,8 @@ dockerd, gVisor, Claude Code pinned by `ARG CLAUDE`, agent-browser, the WhatsApp
 nothing downloads on the server; entrypoint `install/runtime-start.sh`) runs agentd and `agentd/network/link.ts`, privileged, no open
 port, data in `openhut-runtime-data`. Other machines run only that: `curl … | sh -s -- join <address> <token>` from
 Settings › Computers. The link is one outbound WebSocket to `/api/computers/link` carrying the `common/src/tunnel/mux.ts`
-streams (frames.ts): the main opens agentd, agent-API and home-copy streams, the runtime opens gateway streams, so model keys
+streams (frames.ts): the main opens agentd, agent-API and home-copy streams, the runtime opens gateway streams (at most 512 open per computer;
+at the cap new ones are refused, `computer.gateway_full` is logged and its running agents show not answering), so model keys
 stay on the main. `relay/forward.ts` routes each agent's calls to the computer that runs it (`agent.runs_on`; `here` is the
 main's own runtime). Runtimes follow the main: its welcome names its paired runtime image, and a runtime on another one runs
 `install.sh join` in a one-shot `openhut-runtime-update` container, which goes back on failure and labels the image failed.

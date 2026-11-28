@@ -19,7 +19,6 @@ import { HERE } from '../team/home.ts'
 
 const JOIN_MS = 10 * 60_000
 const PING_MS = 30_000
-const MAX_STREAMS = 512
 const HERE_NAME = 'This server'
 const UNINSTALL = 'sudo docker rm -f openhut-runtime openhut-runtime-previous openhut-runtime-update; sudo docker volume rm openhut-runtime openhut-runtime-data'
 const Hello = z.object({
@@ -78,7 +77,6 @@ export const computerService = {
     const { row, token } = found
     if (socket.readyState !== socket.OPEN) return
     let alive = true
-    let streams = 0
     const ping = setInterval(() => {
       if (!alive) return socket.terminate()
       alive = false
@@ -91,11 +89,7 @@ export const computerService = {
       mux: mux({
         odd: false,
         send: (bytes, done) => socket.send(bytes, (err) => done(err ?? undefined)),
-        accept: (open, stream) => {
-          if (open.to !== 'gateway' || ++streams > MAX_STREAMS) return stream.destroy()
-          stream.once('close', () => { streams-- })
-          forward.gateway({ computer: row.id, stream })
-        },
+        accept: (open, stream) => open.to === 'gateway' ? forward.gateway({ computer: row.id, stream }) : stream.destroy(),
         heard: (message) => {
           const hello = z.safeParse(Hello, message)
           if (!hello.success) return

@@ -6,6 +6,7 @@ import { db } from '../platform/db.ts'
 import { HttpError } from '../platform/http-error.ts'
 import { agentApiUrl } from '../platform/network.ts'
 import { config } from '../platform/config.ts'
+import { log } from '../platform/events.ts'
 import { HERE } from '../team/home.ts'
 
 export type Link = { mux: Mux; features: { whatsapp: boolean; browser: boolean }; gvisor: boolean | null; end: (revoked?: boolean) => void }
@@ -16,6 +17,8 @@ await local?.boot()
 const links = new Map<string, Link>()
 const waiting = new Set<() => void>()
 const relayed = new Map<number, string>()
+const gateways = new Map<string, number>()
+export const MAX_GATEWAY_STREAMS = 512
 const OFFLINE = 'The computer that runs this agent is offline. Start it, or move the agent to another computer.'
 
 export const forward = {
@@ -35,6 +38,14 @@ export const forward = {
   linked: (computer: string): Link | undefined => links.get(computer),
 
   gateway({ computer, stream }: { computer: string; stream: Duplex }): void {
+    const open = gateways.get(computer) ?? 0
+    if (open >= MAX_GATEWAY_STREAMS) {
+      stream.destroy()
+      return
+    }
+    gateways.set(computer, open + 1)
+    if (open + 1 === MAX_GATEWAY_STREAMS) log.warn({ event: 'computer.gateway_full', computer, streams: MAX_GATEWAY_STREAMS })
+    stream.once('close', () => gateways.set(computer, (gateways.get(computer) ?? 1) - 1))
     const gateway = connect(config.gatewayPort, '127.0.0.1')
     gateway.once('connect', () => {
       const port = gateway.localPort
@@ -44,9 +55,12 @@ export const forward = {
       stream.pipe(gateway).pipe(stream)
     })
     gateway.on('error', () => stream.destroy())
+    gateway.on('close', () => stream.destroy())
     stream.on('error', () => gateway.destroy())
     stream.on('close', () => gateway.destroy())
   },
+
+  gatewayFull: (computer: string): boolean => (gateways.get(computer) ?? 0) >= MAX_GATEWAY_STREAMS,
 
   relayedFrom: (port: number | undefined): string | undefined => port === undefined ? undefined : relayed.get(port),
 
