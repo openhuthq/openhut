@@ -11,7 +11,7 @@ import { answerErrors, HttpError } from '../../../src/server/platform/http-error
 import { seal } from '../../../src/server/platform/secrets.ts'
 import { validatorCompiler } from 'fastify-type-provider-zod'
 import { threadController } from '../../../src/server/threads/thread-controller.ts'
-import { imageTypeOf, LostTurn, safeFileName, shownCall, threadService } from '../../../src/server/threads/thread-service.ts'
+import { imageTypeOf, LostTurn, safeFileName, shownCall, threadService, timedOut } from '../../../src/server/threads/thread-service.ts'
 import { HERE } from '../../../src/server/team/home.ts'
 import { agentService } from '../../../src/server/agents/agent-service.ts'
 import { connectionService } from '../../../src/server/connections/connection-service.ts'
@@ -666,4 +666,13 @@ test('a new thread starts empty and listed, takes its first message as its title
   await threadService.add({ threadId: thread.id, messages: [{ id: threadService.inboundId({ at: new Date(), ref: 'newt2' }), role: 'user', parts: [{ type: 'step-start' }] }] })
   assert.equal((await listed())?.preview, 'Disk is full again', 'a newest message with no text leaves the last one with words')
   assert.equal((await app.inject({ method: 'POST', url: '/api/threads', headers: as(), payload: { agentId: 'ag_nobody' } })).statusCode, 404)
+})
+
+test('a turn that runs out of time says so instead of a raw abort', async () => {
+  const timeout = AbortSignal.abort(new DOMException('aborted', 'TimeoutError'))
+  async function* events(): AsyncGenerator<number> { yield 1; throw new Error('aborted') }
+  const seen: number[] = []
+  await assert.rejects((async () => { for await (const event of timedOut({ events: events(), timeout, name: 'Ops' })) seen.push(event) })(), /^Error: Stopped: Ops worked on this for 2 hours without finishing\./)
+  assert.deepEqual(seen, [1])
+  await assert.rejects((async () => { for await (const _ of timedOut({ events: events(), timeout: new AbortController().signal, name: 'Ops' })) undefined })(), /^Error: aborted$/)
 })

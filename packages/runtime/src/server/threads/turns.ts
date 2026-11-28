@@ -5,9 +5,12 @@ import { emit, log } from '../platform/events.ts'
 import { messageOf } from '../platform/http-error.ts'
 
 const SAVE_MS = 1000
+const DEADLINE_MS = 2 * 60 * 60_000 + 60_000
+const GRACE_MS = 15_000
+const ABANDONED = 'Stopped: this reply stopped responding, so OpenHut ended it. Ask again.'
 
 type Listener = (chunk?: UIMessageChunk) => void
-type Turn = { id: string; thread: string; agentId: string; chunks: UIMessageChunk[]; saved: number; saving: Promise<void>; ended: boolean; abort: AbortController; listeners: Set<Listener> }
+type Turn = { id: string; thread: string; agentId: string; chunks: UIMessageChunk[]; saved: number; saving: Promise<void>; ended: boolean; running: boolean; abort: AbortController; listeners: Set<Listener> }
 export type TurnRun = { signal: AbortSignal; write: (chunk: UIMessageChunk) => void }
 export type TurnEnd = { message: UIMessage; failed: boolean }
 
@@ -17,14 +20,14 @@ const active = new Map<string, Turn[]>()
 const lanes = new Map<string, Promise<void>>()
 
 export const turns = {
-  start({ id, thread, agentId, run, save }: { id: string; thread: string; agentId: string; run: (turn: TurnRun) => Promise<void>; save: (end: TurnEnd) => Promise<void> }): Promise<void> {
-    const turn: Turn = { id, thread, agentId, chunks: [], saved: 0, saving: Promise.resolve(), ended: false, abort: new AbortController(), listeners: new Set() }
+  start({ id, thread, agentId, run, save, deadlineMs = DEADLINE_MS, graceMs = GRACE_MS }: { id: string; thread: string; agentId: string; run: (turn: TurnRun) => Promise<void>; save: (end: TurnEnd) => Promise<void>; deadlineMs?: number; graceMs?: number }): Promise<void> {
+    const turn: Turn = { id, thread, agentId, chunks: [], saved: 0, saving: Promise.resolve(), ended: false, running: false, abort: new AbortController(), listeners: new Set() }
     active.set(thread, [...active.get(thread) ?? [], turn])
     if (lanes.has(agentId)) send({ turn, chunk: statusChunk(WAITING) })
     changed(turn)
     const queued = db.insertInto('thread_turn').values({ id, thread_id: thread }).execute()
       .catch((err: unknown) => log.warn({ event: 'turn.queue_failed', thread, error: messageOf(err) }))
-    const done = Promise.all([queued, lanes.get(agentId)]).then(() => go({ turn, run, save }))
+    const done = Promise.all([queued, lanes.get(agentId)]).then(() => go({ turn, run, save, deadlineMs, graceMs }))
     const lane = done.catch(() => undefined)
     lanes.set(agentId, lane)
     void lane.then(() => { if (lanes.get(agentId) === lane) lanes.delete(agentId) })
@@ -60,6 +63,10 @@ export const turns = {
     for (const turn of active.get(thread) ?? []) turn.abort.abort()
   },
 
+  stopAgent(agentId: string): void {
+    for (const turn of [...active.values()].flat()) if (turn.agentId === agentId && turn.running) turn.abort.abort()
+  },
+
   async recover(save: (input: { thread: string; id: string; message: UIMessage }) => Promise<void>): Promise<void> {
     const rows = await db.selectFrom('thread_turn').select(['id', 'thread_id']).orderBy('id').execute()
     const running = new Set([...active.values()].flat().map((turn) => turn.id))
@@ -72,18 +79,26 @@ export const turns = {
   },
 }
 
-async function go({ turn, run, save }: { turn: Turn; run: (turn: TurnRun) => Promise<void>; save: (end: TurnEnd) => Promise<void> }): Promise<void> {
+async function go({ turn, run, save, deadlineMs, graceMs }: { turn: Turn; run: (turn: TurnRun) => Promise<void>; save: (end: TurnEnd) => Promise<void>; deadlineMs: number; graceMs: number }): Promise<void> {
   const timer = setInterval(() => { turn.saving = turn.saving.then(() => persist(turn)) }, SAVE_MS).unref()
+  turn.running = true
+  const deadline = setTimeout(() => turn.abort.abort(), deadlineMs).unref()
   let failed = false
+  let grace: NodeJS.Timeout | undefined
+  const abandoned = new Promise<never>((_, reject) => turn.abort.signal.addEventListener('abort', () => {
+    grace = setTimeout(() => reject(new Error(ABANDONED)), graceMs).unref()
+  }, { once: true }))
   if (turn.chunks.length) send({ turn, chunk: statusChunk('') })
   try {
-    await run({ signal: turn.abort.signal, write: (chunk) => send({ turn, chunk }) })
+    await Promise.race([run({ signal: turn.abort.signal, write: (chunk) => { if (!turn.ended) send({ turn, chunk }) } }), abandoned])
   } catch (err) {
     failed = true
     send({ turn, chunk: { type: 'error', errorText: messageOf(err) } })
     throw err
   } finally {
     clearInterval(timer)
+    clearTimeout(deadline)
+    clearTimeout(grace)
     await end({ turn, save, failed })
   }
 }

@@ -612,7 +612,9 @@ async function relay({ agent, session, message, writer, signal, work, retry = fa
     if (text !== status) writer.write(statusChunk(text))
     status = text
   }
-  for await (const event of autonomous.chat({ agent, session, message: asked, system: CHAT_NOTE, signal: AbortSignal.any([signal, AbortSignal.timeout(TURN_MS)]) })) {
+  const timeout = AbortSignal.timeout(TURN_MS)
+  const events = autonomous.chat({ agent, session, message: asked, system: CHAT_NOTE, signal: AbortSignal.any([signal, timeout]) })
+  for await (const event of timedOut({ events, timeout, name: agent.name })) {
     if (event.type === 'dropped') throw text || !retry ? new Error(dropped(agent.name)) : new LostTurn()
     if (event.type === 'error' && event.lost && !text) throw new LostTurn()
     if (event.type === 'error') throw new Error(modelFailure({ name: agent.name, message: event.message }))
@@ -641,6 +643,18 @@ async function relay({ agent, session, message, writer, signal, work, retry = fa
 
 export class LostTurn extends Error {}
 
+export async function* timedOut<T>({ events, timeout, name }: { events: AsyncIterable<T>; timeout: AbortSignal; name: string }): AsyncGenerator<T> {
+  try {
+    yield* events
+  } catch (err) {
+    if (timeout.aborted) throw new Error(tooLong(name))
+    throw err
+  }
+  if (timeout.aborted) throw new Error(tooLong(name))
+}
+
+const tooLong = (name: string): string => `Stopped: ${name} worked on this for ${TURN_MS / 3_600_000} hours without finishing. Ask again, or split it into smaller steps.`
+
 
 const dropped = (name: string): string => `Stopped: the connection to ${name} dropped before it answered. Ask again.`
 
@@ -648,6 +662,7 @@ function modelFailure({ name, message }: { name: string; message: string }): str
   log.warn({ event: 'agent.chat_failed', agent: name, error: message.slice(0, 500) })
   if (/\b401\b|not logged in|sign-in|setup-token/i.test(message)) return `${name} isn't ready: its Claude seat isn't signed in. An owner or admin connects the seat in Admin, then try again.`
   if (/\b429\b|rate limit/i.test(message)) return `${name}'s model is rate limited right now. Try again in a few minutes.`
+  if (/^(request )?aborted\.?$|timed? ?out/i.test(message.trim())) return `Stopped: ${name}'s model took too long to answer. Ask again.`
   return `${name}'s model failed: ${message.slice(0, 300)}`
 }
 

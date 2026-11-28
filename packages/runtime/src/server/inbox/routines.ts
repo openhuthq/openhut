@@ -77,13 +77,13 @@ export const routineService = {
       : await db.insertInto('inbox_source').values({ id: newId('rt'), agent_id: agentId, kind: 'schedule', ...fields }).returningAll().executeTakeFirstOrThrow()
     await upload(row)
     changed({ name: old ? 'routine.updated' : 'routine.scheduled', agentId, routineId: row.id, properties: { cron: row.cron, at: at?.toISOString() } })
-    return `${old ? 'Changed' : 'Scheduled'} ${row.id}, next ${nextRunAt ? shortTime(nextRunAt) : 'never'}. Reports go to ${place}.${endless ? ' No end date, as the owner set it.' : ''}`
+    return `${old ? 'Changed' : 'Scheduled'} ${row.id}, next ${nextRunAt ? shortTime(nextRunAt) : 'never'}${row.cron ? ` (its cron runs in ${settings.timeZone()})` : ''}. Reports go to ${place}.${endless ? ' No end date, as the owner set it.' : ''}`
   },
 
   async listForAgent({ agentId }: { agentId: string }): Promise<string> {
     const rows = await db.selectFrom('inbox_source').selectAll().where('agent_id', '=', agentId).where('kind', '=', 'schedule').orderBy('created_at').execute()
     if (!rows.length) return 'No routines.'
-    return rows.map((row) => `${row.id} ${row.name} · ${row.cron ?? 'once'} · ${row.next_run_at ? `next ${shortTime(new Date(row.next_run_at))}` : stoppedOf(row) ?? 'running now'}`).join('\n')
+    return [`Times are in ${settings.timeZone()}.`, ...rows.map((row) => `${row.id} ${row.name} · ${row.cron ?? 'once'} · ${row.next_run_at ? `next ${shortTime(new Date(row.next_run_at))}` : stoppedOf(row) ?? 'running now'}`)].join('\n')
   },
 
   async cancel({ agentId, id, reason }: { agentId: string; id: string; reason: string }): Promise<string> {
@@ -382,7 +382,7 @@ function validZone(zone: string): boolean {
 }
 
 function shortTime(date: Date): string {
-  return date.toLocaleString('en-US', { timeZone: settings.timeZone(), weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+  return date.toLocaleString('en-US', { timeZone: settings.timeZone(), weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false, timeZoneName: 'short' })
 }
 
 const digits = (value: string): string => value.replace(/@.*$/, '').replace(/\D/g, '')

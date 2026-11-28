@@ -76,7 +76,7 @@ test('every ask needs a short description for the owner: missing or too long is 
 test('a rename waits for approval, the owner edits it, and the decision goes back to the chat it came from', async () => {
   await assert.rejects(asks.create({ agentId: 'ag_chgagent', kind: 'update_self', input: { name: 'Ops' }, description: 'Clearer name.', origin: undefined }), /chat you're in/)
   const asked = await asks.create({ agentId: 'ag_chgagent', kind: 'update_self', input: { name: 'Ops' }, description: 'Clearer name.', origin: app })
-  assert.match(asked, /^Asked for approval \(ask_[a-z0-9]+\): Renamed to Ops\. Nothing has changed yet\./)
+  assert.match(asked, /^Asked for approval \(ask_[a-z0-9]+\): Rename to Ops\. Nothing has changed yet\./)
   const id = idIn(asked)
   assert.equal((await db.selectFrom('agent').select('name').where('id', '=', 'ag_chgagent').executeTakeFirstOrThrow()).name, 'Dev')
   assert.deepEqual(await asks.inChat({ agentId: 'ag_chgagent', since: new Date(Date.now() - 60_000) }), [id])

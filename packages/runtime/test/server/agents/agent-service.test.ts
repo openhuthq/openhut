@@ -33,10 +33,21 @@ test('revoking an agent\'s token refuses the old one at once; the new one works'
   assert.equal((await agentService.byToken({ token: agentToken({ id: 'ag_tokentst', epoch: 1 }) }))?.id, 'ag_tokentst')
 })
 
-test('renaming an agent cleans the name and refuses an empty one', async () => {
+test('renaming an agent drops hidden characters, keeps any letters and parentheses, and refuses a name without letters or digits', async () => {
   const actor = { id: 'usr_tokenown', email: 'tokenowner@example.com', role: 'owner' as const }
-  assert.equal((await agentService.update({ actor, id: 'ag_tokentst', patch: { name: '  Sales <b>bot</b> ' } })).name, 'Sales bbotb')
+  assert.equal((await agentService.update({ actor, id: 'ag_tokentst', patch: { name: '  Sales\u200b bot\n ' } })).name, 'Sales bot')
+  assert.equal((await agentService.update({ actor, id: 'ag_tokentst', patch: { name: 'الناظر' } })).name, 'الناظر')
   await assert.rejects(agentService.update({ actor, id: 'ag_tokentst', patch: { name: '<>' } }), { status: 400 })
+  assert.equal((await agentService.update({ actor, id: 'ag_tokentst', patch: { name: 'El Nazer (DB)' } })).name, 'El Nazer (DB)')
+})
+
+test('renaming an agent with starter instructions renames them too; written instructions stay as they are', async () => {
+  const made = await agentService.create({ actor: owner, name: 'Maple' })
+  await agentService.update({ actor: owner, id: made.id, patch: { name: 'Birch' } })
+  assert.equal((await db.selectFrom('agent').select('instructions').where('id', '=', made.id).executeTakeFirstOrThrow()).instructions, '# Birch\n\nYou are Birch. Answer briefly.')
+  await agentService.update({ actor: owner, id: made.id, patch: { instructions: 'You are Birch, our DBA.' } })
+  await agentService.update({ actor: owner, id: made.id, patch: { name: 'Cedar' } })
+  assert.equal((await db.selectFrom('agent').select('instructions').where('id', '=', made.id).executeTakeFirstOrThrow()).instructions, 'You are Birch, our DBA.')
 })
 
 test('an agent carries its model’s display name from this computer’s catalogue, so teammates see Sonnet 5.5, not sonnet', async () => {

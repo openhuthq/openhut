@@ -9,8 +9,9 @@ test('Runs on lists the online computers', () => {
   assert.deepEqual(runsOnChoices(undefined), [])
 })
 
-test('A name lists the characters it can’t have', () => {
+test('A name may have any letters, digits and punctuation, but no hidden characters', () => {
   assert.equal(nameProblem('Ops-2 v1.0_beta'), '')
-  assert.equal(nameProblem('El Nazer (DB)'), 'Names can’t have ( ). Remove them to save.')
-  assert.equal(nameProblem('Ops!'), 'Names can’t have !. Remove it to save.')
+  assert.equal(nameProblem('El Nazer (DB)'), '')
+  assert.equal(nameProblem('الناظر!'), '')
+  assert.equal(nameProblem('Ops\u200b'), 'This name has hidden characters. Retype it to save.')
 })

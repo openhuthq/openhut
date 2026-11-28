@@ -29,7 +29,7 @@ export type AskKind<I extends z.ZodObject = z.ZodObject, A extends z.ZodObject |
   input: I
   tool?: string
   answer?: A
-  title(x: { agentId: string; input: z.infer<I> }): string | Promise<string>
+  title(x: { agentId: string; input: z.infer<I>; applied?: boolean }): string | Promise<string>
   run(x: { actor: Caller; ask: AskOf<z.infer<I>>; answer: A extends z.ZodObject ? z.infer<A> : undefined }): Promise<string | void>
   declined?(x: { actor: Caller; ask: AskOf<z.infer<I>> }): Promise<void>
   auto?: {

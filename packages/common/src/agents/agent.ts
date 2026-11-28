@@ -2,6 +2,8 @@ import * as z from 'zod/mini'
 import { Timestamp, atLeastOneField } from '../api.ts'
 import { ModelKey } from '../models/provider.ts'
 
+export const HIDDEN_CHARACTERS = /[\p{Cc}\p{Cf}]/gu
+
 export const AgentStatus = z.enum(['running', 'stopped', 'missing'])
 export type AgentStatus = z.infer<typeof AgentStatus>
 

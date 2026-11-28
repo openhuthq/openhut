@@ -1,6 +1,6 @@
-import { starterInstructions } from '@openhut/common/asks/ask.ts'
+import { isStarter, starterInstructions } from '@openhut/common/asks/ask.ts'
 import type { Selectable } from 'kysely'
-import { AgentRecord, ControlRecord, canUse, inSidebar, type Access, type Agent, type CreateAgent, type AgentHealth, type AgentStatus, type Grant, type UpdateAgent } from '@openhut/common/agents/agent.ts'
+import { AgentRecord, ControlRecord, HIDDEN_CHARACTERS, canUse, inSidebar, type Access, type Agent, type CreateAgent, type AgentHealth, type AgentStatus, type Grant, type UpdateAgent } from '@openhut/common/agents/agent.ts'
 import type { Deleted } from '@openhut/common/api.ts'
 import { splitModelKey } from '@openhut/common/models/provider.ts'
 import { db, findRow } from '../platform/db.ts'
@@ -26,6 +26,7 @@ import { runSet } from './run-set.ts'
 import { apply } from './apply.ts'
 import { activity } from '../gateway/activity.ts'
 import { wakes } from '../../core/wakes.ts'
+import { turns } from '../threads/turns.ts'
 
 const RECONCILE_MS = 30_000
 const HEALTH_MS = 5_000
@@ -265,7 +266,7 @@ async function updated({ actor, id, patch }: { actor: Caller; id: string; patch:
   const resealed = personal !== facts.personal
   const name = fields.name === undefined ? undefined : cleanName(fields.name)
   if (Object.keys(fields).length || resealed) {
-    const change = (value: AgentRecord): AgentRecord => ({ ...value, ...fields, ...name && { name } })
+    const change = (value: AgentRecord): AgentRecord => ({ ...value, ...name && fields.instructions === undefined && isStarter(value) && { instructions: starterInstructions(name) }, ...fields, ...name && { name } })
     await recordsService.put({ collection: 'agent', id, workspace: facts.workspace, parent: facts.owner, personal, value: change(facts.value), reapply: (latest) => ({ value: change(AgentRecord.parse(latest.value)) }) })
   }
   if (controls) {
@@ -280,7 +281,12 @@ async function updated({ actor, id, patch }: { actor: Caller; id: string; patch:
 async function put({ row, on }: { row: AgentRow; on?: string }): Promise<Change> {
   const change = await applied(row, agent.setup({ ctx: await ctxOf(row), on, browser: row.web_browser, running: row.wanted === 'running', restart: false }))
   if (change === 'pending') restartWhenQuiet(row.id)
+  endTurns({ id: row.id, change })
   return change
+}
+
+function endTurns({ id, change }: { id: string; change: Change }): void {
+  if (change === 'restarted' || change === 'stopped') turns.stopAgent(id)
 }
 
 function restartWhenQuiet(id: string): void {
@@ -289,7 +295,7 @@ function restartWhenQuiet(id: string): void {
   void activity.quiet({ agentId: id, ms: config.quietMs })
     .then(async () => {
       const row = await rowOf(id)
-      await applied(row, agent.setup({ ctx: await ctxOf(row), browser: row.web_browser, running: row.wanted === 'running' }))
+      endTurns({ id, change: await applied(row, agent.setup({ ctx: await ctxOf(row), browser: row.web_browser, running: row.wanted === 'running' })) })
     })
     .catch((err: unknown) => log.warn({ event: 'agent.restart_failed', agent: id, error: messageOf(err) }))
     .finally(() => {
@@ -543,8 +549,8 @@ function grantOf({ agentId, connectionId, at }: { agentId: string; connectionId:
 }
 
 export function cleanName(name: string): string {
-  const clean = name.trim().replace(/[^\w .-]/g, '').slice(0, 40)
-  if (!clean) throw new HttpError(400, 'Give the agent a name with letters or digits.', { param: 'name' })
+  const clean = [...name.replace(HIDDEN_CHARACTERS, '').trim()].slice(0, 40).join('').trim()
+  if (!/[\p{L}\p{N}]/u.test(clean)) throw new HttpError(400, 'Give the agent a name with letters or digits.', { param: 'name' })
   return clean
 }
 

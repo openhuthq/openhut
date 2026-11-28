@@ -26,7 +26,7 @@ export const inbox = definePlugin({
         name: z.string().min(1).max(80).describe('Starts with a verb, plain words: "Chase Acme on invoice #4471".'),
         plan: z.string().min(1).max(2000).describe('Written to yourself: what to check, when to speak up, when to stop.'),
         at: z.string().max(40).optional().describe('ISO time with an offset, for a one-time routine, like 2026-11-28T09:00:00+01:00.'),
-        cron: z.string().max(100).optional().describe('Minute hour day month weekday, in the owner\'s time zone, for a repeating one, like 0 10 * * 1-5. At most every 15 minutes.'),
+        cron: z.string().max(100).optional().describe('Minute hour day month weekday, in the team\'s time zone (the result names it; tell the person times in it), for a repeating one, like 0 10 * * 1-5. At most every 15 minutes.'),
         until: z.string().max(40).optional().describe('ISO time; a repeating routine stops then. At most 90 days ahead, the default.'),
         replaces: z.string().max(40).optional().describe('The id of your routine this one replaces, like rt_ab12cd34. It changes in place.'),
       },
