@@ -87,7 +87,7 @@ const ToolAsk: AskExtra = ({ agent, ask }) => {
   const lines = toolDetails(ask)
   const choices = toolChoices(ask)
   return <RequestCard agent={agent} change={ask} error={answer.error?.message} icon={<AppIcon brand={brand} size={28} />} title={ask.title}
-    actions={choices.map((choice, index) => <Button key={choice} type="button" variant={variantOf({ choice, index })} size="sm" autoFocus={index === 0} disabled={answer.isPending} onClick={() => answer.mutate({ id: ask.id, ...toolAnswer(choice) })}>{LABEL[choice]}</Button>)}>
+    actions={choices.map((choice, index) => <Button key={choice} type="button" variant={variantOf({ choice, index })} size="sm" disabled={answer.isPending} onClick={() => answer.mutate({ id: ask.id, ...toolAnswer(choice) })}>{LABEL[choice]}</Button>)}>
     {undoable(ask) && <span className="inline-flex items-center gap-1.5 text-[13px] text-ink"><I icon={AlertCircleIcon} size={14} className="text-hue-red" />This can't be undone.</span>}
     <Details>
       <pre className="m-0 overflow-hidden rounded-lg bg-canvas px-2.5 py-2 font-mono text-[11.5px]/[1.55] [overflow-wrap:anywhere] whitespace-pre-wrap text-body">{lines.slice(0, 5).join('\n')}{lines.length > 5 && <span className="block text-mute-2">+{lines.length - 5} more lines</span>}</pre>
