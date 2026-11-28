@@ -77,7 +77,7 @@ export function AgentReply({ agent, threadId: liveThread, step, message, said, l
   const ids = changesOf(message)
   const stored = workOf(message)
   const work = stored && withoutCards(stored)
-  const error = errorUnder({ work, answered: blocks.length > 0 })
+  const error = errorUnder({ work, answered: blocks.length > 0 }) ?? (message.parts.some((part) => part.type !== 'step-start') ? undefined : 'Stopped.')
   const { spec, hasSpec } = useJsonRenderMessage(message.parts)
   const paths = live ? [] : homePathsIn(blocks.flatMap((block) => block.type === 'text' ? [block.text] : []).join('\n'))
   const found = useHomeFiles({ agentId, threadId, paths })

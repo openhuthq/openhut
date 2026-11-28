@@ -54,6 +54,8 @@ export function AgentView({ agentId, threadId, artifactId, dialog, detail }: { a
   const moved = gone && !!agents.data && !agents.isFetching && !away
   useEffect(() => { if (moved) void refetch() }, [moved, agents.dataUpdatedAt, refetch])
   const phone = useMedia(PHONE)
+  const [opened = '', linkedDetail] = (useOpen() ?? '').split(':')
+  const linked = AGENT_DIALOGS.find((each) => each === opened)
   const [picked, setSide] = useState(savedSide)
   useEffect(() => saveSide(picked), [picked])
   const side: Side = artifactId ? 'artifact' : picked
@@ -71,7 +73,7 @@ export function AgentView({ agentId, threadId, artifactId, dialog, detail }: { a
   if (away) return <Redirect to={away} />
   if (!agent.data) return <section className="grid flex-1 place-items-center bg-card">{!gone && <ErrorNote message={agent.error?.message} />}</section>
   const threadsToggle = <Tooltip label="Threads"><Button type="button" variant="bare" data-threads-toggle aria-label="Threads" aria-pressed={!phone && side === 'threads'} onClick={() => phone ? setDetails(true) : flip('threads')} className={cn(TINY_ICON, 'aria-pressed:bg-picked')}><I icon={MessageMultiple01Icon} size={16} /></Button></Tooltip>
-  const dialogs = <Dialogs agent={agent.data} dialog={dialog} detail={detail} />
+  const dialogs = dialog || !linked ? <Dialogs agent={agent.data} dialog={dialog} detail={detail} /> : <Dialogs agent={agent.data} dialog={linked} detail={linkedDetail} onClose={() => open()} />
   const hasBrowser = !phone && agent.data.browser && agent.data.canEdit
   const browserToggle = hasBrowser && <Tooltip label="Browser"><Button type="button" variant="bare" aria-label="Browser" aria-pressed={side === 'browser'} onClick={() => flip('browser')} className={cn(TINY_ICON, 'relative aria-pressed:bg-picked')}><I icon={Globe02Icon} size={16} />{browsing && <i aria-label="Live" className="absolute top-[5px] right-[5px] size-1.5 rounded-full bg-pass shadow-[0_0_0_2px_var(--card)]" />}</Button></Tooltip>
   const actions = <AgentActions agent={agent.data} threads={<>{browserToggle}{threadsToggle}</>} />
