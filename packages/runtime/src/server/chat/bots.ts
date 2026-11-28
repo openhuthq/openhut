@@ -18,6 +18,7 @@ const CATCH_UP_MS = 24 * 60 * 60_000
 const quiet = new ConsoleLogger('warn')
 const CONNECTING = 'Connecting to Discord…'
 const MENTION = /<@!?(\d+)>/g
+const THREAD_EXISTS = /code\\*":\s*160004\b/
 const running = new Map<string, Bot>()
 const PEOPLE_MS = 10 * 60_000
 const people = new Map<string, { at: number; person: Promise<Person | undefined> }>()
@@ -27,10 +28,13 @@ let syncing: Promise<void> = Promise.resolve()
 
 class Discord extends DiscordAdapter {
   allowed = new Set<string>()
+  created = new Set<string>()
 
-  protected override createDiscordThread(channelId: string, messageId: string): ReturnType<DiscordAdapter['createDiscordThread']> {
+  protected override async createDiscordThread(channelId: string, messageId: string): ReturnType<DiscordAdapter['createDiscordThread']> {
     if (!this.allowed.has(channelId)) throw new HttpError(403, 'The agent doesn\'t answer in that channel.')
-    return super.createDiscordThread(channelId, messageId)
+    const thread = await super.createDiscordThread(channelId, messageId)
+    if ('owner_id' in thread) this.created.add(thread.id)
+    return thread
   }
 }
 
@@ -89,7 +93,7 @@ async function start({ agentId, token }: { agentId: string; token: string }): Pr
     if (forOthers) return
     const place: ThreadPlace = { platform: 'discord', chat_id: channelId, ...threadId && { thread_id: threadId }, chat_name: '', url: `https://discord.com/channels/${guildId}/${threadId ?? channelId}` }
     const title = text.slice(0, 100) || 'Discord'
-    if (threadId === message.id && !await threadService.known({ agentId, place })) void adapter.setThreadTitle(id, title).catch(() => undefined)
+    if (threadId && adapter.created.delete(threadId)) void adapter.setThreadTitle(id, title).catch(() => undefined)
     await chat.receive({ agentId, place, title, said: [{ ref: message.id, at: message.metadata.dateSent, author: message.author.fullName || message.author.userName, text }] })
   }
   sdk.onNewMention((thread, message) => hear(thread.id, message))
@@ -106,15 +110,14 @@ async function start({ agentId, token }: { agentId: string; token: string }): Pr
 }
 
 export async function heard({ text, me, mentioned, lookUp }: { text: string; me: string; mentioned: boolean; lookUp: (userId: string) => Promise<Person | undefined> }): Promise<{ text: string; forOthers: boolean }> {
-  const ids = [...new Set([...text.matchAll(MENTION)].map((match) => match[1]))].filter((id) => id !== me)
+  const ids = [...new Set([...text.matchAll(MENTION)].map((match) => match[1]))]
   const found = new Map(await Promise.all(ids.map(async (id) => [id, await lookUp(id)] as const)))
   const named = text.replace(MENTION, (raw, id: string) => {
-    if (id === me) return ''
     const person = found.get(id)
     return person ? `@${person.name}` : raw
-  }).replace(/ {2,}/g, ' ').trim()
-  const toMe = mentioned || new RegExp(`<@!?${me}>`).test(text)
-  return { text: named, forOthers: !toMe && [...found.values()].some((person) => person?.bot) }
+  })
+  const toMe = mentioned || found.has(me)
+  return { text: named, forOthers: !toMe && [...found.entries()].some(([id, person]) => id !== me && person?.bot) }
 }
 
 function personOf({ key, find }: { key: string; find: () => Promise<Person | undefined> }): Promise<Person | undefined> {
@@ -154,6 +157,7 @@ function watch({ agentId, bot }: { agentId: string; bot: Bot }): Logger {
     warn: (message, ...args) => quiet.warn(message, ...args),
     error: (message, ...args) => {
       const error = JSON.stringify(args)
+      if (THREAD_EXISTS.test(error)) return
       if (message === 'Discord Gateway listener error') failed.set(agentId, reasonOf(error))
       log.warn({ event: 'chat.bot_error', agent: agentId, message, error: error.slice(0, 500) })
     },

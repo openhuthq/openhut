@@ -46,6 +46,7 @@ const Authored = z.object({ metadata: z.object({ author: z.string() }) })
 const Woken = z.object({ metadata: z.object({ wake: z.literal(true) }) })
 const Answered = z.object({ metadata: z.object({ answered: z.string() }) })
 const LABEL = /^(?=.*wrote:)/gimu
+const IN_THREAD = '(You were asked in this thread. Your answer is posted here, so don\'t also post it in the channel the thread is in.)'
 const APP_ORIGIN: ThreadOrigin = { platform: 'app', label: 'OpenHut' }
 const NEW_THREAD = 'New thread'
 const STOPPED = 'Stopped.'
@@ -177,7 +178,7 @@ export const threadService = {
 
   answer: async ({ threadId }: { threadId: string }): Promise<string> => reply({ chat: await chatOf(threadId) }),
 
-  inboundId: ({ at, ref }: { at: Date; ref: string }): string => idAt({ ms: at.getTime(), tail: ref }),
+  inboundId: ({ threadId, at, ref }: { threadId: string; at: Date; ref: string }): string => idAt({ ms: at.getTime(), tail: `${ref}${threadId}` }),
 
   async archive({ actor, id, archived }: { actor: Caller; id: string; archived: boolean }): Promise<Thread> {
     const chat = await chatOf(id)
@@ -326,7 +327,7 @@ function startTurn({ chat, prompt, web = false }: { chat: Chat; prompt?: string;
     const started = Date.now()
     const work = turnWork({ agent, started })
     const live = liveThreads.turn({ thread: chat.id, agentId: agent.id, turnId: id, answering: authorsOf(waiting) })
-    const asked = prompt ? undefined : together({ asked: waiting.map((each) => each.message), shared: (!!chat.row && chat.row.channel !== 'web') || agent.shared || peopleOf(agent.people).length > 0 })
+    const asked = prompt ? undefined : together({ asked: waiting.map((each) => each.message), shared: (!!chat.row && chat.row.channel !== 'web') || agent.shared || peopleOf(agent.people).length > 0, inThread: !!chat.row?.place && !!(JSON.parse(chat.row.place) as ThreadPlace).thread_id })
     let spoke = false
     const writer = { write: (chunk: UIMessageChunk) => {
       if (chunk.type === 'text-delta' || chunk.type === SPEC_DATA_PART_TYPE) spoke = true
@@ -520,15 +521,15 @@ function authored({ message, author }: { message: ChatMessage; author: string })
   return { ...rest, metadata: { author } }
 }
 
-function together({ asked, shared }: { asked: ChatMessage[]; shared: boolean }): ChatMessage {
+function together({ asked, shared, inThread = false }: { asked: ChatMessage[]; shared: boolean; inThread?: boolean }): ChatMessage {
   const last = asked[asked.length - 1]
   if (asked.length < 2 && !shared) return last
-  return { ...last, parts: asked.flatMap((message, index) => {
+  return { ...last, parts: [...inThread ? [{ type: 'text', text: `${IN_THREAD}\n\n` }] : [], ...asked.flatMap((message, index) => {
     const author = z.safeParse(Authored, message).data?.metadata.author
     const label = shared && author ? `${author} wrote:\n` : ''
     const parts = shared ? message.parts.map((part) => part.type === 'text' && typeof part.text === 'string' ? { ...part, text: part.text.replace(LABEL, '> ') } : part) : message.parts
     return [{ type: 'text', text: `${index ? '\n\n' : ''}${label}` }, ...parts]
-  }) }
+  })] }
 }
 
 function answerStream({ live, ...input }: { agent: AgentRow; session: string; message: ChatMessage; signal: AbortSignal; work: TurnWork; retry?: boolean; live: LiveTurnHandle }): ReadableStream<UIMessageChunk> {

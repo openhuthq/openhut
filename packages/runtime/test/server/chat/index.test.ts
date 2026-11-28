@@ -56,7 +56,7 @@ test('a Discord message is saved before the turn, the reply is saved before it i
   const id = await chat.receive({ agentId: 'ag_hubagent', place, title: 'is prod up?', said: [said('200', 'is prod up?')] })
   assert.equal(asked.at(-1)?.session, id, 'the Hermes session is the thread id')
   assert.deepEqual(asked.at(-1)?.saved, ['user'], 'the message was saved before Hermes was called')
-  assert.match(String(asked.at(-1)?.content), /^Ana wrote:\nis prod up\?$/)
+  assert.match(String(asked.at(-1)?.content), /^\(You were asked in this thread\. Your answer is posted here, so don.t also post it in the channel the thread is in\.\)\n\nAna wrote:\nis prod up\?$/, 'a turn from a Discord thread is told to answer there')
   assert.deepEqual(sent.mock.calls.map((call) => call.arguments[0]), [{ agentId: 'ag_hubagent', place, text: 'ECHO: is prod up?' }])
   assert.deepEqual((await metadataOf(id)).map(([role, metadata]) => [role, metadata.delivery ?? null, metadata.ref]), [['user', null, '200'], ['assistant', 'sent', '901']])
   assert.equal(await chat.receive({ agentId: 'ag_hubagent', place, title: 'x', said: [said('201', 'thanks')] }), id, 'the same Discord thread is the same thread')
@@ -86,7 +86,7 @@ test('a replayed message is saved once, and a rerun turn with nothing unanswered
 test('two messages that arrive before the turn runs get one answer, and a message sent during a turn is still unanswered after it', async () => {
   const sent = mock.method(channelService, 'send', async () => ({ url: '', messageId: '903' }))
   const id = await threadService.placeThread({ agentId: 'ag_hubagent', place: { ...general, thread_id: '500' } })
-  const user = (ref: string, text: string, at: Date) => ({ id: threadService.inboundId({ at, ref }), role: 'user' as const, parts: [{ type: 'text', text }], metadata: { author: 'Ana' } })
+  const user = (ref: string, text: string, at: Date) => ({ id: threadService.inboundId({ threadId: id, at, ref }), role: 'user' as const, parts: [{ type: 'text', text }], metadata: { author: 'Ana' } })
   await threadService.add({ threadId: id, messages: [user('501', 'first', new Date(Date.now() - 2000)), user('502', 'second', new Date(Date.now() - 1000))] })
   const calls = asked.length
   await threadService.answer({ threadId: id })
@@ -95,6 +95,17 @@ test('two messages that arrive before the turn runs get one answer, and a messag
   await threadService.add({ threadId: id, messages: [user('503', 'late', new Date(Date.now() - 500))] })
   await threadService.answer({ threadId: id })
   assert.equal(asked.length, calls + 2, 'a message older than the last reply but not answered by it still gets a turn')
+  sent.mock.restore()
+})
+
+test('two bots mentioned in one Discord message each keep it in their own thread and each answer in the shared Discord thread', async () => {
+  await db.insertInto('agent').values({ id: 'ag_hubother', name: 'Other', owner_id: 'usr_hubownr', instructions: '#', model: 'sonnet', net: 42, channel_key: seal('k'.repeat(48)), wanted: 'running', workspace: 'ws_hub' }).execute()
+  const sent = mock.method(channelService, 'send', async () => ({ url: '', messageId: '905' }))
+  const place = { ...general, thread_id: '700' }
+  const at = new Date()
+  const ids = await Promise.all(['ag_hubagent', 'ag_hubother'].map((agentId) => chat.receive({ agentId, place, title: 'both', said: [said('700', 'both of you', at)] })))
+  for (const id of ids) assert.deepEqual((await metadataOf(id)).map(([role]) => role), ['user', 'assistant'])
+  assert.deepEqual(sent.mock.calls.map(({ arguments: [sent] }) => [sent?.agentId, sent?.place.thread_id]).sort(), [['ag_hubagent', '700'], ['ag_hubother', '700']])
   sent.mock.restore()
 })
 
