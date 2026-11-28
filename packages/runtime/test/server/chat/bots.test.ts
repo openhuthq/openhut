@@ -58,11 +58,11 @@ test('stopping the agent or removing Discord closes its bot; starting it again r
 })
 
 const ME = '1100000000000000001'
-const PEOPLE: Record<string, { name: string; bot: boolean }> = { '21': { name: 'Ramadan (CI)', bot: true }, '22': { name: 'Mo', bot: false } }
+const PEOPLE: Record<string, { name: string; bot: boolean }> = { [ME]: { name: 'Feras (DB)', bot: true }, '21': { name: 'Ramadan (CI)', bot: true }, '22': { name: 'Mo', bot: false } }
 const lookUp = async (id: string) => PEOPLE[id]
 
-test('mentions reach the agent and the thread title as names, and its own mention is dropped', async () => {
-  assert.deepEqual(await heard({ text: `<@${ME}> <@!21> quick check with <@22>, and <@99>`, me: ME, mentioned: true, lookUp }), { text: '@Ramadan (CI) quick check with @Mo, and <@99>', forOthers: false })
+test('mentions reach the agent and the thread title as names, its own included so it knows it was asked', async () => {
+  assert.deepEqual(await heard({ text: `<@${ME}> <@!21> quick check with <@22>, and <@99>`, me: ME, mentioned: true, lookUp }), { text: '@Feras (DB) @Ramadan (CI) quick check with @Mo, and <@99>', forOthers: false })
 })
 
 test('in a thread, a message that mentions other bots and not this one is for them; one naming only people is for everyone', async () => {

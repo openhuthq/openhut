@@ -37,7 +37,7 @@ export const chat = {
 
   async receive({ agentId, place, title, said }: Inbound): Promise<string> {
     const threadId = await threadService.placeThread({ agentId, place, title })
-    const messages: ChatMessage[] = said.filter((each) => each.text.trim()).map((each) => ({ id: threadService.inboundId(each), role: 'user', parts: [{ type: 'text', text: each.text }], metadata: { author: each.author, ref: each.ref } }))
+    const messages: ChatMessage[] = said.filter((each) => each.text.trim()).map((each) => ({ id: threadService.inboundId({ threadId, ...each }), role: 'user', parts: [{ type: 'text', text: each.text }], metadata: { author: each.author, ref: each.ref } }))
     await threadService.add({ threadId, messages })
     await turn.send(threadId, { threadId })
     return threadId
