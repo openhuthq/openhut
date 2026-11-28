@@ -24,3 +24,8 @@ export function useMoreBelow<T extends HTMLElement>() {
   }, [box])
   return { ref, more }
 }
+
+export function stillPinned({ pinned, scrollHeight, scrollTop, clientHeight, lastTop }: { pinned: boolean; scrollHeight: number; scrollTop: number; clientHeight: number; lastTop: number }): boolean {
+  if (scrollHeight - scrollTop - clientHeight < 80) return true
+  return pinned && scrollTop >= lastTop
+}

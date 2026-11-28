@@ -229,7 +229,10 @@ function ChannelsPane({ agent }: { agent: Agent }) {
       {ORDER.map((kind) => {
         const channel = channels.data?.find((each) => each.kind === kind)
         return <div key={kind} className={LINE}>
-          <Glyph name={kind} size={18} /><span className="min-w-0 flex-1 truncate">{KINDS[kind]}</span>
+          <Glyph name={kind} size={18} />
+          {channel?.status === 'connected'
+            ? <Button type="button" variant="bare" aria-label={`${KINDS[kind]} details`} className="flex min-w-0 flex-1 items-center gap-1.5 text-left" onClick={() => open(kind)}><span className="shrink-0">{KINDS[kind]}</span>{channel.account && <span className="truncate text-mute">· {channel.account}{kind === 'discord' ? ` · ${countOf(channel.allowed.length, 'channel', 'channels')}` : ''}</span>}</Button>
+            : <span className="min-w-0 flex-1 truncate">{KINDS[kind]}</span>}
           {channel?.offline && <span title={channel.offline}><Status tone="bad">Offline</Status></span>}
           {channel?.status === 'connected' && <Switch checked aria-label={`Disconnect ${KINDS[kind]}`} disabled={!agent.canEdit} onCheckedChange={() => setLeaving(kind)} />}
           {channel?.status !== 'connected' && kind === 'whatsapp' && !features.whatsapp && <span className="text-[12.5px] text-mute" title="This computer can’t run the WhatsApp bridge.">Not on this computer</span>}

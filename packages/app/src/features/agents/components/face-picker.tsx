@@ -50,9 +50,11 @@ export function FacePicker({ initial, compact = false }: { initial: string | nul
     {mine && <Button type="button" variant="bare" role="radio" aria-checked={pick === null} aria-label={photoOf(mine) ? 'Your picture' : 'Current face'} title={photoOf(mine) ? 'Your picture' : 'Current face'} className={tileClass(pick === null)} onClick={() => show({ index: null })}><Face agent={shown(mine)} size={30} /></Button>}
     {LOOKS.map(([label], index) => <Button key={label} type="button" variant="bare" role="radio" aria-checked={index === pick} aria-label={label} title={label} onClick={() => show({ index })}
       className={tileClass(index === pick)}><Face agent={shown(preset(index))} size={30} /></Button>)}
-    <Button type="button" variant="bare" aria-label="Upload a picture" title="Upload a picture" className="grid size-10 place-items-center rounded-lg border-[1.5px] border-dashed border-mute-2 text-body hover:bg-picked" onClick={() => file.current?.click()}><I icon={Upload04Icon} size={17} /></Button>
-    <Input ref={file} type="file" accept="image/*" hidden onChange={(event) => { upload(event.currentTarget.files?.[0]); event.currentTarget.value = '' }} />
   </div>
+  const picture = <>
+    <Button type="button" variant="secondary" size="sm" className="gap-1.5 rounded-full px-3" onClick={() => file.current?.click()}><I icon={Upload04Icon} size={14} />Upload picture</Button>
+    <Input ref={file} type="file" accept="image/*" hidden onChange={(event) => { upload(event.currentTarget.files?.[0]); event.currentTarget.value = '' }} />
+  </>
   const photo = pick === null && photoOf(mine)
   const removePhoto = () => show({ index: kept ? null : 0, own: kept })
   const stage = (size: number) => <span key={spin} className={cn('block', spin > 0 && 'animate-hop')}><Face agent={shown(face)} size={size} label="Agent face" /></span>
@@ -62,7 +64,7 @@ export function FacePicker({ initial, compact = false }: { initial: string | nul
       <PopoverTrigger render={<Button type="button" variant="bare" aria-label="Change face" title="Change face" className="grid size-20 place-items-center rounded-xl shadow-[inset_0_0_0_1px_var(--hair)]" style={{ background: stageOf(face) }} />}>{stage(64)}</PopoverTrigger>
       <PopoverContent align="center" className="w-auto items-center gap-3 p-3">
         {tiles}
-        {photo && <Button type="button" variant="secondary" size="sm" className="rounded-full px-3" onClick={removePhoto}>Remove picture</Button>}
+        <span className="flex gap-2">{picture}{photo && <Button type="button" variant="secondary" size="sm" className="rounded-full px-3" onClick={removePhoto}>Remove picture</Button>}</span>
       </PopoverContent>
     </Popover>
     <Button type="button" variant="secondary" size="icon-sm" aria-label="Shuffle" title="Shuffle" className="absolute -right-2 -bottom-2 rounded-full bg-card shadow-menu" onClick={shuffle}><I icon={DiceFaces03Icon} size={14} /></Button>
@@ -74,8 +76,11 @@ export function FacePicker({ initial, compact = false }: { initial: string | nul
       {stage(84)}
     </Button>
     {tiles}
-    {photo
-      ? <Button type="button" variant="secondary" size="sm" className="rounded-full px-3" onClick={removePhoto}>Remove picture</Button>
-      : <Button type="button" variant="secondary" size="sm" className="rounded-full px-3" onClick={shuffle}>Shuffle</Button>}
+    <span className="flex justify-center gap-2">
+      {photo
+        ? <Button type="button" variant="secondary" size="sm" className="rounded-full px-3" onClick={removePhoto}>Remove picture</Button>
+        : <Button type="button" variant="secondary" size="sm" className="rounded-full px-3" onClick={shuffle}>Shuffle</Button>}
+      {picture}
+    </span>
   </>
 }

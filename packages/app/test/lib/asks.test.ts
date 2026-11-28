@@ -47,5 +47,6 @@ test('call_tool: Not now declines', () => {
 
 test('call_tool details: the raw tool id, then its arguments', () => {
   assert.deepEqual(toolDetails({ input: { name: 'github_git_push', tool: 'git_push', arguments: {} } }), ['github_git_push'])
-  assert.deepEqual(toolDetails({ input: { name: 'mcp_db', arguments: { id: 'x' } } }), ['mcp_db', '{', '  "id": "x"', '}'])
+  assert.deepEqual(toolDetails({ input: { name: 'mcp_db', arguments: { id: 'x' } } }), ['mcp_db', 'id: x'])
+  assert.deepEqual(toolDetails({ input: { name: 'slack_post', arguments: { text: 'Hi\nthere', to: ['#ops'] } } }), ['slack_post', 'text: Hi', 'there', 'to: [', '  "#ops"', ']'])
 })
