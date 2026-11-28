@@ -88,6 +88,7 @@ async function go({ turn, run, save, deadlineMs, graceMs }: { turn: Turn; run: (
   const abandoned = new Promise<never>((_, reject) => turn.abort.signal.addEventListener('abort', () => {
     grace = setTimeout(() => reject(new Error(ABANDONED)), graceMs).unref()
   }, { once: true }))
+  abandoned.catch(() => undefined)
   if (turn.chunks.length) send({ turn, chunk: statusChunk('') })
   try {
     await Promise.race([run({ signal: turn.abort.signal, write: (chunk) => { if (!turn.ended) send({ turn, chunk }) } }), abandoned])
@@ -99,6 +100,7 @@ async function go({ turn, run, save, deadlineMs, graceMs }: { turn: Turn; run: (
     clearInterval(timer)
     clearTimeout(deadline)
     clearTimeout(grace)
+    turn.running = false
     await end({ turn, save, failed })
   }
 }
