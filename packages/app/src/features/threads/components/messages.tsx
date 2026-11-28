@@ -1,4 +1,4 @@
-import { createContext, lazy, Suspense, useContext, type ReactElement, type ReactNode, type ComponentType } from 'react'
+import { createContext, lazy, Suspense, useContext, useState, type ReactElement, type ReactNode, type ComponentType } from 'react'
 import * as z from 'zod/mini'
 import type { UIMessage } from 'ai'
 import Markdown, { type ExtraProps } from 'react-markdown'
@@ -36,13 +36,13 @@ import { CallText, webhookOf, WebhookMessage } from '@/features/threads/componen
 import { callOf } from '@/lib/webhook-call'
 import { CallCardMessage } from '@/components/call-card'
 import { FileChip } from '@/features/threads/components/file-drop'
+import { ImageViewer, ZoomImage } from '@/features/threads/components/image-viewer'
 
 export type AgentMessage = UIMessage<unknown, { tool: ToolProgress; calls: ChatCall[]; work: Work; spec: SpecDataPart; asks: string[]; notified: Notified; 'webhook-setup': WebhookSetup; artifact: unknown; step: Record<string, never>; status: TurnStatus }>
 type AgentPart = AgentMessage['parts'][number]
 
 export const ChatFiles = createContext<{ agentId: string; threadId: string; save: (path: string) => void }>({ agentId: '', threadId: '', save: () => undefined })
 
-const IMAGE = /\.(png|jpe?g|gif|webp)$/i
 
 const CodeBlock = lazy(() => import('@/features/threads/components/code').then((module) => ({ default: module.CodeBlock })))
 
@@ -134,13 +134,16 @@ function CopyMenu({ text, children }: { text: string; children: ReactElement }) 
 function SentFile({ name, path, mediaType }: { name: string; path: string; mediaType: string }) {
   const { agentId, threadId, save } = useContext(ChatFiles)
   const thumb = useThumb({ agentId, threadId, path, mediaType })
-  return <FileChip name={name} image={mediaType.startsWith('image/')} thumb={thumb} onOpen={() => save(path)} />
+  const [open, setOpen] = useState(false)
+  return <>
+    <FileChip name={name} image={mediaType.startsWith('image/')} thumb={thumb} onOpen={() => thumb ? setOpen(true) : save(path)} />
+    {open && thumb && <ImageViewer src={thumb} name={name} onClose={() => setOpen(false)} />}
+  </>
 }
 
 function FileCode({ children, className }: { children?: ReactNode; className?: string }) {
-  const { save } = useContext(ChatFiles)
   const path = typeof children === 'string' ? homeFile(children) : undefined
-  if (path) return <FileChip name={nameOf(path)} image={IMAGE.test(path)} onOpen={() => save(path)} />
+  if (path) return <SentFile name={nameOf(path)} path={path} mediaType={mediaTypeOf(path)} />
   return <code className={className}>{children}</code>
 }
 
@@ -156,16 +159,19 @@ const MEDIA_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg
 
 function ChatImage({ src, alt }: { src?: string | Blob; alt?: string }) {
   const path = typeof src === 'string' ? homeFile(src) : undefined
-  if (!path) return typeof src === 'string' ? <img src={src} alt={alt ?? ''} /> : null
+  if (!path) return typeof src === 'string' ? <ZoomImage src={src} name={alt ?? nameOf(src)} className="max-w-[520px]" /> : null
   return <HomeImage path={path} />
 }
 
 function HomeImage({ path }: { path: string }) {
   const { agentId, threadId, save } = useContext(ChatFiles)
-  const mediaType = MEDIA_TYPES[path.slice(path.lastIndexOf('.') + 1).toLowerCase()] ?? ''
-  const thumb = useThumb({ agentId, threadId, path, mediaType })
+  const thumb = useThumb({ agentId, threadId, path, mediaType: mediaTypeOf(path) })
   if (!thumb) return <FileChip name={nameOf(path)} image onOpen={() => save(path)} />
-  return <Button type="button" variant="bare" className="block h-auto max-w-[520px] cursor-zoom-in overflow-hidden rounded-lg border border-hair p-0" onClick={() => save(path)} aria-label={`Save ${nameOf(path)}`}><img src={thumb} alt={nameOf(path)} className="block h-auto w-full" /></Button>
+  return <ZoomImage src={thumb} name={nameOf(path)} className="max-w-[520px] border border-hair" />
+}
+
+function mediaTypeOf(path: string) {
+  return MEDIA_TYPES[path.slice(path.lastIndexOf('.') + 1).toLowerCase()] ?? ''
 }
 
 function homeFile(text: string) {
@@ -205,7 +211,7 @@ function OutLink({ href, children }: { href?: string; children?: ReactNode }) {
 export function ChatLink({ href, children }: { href?: string; children?: ReactNode }) {
   const { save } = useContext(ChatFiles)
   const path = href === undefined ? undefined : homeFile(href)
-  if (path) return <FileChip name={nameOf(path)} image={IMAGE.test(path)} onOpen={() => save(path)} />
+  if (path) return <SentFile name={nameOf(path)} path={path} mediaType={mediaTypeOf(path)} />
   const bare = href !== undefined && children === href && /^https?:\/\//.test(href)
   return <a href={href} target="_blank" rel="noreferrer">{bare ? shortUrl(href) : children}{bare && <I icon={ArrowUpRight01Icon} size={12} className="ml-0.5 inline align-[-1px] text-mute" />}</a>
 }

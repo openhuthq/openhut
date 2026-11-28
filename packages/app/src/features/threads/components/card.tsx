@@ -7,6 +7,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { isBrand } from '@/components/brand-icons'
 import { Glyph } from '@/components/glyph'
 import { integration } from '@/config/catalog'
+import { ZoomImage } from '@/features/threads/components/image-viewer'
 
 export const CardReply = createContext<((text: string) => boolean) | undefined>(undefined)
 
@@ -53,7 +54,7 @@ export const MessageCard = createRenderer(cardCatalog, {
       </div>)}
     </figure>
   },
-  Image: ({ element: { props } }) => <img src={props.url} alt={props.alt} className="max-w-full rounded-md" />,
+  Image: ({ element: { props } }) => <ZoomImage src={props.url} name={props.alt ?? ''} className="rounded-md" />,
   Divider: () => <hr className="m-0 border-0 border-t border-hair" />,
   Actions: ({ children }) => <div className="flex flex-wrap gap-2">{children}</div>,
   Button: ({ element: { props } }) => {
