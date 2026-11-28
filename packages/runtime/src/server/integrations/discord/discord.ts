@@ -21,8 +21,12 @@ const RETRIES = 3
 const MAX_WAIT_MS = 30_000
 const Target = z.object({ guild_id: z.optional(z.string()), parent_id: z.optional(z.nullable(z.string())) })
 const Created = z.object({ id: z.string() })
-const Failure = z.object({ message: z.optional(z.string()), retry_after: z.optional(z.number()) })
+const Failure = z.object({ message: z.optional(z.string()), code: z.optional(z.number()), retry_after: z.optional(z.number()) })
+const GONE = /code\\*":\s*100(03|08)\b/
+const DELETED = 'That channel or thread was deleted in Discord.'
 export const DiscordSecrets = z.object({ botToken: z.string() })
+
+export const gone = (err: unknown): boolean => (err instanceof HttpError && err.status === 410) || GONE.test(messageOf(err))
 
 export const discord = {
   async verify({ botToken, channels }: { botToken: string; channels: string[] }): Promise<string> {
@@ -106,6 +110,7 @@ export const discord = {
     const target = threadId ?? channelId
     const found = await call({ path: `/channels/${target}`, botToken })
     const info = z.safeParse(Target, found.body).data
+    if (z.safeParse(Failure, found.body).data?.code === 10003) throw new HttpError(410, DELETED)
     if (!found.ok || !info) throw new HttpError(400, `The bot can't see that channel (HTTP ${found.status}). In Discord, open the channel's settings, then Permissions, and add the bot.`)
     if (threadId && info.parent_id !== channelId) throw new HttpError(400, 'That thread isn\'t in the channel. Post in the channel instead.')
     const [first = '', ...rest] = split(text)
@@ -135,6 +140,7 @@ async function write({ path, botToken, body }: { path: string; botToken: string;
       continue
     }
     if (res.status === 429) throw new HttpError(429, 'Discord is rate limiting the bot. Try again in a minute.')
+    if (failure?.code === 10003 || failure?.code === 10008) throw new HttpError(410, DELETED)
     if (res.status === 401) throw new HttpError(400, 'Discord didn\'t accept the bot token. Reset it on the Bot page and connect Discord again.')
     if (res.status === 403 || res.status === 404) throw new HttpError(400, `The bot can't post there (${failure?.message ?? `HTTP ${res.status}`}). In Discord, open the channel's settings, then Permissions, and let the bot send messages.`)
     throw new HttpError(502, `Discord refused the message (${failure?.message ?? `HTTP ${res.status}`}). Try again.`)

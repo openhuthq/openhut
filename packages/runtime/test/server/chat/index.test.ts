@@ -118,6 +118,16 @@ test('a reply the platform keeps refusing stays saved, marked failed with the re
   sent.mock.restore()
 })
 
+test('a reply into a channel or thread deleted in Discord is marked failed once, without an error', async () => {
+  const sent = mock.method(channelService, 'send', async () => { throw new HttpError(410, 'That channel or thread was deleted in Discord.') })
+  const place = { ...general, thread_id: '650' }
+  await chat.receive({ agentId: 'ag_hubagent', place, title: 'gone', said: [said('650', 'hello?')] })
+  const id = await threadService.placeThread({ agentId: 'ag_hubagent', place })
+  assert.deepEqual((await metadataOf(id)).map(([role, metadata]) => [role, metadata.delivery ?? null, metadata.error ?? null]), [['user', null, null], ['assistant', 'failed', 'That channel or thread was deleted in Discord.']])
+  assert.equal(sent.mock.callCount(), 1)
+  sent.mock.restore()
+})
+
 test('post_message to a Discord channel is saved in that channel\'s thread and delivered from there', async () => {
   const target = mock.method(channelService, 'postTarget', async () => ({ channel: 'ch_hubdisco', chat: '100', place: '#general', target: 'discord:100' }))
   const sent = mock.method(channelService, 'send', async () => ({ url: '', messageId: '904' }))

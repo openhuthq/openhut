@@ -1,6 +1,6 @@
 import { test, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
-import { discord } from '../../../../src/server/integrations/discord/discord.ts'
+import { discord, gone } from '../../../../src/server/integrations/discord/discord.ts'
 
 const TOKEN = 'fake-test-token'
 const SEEN = '1234567890123456789'
@@ -118,4 +118,22 @@ test('a server member reads as their server nickname, else their display name, e
   })
   const person = (userId: string) => discord.person({ botToken: TOKEN, guildId: '1', userId })
   assert.deepEqual(await Promise.all(['11', '12', '13', '14'].map(person)), [{ name: 'El Nazer (DB)', bot: true }, { name: 'Ana', bot: false }, { name: 'ben', bot: false }, undefined])
+})
+
+test('a channel, thread or message deleted in Discord reads as gone, on our own calls and the chat adapter\'s', async (t) => {
+  const posted: string[] = []
+  t.mock.method(globalThis, 'fetch', async (url: string | URL, init?: RequestInit) => {
+    const path = new URL(String(url)).pathname.replace('/api/v10', '')
+    if (init?.method === 'POST') posted.push(path)
+    if (path === `/channels/${HIDDEN}`) return Response.json({ message: 'Unknown Channel', code: 10003 }, { status: 404 })
+    if (path === `/channels/${SEEN}`) return Response.json({ id: SEEN, guild_id: '1' })
+    return Response.json({ message: 'Unknown Message', code: 10008 }, { status: 404 })
+  })
+  const deleted = await discord.post({ botToken: TOKEN, channelId: HIDDEN, text: 'hi' }).catch((err: unknown) => err)
+  assert.ok(gone(deleted))
+  assert.deepEqual(posted, [])
+  assert.ok(gone(await discord.post({ botToken: TOKEN, channelId: SEEN, text: 'hi' }).catch((err: unknown) => err)))
+  assert.ok(gone(new Error('Discord API error: 404 {"message": "Unknown Channel", "code": 10003}')))
+  assert.ok(gone(JSON.stringify([{ status: 404, error: '{"message": "Unknown Message", "code": 10008}' }])))
+  assert.ok(!gone(new Error('Discord API error: 403 {"message": "Missing Access", "code": 50001}')))
 })

@@ -2,7 +2,7 @@ import { Chat, ConsoleLogger, type Logger, type Message } from 'chat'
 import { DiscordAdapter } from '@chat-adapter/discord'
 import { createPostgresState } from '@chat-adapter/state-pg'
 import type pg from 'pg'
-import { discord, DiscordSecrets } from '../integrations/discord/discord.ts'
+import { discord, DiscordSecrets, gone } from '../integrations/discord/discord.ts'
 import { config } from '../platform/config.ts'
 import { db, pglite } from '../platform/db.ts'
 import { listen, log } from '../platform/events.ts'
@@ -138,8 +138,13 @@ function stop(agentId: string): void {
 async function catchUp({ agentId, adapter, hear }: { agentId: string; adapter: Discord; hear: (id: string, message: Message) => Promise<void> }): Promise<void> {
   for (const { place, ref } of await threadService.lastHeard({ agentId, channel: 'discord', since: Date.now() - CATCH_UP_MS })) {
     const id = sdkId(place)
-    for (const message of (await adapter.fetchMessages(id, { cursor: ref, direction: 'forward' })).messages) {
-      if (!message.author.isMe) await hear(id, message)
+    try {
+      for (const message of (await adapter.fetchMessages(id, { cursor: ref, direction: 'forward' })).messages) {
+        if (!message.author.isMe) await hear(id, message)
+      }
+    } catch (err) {
+      if (!gone(err)) throw err
+      log.info({ event: 'chat.discord_gone', agent: agentId, place: place.url })
     }
   }
 }
@@ -157,7 +162,7 @@ function watch({ agentId, bot }: { agentId: string; bot: Bot }): Logger {
     warn: (message, ...args) => quiet.warn(message, ...args),
     error: (message, ...args) => {
       const error = JSON.stringify(args)
-      if (THREAD_EXISTS.test(error)) return
+      if (THREAD_EXISTS.test(error) || gone(error)) return
       if (message === 'Discord Gateway listener error') failed.set(agentId, reasonOf(error))
       log.warn({ event: 'chat.bot_error', agent: agentId, message, error: error.slice(0, 500) })
     },
