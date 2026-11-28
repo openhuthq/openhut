@@ -7,7 +7,7 @@ chmod 0700 /data/agents /data/agent-conf
 export AGENT_IMAGE="${AGENT_IMAGE:-$(cat /opt/openhut-agent/image)}" RESOLVER="${RESOLVER:-1.1.1.1}"
 printf 'nameserver %s\n' "$RESOLVER" > /etc/agentd/resolv.conf
 mark() { echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') $*" >> "$LOG/boot.log"; }
-supervise() { log=$1; shift; while :; do "$@" >> "$log" 2>&1; sleep 2; done; }
+supervise() { log=$1; shift; while :; do "$@" >> "$log" 2>&1 || true; sleep 2; done; }
 pull() {
   docker image inspect "$AGENT_IMAGE" >/dev/null 2>&1 && return
   if [ "$(cat /opt/openhut-agent/image)" = "$AGENT_IMAGE" ]; then zstd -dc /opt/openhut-agent/agent.tar.zst | docker load -q; else docker pull "$AGENT_IMAGE"; fi

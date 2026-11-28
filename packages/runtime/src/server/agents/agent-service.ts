@@ -509,6 +509,7 @@ async function healthOf({ row, state }: { row: AgentRow; state: string | undefin
     probes.delete(row.id)
     return { health: null, detail: '' }
   }
+  if (forward.gatewayFull(row.runs_on ?? HERE)) return { health: 'not_answering', detail: "This agent's computer has too many requests open, so new ones fail. Restart the computer if this lasts." }
   if (config.fakeAgents) return { health: 'answering', detail: '' }
   const last = await probe({ row, fresh: false })
   if (!last.detail) return { health: 'answering', detail: '' }
