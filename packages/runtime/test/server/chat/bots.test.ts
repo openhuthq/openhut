@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { startPlugins } from '../../../src/core/plugins.ts'
-import { bots } from '../../../src/server/chat/bots.ts'
+import { bots, heard } from '../../../src/server/chat/bots.ts'
 import { channelService } from '../../../src/server/channels/channel-service.ts'
 import { config } from '../../../src/server/platform/config.ts'
 import { db, migrate } from '../../../src/server/platform/db.ts'
@@ -55,4 +55,20 @@ test('stopping the agent or removing Discord closes its bot; starting it again r
   await db.deleteFrom('channel').where('id', '=', 'ch_botdisco').execute()
   emit({ name: 'channel.deleted', target: { type: 'channel', id: 'ch_botdisco' } })
   await until('the bot gone', () => discord.connected() === 0)
+})
+
+const ME = '1100000000000000001'
+const PEOPLE: Record<string, { name: string; bot: boolean }> = { '21': { name: 'Ramadan (CI)', bot: true }, '22': { name: 'Mo', bot: false } }
+const lookUp = async (id: string) => PEOPLE[id]
+
+test('mentions reach the agent and the thread title as names, and its own mention is dropped', async () => {
+  assert.deepEqual(await heard({ text: `<@${ME}> <@!21> quick check with <@22>, and <@99>`, me: ME, mentioned: true, lookUp }), { text: '@Ramadan (CI) quick check with @Mo, and <@99>', forOthers: false })
+})
+
+test('in a thread, a message that mentions other bots and not this one is for them; one naming only people is for everyone', async () => {
+  assert.equal((await heard({ text: '<@21> can you rerun CI?', me: ME, mentioned: false, lookUp })).forOthers, true)
+  assert.equal((await heard({ text: `<@21> <@${ME}> both of you`, me: ME, mentioned: false, lookUp })).forOthers, false)
+  assert.equal((await heard({ text: '<@21> thoughts?', me: ME, mentioned: true, lookUp })).forOthers, false)
+  assert.equal((await heard({ text: '<@22> look at this', me: ME, mentioned: false, lookUp })).forOthers, false)
+  assert.equal((await heard({ text: 'anyone?', me: ME, mentioned: false, lookUp })).forOthers, false)
 })

@@ -8,6 +8,7 @@ const OPERATIONS = new Set<string>(['read', 'create', 'update', 'delete'])
 const CATCH_ALL = /(^|_)(invoke|call|execute|run)_(a_|any_)?tool$/
 const DISCOVERY = /(^|_)(list|find|search|describe|get|retrieve)_(\w+_)?(tools?|schemas?|actions?)$/
 const DESTROYS = new Set(['delete', 'remove', 'destroy', 'drop', 'purge', 'wipe'])
+const SAVES = new Set(['save', 'upsert'])
 const READS = new Set(['list', 'get', 'read', 'search', 'describe', 'fetch'])
 const WRITES = new Set(['create', 'add', 'update', 'edit', 'set', 'put', 'patch', 'post', 'write', 'save', 'delete', 'remove', 'destroy', 'drop', 'purge', 'run', 'execute', 'invoke', 'call', 'send', 'start', 'stop', 'restart', 'resize', 'move', 'merge', 'close', 'cancel', 'assign', 'deploy', 'publish', 'upload', 'import', 'push', 'rebuild', 'reset', 'enable', 'disable', 'attach', 'detach'])
 const ANY: Record<Exclude<ToolGroup, 'create'>, { description: string; annotations?: ToolSpec['annotations'] }> = {
@@ -24,6 +25,7 @@ export const permissions = {
     if (spec.annotations?.readOnlyHint) return 'read'
     if (DISCOVERY.test(snake(spec.name))) return 'read'
     if (isCatchAll(spec)) return 'other'
+    if (saves(spec)) return 'create'
     if (spec.annotations?.destructiveHint) return 'delete'
     return spec.annotations ? 'update' : 'other'
   },
@@ -32,13 +34,14 @@ export const permissions = {
     const group = permissions.groupOf(spec)
     if (labelOf({ spec, key: 'risk' }) === 'high') return 'deny'
     if (isCatchAll(spec)) return 'ask'
-    if (group === 'delete' || spec.annotations?.destructiveHint === true) return 'deny'
+    if (group === 'delete' || (spec.annotations?.destructiveHint === true && !saves(spec))) return 'deny'
     return group === 'read' ? 'allow' : 'ask'
   },
 
   isCatchAll,
 
-  undoable(spec: ToolSpec): boolean {
+  undoable(spec: ToolSpec, args: unknown = {}): boolean {
+    if (saves(spec)) return typeof args === 'object' && args !== null && Boolean((args as Record<string, unknown>).id)
     if (permissions.groupOf(spec) === 'delete' || spec.annotations?.destructiveHint === true) return true
     return !spec.annotations && !labelOf({ spec, key: 'operation' }) && snake(spec.name).split('_').some((word) => DESTROYS.has(word))
   },
@@ -83,6 +86,10 @@ export const permissions = {
 
 function isCatchAll(spec: ToolSpec): boolean {
   return !spec.annotations?.readOnlyHint && !labelOf({ spec, key: 'operation' }) && CATCH_ALL.test(snake(spec.name))
+}
+
+function saves(spec: ToolSpec): boolean {
+  return !labelOf({ spec, key: 'operation' }) && SAVES.has(snake(spec.name).split('_')[0])
 }
 
 function snake(name: string): string {

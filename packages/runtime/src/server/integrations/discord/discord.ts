@@ -8,6 +8,7 @@ const App = z.object({ flags: z.optional(z.number()), bot_public: z.optional(z.b
 const Guild = z.object({ id: z.string(), name: z.string() })
 const Roles = z.object({ roles: z.array(z.object({ id: z.string(), permissions: z.string() })) })
 const Member = z.object({ roles: z.array(z.string()) })
+const Person = z.object({ nick: z.optional(z.nullable(z.string())), user: z.object({ username: z.string(), global_name: z.optional(z.nullable(z.string())), bot: z.optional(z.boolean()) }) })
 const Overwrite = z.object({ id: z.string(), type: z.number(), allow: z.string(), deny: z.string() })
 const GuildChannel = z.object({ id: z.string(), name: z.string(), type: z.number(), permission_overwrites: z._default(z.array(Overwrite), []) })
 const ADMINISTRATOR = 1n << 3n
@@ -33,6 +34,32 @@ export const discord = {
     if (app.data.bot_public) throw new HttpError(400, `Turn Public Bot off on the Bot page, so nobody else can add @${user.data.username} to their server. Then paste the token again.`, { param: 'botToken' })
     await discord.enter({ botToken, ids: channels, bot: `@${user.data.username}` })
     return `@${user.data.username}`
+  },
+
+  async name(botToken: string): Promise<string | undefined> {
+    const user = z.safeParse(Me, (await call({ path: '/users/@me', botToken })).body)
+    return user.success ? `@${user.data.username}` : undefined
+  },
+
+  async person({ botToken, guildId, userId }: { botToken: string; guildId: string; userId: string }): Promise<{ name: string; bot: boolean } | undefined> {
+    const res = await call({ path: `/guilds/${guildId}/members/${userId}`, botToken }).catch(() => undefined)
+    const found = res?.ok ? z.safeParse(Person, res.body).data : undefined
+    return found && { name: found.nick || found.user.global_name || found.user.username, bot: found.user.bot === true }
+  },
+
+  async places({ botToken, ids }: { botToken: string; ids: string[] }): Promise<Record<string, string>> {
+    const guilds = new Map<string, Promise<string | undefined>>()
+    const guildName = (id: string) => {
+      if (!guilds.has(id)) guilds.set(id, call({ path: `/guilds/${id}`, botToken }).then((res) => z.safeParse(Guild, res.body).data?.name, () => undefined))
+      return guilds.get(id)
+    }
+    const named = await Promise.all(ids.map(async (id) => {
+      const channel = z.safeParse(z.object({ name: z.string(), guild_id: z.optional(z.string()) }), (await call({ path: `/channels/${id}`, botToken }).catch(() => undefined))?.body).data
+      if (!channel) return []
+      const guild = channel.guild_id ? await guildName(channel.guild_id) : undefined
+      return [[id, guild ? `${guild} › #${channel.name}` : `#${channel.name}`]]
+    }))
+    return Object.fromEntries(named.flat())
   },
 
   async enter({ botToken, ids, bot }: { botToken: string; ids: string[]; bot: string }): Promise<void> {

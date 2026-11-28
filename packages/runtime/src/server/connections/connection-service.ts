@@ -184,7 +184,7 @@ export const connectionService = {
   async call({ agent, name, args, connectionId, reason, origin }: { agent: { id: string; owner_id: string }; name: string; args: Record<string, unknown>; connectionId?: string; reason: string; origin?: unknown }): Promise<{ text: string; isError: boolean }> {
     const matches = (await connectionService.tools({ agent })).filter((tool) => tool.name === name && (!connectionId || tool.connection.id === connectionId))
     if (!matches.length) {
-      await record({ agentId: agent.id, connectionId: connectionId ?? null, tool: name, reason, outcome: 'denied', args, error: `This agent has no app with ${name}.` })
+      await record({ agentId: agent.id, connectionId: null, tool: name, reason, outcome: 'denied', args, error: `This agent has no app with ${name}.` })
       return { text: `Denied: no connection grants ${name} to this agent.`, isError: true }
     }
     if (matches.length > 1) {
@@ -205,7 +205,7 @@ export const connectionService = {
         return { text: `Not asked: the arguments for ${action.spec.name} don't match its schema, so it would fail. ${invalid}\nFix them (check its schema) and call again.`, isError: true }
       }
       const inner = action && { name: action.spec.name, label: action.label }
-      const destructive = permissions.undoable(action?.spec ?? spec)
+      const destructive = action ? permissions.undoable(action.spec, innerArgs({ spec, args })) : permissions.undoable(spec, args)
       const expires = await routineService.inRun(agent.id) ? new Date(Date.now() + ASK_EXPIRES_MS) : undefined
       const asked = await asks.create({ agentId: agent.id, kind: 'call_tool', input: { connectionId: connection.id, tool: spec.name, name, arguments: args, action: inner, destructive }, description: reason, origin, expires })
       await record({ agentId: agent.id, connectionId: connection.id, tool: name, reason, outcome: 'asked', app: connection.name, spec, action, args })

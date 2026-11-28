@@ -31,9 +31,9 @@ export const channelService = {
   async list({ agentId }: { agentId?: string }): Promise<Channel[]> {
     if (agentId) {
       const facts = await agentService.find({ id: agentId })
-      return channelsOf(await recordsService.list({ collection: 'channel', workspace: facts.workspace, parent: agentId }))
+      return named(await recordsService.list({ collection: 'channel', workspace: facts.workspace, parent: agentId }))
     }
-    return channelsOf(await recordsService.list({ collection: 'channel', workspace: HOME }))
+    return named(await recordsService.list({ collection: 'channel', workspace: HOME }))
   },
 
   async get({ actor, id }: { actor: Caller; id: string }): Promise<Channel> {
@@ -111,13 +111,14 @@ export const channelService = {
     if (current.kind === 'discord' && !patch.allowed?.length) throw new HttpError(400, 'Keep at least one Discord channel. Disconnect Discord to stop it answering.', { param: 'allowed' })
     const botToken = ChannelSecrets.safeParse(held.secret).data?.botToken
     const added = [...new Set(patch.allowed ?? [])].filter((address) => !current.allowed.includes(address))
-    if (current.kind === 'discord' && botToken && added.length) await discord.enter({ botToken, ids: added, bot: current.account ?? 'The bot' })
+    const account = current.kind === 'discord' && botToken ? await discord.name(botToken) ?? current.account : current.account
+    if (current.kind === 'discord' && botToken && added.length) await discord.enter({ botToken, ids: added, bot: account ?? 'The bot' })
     const live = current.kind === 'discord' && !!patch.allowed?.length ? { status: 'connected' as const } : {}
-    const change = (value: ChannelRecord): ChannelRecord => ({ ...value, ...live, ...patch.allowed && { allowed: [...new Set(patch.allowed)] }, ...!CHANNEL_KINDS.has(current.kind) && patch.open !== undefined && { open: patch.open } })
+    const change = (value: ChannelRecord): ChannelRecord => ({ ...value, ...live, account, ...patch.allowed && { allowed: [...new Set(patch.allowed)] }, ...!CHANNEL_KINDS.has(current.kind) && patch.open !== undefined && { open: patch.open } })
     const saved = await recordsService.put({ collection: 'channel', id, parent: facts.id, workspace: facts.workspace, personal: facts.personal, value: change(current), secret: held.secret, reapply: (latest) => ({ value: change(ChannelRecord.parse(latest.value)), secret: latest.secret }) })
     emit({ name: 'channel.updated', actor, target: { type: 'channel', id, kind: current.kind, agentId: facts.id } })
     if (current.kind === 'discord' && botToken && added.length) {
-      const failed = await discord.greet({ botToken, ids: added, bot: current.account ?? 'The bot' })
+      const failed = await discord.greet({ botToken, ids: added, bot: account ?? 'The bot' })
       if (failed.length) log.warn({ event: 'channel.greet_failed', agent: facts.id, failed })
     }
     return channelOf({ held: saved ?? held, qr: null })
@@ -219,7 +220,7 @@ export const channelService = {
       wanted.add(held.id)
       const before = await db.selectFrom('channel').selectAll().where('id', '=', held.id).executeTakeFirst()
       const secret = ChannelSecrets.safeParse(held.secret).data
-      const fields = { kind: value.kind, status: before?.status === 'connected' ? 'connected' as const : value.status, account: before?.account ?? value.account, owner_address: value.ownerAddress, open: value.open, allowed: value.allowed.join(','), secrets: secret?.botToken ? seal(JSON.stringify(secret)) : '' }
+      const fields = { kind: value.kind, status: before?.status === 'connected' ? 'connected' as const : value.status, account: value.account ?? before?.account ?? null, owner_address: value.ownerAddress, open: value.open, allowed: value.allowed.join(','), secrets: secret?.botToken ? seal(JSON.stringify(secret)) : '' }
       await db.insertInto('channel').values({ id: held.id, agent_id: agentId, ...fields, created_at: value.createdAt }).onConflict((oc) => oc.column('id').doUpdateSet(fields)).execute()
       const added = value.allowed.filter((address) => !before || !audienceOf(before).allowed.includes(address))
       if (value.kind === 'slack' && secret?.botToken && before && added.length) greetings.push({ botToken: secret.botToken, ids: added })
@@ -324,6 +325,21 @@ const slackSecrets = (row: Row) => SlackSecrets.parse(JSON.parse(unseal(row.secr
 
 function channelsOf(records: Held[]): Channel[] {
   return records.flatMap((held) => ChannelRecord.safeParse(held.value).success ? [channelOf({ held, qr: null })] : []).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+}
+
+const PLACES_MS = 10 * 60_000
+const places = new Map<string, { at: number; names: Promise<Record<string, string>> }>()
+
+function named(records: Held[]): Promise<Channel[]> {
+  return Promise.all(channelsOf(records).map(async (channel) => {
+    const botToken = channel.kind === 'discord' ? ChannelSecrets.safeParse(records.find((held) => held.id === channel.id)?.secret).data?.botToken : undefined
+    if (!botToken || !channel.allowed.length) return channel
+    const key = `${channel.id}:${channel.allowed.join(',')}`
+    const cached = places.get(key)
+    const found = cached && Date.now() - cached.at < PLACES_MS ? cached : { at: Date.now(), names: discord.places({ botToken, ids: channel.allowed }) }
+    places.set(key, found)
+    return { ...channel, names: { ...channel.names, ...await found.names } }
+  }))
 }
 
 function channelOf({ held, qr }: { held: Held; qr: string | null }): Channel {
