@@ -37,6 +37,9 @@ const WantedApp = z.object({
 })
 type Wanted = z.infer<typeof WantedApp>
 const SHOWN: ToolGroup[] = ['read', 'create', 'update', 'delete']
+const OPTION = 'flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-lg border-0 bg-transparent px-3 py-2 text-left'
+const IDLE = 'shadow-[inset_0_0_0_1px_var(--hair)] hover:bg-hover'
+const PICKED = 'bg-tint shadow-[inset_0_0_0_1.5px_var(--ink)]'
 const SUGGESTED: Record<ToolGroup, Permission> = { read: 'allow', create: 'ask', update: 'ask', delete: 'deny', other: 'ask' }
 
 const ConnectRow: AskRow = ({ agent, ask, compact }) => {
@@ -104,6 +107,8 @@ function ConnectDialog({ agent, ask, wanted, onClose }: { agent: Agent; ask: Ask
   const authorize = useAuthorizeConnection({ stay: true })
   const existing = (useConnections().data ?? []).filter((connection) => matches({ connection, wanted }))
   const [permissions, setPermissions] = useState<Record<ToolGroup, Permission>>({ ...SUGGESTED, ...wanted.permissions, read: 'allow' })
+  const [choice, setChoice] = useState<string | null>()
+  const chosen = choice === undefined ? existing[0]?.id : choice ?? undefined
   const name = nameOf(wanted)
   const brand = brandOf(wanted)
   const signIn = isSignIn(wanted)
@@ -119,6 +124,7 @@ function ConnectDialog({ agent, ask, wanted, onClose }: { agent: Agent; ask: Ask
     </div>
   </SetupSheet>
   const connect = (fields: Record<string, string>) => {
+    if (chosen) return approve({ connectionId: chosen })
     if (!signIn) return approve({ fields })
     authorize.mutate({ kind: wanted.app === 'mcp' ? 'mcp' : signInKind(wanted.app), name, url: wanted.url, askId: ask.id, permissions, tab: openSignInTab() }, { onSuccess: (done) => { if (done) onClose() } })
   }
@@ -126,16 +132,22 @@ function ConnectDialog({ agent, ask, wanted, onClose }: { agent: Agent; ask: Ask
     onSubmit={(event) => connect(fieldsOf({ wanted, field: formValues(event) }))}
     foot={<><Button type="button" variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" variant="primary" disabled={answer.isPending}>Connect</Button></>}>
     <div className="flex flex-col gap-1.5">
-      {existing.map((connection) => <div key={connection.id} className="flex min-h-12 items-center gap-3 rounded-lg px-3 py-2 shadow-[inset_0_0_0_1px_var(--hair)]">
+      {existing.map((connection) => <Button key={connection.id} type="button" variant="bare" aria-pressed={chosen === connection.id} onClick={() => setChoice(connection.id)} className={cn(OPTION, chosen === connection.id ? PICKED : IDLE)}>
         <Glyph name={connectionBrand(connection)} size={20} />
         <span className="flex min-w-0 flex-1 flex-col"><span className="truncate text-[13px] text-ink">Use existing: {connection.name}</span><span className="truncate text-[12px] text-mute">{connection.account || `Connected by ${connection.ownerName}`} · {connection.agents === 1 ? '1 agent uses it' : `${connection.agents} agents use it`}</span></span>
-        <Button type="button" variant="secondary" className={PILL} disabled={answer.isPending} onClick={() => approve({ connectionId: connection.id })}>Use this</Button>
-      </div>)}
-      {signIn ? <div className="flex min-h-12 items-center gap-3 rounded-lg bg-tint px-3 py-2 shadow-[inset_0_0_0_1.5px_var(--ink)]">
+        {chosen === connection.id && <I icon={CheckmarkCircle02Icon} size={16} className="text-ink" />}
+      </Button>)}
+      {signIn ? <Button type="button" variant="bare" aria-pressed={!chosen} onClick={() => setChoice(null)} className={cn(OPTION, chosen ? IDLE : PICKED)}>
         <span className="grid size-5 place-items-center text-ink"><I icon={Add01Icon} size={16} /></span>
         <span className="flex min-w-0 flex-1 flex-col"><span className="text-[13px] text-ink">{existing.length ? `Sign in to another ${name} account` : `Sign in to ${name}`}</span><span className="text-[12px] text-mute">Opens {name} in a new tab</span></span>
         <I icon={LinkSquare02Icon} size={14} className="text-mute" />
-      </div> : <KeyFields wanted={wanted} />}
+      </Button> : <>
+        {existing.length > 0 && <Button type="button" variant="bare" aria-pressed={!chosen} onClick={() => setChoice(null)} className={cn(OPTION, chosen ? IDLE : PICKED)}>
+          <span className="grid size-5 place-items-center text-ink"><I icon={Add01Icon} size={16} /></span>
+          <span className="flex-1 text-[13px] text-ink">Connect a new one</span>
+        </Button>}
+        {!chosen && <KeyFields wanted={wanted} />}
+      </>}
     </div>
     <div className="flex flex-col gap-1">
       <span className="text-[12px]/[16px] text-mute">{agent.name} will be able to:</span>

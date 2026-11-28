@@ -10,7 +10,9 @@ import type { Connector, ConnectorContext, ToolSpec } from '../connector.ts'
 import { MCP_SERVERS, mcp } from '../mcp/mcp.ts'
 import { permissions } from '../../permissions/permissions.ts'
 
-const PERMISSIONS = { contents: 'write', pull_requests: 'write', issues: 'write', actions: 'read', checks: 'read', metadata: 'read' }
+const PERMISSIONS = { contents: 'write', pull_requests: 'write', issues: 'write', actions: 'write', workflows: 'write', checks: 'read', metadata: 'read' }
+const TOOLSETS = 'context,repos,issues,pull_requests,users,actions'
+const NO_PERMISSION = /Resource not accessible by integration|without `?\w+`? permission|\b403\b/i
 const TOKEN_FRESH_MS = 50 * 60_000
 const NOT_SET_UP = 'GitHub isn\'t set up on this server yet. An admin sets it up once in Settings › Admin › GitHub.'
 const Config = z.object({ installationId: z.number(), repositories: z.optional(z.array(z.string())) })
@@ -113,7 +115,12 @@ export const github = {
   connector: {
     tools: async (ctx) => [...GIT_SPECS, ...await remote.tools(await asBot(ctx))],
     call: async (ctx) => {
-      if (!GIT_TOOLS.includes(ctx.tool)) return remote.call({ ...await asBot(ctx), tool: ctx.tool, args: ctx.args })
+      if (!GIT_TOOLS.includes(ctx.tool)) {
+        const result = await remote.call({ ...await asBot(ctx), tool: ctx.tool, args: ctx.args })
+        if (!result.isError || !NO_PERMISSION.test(result.text)) return result
+        forget(configOf(ctx.config))
+        return remote.call({ ...await asBot(ctx), tool: ctx.tool, args: ctx.args })
+      }
       configOf(ctx.config)
       if (ctx.tool === GIT_PUSH.name) return { text: `You can push${pushTarget(ctx.args)} now. If it is only allowed once, push within 10 minutes.`, isError: false }
       return { text: gitSetup(serverApp()), isError: false }
@@ -142,7 +149,9 @@ export const github = {
     if (state === 'ask' && !await approvedOnce({ agentId, connectionId: row.id, tool: spec.name, repo })) {
       throw new HttpError(403, `${what} waits for your owner's OK. Call call_tool github_${spec.name}${push ? ` with repo ${repo ?? 'OWNER/REPO'} and the branch` : ''} to ask, then try again once it is approved.`)
     }
-    return fresh(configOf(JSON.parse(unseal(row.config))))
+    const config = configOf(JSON.parse(unseal(row.config)))
+    if (push) forget(config)
+    return fresh(config)
   },
 
 
@@ -176,11 +185,19 @@ function configOf(stored: unknown): GithubConfig {
 }
 
 async function asBot(ctx: ConnectorContext): Promise<ConnectorContext> {
-  return { ...ctx, config: { headers: { Authorization: `Bearer ${await fresh(configOf(ctx.config))}` } } }
+  return { ...ctx, config: { headers: { Authorization: `Bearer ${await fresh(configOf(ctx.config))}`, 'X-MCP-Toolsets': TOOLSETS } } }
+}
+
+function forget(config: GithubConfig): void {
+  tokens.delete(tokenKey(config))
+}
+
+function tokenKey(config: GithubConfig): string {
+  return `${config.installationId}:${config.repositories?.join(',') ?? '*'}`
 }
 
 async function fresh(config: GithubConfig): Promise<string> {
-  const key = `${config.installationId}:${config.repositories?.join(',') ?? '*'}`
+  const key = tokenKey(config)
   const cached = tokens.get(key)
   if (cached && Date.now() - cached.at < TOKEN_FRESH_MS) return cached.token
   const body = config.repositories ? JSON.stringify({ repositories: config.repositories }) : undefined

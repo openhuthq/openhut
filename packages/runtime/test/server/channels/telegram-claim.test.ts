@@ -143,3 +143,25 @@ test('a linking Discord channel read by id still carries its invite link', async
   assert.ok(made.link)
   assert.equal((await channelService.get({ actor, id: made.id })).link, made.link)
 })
+
+test('saving a Discord bot\'s channels picks up the name it has in Discord now, and the list names its server and channels', async (t) => {
+  const real = globalThis.fetch
+  let username = 'moss'
+  t.mock.method(globalThis, 'fetch', async (url: string | URL, init?: RequestInit) => {
+    const path = new URL(String(url)).pathname.replace('/api/v10', '')
+    if (path === '/users/@me') return Response.json({ id: '1', username })
+    if (path === '/applications/@me') return Response.json({ id: '1', flags: 1 << 18 })
+    if (path.startsWith('/channels/')) return Response.json({ id: '1', name: 'agents', guild_id: '9' })
+    if (path === '/guilds/9') return Response.json({ id: '9', name: 'Activepieces' })
+    return real(url, init)
+  })
+  const botToken = `${Buffer.from('123456789012345679').toString('base64')}.GhTq2x.${'x'.repeat(27)}`
+  const made = await channelService.create({ actor, kind: 'discord', agentId: 'ag_tgclaim3', botToken, allowed: [] })
+  assert.equal(made.account, '@moss')
+  username = 'database'
+  const saved = await channelService.update({ actor, id: made.id, patch: { allowed: ['1234567890123456789'] } })
+  assert.equal(saved.account, '@database')
+  await until(() => db.selectFrom('channel').select('account').where('id', '=', made.id).executeTakeFirst(), (row) => row?.account === '@database')
+  const listed = (await channelService.list({ agentId: 'ag_tgclaim3' })).find((each) => each.id === made.id)
+  assert.deepEqual(listed?.names, { '1234567890123456789': 'Activepieces › #agents' })
+})

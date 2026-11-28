@@ -17,7 +17,10 @@ const FOREVER_MS = 2 ** 31 - 1
 const CATCH_UP_MS = 24 * 60 * 60_000
 const quiet = new ConsoleLogger('warn')
 const CONNECTING = 'Connecting to Discord…'
+const MENTION = /<@!?(\d+)>/g
 const running = new Map<string, Bot>()
+const PEOPLE_MS = 10 * 60_000
+const people = new Map<string, { at: number; person: Promise<Person | undefined> }>()
 const failed = new Map<string, string>()
 let expected = new Set<string>()
 let syncing: Promise<void> = Promise.resolve()
@@ -81,8 +84,10 @@ async function start({ agentId, token }: { agentId: string; token: string }): Pr
   const hear = async (id: string, message: Message) => {
     const { guildId, channelId, threadId } = adapter.decodeThreadId(id)
     if (adapter.isDM(id) || !adapter.allowed.has(channelId) || message.author.isBot === true) return
+    const lookUp = (userId: string) => personOf({ key: `${guildId}:${userId}`, find: () => discord.person({ botToken: token, guildId, userId }) })
+    const { text, forOthers } = await heard({ text: message.text, me: adapter.botUserId ?? '', mentioned: message.isMention === true, lookUp })
+    if (forOthers) return
     const place: ThreadPlace = { platform: 'discord', chat_id: channelId, ...threadId && { thread_id: threadId }, chat_name: '', url: `https://discord.com/channels/${guildId}/${threadId ?? channelId}` }
-    const text = message.text.replace(new RegExp(`<@!?${adapter.botUserId}>`, 'g'), '').trim()
     const title = text.slice(0, 100) || 'Discord'
     if (threadId === message.id && !await threadService.known({ agentId, place })) void adapter.setThreadTitle(id, title).catch(() => undefined)
     await chat.receive({ agentId, place, title, said: [{ ref: message.id, at: message.metadata.dateSent, author: message.author.fullName || message.author.userName, text }] })
@@ -98,6 +103,27 @@ async function start({ agentId, token }: { agentId: string; token: string }): Pr
   await adapter.startGatewayListener({ waitUntil: (task) => void task.finally(() => { if (running.get(agentId) === bot) running.delete(agentId) }) }, FOREVER_MS, halt.signal)
   void catchUp({ agentId, adapter, hear }).catch((err: unknown) => log.warn({ event: 'chat.catch_up_failed', agent: agentId, error: messageOf(err) }))
   return bot
+}
+
+export async function heard({ text, me, mentioned, lookUp }: { text: string; me: string; mentioned: boolean; lookUp: (userId: string) => Promise<Person | undefined> }): Promise<{ text: string; forOthers: boolean }> {
+  const ids = [...new Set([...text.matchAll(MENTION)].map((match) => match[1]))].filter((id) => id !== me)
+  const found = new Map(await Promise.all(ids.map(async (id) => [id, await lookUp(id)] as const)))
+  const named = text.replace(MENTION, (raw, id: string) => {
+    if (id === me) return ''
+    const person = found.get(id)
+    return person ? `@${person.name}` : raw
+  }).replace(/ {2,}/g, ' ').trim()
+  const toMe = mentioned || new RegExp(`<@!?${me}>`).test(text)
+  return { text: named, forOthers: !toMe && [...found.values()].some((person) => person?.bot) }
+}
+
+function personOf({ key, find }: { key: string; find: () => Promise<Person | undefined> }): Promise<Person | undefined> {
+  const cached = people.get(key)
+  if (cached && Date.now() - cached.at < PEOPLE_MS) return cached.person
+  const person = find()
+  people.set(key, { at: Date.now(), person })
+  void person.then((found) => { if (!found) people.delete(key) })
+  return person
 }
 
 function stop(agentId: string): void {
@@ -143,4 +169,5 @@ function reasonOf(error: string): string {
 
 const sdkId = (place: ThreadPlace): string => `discord:_:${place.chat_id}${place.thread_id ? `:${place.thread_id}` : ''}`
 
+type Person = { name: string; bot: boolean }
 type Bot = { token: string; adapter: Discord; halt: AbortController; connected: boolean }

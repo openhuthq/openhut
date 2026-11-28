@@ -29,6 +29,8 @@ OpenHut reads the labels the app puts on each action:
 | A write, or no label | Ask first |
 | Destructive, a delete, or high risk | Never |
 
+An action named *save* or *upsert* (like Linear's *Save issue* and *Save comment*) is under **Add new things** even when the app labels it destructive, because it mostly creates. When one of its calls names an existing item by `id`, it overwrites, so its card says *This can't be undone.*
+
 Nothing destructive or high risk starts as Always allow. Reads never ask to start with: tools that only look up other tools or their details (find tools, get a schema, describe) are Always allow too, and the connect dialog starts **Look things up** at Always allow whatever the agent suggested. When you connect an app an agent asked for, each kind of action gets the setting you picked in that dialog. Postgres, ClickHouse and Better Stack only read, so their actions start as Always allow.
 
 ## Apps with one tool that runs any other
@@ -55,7 +57,7 @@ A request from a scheduled routine expires after 30 minutes if nobody answers, a
 
 ## When it's blocked
 
-An action set to **Never** doesn't run. The chat shows a card naming the app and the action, like *List databases in DigitalOcean is set to Never*, with **Allow reads** (for a read action: sets every read action of that app to Always allow) and **Change permission** (opens that app's settings for the agent, with that action highlighted). Then ask the agent again.
+An action set to **Never** doesn't run. The chat shows a card naming the app and the action, like *List databases in DigitalOcean is set to Never*, with **Allow reads** (for a read action: sets every read action of that app to Always allow) and **Change permission** (opens that app's settings for the agent, with that action highlighted). Then ask the agent again. A call to an action no app gives the agent shows the reason instead, with no **Change permission**.
 
 ## Activity
 

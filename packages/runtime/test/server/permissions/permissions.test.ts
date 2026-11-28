@@ -27,6 +27,9 @@ test('defaults come from the tool labels, and risky tools never default to Alway
     ['schema lookup with no labels', { name: 'retrieve_tool_schema' }, 'read', 'allow'],
     ['describe with no labels', { name: 'describeTools' }, 'read', 'allow'],
     ['a top-level tool named like a read keeps its labels', { name: 'apps/app-list' }, 'other', 'ask'],
+    ['Linear save issue, labeled destructive', { name: 'save_issue', annotations: { readOnlyHint: false, destructiveHint: true } }, 'create', 'ask'],
+    ['Linear save comment', { name: 'save_comment', annotations: { destructiveHint: true } }, 'create', 'ask'],
+    ['save labeled delete stays a delete', { name: 'save_issue', meta: { operation: 'delete' } }, 'delete', 'deny'],
   ]
   for (const [label, extra, group, permission] of table) {
     assert.equal(permissions.groupOf(spec(extra)), group, label)
@@ -100,4 +103,10 @@ test('a call can\'t be undone when it is labeled destructive, or is an unlabeled
     [{ name: 'apps/app-list' }, false],
   ]
   for (const [extra, undoable] of table) assert.equal(permissions.undoable(spec(extra)), undoable, String(extra.name))
+})
+
+test('saving a new thing can be undone; saving over one with an id can\'t', () => {
+  const save = spec({ name: 'save_issue', annotations: { destructiveHint: true } })
+  assert.equal(permissions.undoable(save, { title: 'Flaky CI' }), false)
+  assert.equal(permissions.undoable(save, { id: 'ENG-12', title: 'Flaky CI' }), true)
 })

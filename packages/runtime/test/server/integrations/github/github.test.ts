@@ -62,6 +62,9 @@ test('the gateway\'s token is minted as the server app, then cached', async (t) 
   const [header, payload, signature] = seen[0].authorization.replace('Bearer ', '').split('.')
   assert.ok(createVerify('RSA-SHA256').update(`${header}.${payload}`).verify(publicKey, signature, 'base64url'))
   assert.equal(JSON.parse(Buffer.from(payload, 'base64url').toString()).iss, 42)
+  await db.insertInto('tool_permission').values({ agent_id: 'ag_ghtokenn', connection_id: 'cn_ghtokenn', tool: 'git_push', state: 'allow', changed_by: 'usr_ghtokenn' }).execute()
+  await github.gitToken({ agentId: 'ag_ghtokenn', push: true })
+  assert.equal(seen.length, 2, 'a push always gets a fresh token, so permissions granted since the last one apply')
 })
 
 test('a connection limited to some repositories gets a token for only those; installations list their repositories', async (t) => {

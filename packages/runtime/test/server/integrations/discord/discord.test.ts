@@ -105,3 +105,17 @@ test('a bot with Administrator reads every private channel', async (t) => {
   })
   assert.deepEqual((await discord.conversations({ botToken: TOKEN })).map((each) => [each.type, each.joined]), [['private', true]])
 })
+
+test('a server member reads as their server nickname, else their display name, else their username, and says whether it is a bot', async (t) => {
+  const members: Record<string, unknown> = {
+    '/guilds/1/members/11': { nick: 'El Nazer (DB)', user: { username: 'elnazer', global_name: 'Nazer', bot: true } },
+    '/guilds/1/members/12': { nick: null, user: { username: 'ana', global_name: 'Ana' } },
+    '/guilds/1/members/13': { user: { username: 'ben' } },
+  }
+  t.mock.method(globalThis, 'fetch', async (url: string | URL) => {
+    const found = members[new URL(String(url)).pathname.replace('/api/v10', '')]
+    return found ? Response.json(found) : Response.json({ message: 'Unknown Member' }, { status: 404 })
+  })
+  const person = (userId: string) => discord.person({ botToken: TOKEN, guildId: '1', userId })
+  assert.deepEqual(await Promise.all(['11', '12', '13', '14'].map(person)), [{ name: 'El Nazer (DB)', bot: true }, { name: 'Ana', bot: false }, { name: 'ben', bot: false }, undefined])
+})

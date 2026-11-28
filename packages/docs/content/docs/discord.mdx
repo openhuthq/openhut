@@ -9,7 +9,7 @@ icon: logo:discord
 
 ### Make the bot
 
-In the agent's **Setup › Channels**, **Connect** Discord, then **Open Discord**. **New Application**, give it the agent's name. On **Bot**, turn **Public Bot** off and **Message Content Intent** on, then **Reset Token** and copy it. Paste it in the sheet and press **Next**. OpenHut checks both switches before it goes on.
+In the agent's **Setup › Channels**, **Connect** Discord, then **Open Discord**. **New Application**, give it the agent's name. On **Installation**, set **Install Link** to **None**: Discord won't turn Public Bot off while it is *Discord Provided Link*. On **Bot**, turn **Public Bot** off and **Message Content Intent** on, then **Reset Token** and copy it. Paste it in the sheet and press **Next**. OpenHut checks both switches before it goes on.
 
 </Step>
 <Step>
@@ -23,11 +23,11 @@ Under **Add it to your server**, open the link. Discord opens with the right per
 
 ### Pick its channels
 
-Pick its channels from the list and press **Connect**. A private channel shows a lock. If the bot isn't in it yet, open the channel's settings in Discord, then **Permissions**, and add the bot; the list picks it up when you open it again. It says hi in each one. Everyone there can mention it, and it answers in a new thread named after the message. In that thread it answers every message, no mention needed. It doesn't answer DMs. Each Discord thread also shows in the OpenHut app, read only: you reply in Discord.
+Pick its channels from the list and press **Connect**. A private channel shows a lock. If the bot isn't in it yet, open the channel's settings in Discord, then **Permissions**, and add the bot; the list picks it up when you open it again. It says hi in each one. Everyone there can mention it, and it answers in a new thread named after the message. In that thread it answers every message, no mention needed, unless the message mentions other bots and not this one: then only those bots answer. Several agents' bots can share a channel; mention them all in one message and each answers in the same thread. Mentions reach the agent as names, like *@Ana*. It doesn't answer DMs. Each Discord thread also shows in the OpenHut app, read only: you reply in Discord.
 
 </Step>
 </Steps>
 
-Open Discord again in **Setup › Channels** to change its channels or add it to another server.
+Open Discord again in **Setup › Channels** to change its channels or add it to another server. Saving its channels also picks up the bot's name if you renamed it in Discord. The channel row names the server and channels, like *Acme › #support*.
 
 OpenHut holds the bot's connection to Discord, not the agent, so the bot token never reaches the agent. While OpenHut restarts the bot is offline for a few seconds, and when it's back it reads what it missed in threads from the last day. If the bot can't connect, for example because Discord no longer accepts its token, its row in **Setup › Channels** says **Offline**; hover it to see why.
